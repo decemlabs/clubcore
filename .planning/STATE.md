@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.4
 milestone_name: Content & Communication — Client-First
 status: executing
-stopped_at: Phase 87 UI-SPEC approved
-last_updated: "2026-06-06T07:51:25.532Z"
-last_activity: 2026-06-06 -- Phase 87 planning complete
+stopped_at: Phase 87 Plan 01 complete — notifications data layer
+last_updated: "2026-06-06T08:05:00.000Z"
+last_activity: 2026-06-06 -- Phase 87 Plan 01 executed (models/migrations/service/tests)
 progress:
   total_phases: 8
   completed_phases: 1
   total_plans: 7
-  completed_plans: 3
+  completed_plans: 4
   percent: 13
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 87 — notification inbox
+**Current focus:** Phase 87 — Notification Inbox
 
 ## Current Position
 
-Phase: 87
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-06-06 -- Phase 87 planning complete
+Phase: 87 (Notification Inbox) — EXECUTING
+Plan: 2 of 4
+Status: Executing Phase 87
+Last activity: 2026-06-06 -- Phase 87 Plan 01 executed (models/migrations/service/tests)
 
 ## v2.4 Roadmap Summary
 
@@ -78,6 +78,12 @@ Last activity: 2026-06-06 -- Phase 87 planning complete
 - **Inbox source**: только системные события (бронь/платёж/autopay) — нет broadcast/ручного-composer
 - **Trainer reviews out of scope**: только bio/detail; REVW-* → v2
 - **Module discipline**: D-20-MODULE (raw-SQL reads / Protocol-slot writes; zero new `ignore_imports` по возможности) + D-20-IDOR
+
+### Key v2.4 Phase 87 Plan 01 Decisions
+
+- **D-87-01-DEDUP-ON-CONFLICT**: `pg_insert ON CONFLICT DO NOTHING` on named UNIQUE constraint `uq_in_app_notifications_client_source_kind` — SAVEPOINT-safe dedup (not IntegrityError+rollback which breaks SAVEPOINT-mode test sessions and production webhook retry context); mirrors D-82 welcome-bonus approach
+- **D-87-02-PUSH-TOKEN-UPDATE-FIRST**: `register_push_token` uses UPDATE-first + INSERT-fallback — partial index `WHERE unregistered_at IS NULL` excludes unregistered rows, so ON CONFLICT cannot revive them; UPDATE-first covers both alive-idempotent and unregistered-revival paths
+- **D-87-03-ORDERING-TEST-RAW-SQL**: ordering test forces distinct `created_at` via raw SQL `now() - interval '10 seconds'` to avoid non-deterministic ORDER BY when both inserts land in the same transaction microsecond
 
 ### Key v2.4 Phase 86 Plan 03 Decisions
 
@@ -184,7 +190,7 @@ Ran the complete test suite + live browser verification of all v2.2 features aft
 
 ## Session Continuity
 
-Last session: 2026-06-06T07:22:11.316Z
+Last session: 2026-06-06T08:02:39.281Z
 Stopped at: Phase 87 UI-SPEC approved
 Resume: Start Phase 86 with /gsd:plan-phase 86
 

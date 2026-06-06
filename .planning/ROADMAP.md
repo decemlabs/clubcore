@@ -158,7 +158,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 87-01-PLAN.md — Backend data layer: notifications models + migrations 0060/0061 + schemas/repository/service (create_notification, list/mark/upsert) (INBOX-01..04)
+- [x] 87-01-PLAN.md — Backend data layer: notifications models + migrations 0060/0061 + schemas/repository/service (create_notification, list/mark/upsert) (INBOX-01..04)
 
 **Wave 2** *(blocked on Wave 1)*
 
@@ -245,6 +245,6 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 86. Gym-Info / CMS | 3/3 | Complete    | 2026-06-06 |
-| 87. Notification Inbox | 0/4 | Planned     | - |
+| 87. Notification Inbox | 1/4 | In Progress|  |
 | 88. Trainer Detail / Bio | 0/TBD | Not started | - |
 | 89. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |

@@ -17,10 +17,10 @@ Requirements for this milestone (v2.4). Each maps to exactly one roadmap phase.
 
 ### Notification inbox
 
-- [ ] **INBOX-01**: Клиент видит ленту своих in-app уведомлений (newest-first, пагинация) через `GET /client/notifications`
-- [ ] **INBOX-02**: Клиент помечает уведомления прочитанными (одно + все) через `PATCH /client/notifications`, и счётчик непрочитанных доступен для бейджа PWA
-- [ ] **INBOX-03**: Системные события (бронь подтверждена/отменена/перенесена, checkout/платёж succeeded, autopay успех/провал) автоматически создают запись в ленте для затронутого клиента
-- [ ] **INBOX-04**: Клиент регистрирует push-токен устройства через API (хранение/рельсы под будущий web-push; сама доставка отложена)
+- [x] **INBOX-01**: Клиент видит ленту своих in-app уведомлений (newest-first, пагинация) через `GET /client/notifications`
+- [x] **INBOX-02**: Клиент помечает уведомления прочитанными (одно + все) через `PATCH /client/notifications`, и счётчик непрочитанных доступен для бейджа PWA
+- [x] **INBOX-03**: Системные события (бронь подтверждена/отменена/перенесена, checkout/платёж succeeded, autopay успех/провал) автоматически создают запись в ленте для затронутого клиента
+- [x] **INBOX-04**: Клиент регистрирует push-токен устройства через API (хранение/рельсы под будущий web-push; сама доставка отложена)
 - [ ] **INBOX-05**: Экран ленты уведомлений в PWA подключён к реальным эндпоинтам за feature-флагом
 
 ### Trainer detail / bio
@@ -74,10 +74,10 @@ Which phases cover which requirements. Populated during roadmap creation.
 | GYM-01 | Phase 86 | Complete |
 | GYM-02 | Phase 86 | Complete |
 | GYM-03 | Phase 86 | Complete |
-| INBOX-01 | Phase 87 | Pending |
-| INBOX-02 | Phase 87 | Pending |
-| INBOX-03 | Phase 87 | Pending |
-| INBOX-04 | Phase 87 | Pending |
+| INBOX-01 | Phase 87 | Complete |
+| INBOX-02 | Phase 87 | Complete |
+| INBOX-03 | Phase 87 | Complete |
+| INBOX-04 | Phase 87 | Complete |
 | INBOX-05 | Phase 87 | Pending |
 | TRNR-01 | Phase 88 | Pending |
 | TRNR-02 | Phase 88 | Pending |
