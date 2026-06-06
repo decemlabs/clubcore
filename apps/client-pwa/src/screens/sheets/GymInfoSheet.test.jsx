@@ -1,75 +1,46 @@
 /**
- * GymInfoSheet tests (Phase 86 GYM-01).
+ * GymInfoSheet tests — redesigned «О зале» (quick 260606-uxo).
  *
  * Covers:
- *   (a) Loaded state renders gym name + section eyebrow + amenity label
- *   (b) Loading state shows skeleton aria-label, no error copy
+ *   (a) Loaded state renders gym name + «Часы работы» + «Что есть в зале» + amenity label
+ *   (b) Loading state shows the loading copy, no error copy
  *   (c) Error state renders "Не удалось загрузить информацию о зале"
- *   (d) Open/closed badge — open branch "Сейчас открыто", closed branch "Закрыто"
- *   (e) Social section hidden when social:[] and shown when present
+ *   (d) Open/closed copy — open branch "Сейчас открыто", closed branch "Закрыто"
+ *   (e) Contacts: social handle hidden when social:[] and shown when present
+ *   (f) Back button calls onClose
  */
 import React from 'react'
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
-// ─── Wrap with QueryClientProvider (required by sheet shell) ─────────────────
 function renderSheet(ui) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
 }
 
-// ─── Mock @/data: useClientGymInfo ────────────────────────────────────────────
-// The sheet imports the hook through the @/data swap seam (sibling convention,
-// e.g. LoyaltySheet). GymInfoSheet graduated from the D-71-09 placeholder zone in
-// Phase 86, so the swap-seam import is allowed and preserves mock-mode integrity.
+// ─── Mock @/data: useClientGymInfo (swap seam) ───────────────────────────────
 const useClientGymInfo = vi.fn()
-
 vi.mock('@/data', async () => {
   const actual = await vi.importActual('@/data')
-  return {
-    ...actual,
-    useClientGymInfo: (...args) => useClientGymInfo(...args),
-  }
+  return { ...actual, useClientGymInfo: (...args) => useClientGymInfo(...args) }
 })
 
 // ─── Stub sub-components not under test ──────────────────────────────────────
 vi.mock('@/components/Icon.jsx', () => ({
   Icon: ({ name }) => <span data-testid={`icon-${name}`} />,
 }))
-vi.mock('@/components/StatusBar.jsx', () => ({
-  StatusBar: () => null,
-}))
+vi.mock('@/components/StatusBar.jsx', () => ({ StatusBar: () => null }))
 vi.mock('@/components/PullToRefresh.jsx', () => ({
   PullToRefresh: ({ children }) => <div>{children}</div>,
 }))
-vi.mock('@/screens/sheets/ProfileExtraSheets.jsx', async () => {
-  const actual = await vi.importActual('@/screens/sheets/ProfileExtraSheets.jsx')
-  return {
-    ...actual,
-    SubSheetHeader: ({ title, onClose }) => (
-      <div>
-        <span>{title}</span>
-        <button onClick={onClose}>Закрыть</button>
-      </div>
-    ),
-  }
-})
 
 import { GymInfoSheet } from './GymInfoSheet.jsx'
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 function makeQuery(overrides = {}) {
-  return {
-    data: undefined,
-    isLoading: false,
-    isError: false,
-    refetch: vi.fn().mockResolvedValue(undefined),
-    ...overrides,
-  }
+  return { data: undefined, isLoading: false, isError: false, refetch: vi.fn().mockResolvedValue(undefined), ...overrides }
 }
 
-// Full sample gym data matching GymInfoData interface
 const GYM_DATA = {
   name: 'Тестовый зал',
   tagline: 'Лучший зал города',
@@ -89,110 +60,84 @@ const GYM_DATA = {
   ],
   amenities: [
     { icon: 'parking', label: 'Парковка' },
-    { icon: 'wifi',    label: 'Wi-Fi' },
+    { icon: 'wifi', label: 'Wi-Fi' },
   ],
-  rules: [
-    'Спортивная форма обязательна',
-    'Берите полотенце',
-  ],
-  social: [
-    { kind: 'tg', label: 'Telegram', handle: '@mygym_test' },
-  ],
+  rules: ['Спортивная форма обязательна', 'Берите полотенце'],
+  social: [{ kind: 'tg', label: 'Telegram', handle: '@mygym_test' }],
 }
 
-// ─── Tests ────────────────────────────────────────────────────────────────────
-describe('GymInfoSheet', () => {
+describe('GymInfoSheet (redesigned «О зале»)', () => {
+  beforeEach(() => { vi.clearAllMocks() })
 
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
-  // (a) Loaded state
-  it('renders gym name, hours section eyebrow, and amenity label when loaded', () => {
+  // (a)
+  it('renders gym name, sections, and amenity label when loaded', () => {
     useClientGymInfo.mockReturnValue(makeQuery({ data: GYM_DATA }))
     renderSheet(<GymInfoSheet onClose={vi.fn()} />)
-
     expect(screen.getByText('Тестовый зал')).toBeInTheDocument()
-    expect(screen.getByText('ЧАСЫ РАБОТЫ')).toBeInTheDocument()
+    expect(screen.getByText('Часы работы')).toBeInTheDocument()
+    expect(screen.getByText('Что есть в зале')).toBeInTheDocument()
     expect(screen.getByText('Парковка')).toBeInTheDocument()
   })
 
-  // (b) Loading state
-  it('shows skeleton aria-label and no error copy when loading', () => {
+  // (b)
+  it('shows loading copy and no error copy when loading', () => {
     useClientGymInfo.mockReturnValue(makeQuery({ isLoading: true, data: undefined }))
     renderSheet(<GymInfoSheet onClose={vi.fn()} />)
-
-    expect(screen.getByLabelText('Загрузка информации о зале…')).toBeInTheDocument()
+    expect(screen.getByText('Загрузка информации о зале…')).toBeInTheDocument()
     expect(screen.queryByText('Не удалось загрузить информацию о зале')).not.toBeInTheDocument()
   })
 
-  // (c) Error state
+  // (c)
   it('renders error heading when query fails', () => {
     useClientGymInfo.mockReturnValue(makeQuery({ isError: true, data: undefined }))
     renderSheet(<GymInfoSheet onClose={vi.fn()} />)
-
     expect(screen.getByText('Не удалось загрузить информацию о зале')).toBeInTheDocument()
     expect(screen.getByText('Потяните вниз, чтобы попробовать снова.')).toBeInTheDocument()
   })
 
-  // (d) Open/closed badge — open branch
-  it('shows "Сейчас открыто" badge when current Moscow time is within open hours', () => {
-    // Mock Date to be Mon 10:00 Moscow time — inside Mon 07:00–23:00
-    // getMoscowNow() uses Intl.DateTimeFormat to get weekday+time in Europe/Moscow.
-    // We override Date constructor to return a fixed ISO time that maps to Mon 10:00 MSK.
-    // 2026-06-01 is a Monday. 07:00 UTC = 10:00 MSK.
-    const FIXED_DATE = new Date('2026-06-01T07:00:00Z')
+  // (d) open branch — Mon 10:00 MSK (07:00 UTC), inside 07:00–23:00
+  it('shows "Сейчас открыто" when current Moscow time is within open hours', () => {
+    const FIXED = new Date('2026-06-01T07:00:00Z')
     const OrigDate = globalThis.Date
-    vi.spyOn(globalThis, 'Date').mockImplementation((...args) => {
-      if (args.length === 0) return FIXED_DATE
-      // @ts-ignore: test helper
-      return new OrigDate(...args)
-    })
-
+    vi.spyOn(globalThis, 'Date').mockImplementation((...args) => (args.length === 0 ? FIXED : new OrigDate(...args)))
     useClientGymInfo.mockReturnValue(makeQuery({ data: GYM_DATA }))
     renderSheet(<GymInfoSheet onClose={vi.fn()} />)
-
-    expect(screen.getByText('Сейчас открыто')).toBeInTheDocument()
-
+    expect(screen.getByText(/Сейчас открыто/)).toBeInTheDocument()
     vi.restoreAllMocks()
   })
 
-  // (d) Open/closed badge — closed branch
-  it('shows "Закрыто" badge when current Moscow time is outside open hours', () => {
-    // 2026-06-01 (Monday) at 00:00 UTC = 03:00 MSK — before 07:00 open
-    const FIXED_DATE = new Date('2026-06-01T00:00:00Z')
+  // (d) closed branch — Mon 03:00 MSK (00:00 UTC), before 07:00 open
+  it('shows "Закрыто" when current Moscow time is outside open hours', () => {
+    const FIXED = new Date('2026-06-01T00:00:00Z')
     const OrigDate = globalThis.Date
-    vi.spyOn(globalThis, 'Date').mockImplementation((...args) => {
-      if (args.length === 0) return FIXED_DATE
-      // @ts-ignore: test helper
-      return new OrigDate(...args)
-    })
-
+    vi.spyOn(globalThis, 'Date').mockImplementation((...args) => (args.length === 0 ? FIXED : new OrigDate(...args)))
     useClientGymInfo.mockReturnValue(makeQuery({ data: GYM_DATA }))
     renderSheet(<GymInfoSheet onClose={vi.fn()} />)
-
-    expect(screen.getByText('Закрыто')).toBeInTheDocument()
-
+    expect(screen.getByText(/Закрыто/)).toBeInTheDocument()
     vi.restoreAllMocks()
   })
 
-  // (e) Social section hidden when social is empty
-  it('does not render social section when social is empty', () => {
-    const dataNoSocial = { ...GYM_DATA, social: [] }
-    useClientGymInfo.mockReturnValue(makeQuery({ data: dataNoSocial }))
+  // (e) social handle hidden when empty, shown when present
+  it('hides the social handle when social is empty', () => {
+    useClientGymInfo.mockReturnValue(makeQuery({ data: { ...GYM_DATA, social: [] } }))
     renderSheet(<GymInfoSheet onClose={vi.fn()} />)
-
-    expect(screen.queryByText('МЫ В СОЦСЕТЯХ')).not.toBeInTheDocument()
+    expect(screen.queryByText('@mygym_test')).not.toBeInTheDocument()
+    expect(screen.getByText('Связаться')).toBeInTheDocument() // contacts still render (phone/email)
   })
 
-  // (e) Social section shown when social is present
-  it('renders social section with handle text when social data is present', () => {
+  it('renders the social handle when social data is present', () => {
     useClientGymInfo.mockReturnValue(makeQuery({ data: GYM_DATA }))
     renderSheet(<GymInfoSheet onClose={vi.fn()} />)
-
-    expect(screen.getByText('МЫ В СОЦСЕТЯХ')).toBeInTheDocument()
     expect(screen.getByText('Telegram')).toBeInTheDocument()
     expect(screen.getByText('@mygym_test')).toBeInTheDocument()
   })
 
+  // (f) back button → onClose
+  it('calls onClose when the back button is pressed', () => {
+    const onClose = vi.fn()
+    useClientGymInfo.mockReturnValue(makeQuery({ data: GYM_DATA }))
+    renderSheet(<GymInfoSheet onClose={onClose} />)
+    fireEvent.click(screen.getByLabelText('Назад'))
+    expect(onClose).toHaveBeenCalled()
+  })
 })
