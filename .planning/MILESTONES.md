@@ -1,5 +1,25 @@
 # Milestones
 
+## v2.4 Content & Communication — Client-First (Shipped: 2026-06-06)
+
+**Phases completed:** 4 phases, 11 plans, 12 tasks
+
+**Key accomplishments:**
+
+- Backend gym module
+- Backend gym HTTP router
+- `useClientGymInfo` hook + `GymInfoData` interface
+- Schemas:
+- v1/router.py
+- handlers.py
+- One-liner:
+- Three nullable Text columns (bio/specialization/photo_url) added to Trainer ORM + schemas + migration chain 0062→0063 with idempotent six-trainer backfill
+- GET /client/trainers/{id} with client-safe projection (id/fullName/photoUrl/specialization/bio) + 404-collapse anti-enumeration + owner PATCH bio tests
+- TrainerDetailSheet wired to GET /client/trainers/{id} via @/data seam with XSS-safe photo rendering and full D-71-09 ESLint graduation (all 3 spots removed, grep=0 verified)
+- One-liner:
+
+---
+
 ## v2.3 Loyalty / Club Bonuses + Real Autopay (Shipped: 2026-06-06)
 
 **Phases completed:** 4 phases, 10 plans, 15 tasks

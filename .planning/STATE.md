@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v2.4
 milestone_name: Content & Communication — Client-First
-status: ready_to_plan
-stopped_at: Phase 89 complete (1/1) — ready to discuss Phase 999.1
-last_updated: 2026-06-06T12:50:20.587Z
-last_activity: 2026-06-06
+status: Awaiting next milestone
+stopped_at: Phase 89 Plan 01 complete — v2.4 milestone gate green
+last_updated: "2026-06-06T16:43:28.661Z"
+last_activity: 2026-06-06 — Milestone v2.4 completed and archived
 progress:
   total_phases: 8
   completed_phases: 4
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 999.1
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-06-06
+Phase: Milestone v2.4 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-06 — Milestone v2.4 completed and archived
 
 ## v2.4 Roadmap Summary
 
@@ -151,6 +151,16 @@ None.
 
 ## Deferred Items
 
+**v2.4 close (2026-06-06) — acknowledged open artifacts (15):** 8 stale pre-v2.4 quick-task slugs with empty status fields (historical shipped work — `260529-*`/`260601-*`/`260602-*`; NOT v2.4); 1 pending todo (`future-milestones-sequence` — intentional next-milestone planning); 3 verification gaps + 3 UAT gaps = the v2.4 live docker+browser deferrals below (Phases 86/87/88 `human_needed` — all automated checks passed, only live-stack/browser confirmation deferred per operator standing preference). None block v2.4 completion; logic paths covered by ASGITransport/vitest suites (drift gate + 2654 backend pytest + 175 PWA vitest green).
+
+| Category | Item | Status |
+|----------|------|--------|
+| human-verify | Phase 86 live GymInfoSheet render from DB + open/closed badge (Europe/Moscow) | deferred — 86-HUMAN-UAT.md |
+| human-verify | Phase 87 live notification feed + booking-event→inbox round-trip + mark-all bell-badge + autopay-failure row | deferred — 87-HUMAN-UAT.md |
+| human-verify | Phase 88 live TrainerDetailSheet render + owner photo_url + error/empty states (Plan 88-03 Task 3 checkpoint) | deferred — 88-HUMAN-UAT.md |
+| advisory-ui | v2.4 UI-review nits (inline fontWeight:700 eyebrows; minor off-scale paddings; green-container cancellation icon; missing photo-strip icons dumbbell/run/yoga; no app-wide ErrorBoundary) | deferred — see 86/87/88-UI-REVIEW.md |
+| tech-debt | Pre-existing (NOT v2.4): flaky `test_freeze_race`; 7 promo F821 / whole-tree ruff DTZ debt; `test_alembic_clean` | carried forward |
+
 **v2.3 close (2026-06-06) — acknowledged open artifacts (10):** 8 quick-tasks with empty status fields (historical shipped work — the 999.x DONE/SHIPPED roadmap markers: `260529-ny2`, `260529-olc`, `260601-*` client-pwa tasks); 1 pending todo (`future-milestones-sequence` — intentional next-milestone planning); 1 verification gap (Phase 83 `human_needed` — live-ЮKassa bonus-redemption E2E, OPERATOR-PENDING by design, auto-deferred). None block v2.3 completion; logic paths covered by ASGITransport/respx suites.
 
 Items carried forward from v2.1 close:
@@ -202,5 +212,4 @@ Resume: Run milestone audit/complete/cleanup with /gsd:milestone-complete v2.4
 
 ## Operator Next Steps
 
-- Run milestone audit with /gsd:milestone-complete v2.4 (or /gsd:plan-phase for post-v2.4 work)
-- All 13/13 v2.4 requirements complete (GYM-01..03, INBOX-01..05, TRNR-01..04, HND-01)
+- Start the next milestone with /gsd-new-milestone

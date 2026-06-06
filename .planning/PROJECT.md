@@ -91,9 +91,22 @@ Phase 40 milestone verification (legacy note) — see v1.5 archive for detail.
 
 </details>
 
-## Last Shipped Milestone: v2.3 Loyalty / Club Bonuses + Real Autopay
+## Last Shipped Milestone: v2.4 Content & Communication — Client-First
 
-**✅ SHIPPED 2026-06-06** (Phases 82-85, 10 plans, 14/14 requirements; tag `v2.3`; audit `passed`, integration 5/5 green). Loyalty balance + append-only ledger, server-authoritative checkout redemption, the real off-session `charge_expiring_autopay` leg deferred from v2.2, and the byte-stable OpenAPI freeze — all staff-free under `require_client()`, staff contract byte-identical. Live-ЮKassa legs (bonus-redemption E2E, off-session autopay charge) remain OPERATOR-PENDING by project convention; logic paths covered by ASGITransport/respx suites. Original milestone scope below for reference.
+**✅ SHIPPED 2026-06-06** (Phases 86-89, 11 plans, 13/13 requirements; tag `v2.4`; audit `tech_debt`, 0 blockers, 7/7 E2E flows wired, integration 0 open findings). The first Group-B content/communication slice — all client-first under `require_client()` (IDOR-safe), owner-only write-API + seeds (no admin-web UI), staff contract byte-identical to `contract-freeze-v1.11.0`:
+- **Phase 86 Gym-Info / CMS** — `gym` module singleton (scalar + JSONB list cols), `GET /client/gym` + owner-only `PUT /gym` (reception 403), seed migration 0059, GymInfoSheet graduated from the D-71-09 placeholder zone and wired via the `@/data` swap seam (GYM-01..03).
+- **Phase 87 Notification Inbox** — `in_app_notifications` + `client_push_tokens` tables (migrations 0060/0061), paginated `GET /client/notifications` with `unreadCount`, single + mark-all `PATCH`, idempotent push-token `POST` (delivery deferred), 7 co-transactional `create_notification` event hooks across bookings/payments/autopay with anti-oracle (payment_canceled → 0 client rows) + webhook-replay dedup, NotificationsSheet + Home bell badge (INBOX-01..05).
+- **Phase 88 Trainer Detail / Bio** — additive `bio`/`specialization`/`photo_url` columns (migrations 0062/0063 idempotent backfill), client-safe `GET /client/trainers/{id}` (404-collapse anti-enumeration, no phone/rates leak), owner PATCH with `http(s)`-only photo_url validator (stored-XSS guard), TrainerDetailSheet graduated + wired (TRNR-01..04).
+- **Phase 89 OpenAPI Handoff** — authoritative byte-stable `openapi.json` + `schema.d.ts` regen (replaced 86/87/88 hand-stubs), `_v24Checks` AssertNonNever[8] forward-guards, staff drift gate green, full milestone gate (2654 backend pytest + mypy strict + lint-imports + 175 PWA vitest + Redocly + CISO-01 no-edit guard) green (HND-01).
+
+Recurring lesson reinforced: graduating a net-new placeholder PWA sheet requires de-listing it from the D-71-09 ESLint zone (3 spots) + importing via `@/data` — caught in 86, applied cleanly in 87/88. Deferred at close (acknowledged tech_debt): live docker+browser verification for the 3 sheets (per-phase HUMAN-UAT), real web-push delivery (INBOX-04 storage-only), advisory UI-review nits, and pre-existing flaky test_freeze_race / promo F821 / test_alembic_clean (NOT v2.4 regressions). Full audit: `.planning/v2.4-MILESTONE-AUDIT.md`.
+
+<details>
+<summary>v2.3 Loyalty / Club Bonuses + Real Autopay — shipped 2026-06-06</summary>
+
+**✅ SHIPPED 2026-06-06** (Phases 82-85, 10 plans, 14/14 requirements; tag `v2.3`; audit `passed`, integration 5/5 green). Loyalty balance + append-only ledger, server-authoritative checkout redemption, the real off-session `charge_expiring_autopay` leg deferred from v2.2, and the byte-stable OpenAPI freeze — all staff-free under `require_client()`, staff contract byte-identical. Live-ЮKassa legs (bonus-redemption E2E, off-session autopay charge) remain OPERATOR-PENDING by project convention; logic paths covered by ASGITransport/respx suites.
+
+</details>
 
 **Goal:** Дать клиенту бонусный баланс (накопление по событиям + списание скидкой в чекауте, server-authoritative) и закрыть реальный автосписание-leg, отложенный из v2.2 (off-session списание с сохранённой карты по cron) — всё под `require_client()`, staff-контракт байт-в-байт цел.
 
