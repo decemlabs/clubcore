@@ -662,11 +662,12 @@ async def test_post_push_token_invalid_platform_returns_error(
     http_client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """POST /push-tokens with platform not in (web, android, ios) → rejected (T-87-09).
+    """POST /push-tokens with platform not in (web, android, ios) → 422 (T-87-09).
 
-    The DB CheckConstraint 'ck_client_push_tokens_platform' enforces this;
-    service layer passes the value through without pre-validation so the DB
-    constraint fires and propagates as an integrity/app error.
+    ClientPushTokenRegisterRequest.platform is typed as Literal["web", "android", "ios"]
+    (Pydantic v2), so the request is rejected with 422 Unprocessable Entity before the
+    service or DB layer is reached.  The DB CheckConstraint 'ck_client_push_tokens_platform'
+    remains as a defence-in-depth second layer but should never fire from this endpoint.
     """
     staff = await _seed_staff(db_session, "push-plat")
     client = await _seed_client(db_session, staff, _phone(64))
@@ -680,11 +681,9 @@ async def test_post_push_token_invalid_platform_returns_error(
         json={"token": "some-token", "platform": "windows-phone"},
         headers={"X-CSRF-Token": csrf_token},
     )
-    # DB CheckConstraint fires; FastAPI turns the DB error into 500 unless the
-    # service validates. Since the constraint is at DB level, expect a 4xx or 5xx
-    # error (not 204). The important assertion is that it does NOT succeed.
-    assert resp.status_code != 204, (
-        f"Expected an error for invalid platform 'windows-phone', got 204"
+    # Pydantic Literal validation rejects "windows-phone" → 422 Unprocessable Entity.
+    assert resp.status_code == 422, (
+        f"Expected 422 for invalid platform 'windows-phone', got {resp.status_code}: {resp.text}"
     )
 
 
