@@ -51,6 +51,11 @@ class TrainerUpdateRequest(BackendSchemaBase):
     full_name: str | None = Field(default=None, min_length=1, max_length=200)
     phone: str | None = Field(default=None, pattern=PHONE_REGEX)
     is_active: bool | None = None
+    # Phase 88 TRNR-02: profile fields (owner-write)
+    bio: str | None = None
+    specialization: str | None = None
+    # photo_url: max_length=2048 length cap; scheme validation at render time (Plan 03 T-88-03).
+    photo_url: str | None = Field(default=None, max_length=2048)
 
 
 # ---------------------------------------------------------------------------
@@ -67,6 +72,10 @@ class TrainerResponse(ResponseData):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    # Phase 88 TRNR-01: new profile fields (read echo)
+    bio: str | None = None
+    specialization: str | None = None
+    photo_url: str | None = None
 
 
 # ---------------------------------------------------------------------------

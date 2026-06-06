@@ -32,6 +32,12 @@ class Trainer(Base, UUIDPkMixin, TimestampMixin, SoftDeleteMixin):
         nullable=False,
         server_default=text("true"),
     )
+    # Phase 88 TRNR-01/TRNR-02: profile fields (owner-write via PATCH, client-read via GET)
+    bio: Mapped[str | None] = mapped_column(Text, nullable=True)
+    specialization: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # photo_url: max_length=2048 enforced at DTO boundary (TrainerUpdateRequest);
+    # scheme validation deferred to render layer (Plan 03 T-88-03).
+    photo_url: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
         Index(
