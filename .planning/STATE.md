@@ -28,7 +28,7 @@ See: .planning/PROJECT.md
 Phase: Milestone v2.4 complete
 Plan: —
 Status: Awaiting next milestone
-Last activity: 2026-06-06 — Completed quick task 260606-u22: replaced BookScreen with the new «Запись» design (hybrid — real booking + decor overlay)
+Last activity: 2026-06-06 — Completed quick task 260606-uxo: replaced GymInfoSheet with the new «О зале» design (hybrid — real /client/gym + decor occupancy/staff)
 
 ## v2.4 Roadmap Summary
 
@@ -157,6 +157,7 @@ None.
 | 260606-szy | Integrate new Notifications design into wired NotificationsSheet — no frame, shared tokens, real API, gestures→mark-read | 2026-06-06 | bb5832ec | [260606-szy-integrate-new-notifications-design-into](./quick/260606-szy-integrate-new-notifications-design-into/) |
 | 260606-toj | Pixel-perfect verbatim port of BookingScreen.jsx (Запись) into apps/client-pwa (added, not yet routed/wired) | 2026-06-06 | 870d0ce7 | [260606-toj-pixel-perfect-verbatim-port-of-the-user-](./quick/260606-toj-pixel-perfect-verbatim-port-of-the-user-/) |
 | 260606-u22 | Replace BookScreen with the new «Запись» design (hybrid — real /client/slots+/booking, trainer rating/exp/price + duration as decor) | 2026-06-06 | 1e39219d | [260606-u22-replace-bookscreen-with-the-new-design-h](./quick/260606-u22-replace-bookscreen-with-the-new-design-h/) |
+| 260606-uxo | Replace GymInfoSheet with the new «О зале» design (hybrid — real /client/gym + live status; occupancy/staff as decor) | 2026-06-06 | 029b4f49 | [260606-uxo-replace-gyminfosheet-with-the-new-aboutg](./quick/260606-uxo-replace-gyminfosheet-with-the-new-aboutg/) |
 
 ## Deferred Items
 
