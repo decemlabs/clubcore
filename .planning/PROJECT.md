@@ -91,6 +91,36 @@ Phase 40 milestone verification (legacy note) — see v1.5 archive for detail.
 
 </details>
 
+## Current Milestone: v2.5 Chat / Messaging — Client↔Gym
+
+**◆ In progress (opened 2026-06-06).** Самый тяжёлый Group-B домен: живая 1:1-переписка клиента с залом из PWA в реальном времени. ChatScreen сейчас ComingSoon. Staff-сторона решена через **Telegram-мост** (без расфриза admin-web — chat-инбокс в админке отложен на v2.6).
+
+**Goal:** Клиент ведёт живую 1:1-переписку с залом из PWA в реальном времени; staff отвечает через Telegram-мост; всё под `require_client()`, IDOR-safe, staff-контракт байт-в-байт цел.
+
+**Target features:**
+- **Messaging-домен** — новый `app/modules/messaging/`: 1:1 тред `client↔зал`, отправка/получение сообщений, unread-счётчик; client-read/write под `require_client()` (IDOR-safe, 404-collapse на не-свой тред); `GET /client/messages` (история + unread) + `POST /client/messages` (отправка).
+- **WebSocket-транспорт** — первый real-time слой в проекте: FastAPI WS endpoint + Redis pub/sub для fan-out доставки; PWA подключается/переподключается (reconnect/backoff); auth WS по тому же `aud:"client"` принципалу.
+- **Read receipts + typing** — отметки «прочитано» (per-message/per-thread) + индикатор набора, доставляются через WS.
+- **Вложения (фото)** — загрузка изображений в сообщения; первая бинарная поверхность проекта — хранилище/прокси файлов + валидация типа/размера (stored-XSS / content-type guard).
+- **Telegram-мост (staff-канал)** — staff отвечает из существующего Telegram-бота; сообщения зеркалятся в обе стороны (client→staff DM, staff-reply→тред). Переиспользует уже живой Telegram-процесс (`app/workers/telegram_bot.py`), без нового staff-UI.
+- **PWA ChatScreen wired** — убрать ComingSoon; подключить к реальному API + WS; убрать mock; graduate из D-71-09 placeholder-зоны (де-листинг 3 spots + импорт через `@/data`, урок v2.4).
+- **OpenAPI handoff** — byte-stable regen `openapi.json` + `schema.d.ts` + `AssertNonNever` forward-guards; staff-пути байт-идентичны `contract-freeze-v1.11.0` (drift gate зелёный).
+
+**Out of scope (этого milestone):**
+- **admin-web chat-инбокс** — расфриз admin-web и боевое подключение к API отложены на v2.6 (первый production-wiring админки — отдельный крупный milestone). `apps/admin-web` остаётся frozen.
+- **Системные сообщения в треде** — чат строго человеческий (client↔staff); авто-события (брони/платежи/autopay) остаются в v2.4 notification inbox, НЕ дублируются в тред (нет system-message типа).
+- **Групповые чаты / каналы / broadcast** — только 1:1 client↔зал.
+- **Голос/видео/файлы кроме фото** — только текст + изображения.
+
+**Key constraints:**
+- Staff-free на уровне UI: всё клиентское под `require_client()`; `apps/admin-web` не трогаем (frozen); staff-ответы только через Telegram-мост.
+- WS — новая поверхность: auth/принципал по `aud:"client"` (D-20-PRINCIPAL); Redis 7 (уже в стеке) как pub/sub backbone; тесты через ASGITransport где возможно + явные WS-тесты.
+- Вложения — новая бинарная поверхность: content-type allowlist + size cap + XSS-safe выдача (прецедент photo_url-валидатора Phase 88).
+- `app/modules/messaging/` следует D-20-MODULE (raw-SQL reads / Protocol-slot writes; минимум новых `ignore_imports`) + D-20-IDOR (client_id только из principal). Telegram-мост через worker→modules edge (прецедент D-06/D-10).
+- Деньги/даты не задействованы напрямую; Europe/Moscow для timestamp-форматирования на клиенте.
+
+**Status:** ◆ In progress (opened 2026-06-06). Phase numbering continues from v2.4 (last phase 89) → v2.5 starts at Phase 90. `REQUIREMENTS.md` recreated fresh; v2.4 snapshot archived to `.planning/milestones/v2.4-REQUIREMENTS.md`.
+
 ## Last Shipped Milestone: v2.4 Content & Communication — Client-First
 
 **✅ SHIPPED 2026-06-06** (Phases 86-89, 11 plans, 13/13 requirements; tag `v2.4`; audit `tech_debt`, 0 blockers, 7/7 E2E flows wired, integration 0 open findings). The first Group-B content/communication slice — all client-first under `require_client()` (IDOR-safe), owner-only write-API + seeds (no admin-web UI), staff contract byte-identical to `contract-freeze-v1.11.0`:
@@ -323,7 +353,7 @@ v1.8 Reports + Audit Log read API shipped 2026-05-24 (tag `v1.8`, 30/30 requirem
 
 ## Next Milestone Goals
 
-**v2.4 Content & Communication — Client-First in progress (opened 2026-06-06).** v2.1 (Fill the Gaps), v2.2 (Membership self-service depth) and v2.3 (Loyalty + Real Autopay) shipped; the sequence is being walked in order. v2.4 opens the first **Group B content/communication** slice — the staff-side decision gate below is now **resolved**. Candidate sequence below (versions/order are a guide, not a contract; production may jump ahead). Durable snapshot mirrored in `.planning/todos/pending/2026-06-02-future-milestones-sequence-post-v2-1.md`.
+**v2.5 Chat / Messaging in progress (opened 2026-06-06).** v2.1→v2.4 shipped in order (Fill the Gaps, Membership self-service, Loyalty + Real Autopay, Content & Communication). v2.5 opens the heaviest Group-B domain — live 1:1 client↔gym messaging. Staff-side resolved via **Telegram bridge** (no admin-web unfreeze; the admin chat inbox moves to v2.6). Candidate sequence below (versions/order are a guide, not a contract; production may jump ahead). Durable snapshot mirrored in `.planning/todos/pending/2026-06-02-future-milestones-sequence-post-v2-1.md`.
 
 **✅ Decision gate before content/communication domains — RESOLVED (2026-06-06, D-86-STAFF):** for v2.4 we chose **option (2): owner manages via owner-only write-API + seeds, no admin-web UI**. `apps/admin-web` stays frozen; the admin-web UI for these domains becomes a separate future milestone that integrates over the already-shipped client-facing paths. The notification inbox is fed by **system events only** (no manual broadcast — anti-feature), and **trainer reviews are deferred** (only trainer detail/bio ships), so the moderation surface that would have demanded a staff UI is out of v2.4 scope entirely.
 
@@ -331,9 +361,9 @@ v1.8 Reports + Audit Log read API shipped 2026-05-24 (tag `v1.8`, 30/30 requirem
 |---|---|---|
 | **v2.2 — Membership self-service depth** ✅ shipped 2026-06-03 | Card-on-file + autopay (YooKassa saved methods, `GET /client/payment-method` → flag `linkedCard`); booking reschedule (`POST /client/booking/{id}/reschedule`); weekly-activity analytics (`GET /client/activity/weekly` → flag `weeklyActivity`). | No |
 | **v2.3 — Loyalty / club bonuses + real autopay** ✅ shipped 2026-06-06 | Bonus balance + ledger (event-based accrual: welcome/promo/manual owner-grant via owner-only API, no admin-web UI) + server-authoritative webhook redemption → flag `clubBonuses`. **Plus** the real `charge_expiring_autopay` cron deferred from v2.2 (off-session YooKassa charge on saved token). Gold-tier/tenure deferred; referral accrual = manual grant only (codes → v2.6). Keep discount server-side, D-06. | No |
-| **v2.4 — Content & communication (client-first)** ◆ in progress | Gym-info/CMS (`GET /client/gym`); in-app notification inbox + push tokens (fed by system events only); trainer **detail/bio** (`GET /client/trainers/{id}`). Owner-only write-API + seeds; **no admin-web UI** (deferred); **reviews deferred**. | No (owner-via-API) |
-| **v2.5 — Chat / messaging** | Full `messaging` domain (conversations, unread, ws/polling). Heaviest; ChatScreen currently ComingSoon. | **Yes** (gated) |
-| **v2.6 — Referral program** | `referral` domain: codes, rewards, history (ReferralSheet ComingSoon). | Partial |
+| **v2.4 — Content & communication (client-first)** ✅ shipped 2026-06-06 | Gym-info/CMS (`GET /client/gym`); in-app notification inbox + push tokens (fed by system events only); trainer **detail/bio** (`GET /client/trainers/{id}`). Owner-only write-API + seeds; **no admin-web UI** (deferred); **reviews deferred**. | No (owner-via-API) |
+| **v2.5 — Chat / messaging** ◆ in progress | New `messaging` domain (1:1 client↔gym thread, unread, read-receipts/typing, photo attachments); first **WebSocket** real-time layer (FastAPI WS + Redis pub/sub); PWA ChatScreen wired (ComingSoon removed). Human-only chat — system events stay in v2.4 notification inbox. | **Yes** — Telegram bridge (admin-web stays frozen; admin chat inbox → v2.6) |
+| **v2.6 — Referral program + admin-web chat inbox** | `referral` domain: codes, rewards, history (ReferralSheet ComingSoon). **Plus** the deferred admin-web chat inbox — first production wiring of `apps/admin-web` to the live API (unfreeze). | Partial / **Yes** (admin-web) |
 | **v3.0 — Production deploy / launch** (may jump ahead) | Kubernetes/Terraform (INFRA-01); `sportzal_csrf → clubcore_csrf` rename (NAME-01, D-11-CSRF-DEFER); live ЮKassa credentialed leg (RUN-01, OPERATOR-PENDING per D-72-06) + RU email/SMS deliverability; secrets + monitoring; `/gsd:secure-phase 70` (3 deferred security items). | — |
 
 **Other deferred (outside explicit milestones):** promo-code admin CRUD UI (999.4 — depends on staff side); phone-change via OTP (new endpoint); FAQ static → config endpoint (cosmetic).
@@ -502,7 +532,7 @@ Target features (all delivered):
 
 ### Active
 
-**v2.4 Content & Communication — Client-First (opened 2026-06-06).** Три client-facing домена, полностью на клиентской стороне, staff-управление только через owner-only write-API + сиды (admin-web остаётся frozen, UI — будущий milestone): (1) **Gym-info / CMS** — `GET /client/gym` (адрес/часы/удобства/правила), owner-only write-API + сиды; (2) **Notification inbox** — `GET/PATCH /client/notifications` + регистрация push-токенов, лента питается ТОЛЬКО системными событиями (брони/платежи/autopay-исходы), без ручных рассылок; (3) **Trainer detail/bio** — `GET /client/trainers/{id}` (профиль + bio через owner-only write-API/сиды). Всё под `require_client()`, IDOR-safe; staff-контракт байт-в-байт; контракт замораживается byte-stable в финале. Отложено: **отзывы тренеров** (review submission + модерация → будущий milestone), admin-web UI для этих доменов, broadcast/ручные рассылки, occupancy live-источник.
+**v2.5 Chat / Messaging — Client↔Gym (opened 2026-06-06).** Живая 1:1-переписка клиента с залом из PWA в реальном времени: новый `app/modules/messaging/` (тред + сообщения + unread, `GET/POST /client/messages`, IDOR-safe под `require_client()`); первый real-time WS-слой (FastAPI WS + Redis pub/sub) с reconnect; read-receipts + typing; вложения-фото (первая бинарная поверхность — content-type allowlist + size cap + XSS-safe выдача); **Telegram-мост** как staff-канал (zerkalo в обе стороны через существующий bot-worker, без расфриза admin-web); PWA ChatScreen wired (убрать ComingSoon, graduate из D-71-09 зоны); byte-stable OpenAPI handoff в финале. **Out of scope:** admin-web chat-инбокс (→ v2.6), системные сообщения в треде (остаются в v2.4 notification inbox — чат строго человеческий), групповые чаты/broadcast, голос/видео/файлы кроме фото.
 
 ### Out of Scope
 
@@ -631,6 +661,9 @@ This document evolves at phase transitions and milestone boundaries.
 2. Core Value check — still the right priority?
 3. Audit Out of Scope — reasons still valid?
 4. Update Context with current state
+
+---
+*Last updated: 2026-06-06 — **started milestone v2.5 Chat / Messaging — Client↔Gym** (walking the v2.2→v2.6 sequence in order; v2.1/v2.2/v2.3/v2.4 shipped). Opens the heaviest Group-B domain: live 1:1 client↔gym messaging from the PWA. **Staff-side resolved to the Telegram bridge** — staff replies from the existing bot, mirrored both ways into the new `app/modules/messaging/` domain; `apps/admin-web` stays frozen (its chat inbox + first production API-wiring moves to v2.6). Scope: messaging domain (1:1 thread + unread + `GET/POST /client/messages`, IDOR-safe under `require_client()`); the project's first **WebSocket** real-time layer (FastAPI WS + Redis pub/sub, reconnect/backoff, `aud:"client"` WS auth); read-receipts + typing; **photo attachments** (first binary surface — content-type allowlist + size cap + XSS-safe serving); Telegram bridge (worker→modules edge, D-06/D-10 precedent); PWA ChatScreen wired (ComingSoon removed, graduated from the D-71-09 placeholder zone); byte-stable OpenAPI handoff. **Out of scope:** admin-web chat inbox (→ v2.6), system messages in the thread (chat is human-only — auto events stay in the v2.4 notification inbox), group chats/broadcast, voice/video/non-photo files. Phase numbering continues from v2.4 (last phase 89) → v2.5 starts at Phase 90. `REQUIREMENTS.md` recreated fresh; v2.4 snapshot archived to `.planning/milestones/v2.4-REQUIREMENTS.md`.*
 
 ---
 *Last updated: 2026-06-06 — **started milestone v2.4 Content & Communication — Client-First** (walking the v2.2→v2.6 sequence in order; v2.1/v2.2/v2.3 shipped). Opens the first Group B content/communication slice with the staff-side gate **resolved to option (2): owner-only write-API + seeds, no admin-web UI** (D-86-STAFF). Three client-facing domains, all under `require_client()`, IDOR-safe, staff contract byte-identical: (1) **Gym-info / CMS** — `GET /client/gym` (адрес/часы/удобства/правила), owner-only write-API + сиды (replaces the static `data/gym.js`); (2) **Notification inbox** — `GET/PATCH /client/notifications` (read/mark-read) + push-token registration, the feed is populated by **system events only** (bookings/payments/autopay outcomes) — broadcast/manual blasts are an explicit anti-feature; (3) **Trainer detail/bio** — `GET /client/trainers/{id}` (profile + bio via owner-only write-API/seeds), surfacing TrainerDetailSheet (currently ComingSoon). **Out of scope:** trainer reviews (review submission + moderation → future milestone — removes the staff-moderation UI need), admin-web UI for these domains (deferred future milestone), broadcast/manual notifications, live occupancy source. Phase numbering continues from v2.3 (last phase 85) → v2.4 starts at Phase 86. `REQUIREMENTS.md` recreated fresh; v2.3 snapshot archived to `.planning/milestones/v2.3-REQUIREMENTS.md`.*

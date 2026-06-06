@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.4
-milestone_name: Content & Communication — Client-First
-status: Awaiting next milestone
-stopped_at: Phase 89 Plan 01 complete — v2.4 milestone gate green
-last_updated: "2026-06-06T16:43:28.661Z"
-last_activity: 2026-06-06 — Milestone v2.4 completed and archived
+milestone: v2.5
+milestone_name: Chat / Messaging — Client↔Gym
+status: planning
+last_updated: "2026-06-06T19:38:50.073Z"
+last_activity: 2026-06-06
 progress:
-  total_phases: 8
-  completed_phases: 4
-  total_plans: 11
-  completed_plans: 11
-  percent: 50
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: Milestone v2.4 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-06 — Completed quick task 260606-uxo: replaced GymInfoSheet with the new «О зале» design (hybrid — real /client/gym + decor occupancy/staff)
+Status: Defining requirements
+Last activity: 2026-06-06 — Milestone v2.5 started
 
 ## v2.4 Roadmap Summary
 
