@@ -234,6 +234,47 @@ describe('NotificationsSheet', () => {
     expect(markReadMutate).not.toHaveBeenCalled()
   })
 
+  // (e-rollback) CR-01: mark-all error rollback does NOT over-count already-read items
+  it('CR-01: onError rollback restores only items that were unread before mark-all, not already-read ones', async () => {
+    // Setup: one unread item and one already-read item
+    const onErrorCallback = { fn: null }
+    markAllReadMutate.mockImplementation((_, { onError } = {}) => {
+      // Capture onError for manual invocation
+      onErrorCallback.fn = onError
+    })
+
+    useClientNotifications.mockReturnValue(makeQuery({
+      data: {
+        items: [UNREAD_ITEM, READ_ITEM],
+        total: 2, page: 1, pageSize: 10, unreadCount: 1,
+      },
+    }))
+
+    renderSheet(<NotificationsSheet onClose={vi.fn()} />)
+
+    // Verify initial state: 1 unread dot
+    expect(screen.queryAllByLabelText('непрочитано')).toHaveLength(1)
+
+    // Click mark-all — triggers optimistic update
+    fireEvent.click(screen.getByText('Всё прочитано'))
+
+    // After optimistic update: 0 unread dots
+    expect(screen.queryAllByLabelText('непрочитано')).toHaveLength(0)
+
+    // Trigger onError rollback
+    act(() => {
+      onErrorCallback.fn?.()
+    })
+
+    // After rollback: the original unread dot should be restored
+    expect(screen.queryAllByLabelText('непрочитано')).toHaveLength(1)
+
+    // The already-read item (READ_ITEM) must NOT have an unread dot after rollback
+    // (CR-01: old code inflated optimisticReadIds by adding all IDs including already-read)
+    const dots = screen.queryAllByLabelText('непрочитано')
+    expect(dots).toHaveLength(1)
+  })
+
   // (g) Error state copy renders on isError
   it('renders error copy when query fails', () => {
     useClientNotifications.mockReturnValue(makeQuery({
