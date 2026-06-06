@@ -52,6 +52,7 @@ from app.modules.client_portal.schemas import (
     ClientCatalogPlanResponse,
     ClientCatalogPtPackageResponse,
     ClientCatalogTrainerResponse,
+    ClientTrainerDetailResponse,
     ClientCheckInRequest,
     ClientCheckInResponse,
     ClientCheckoutRequest,
@@ -329,6 +330,29 @@ async def client_list_trainers(
     No try/except — AppError bubbles to _app_error_handler.
     """
     result = await service.list_trainers(session)
+    return envelope(result)
+
+
+@router.get(
+    "/trainers/{trainer_id}",
+    response_model=ResponseEnvelope[ClientTrainerDetailResponse],
+    operation_id="client_get_trainer",
+    summary=(
+        "Single trainer profile for the authenticated client (TRNR-01); "
+        "404 trainer_not_found on unknown / soft-deleted / inactive"
+    ),
+)
+async def client_get_trainer(
+    trainer_id: UUID,
+    client: Annotated[ClientPrincipal, Depends(require_client())],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[ClientTrainerDetailResponse]:
+    """TRNR-01 — client-safe trainer detail (id, name, photo_url, spec, bio).
+
+    404 trainer_not_found for missing/soft-deleted/inactive trainers (D-20-IDOR).
+    No try/except — NotFoundError bubbles to _app_error_handler.
+    """
+    result = await service.get_trainer_detail(session, trainer_id)
     return envelope(result)
 
 

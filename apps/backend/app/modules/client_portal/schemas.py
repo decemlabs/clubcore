@@ -115,11 +115,24 @@ class ClientCatalogTrainerResponse(ResponseData):
     """Active trainer — client-safe projection (CPLAN-03, D-69-05).
 
     NO rates, NO phone, NO is_active flag, NO audit fields.
-    specialization is not present in the Trainer model (reserved for future).
     """
 
     id: UUID
     full_name: str
+
+
+class ClientTrainerDetailResponse(ResponseData):
+    """Single trainer detail — client-safe projection (TRNR-01, Phase 88).
+
+    Client-safe fields only: id, full_name, photo_url, specialization, bio.
+    NO phone, NO is_active, NO rates, NO audit fields (D-20-IDOR / CPLAN convention).
+    """
+
+    id: UUID
+    full_name: str
+    photo_url: str | None = None
+    specialization: str | None = None
+    bio: str | None = None
 
 
 # ---------------------------------------------------------------------------

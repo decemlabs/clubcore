@@ -42,6 +42,7 @@ __all__ = (
     "fetch_client_visits_page",
     "fetch_membership_plans_catalog",
     "fetch_pt_packages_catalog",
+    "fetch_trainer_detail",
     "fetch_trainers_catalog",
     "fetch_weekly_activity",
     "update_client_profile",
@@ -528,6 +529,31 @@ async def fetch_trainers_catalog(
         )
     ).mappings().all()
     return [dict(r) for r in rows]
+
+
+async def fetch_trainer_detail(
+    session: AsyncSession,
+    trainer_id: UUID,
+) -> dict[str, object] | None:
+    """Single trainer detail — client-safe fields only (TRNR-01, Phase 88).
+
+    CROSS-MODULE READ — raw SQL text() only; NO ORM import of Trainer.
+    Client-safe projection: id, full_name, photo_url, specialization, bio.
+    Filters: is_active = true AND deleted_at IS NULL (404 on unknown/inactive/soft-deleted).
+    CAST(:trainer_id AS UUID) — asyncpg sends bind params as VARCHAR (same pattern as
+    fetch_available_slots in this file).
+    """
+    row = (
+        await session.execute(
+            text(
+                "SELECT id, full_name, photo_url, specialization, bio "
+                "FROM trainers "
+                "WHERE id = CAST(:trainer_id AS UUID) "
+                "AND is_active = true AND deleted_at IS NULL"
+            ).bindparams(trainer_id=str(trainer_id)),
+        )
+    ).mappings().one_or_none()
+    return dict(row) if row is not None else None
 
 
 # ---------------------------------------------------------------------------

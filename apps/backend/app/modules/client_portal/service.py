@@ -66,6 +66,7 @@ from app.modules.client_portal.schemas import (
     ClientCatalogPlanResponse,
     ClientCatalogPtPackageResponse,
     ClientCatalogTrainerResponse,
+    ClientTrainerDetailResponse,
     ClientCheckInResponse,
     ClientCheckoutResponse,
     ClientHomeResponse,
@@ -417,6 +418,28 @@ async def list_trainers(
         )
         for r in rows
     ]
+
+
+async def get_trainer_detail(
+    session: AsyncSession,
+    trainer_id: UUID,
+) -> ClientTrainerDetailResponse:
+    """Single trainer detail for client GET (TRNR-01, Phase 88).
+
+    404-collapse on missing/soft-deleted/inactive trainer (D-20-IDOR).
+    No try/except — NotFoundError bubbles to _app_error_handler.
+    """
+    row = await repository.fetch_trainer_detail(session, trainer_id)
+    if row is None:
+        raise NotFoundError("trainer_not_found")
+    r: dict[str, Any] = cast(Any, row)
+    return ClientTrainerDetailResponse(
+        id=r["id"],
+        full_name=str(r["full_name"]),
+        photo_url=r.get("photo_url"),
+        specialization=r.get("specialization"),
+        bio=r.get("bio"),
+    )
 
 
 # ---------------------------------------------------------------------------
