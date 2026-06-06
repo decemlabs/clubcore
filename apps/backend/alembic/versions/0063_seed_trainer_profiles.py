@@ -14,7 +14,9 @@ Idempotency:
 - Re-running sets identical values — safe no-op side-effect on subsequent runs.
 - photo_url left NULL; owner sets it later via PATCH /api/v1/trainers/{id}.
 
-Downgrade resets specialization/bio/photo_url to NULL for all non-deleted rows.
+Downgrade resets specialization/bio/photo_url to NULL only for the six seeded rows
+(mirrors the upgrade's full_name filter — does NOT touch owner-edited rows added
+after the seed, WR-01 fix).
 """
 
 from __future__ import annotations
@@ -85,10 +87,13 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(
-        sa.text(
-            "UPDATE trainers "
-            "SET specialization = NULL, bio = NULL, photo_url = NULL "
-            "WHERE deleted_at IS NULL"
+    # WR-01: scope downgrade to mirror upgrade — only reset the six seeded rows,
+    # not ALL non-deleted trainers (which would wipe owner-edited rows added later).
+    for full_name, _specialization, _bio in _TRAINER_PROFILES:
+        op.execute(
+            sa.text(
+                "UPDATE trainers "
+                "SET specialization = NULL, bio = NULL, photo_url = NULL "
+                "WHERE full_name = :name AND deleted_at IS NULL"
+            ).bindparams(name=full_name)
         )
-    )
