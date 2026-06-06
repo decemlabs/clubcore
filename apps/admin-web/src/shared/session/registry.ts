@@ -23,6 +23,7 @@ export type Resource =
   | 'bookings' // NEW Phase 37 INFRA-26 — mirror Resource.BOOKINGS.value
   | 'users' // NEW Phase 41 INFRA-37 / D-41-23 — multi-user admin backend contract; no sidebar in v1.3 mock-reference
   | 'audit-log' // NEW Phase 54 INFRA-42 — mirror Resource.AUDIT_LOG.value; no sidebar entry in v1.8
+  | 'gym' // NEW Phase 86 GYM-02 — mirror Resource.GYM.value; owner-only gym-info write
 
 export type Action =
   | 'view'

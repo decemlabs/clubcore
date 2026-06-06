@@ -26,9 +26,10 @@ def test_owner_only_has_exactly_forty_entries() -> None:
     #                pairs: (CREATE, COMPENSATION) + PAYROLL (CREATE / EDIT / REFUND /
     #                LIST). (EDIT, COMPENSATION) collapsed into (CREATE, COMPENSATION)
     #                per D-58-15 Claude's Discretion (INSERT-only versioned model).
+    #              + 1 v2.4 Phase 86 GYM-02 (EDIT on GYM — gym-info owner-only write).
     # tests/integration/test_rbac_parity.py covers the cross-codebase mirror;
     # this assertion is the structural-only drift tripwire.
-    assert len(OWNER_ONLY) == 40
+    assert len(OWNER_ONLY) == 41
 
 
 def test_role_value_set() -> None:
@@ -53,7 +54,8 @@ def test_action_value_set() -> None:
 
 def test_resource_value_set() -> None:
     # Verbatim from apps/admin-web/src/shared/session/registry.ts
-    # (22 values: 11 v1.1 + 3 v1.2 + 1 v1.2 FE-09 + 5 v1.4 INFRA-18 + 2 v1.5 Phase 37 INFRA-26).
+    # (23 values: 11 v1.1 + 3 v1.2 + 1 v1.2 FE-09 + 5 v1.4 INFRA-18 + 2 v1.5 Phase 37 INFRA-26
+    # + 1 v2.4 Phase 86 GYM-02 (gym)).
     # Note: OWNER_AREA / MEMBERSHIP_PLANS / PT_PACKAGE_PLANS / PT_PACKAGES / PT_SESSIONS /
     # SCHEDULE_SLOTS Python identifiers map to hyphenated string values.
     assert {r.value for r in Resource} == {
@@ -81,6 +83,7 @@ def test_resource_value_set() -> None:
         "bookings",  # Phase 37 INFRA-26 — v1.5 booking resource (single word)
         "users",  # Phase 41 INFRA-37 / D-41-21 — v1.6 multi-user admin resource
         "audit-log",  # Phase 54 INFRA-42 — v1.8 audit-log read resource (kebab, multi-word)
+        "gym",  # Phase 86 GYM-02 — v2.4 gym-info owner-only write resource
     }
 
 
@@ -118,12 +121,14 @@ def test_reception_allowed_for_non_owner_only_pair() -> None:
 
 
 def test_specific_owner_only_membership() -> None:
-    """Spot-check 35 locked entries (drift tripwire).
+    """Spot-check 41 locked entries (drift tripwire).
 
     Composition: v1.1 + v1.2 INFRA-08 + v1.4 INFRA-19 - Phase 34 D-34-09a
                  + 4 v1.5 Phase 37 INFRA-27 SCHEDULE_SLOTS write pairs
                  + 4 v1.6 Phase 41 INFRA-37 USERS write pairs
-                 + 2 v1.8 Phase 54 INFRA-42 AUDIT_LOG read pairs.
+                 + 2 v1.8 Phase 54 INFRA-42 AUDIT_LOG read pairs
+                 + 5 v1.9 Phase 58 INFRA-15 / D-58-15 payroll/compensation write pairs
+                 + 1 v2.4 Phase 86 GYM-02 (EDIT, GYM).
     """
     expected = frozenset(
         {
@@ -187,6 +192,9 @@ def test_specific_owner_only_membership() -> None:
             (Action.EDIT, Resource.PAYROLL),
             (Action.REFUND, Resource.PAYROLL),
             (Action.LIST, Resource.PAYROLL),
+            # Phase 86 GYM-02 - v2.4 gym-info owner-only write
+            # (reception denied EDIT on gym; enforced at router level in Plan 02).
+            (Action.EDIT, Resource.GYM),
         }
     )
     assert expected == OWNER_ONLY

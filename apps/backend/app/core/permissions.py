@@ -56,9 +56,11 @@ class Resource(StrEnum):
     USERS = "users"  # NEW Phase 41 INFRA-37 / D-41-21 — multi-user admin module (Phase 43)
     # NEW Phase 54 INFRA-42 — kebab on wire (multi-word, mirrors OWNER_AREA / SCHEDULE_SLOTS)
     AUDIT_LOG = "audit-log"
+    # Phase 86 GYM-02 — gym-info owner-only write; value mirrors registry.ts Resource union
+    GYM = "gym"
 
 
-# Verbatim mirror of apps/admin-web/src/shared/session/can.ts (40 entries after Phase 58 INFRA-15).
+# Verbatim mirror of apps/admin-web/src/shared/session/can.ts (41 entries after Phase 86 GYM-02).
 # frozenset for set-membership lookup in can() and parity-set equality in Phase 6.
 OWNER_ONLY: frozenset[tuple[Action, Resource]] = frozenset(
     {
@@ -139,6 +141,9 @@ OWNER_ONLY: frozenset[tuple[Action, Resource]] = frozenset(
         (Action.EDIT, Resource.PAYROLL),
         (Action.REFUND, Resource.PAYROLL),
         (Action.LIST, Resource.PAYROLL),
+        # Phase 86 GYM-02 — gym-info owner-only write (T-86-02 mitigation).
+        # Reception is denied EDIT on gym-info content; 403 enforced at router.
+        (Action.EDIT, Resource.GYM),
     }
 )
 

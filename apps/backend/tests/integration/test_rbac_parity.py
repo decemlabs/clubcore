@@ -132,14 +132,15 @@ def test_action_values_match() -> None:
 
 
 def test_owner_only_count_is_forty() -> None:
-    """Sanity belt — `OWNER_ONLY` is exactly 40 entries.
+    """Sanity belt — `OWNER_ONLY` is exactly 41 entries.
 
     Breakdown: 9 v1.1 + 6 v1.2 INFRA-08 + 11 v1.4 INFRA-19 - 1 D-34-09a
     + 4 v1.5 INFRA-27 (CREATE|EDIT|DELETE|CANCEL on SCHEDULE_SLOTS)
     + 4 v1.6 Phase 41 INFRA-37 (CREATE|UPDATE|DELETE|LIST on USERS)
     + 2 v1.8 Phase 54 INFRA-42 (VIEW|LIST on AUDIT_LOG)
     + 5 v1.9 Phase 58 INFRA-15 / D-58-15
-      (CREATE|COMPENSATION, CREATE|PAYROLL, EDIT|PAYROLL, REFUND|PAYROLL, LIST|PAYROLL).
+      (CREATE|COMPENSATION, CREATE|PAYROLL, EDIT|PAYROLL, REFUND|PAYROLL, LIST|PAYROLL)
+    + 1 v2.4 Phase 86 GYM-02 (EDIT on GYM).
     """
-    assert len(OWNER_ONLY) == 40
-    assert len(_parse_owner_only_pairs()) == 40
+    assert len(OWNER_ONLY) == 41
+    assert len(_parse_owner_only_pairs()) == 41
