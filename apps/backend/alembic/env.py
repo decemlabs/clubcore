@@ -44,6 +44,7 @@ import app.modules.promo_codes.models  # Phase 999.4 D-04/D-07 / 0046 (env.py ga
 import app.modules.loyalty.models  # Phase 82 LOYL-03 / 0054
 import app.modules.autopay_charges.models  # Phase 84 APAY-03/APAY-04 / 0056
 import app.modules.gym.models  # Phase 86 GYM-01 / 0058
+import app.modules.notifications.models  # Phase 87 INBOX-01/INBOX-02 / 0060+0061
 import app.core.audit_models  # noqa: F401
 
 # Alembic Config object — provides access to values within alembic.ini.
