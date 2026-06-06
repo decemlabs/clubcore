@@ -28,7 +28,7 @@ See: .planning/PROJECT.md
 Phase: Milestone v2.4 complete
 Plan: —
 Status: Awaiting next milestone
-Last activity: 2026-06-06 — Milestone v2.4 completed and archived
+Last activity: 2026-06-06 — Completed quick task 260606-sqb: verbatim port of NotificationsScreen.jsx
 
 ## v2.4 Roadmap Summary
 
@@ -148,6 +148,12 @@ Last activity: 2026-06-06 — Milestone v2.4 completed and archived
 ### Blockers/Concerns
 
 None.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260606-sqb | Pixel-perfect verbatim port of NotificationsScreen.jsx into apps/client-pwa (added, not yet routed/wired) | 2026-06-06 | d9e0612f | [260606-sqb-pixel-perfect-verbatim-port-of-notificat](./quick/260606-sqb-pixel-perfect-verbatim-port-of-notificat/) |
 
 ## Deferred Items
 
