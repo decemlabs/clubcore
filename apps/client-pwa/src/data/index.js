@@ -53,6 +53,8 @@ export {
   // Phase-82 LOYL-01 + LOYL-02: loyalty balance + history hooks
   useClientLoyaltyBalance,
   useClientLoyaltyHistory,
+  // Phase-86 GYM-01: gym info hook
+  useClientGymInfo,
 } from '../lib/clientQueries'
 
 // ─── Legacy mock constants (retained for non-wired consumers) ─────────────

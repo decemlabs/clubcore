@@ -40,6 +40,7 @@ export const clientPortalKeys = {
   paymentMethod: () => [...clientPortalKeys.all, 'payment-method'] as const,
   loyaltyBalance: () => [...clientPortalKeys.all, 'loyalty-balance'] as const,
   loyaltyHistory: (page: number) => [...clientPortalKeys.all, 'loyalty-history', page] as const,
+  gymInfo: () => [...clientPortalKeys.all, 'gym-info'] as const,
 } as const
 
 // ---------------------------------------------------------------------------
@@ -782,6 +783,37 @@ export function useClientLoyaltyHistory(page = 1) {
         query: { page },
       })
       return (res as { data: PaginatedResult<LoyaltyHistoryItem> }).data
+    },
+    staleTime: 30_000,
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Phase-86 GYM-01: gym info hook + interface
+// ---------------------------------------------------------------------------
+
+/** Wire shape for GET /api/v1/client/gym envelope.data (camelCase on the wire). */
+export interface GymInfoData {
+  name: string
+  tagline: string | null
+  address: string
+  city: string | null
+  metro: string | null
+  phone: string | null
+  email: string | null
+  hours: Array<{ d: string; open: string; close: string }>
+  amenities: Array<{ icon: string; label: string }>
+  rules: string[]
+  social: Array<{ kind: string; label: string; handle: string }>
+}
+
+/** GET /api/v1/client/gym — gym info (Phase 86 GYM-01) */
+export function useClientGymInfo() {
+  return useQuery({
+    queryKey: clientPortalKeys.gymInfo(),
+    queryFn: async () => {
+      const res = await clientRequest('get', '/api/v1/client/gym')
+      return (res as { data: GymInfoData }).data
     },
     staleTime: 30_000,
   })

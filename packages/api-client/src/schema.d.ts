@@ -889,6 +889,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/client/gym": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Gym info singleton for the authenticated client (GYM-01; Phase 86)
+         * @description Return singleton gym_info row. 404 if seed missing.
+         *     D-20-IDOR not applicable — gym_info is shared facility content.
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        get: operations["client_get_gym_info"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/client/loyalty/balance": {
         parameters: {
             query?: never;
@@ -7394,6 +7416,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResponseEnvelope_ClientHomeResponse_"];
+                };
+            };
+        };
+    };
+    client_get_gym_info: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ok: boolean;
+                        data: {
+                            name: string;
+                            tagline: string | null;
+                            address: string;
+                            city: string | null;
+                            metro: string | null;
+                            phone: string | null;
+                            email: string | null;
+                            hours: { d: string; open: string; close: string }[];
+                            amenities: { icon: string; label: string }[];
+                            rules: string[];
+                            social: { kind: string; label: string; handle: string }[];
+                        };
+                    };
                 };
             };
         };
