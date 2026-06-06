@@ -134,7 +134,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 86-02-PLAN.md — gym router (client GET + owner PUT) + v1 registration + integration tests (GYM-01, GYM-02)
+- [x] 86-02-PLAN.md — gym router (client GET + owner PUT) + v1 registration + integration tests (GYM-01, GYM-02)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -230,7 +230,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 86. Gym-Info / CMS | 1/3 | In Progress|  |
+| 86. Gym-Info / CMS | 2/3 | In Progress|  |
 | 87. Notification Inbox | 0/TBD | Not started | - |
 | 88. Trainer Detail / Bio | 0/TBD | Not started | - |
 | 89. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
