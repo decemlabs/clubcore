@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v2.4
 milestone_name: Content & Communication — Client-First
-status: ready_for_verification
-stopped_at: Phase 89 Plan 01 complete — v2.4 milestone gate green
-last_updated: "2026-06-06T12:45:42.148Z"
+status: ready_to_plan
+stopped_at: Phase 89 complete (1/1) — ready to discuss Phase 999.1
+last_updated: 2026-06-06T12:50:20.587Z
 last_activity: 2026-06-06
 progress:
   total_phases: 8
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 89 — OpenAPI Handoff + Milestone Verification
+**Current focus:** Phase 999.1 — wr 06 restore pt session credit on owner force cancel (✅ done 2026 05 29 — quick task 260529 ny2)
 
 ## Current Position
 
-Phase: 89 (OpenAPI Handoff + Milestone Verification) — COMPLETE
-Plan: 1 of 1 (all complete)
-Status: v2.4 milestone gate green — ready for milestone audit/complete/cleanup
-Last activity: 2026-06-06 — Phase 89 Plan 01 complete
+Phase: 999.1
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-06-06
 
 ## v2.4 Roadmap Summary
 
