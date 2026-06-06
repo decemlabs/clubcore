@@ -79,3 +79,36 @@ async def test_reception_patch_bio_returns_403(
     )
     assert r.status_code == 403, r.text
     assert r.json()["code"] == "forbidden", r.json()
+
+
+async def test_owner_patch_javascript_photo_url_returns_422(
+    authed_client_owner: AsyncClient,
+) -> None:
+    """CR-01: owner PATCH photo_url='javascript:alert(1)' → 422 (scheme rejected at API boundary)."""
+    created = await _create(
+        authed_client_owner, phone="+79998880104", full_name="XSS Test Тренер"
+    )
+
+    r = await authed_client_owner.patch(
+        f"/api/v1/trainers/{created['id']}",
+        json={"photoUrl": "javascript:alert(1)"},
+        headers=_csrf_headers(authed_client_owner),
+    )
+    assert r.status_code == 422, r.text
+
+
+async def test_owner_patch_https_photo_url_returns_200(
+    authed_client_owner: AsyncClient,
+) -> None:
+    """CR-01: owner PATCH photo_url with valid https URL → 200, echoed in response."""
+    created = await _create(
+        authed_client_owner, phone="+79998880105", full_name="HTTPS URL Тренер"
+    )
+
+    r = await authed_client_owner.patch(
+        f"/api/v1/trainers/{created['id']}",
+        json={"photoUrl": "https://cdn.example.com/a.jpg"},
+        headers=_csrf_headers(authed_client_owner),
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["data"]["photoUrl"] == "https://cdn.example.com/a.jpg", r.json()

@@ -12,7 +12,7 @@ Decisions enforced here at the DTO boundary:
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from app.core.pagination import PageQuery
 from app.core.schemas import BackendSchemaBase, ResponseData
@@ -54,8 +54,21 @@ class TrainerUpdateRequest(BackendSchemaBase):
     # Phase 88 TRNR-02: profile fields (owner-write)
     bio: str | None = None
     specialization: str | None = None
-    # photo_url: max_length=2048 length cap; scheme validation at render time (Plan 03 T-88-03).
+    # photo_url: max_length=2048 length cap; scheme MUST be http or https (CR-01 fix).
     photo_url: str | None = Field(default=None, max_length=2048)
+
+    @field_validator("photo_url", mode="before")
+    @classmethod
+    def _validate_photo_url_scheme(cls, v: object) -> object:
+        """Reject non-http(s) schemes before the value reaches the database (CR-01)."""
+        if v is None:
+            return v
+        if not isinstance(v, str):
+            return v
+        lower = v.lower().strip()
+        if not (lower.startswith("http://") or lower.startswith("https://")):
+            raise ValueError("photo_url must use http or https scheme")
+        return v
 
 
 # ---------------------------------------------------------------------------
