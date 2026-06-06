@@ -27,6 +27,7 @@ const { ApiError, useClientAvailableSlots, createBookingMutate } = vi.hoisted(()
 vi.mock('@/data', () => ({
   ApiError,
   useClientAvailableSlots: (...a) => useClientAvailableSlots(...a),
+  useClientTrainerDetail: () => ({ data: { id: 'tr-1', fullName: 'Иван Тренер', photoUrl: null, specialization: 'Силовые', bio: 'Реальная биография тренера.' }, isLoading: false }),
   useCreateBooking: () => ({ mutateAsync: createBookingMutate }),
 }))
 
@@ -107,10 +108,12 @@ describe('BookScreen (new design, real booking)', () => {
     await waitFor(() => expect(onOpenPlans).toHaveBeenCalled())
   })
 
-  // «Подробнее» reuses the wired TrainerDetailSheet via onOpenTrainer
-  it('«Подробнее» calls onOpenTrainer with the trainer id', () => {
-    const { onOpenTrainer } = renderScreen()
+  // «Подробнее» opens the in-component slide-up sheet with real bio + «Выбрать тренера»
+  it('«Подробнее» opens the trainer-detail bottom sheet', async () => {
+    renderScreen()
     fireEvent.click(screen.getByText('Подробнее'))
-    expect(onOpenTrainer).toHaveBeenCalledWith(expect.objectContaining({ id: 'tr-1', name: 'Иван Тренер' }))
+    expect(await screen.findByText('Выбрать тренера')).toBeInTheDocument()
+    expect(screen.getByText('Реальная биография тренера.')).toBeInTheDocument()
+    expect(screen.getByText('Ближайшие окна')).toBeInTheDocument()
   })
 })

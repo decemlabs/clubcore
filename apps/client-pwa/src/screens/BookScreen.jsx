@@ -5,7 +5,7 @@ import { LoadError } from '@/components/LoadError.jsx';
 import { Divider, RowItem } from '@/components/RowItem.jsx';
 import { SearchBar } from '@/components/SearchBar.jsx';
 import { StatusBar } from '@/components/StatusBar.jsx';
-import { ApiError, useClientAvailableSlots, useCreateBooking } from '@/data';
+import { ApiError, useClientAvailableSlots, useClientTrainerDetail, useCreateBooking } from '@/data';
 import { monthName } from '@/utils/format.js';
 
 /* ============================================================================
@@ -125,11 +125,21 @@ function PeriodIco({ name }) {
 function Avatar({ initials, bg, color, size }) {
   const fs = Math.round(size * 0.38);
   return (
-    <span className="ava" style={{ width: size, height: size, background: bg, color, fontSize: fs }}>
+    <span className="ava" style={{ width: size, height: size, borderRadius: 999, background: bg, color, fontSize: fs }}>
       {initials}
     </span>
   );
 }
+
+// Trainer-detail bottom sheet (mockup's slide-up dialog). Distinct class names
+// (bk-*) so they never collide with the app's global .sheet/.sheet-scrim.
+const BK_SHEET_CSS = `
+.bk-scrim{position:absolute;inset:0;z-index:40;background:rgba(10,8,6,0.42);opacity:0;pointer-events:none;transition:opacity .28s ease;}
+.bk-scrim.open{opacity:1;pointer-events:auto;}
+.bk-sheet{position:absolute;left:0;right:0;bottom:0;z-index:41;background:var(--surface);border-top-left-radius:28px;border-top-right-radius:28px;box-shadow:0 -10px 40px rgba(0,0,0,0.25);transform:translateY(100%);transition:transform .34s cubic-bezier(0.32,0.72,0.2,1);max-height:86%;display:flex;flex-direction:column;overflow:hidden;}
+.bk-scrim.open .bk-sheet{transform:translateY(0);}
+.bk-sheet-handle{width:38px;height:5px;border-radius:3px;background:var(--border-strong);margin:10px auto 2px;flex-shrink:0;}
+`;
 
 const PERIODS = [
   { id: 'morning', label: 'Утро', hint: 'до 11:00', icon: 'sunrise', range: [0, 11] },
@@ -138,7 +148,7 @@ const PERIODS = [
 ];
 
 export const BookScreen = ({ onTab, onOpenManage, onOpenTrainer, onCheckout, onConfirmFlow, onOpenPlans }) => {
-  void onCheckout;
+  void onCheckout; void onOpenTrainer;
   const navigate = useNavigate();
   const [step, setStep] = React.useState('pick'); // 'pick' | 'confirm' | 'done'
   const [selectedDay, setSelectedDay] = React.useState(null);
@@ -152,6 +162,11 @@ export const BookScreen = ({ onTab, onOpenManage, onOpenTrainer, onCheckout, onC
   const [submitError, setSubmitError] = React.useState(null);
   const [createdBooking, setCreatedBooking] = React.useState(null);
 
+  // Trainer-detail bottom sheet (mockup slide-up dialog)
+  const [sheetTrainerId, setSheetTrainerId] = React.useState(null);
+  const [sheetOpen, setSheetOpen] = React.useState(false);
+  const skipResetRef = React.useRef(false);
+
   const [toastMsg, setToastMsg] = React.useState('');
   const [toastShow, setToastShow] = React.useState(false);
   const toastTimer = React.useRef(null);
@@ -161,6 +176,7 @@ export const BookScreen = ({ onTab, onOpenManage, onOpenTrainer, onCheckout, onC
 
   const { data: slotsData, isLoading: slotsLoading, isError: slotsError, refetch: refetchSlots } = useClientAvailableSlots();
   const createBookingMutation = useCreateBooking();
+  const detailQuery = useClientTrainerDetail(sheetTrainerId); // real spec/bio for the sheet
 
   const toast = React.useCallback((msg) => {
     setToastMsg(msg);
@@ -170,9 +186,10 @@ export const BookScreen = ({ onTab, onOpenManage, onOpenTrainer, onCheckout, onC
   }, []);
 
   React.useEffect(() => {
-    onConfirmFlow && onConfirmFlow(step === 'confirm' || step === 'done');
+    // Hide the shell tab bar during confirm/done AND while the detail sheet is open.
+    onConfirmFlow && onConfirmFlow(step === 'confirm' || step === 'done' || sheetOpen);
     return () => { onConfirmFlow && onConfirmFlow(false); };
-  }, [step]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [step, sheetOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   React.useEffect(() => {
     if (!selectedTrainer) return;
@@ -184,7 +201,12 @@ export const BookScreen = ({ onTab, onOpenManage, onOpenTrainer, onCheckout, onC
     return () => cancelAnimationFrame(id);
   }, [selectedTrainer]);
 
-  React.useEffect(() => { setSelectedSlot(null); setSelectedSlotMeta(null); }, [selectedTrainer, selectedDay]);
+  React.useEffect(() => {
+    // pickFromSheet sets trainer+day+slot together — skip the auto-reset once so
+    // the slot it chose survives the trainer/day change.
+    if (skipResetRef.current) { skipResetRef.current = false; return; }
+    setSelectedSlot(null); setSelectedSlotMeta(null);
+  }, [selectedTrainer, selectedDay]);
 
   const allSlots = slotsData?.items ?? [];
 
@@ -259,6 +281,36 @@ export const BookScreen = ({ onTab, onOpenManage, onOpenTrainer, onCheckout, onC
 
   const selectTrainer = (id) => { setSelectedTrainer(id); setSelectedSlot(null); setSelectedSlotMeta(null); };
   const jumpDay = (key) => { setSelectedDay(key); setSelectedSlot(null); setSelectedSlotMeta(null); };
+
+  // ─── Trainer-detail sheet ──────────────────────────────────────────────────
+  const sheetTrainer = trainersForDay.find((t) => t.id === sheetTrainerId) || null;
+  const sheetWindows = React.useMemo(() => {
+    if (!sheetTrainerId) return [];
+    const out = [];
+    for (const d of calendarDays) {
+      const daySlots = allSlots
+        .filter((s) => s.trainerId === sheetTrainerId && parseSlotDate(s.startTime).key === d.key)
+        .sort((a, b) => a.startTime.localeCompare(b.startTime));
+      if (daySlots.length) out.push({ day: d, slot: daySlots[0] });
+      if (out.length >= 3) break;
+    }
+    return out;
+  }, [sheetTrainerId, allSlots, calendarDays]);
+
+  const openDetail = (id) => { setSheetTrainerId(id); setSheetOpen(true); };
+  const closeDetail = () => setSheetOpen(false);
+  const pickFromSheet = (win) => {
+    if (win) {
+      skipResetRef.current = true;
+      setSelectedTrainer(sheetTrainerId);
+      setSelectedDay(win.day.key);
+      setSelectedSlot(win.slot.slotId);
+      setSelectedSlotMeta({ startTime: win.slot.startTime, trainerName: win.slot.trainerName, trainerId: win.slot.trainerId });
+    } else {
+      setSelectedTrainer(sheetTrainerId);
+    }
+    setSheetOpen(false);
+  };
 
   const handleConfirm = async () => {
     if (!selectedSlot || !selectedSlotMeta) return;
@@ -547,14 +599,12 @@ export const BookScreen = ({ onTab, onOpenManage, onOpenTrainer, onCheckout, onC
                           <span className="chip" style={{ height: 22, fontSize: 11.5, padding: '0 9px' }}>{t.exp}</span>
                           <span className="t-small" style={{ color: 'var(--text-2)', fontWeight: 600 }}>{fmt(t.price)} ₽</span>
                         </div>
-                        {onOpenTrainer && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); onOpenTrainer({ id: t.id, name: t.name, initials: t.initials, bg: t.bg, color: t.color }); }}
-                            style={{ appearance: 'none', border: '0.5px solid var(--border-strong)', background: 'transparent', cursor: 'pointer', height: 26, padding: '0 10px', borderRadius: 999, fontSize: 12, fontWeight: 600, color: 'var(--text-2)', display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'inherit' }}
-                          >
-                            Подробнее
-                          </button>
-                        )}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); openDetail(t.id); }}
+                          style={{ appearance: 'none', border: '0.5px solid var(--border-strong)', background: 'transparent', cursor: 'pointer', height: 26, padding: '0 10px', borderRadius: 999, fontSize: 12, fontWeight: 600, color: 'var(--text-2)', display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'inherit' }}
+                        >
+                          Подробнее
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -690,6 +740,81 @@ export const BookScreen = ({ onTab, onOpenManage, onOpenTrainer, onCheckout, onC
       )}
 
       <div className={'toast' + (toastShow ? ' show' : '')}>{toastMsg}</div>
+
+      {/* Trainer-detail bottom sheet (mockup slide-up) — decor chips, real spec/bio,
+          nearest free windows from real slots */}
+      <style>{BK_SHEET_CSS}</style>
+      <div className={'bk-scrim' + (sheetOpen ? ' open' : '')} onClick={(e) => { if (e.target === e.currentTarget) closeDetail(); }}>
+        <div className="bk-sheet" role="dialog" aria-modal="true">
+          <div className="bk-sheet-handle" />
+          <div className="no-sb" style={{ overflowY: 'auto', padding: '8px 0 0' }}>
+            {sheetTrainer && (
+              <>
+                <div style={{ padding: '6px 20px 4px', display: 'flex', gap: 14, alignItems: 'center' }}>
+                  <Avatar initials={sheetTrainer.initials} bg={sheetTrainer.bg} color={sheetTrainer.color} size={60} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="t-h1" style={{ fontSize: 22 }}>{sheetTrainer.name}</div>
+                    <div className="t-small" style={{ marginTop: 3 }}>{detailQuery.data?.specialization || sheetTrainer.spec}</div>
+                  </div>
+                  <button
+                    aria-label="Закрыть" onClick={closeDetail}
+                    style={{ width: 34, height: 34, borderRadius: 999, border: '0.5px solid var(--border-strong)', background: 'var(--surface-2)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                  >
+                    <Icon name="x" size={16} color="var(--text-2)" />
+                  </button>
+                </div>
+
+                <div style={{ padding: '14px 20px 4px', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <span className="chip" style={{ gap: 5 }}>
+                    <Icon name="starFill" size={13} color="#f59e0b" /><b style={{ color: 'var(--text)' }}>{sheetTrainer.rating}</b>
+                  </span>
+                  <span className="chip">{sheetTrainer.exp} опыта</span>
+                  <span className="chip" style={{ color: 'var(--text)', fontWeight: 600 }}>от {fmt(sheetTrainer.price)} ₽ / час</span>
+                </div>
+
+                <div style={{ padding: '12px 20px 4px' }}>
+                  <div className="t-body" style={{ color: 'var(--text-2)', lineHeight: 1.5 }}>
+                    {detailQuery.data?.bio || (detailQuery.isLoading ? 'Загрузка…' : '')}
+                  </div>
+                </div>
+
+                <div style={{ padding: '14px 20px 6px' }}>
+                  <div className="t-mini" style={{ color: 'var(--text-3)' }}>Ближайшие окна</div>
+                </div>
+                <div className="card" style={{ margin: '0 16px', padding: 0, overflow: 'hidden' }}>
+                  {sheetWindows.length ? sheetWindows.map((w, i) => (
+                    <React.Fragment key={w.day.key}>
+                      {i > 0 && <div style={{ height: 0.5, background: 'var(--border)', marginLeft: 66 }} />}
+                      <button
+                        className="press"
+                        onClick={() => pickFromSheet(w)}
+                        style={{ width: '100%', textAlign: 'left', border: 0, background: 'transparent', cursor: 'pointer', padding: '11px 20px', display: 'flex', alignItems: 'center', gap: 12 }}
+                      >
+                        <div style={{ width: 34, height: 34, borderRadius: 999, flexShrink: 0, background: 'var(--accent-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Icon name="clock" size={16} color="var(--accent-deep)" strokeWidth={2} />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div className="t-h3" style={{ fontSize: 14 }}>{w.day.dow}, {w.day.num} {monthNm(w.day.month)}</div>
+                          <div className="t-small" style={{ fontSize: 12, marginTop: 1 }}>ближайшее окно</div>
+                        </div>
+                        <span className="chip" style={{ height: 26, background: 'var(--accent)', color: '#06120c', border: 0, fontWeight: 600 }}>{parseSlotTime(w.slot.startTime)}</span>
+                      </button>
+                    </React.Fragment>
+                  )) : (
+                    <div className="t-small" style={{ padding: '16px 20px', color: 'var(--text-3)' }}>Свободных окон пока нет.</div>
+                  )}
+                </div>
+
+                <div style={{ padding: '18px 16px 20px' }}>
+                  <button className="btn btn-accent" onClick={() => pickFromSheet(null)} style={{ width: '100%', height: 52 }}>
+                    Выбрать тренера
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
