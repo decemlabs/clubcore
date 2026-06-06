@@ -11,8 +11,10 @@ generic base definition, so we replicate the page/page_size/total/items shape he
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
+
+from pydantic import Field
 
 from app.core.schemas import BackendSchemaBase, ResponseData
 
@@ -51,10 +53,12 @@ class ClientPushTokenRegisterRequest(BackendSchemaBase):
     """Request body for POST /client/notifications/push-token (INBOX-02).
 
     extra='forbid' (inherited from BackendSchemaBase) rejects unknown fields (T-87-04).
+    token: min_length=1 rejects empty/whitespace-only tokens; max_length=512 guards
+    against oversized input (WR-05: unbounded token storage is a denial-of-storage vector).
     platform: Literal enum enforces allow-list at Pydantic layer → 422 before DB hit.
     DB CheckConstraint 'ck_client_push_tokens_platform' provides a defence-in-depth
     second layer for any bypass paths (T-87-04, T-87-09).
     """
 
-    token: str
+    token: Annotated[str, Field(min_length=1, max_length=512)]
     platform: Literal["web", "android", "ios"]
