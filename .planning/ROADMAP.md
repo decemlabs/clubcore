@@ -111,7 +111,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 - [x] **Phase 86: Gym-Info / CMS** — new `gym_info` module (`GET /client/gym`), owner-only write-API, seeded baseline record, PWA GymInfoScreen wired (GYM-01, GYM-02, GYM-03) (completed 2026-06-06)
 - [x] **Phase 87: Notification Inbox** — new `client_notifications` table + system-event fan-out (bookings/payments/autopay), IDOR-safe `GET /client/notifications` + `PATCH` read/mark-all, push-token registration endpoint, PWA NotificationsScreen wired (INBOX-01, INBOX-02, INBOX-03, INBOX-04, INBOX-05) (completed 2026-06-06)
 - [x] **Phase 88: Trainer Detail / Bio** — extend trainer module with bio fields (migration), owner-only write-API, seeded bio data, `GET /client/trainers/{id}` detail endpoint, PWA TrainerDetailSheet wired (TRNR-01, TRNR-02, TRNR-03, TRNR-04) (completed 2026-06-06)
-- [ ] **Phase 89: OpenAPI Handoff + Milestone Verification** — byte-stable `openapi.json` + `schema.d.ts` regen + `_v24Checks` AssertNonNever forward-guards; staff paths byte-identical to `contract-freeze-v1.11.0`; full milestone gate green (HND-01)
+- [x] **Phase 89: OpenAPI Handoff + Milestone Verification** — byte-stable `openapi.json` + `schema.d.ts` regen + `_v24Checks` AssertNonNever forward-guards; staff paths byte-identical to `contract-freeze-v1.11.0`; full milestone gate green (HND-01) (completed 2026-06-06)
 
 ## Phase Details
 
@@ -215,7 +215,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 89-01-PLAN.md — Authoritative byte-stable regen of openapi.json + schema.d.ts (adds 7 v2.4 paths + additive trainer body fields, replaces 86/87/88 stubs) + _v24Checks AssertNonNever forward-guards (8) + full milestone gate (drift/Redocly/pytest/mypy/lint-imports/PWA/no-edit guard) (HND-01)
+- [x] 89-01-PLAN.md — Authoritative byte-stable regen of openapi.json + schema.d.ts (adds 7 v2.4 paths + additive trainer body fields, replaces 86/87/88 stubs) + _v24Checks AssertNonNever forward-guards (8) + full milestone gate (drift/Redocly/pytest/mypy/lint-imports/PWA/no-edit guard) (HND-01)
 
 ## Backlog
 
@@ -265,4 +265,4 @@ Plans:
 | 86. Gym-Info / CMS | 3/3 | Complete    | 2026-06-06 |
 | 87. Notification Inbox | 4/4 | Complete    | 2026-06-06 |
 | 88. Trainer Detail / Bio | 3/3 | Complete    | 2026-06-06 |
-| 89. OpenAPI Handoff + Milestone Verification | 0/1 | Not started | - |
+| 89. OpenAPI Handoff + Milestone Verification | 1/1 | Complete   | 2026-06-06 |

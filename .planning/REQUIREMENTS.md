@@ -32,7 +32,7 @@ Requirements for this milestone (v2.4). Each maps to exactly one roadmap phase.
 
 ### OpenAPI Handoff
 
-- [ ] **HND-01**: `openapi.json` + `schema.d.ts` регенерированы byte-stable со всеми новыми путями v2.4; staff-пути байт-в-байт с `contract-freeze-v1.11.0`; `_v24Checks` `AssertNonNever` forward-guards; milestone-gate зелёный
+- [x] **HND-01**: `openapi.json` + `schema.d.ts` регенерированы byte-stable со всеми новыми путями v2.4; staff-пути байт-в-байт с `contract-freeze-v1.11.0`; `_v24Checks` `AssertNonNever` forward-guards; milestone-gate зелёный
 
 ## v2 Requirements
 
@@ -83,7 +83,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | TRNR-02 | Phase 88 | Complete |
 | TRNR-03 | Phase 88 | Complete |
 | TRNR-04 | Phase 88 | Complete |
-| HND-01 | Phase 89 | Pending |
+| HND-01 | Phase 89 | Complete |
 
 **Coverage:**
 - v1 requirements: 13 total
