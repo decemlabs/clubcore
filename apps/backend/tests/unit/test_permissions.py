@@ -13,7 +13,7 @@ def test_owner_only_is_frozenset_instance() -> None:
     assert isinstance(OWNER_ONLY, frozenset)
 
 
-def test_owner_only_has_exactly_forty_entries() -> None:
+def test_owner_only_has_exactly_forty_one_entries() -> None:
     # Mirrors apps/admin-web/src/shared/session/can.ts.
     # Composition: 9 v1.1 + 6 v1.2 INFRA-08 + 11 v1.4 INFRA-19
     #              - 1 v1.4 Phase 34 D-34-09a removal of `(CANCEL, PT_SESSIONS)`
