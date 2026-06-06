@@ -4,13 +4,13 @@ milestone: v2.4
 milestone_name: Content & Communication — Client-First
 status: executing
 stopped_at: Phase 87 UI-SPEC approved
-last_updated: "2026-06-06T08:13:00.519Z"
+last_updated: "2026-06-06T08:27:41.748Z"
 last_activity: 2026-06-06
 progress:
   total_phases: 8
   completed_phases: 1
   total_plans: 7
-  completed_plans: 5
+  completed_plans: 6
   percent: 13
 ---
 
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 87 (Notification Inbox) — EXECUTING
-Plan: 3 of 4
-Status: Ready to execute
+Plan: 4 of 4
+Status: Plan 03 complete; Plan 04 (PWA wiring) pending
 Last activity: 2026-06-06
 
 ## v2.4 Roadmap Summary
@@ -78,6 +78,12 @@ Last activity: 2026-06-06
 - **Inbox source**: только системные события (бронь/платёж/autopay) — нет broadcast/ручного-composer
 - **Trainer reviews out of scope**: только bio/detail; REVW-* → v2
 - **Module discipline**: D-20-MODULE (raw-SQL reads / Protocol-slot writes; zero new `ignore_imports` по возможности) + D-20-IDOR
+
+### Key v2.4 Phase 87 Plan 03 Decisions
+
+- **D-87-03-IMPORTLINTER**: two narrow `ignore_imports` edges added — `bookings.service -> notifications.service` (5 booking hooks) + `autopay_charges.service -> notifications.service` (failure hook); service-function imports only (no ORM/repository cross-module); mirrors D-84-11 precedent
+- **D-87-03-TRAINER-FETCH**: `_fetch_trainer_full_name` helper uses raw `sa.text("SELECT full_name FROM trainers WHERE id = :trainer_id")` at hook sites where ORM joinedload chain does not include trainer relationship pre-commit (D-54-08 pattern)
+- **D-87-03-ANTI-ORACLE**: `handle_payment_canceled` has NO `create_notification` call — only `handle_payment_succeeded` fires payment hooks; anti-oracle test asserts 0 rows on cancellation (D-52-08)
 
 ### Key v2.4 Phase 87 Plan 01 Decisions
 
@@ -190,7 +196,7 @@ Ran the complete test suite + live browser verification of all v2.2 features aft
 
 ## Session Continuity
 
-Last session: 2026-06-06T08:13:00.515Z
+Last session: 2026-06-06T08:27:41.744Z
 Stopped at: Phase 87 UI-SPEC approved
 Resume: Start Phase 86 with /gsd:plan-phase 86
 

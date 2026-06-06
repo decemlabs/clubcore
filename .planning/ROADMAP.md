@@ -163,7 +163,7 @@ Plans:
 **Wave 2** *(blocked on Wave 1)*
 
 - [x] 87-02-PLAN.md — Client router (GET list+unreadCount / PATCH read / PATCH read-all / POST push-tokens) + v1 registration + IDOR/CSRF integration tests (INBOX-01, INBOX-02, INBOX-04)
-- [ ] 87-03-PLAN.md — 6 system-event hooks (4 booking + payment-succeeded + autopay-failure) co-transactional create_notification + anti-oracle/replay tests (INBOX-03)
+- [x] 87-03-PLAN.md — 6 system-event hooks (4 booking + payment-succeeded + autopay-failure) co-transactional create_notification + anti-oracle/replay tests (INBOX-03)
 
 **Wave 3** *(blocked on Wave 2)*
 
@@ -245,6 +245,6 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 86. Gym-Info / CMS | 3/3 | Complete    | 2026-06-06 |
-| 87. Notification Inbox | 2/4 | In Progress|  |
+| 87. Notification Inbox | 3/4 | In Progress|  |
 | 88. Trainer Detail / Bio | 0/TBD | Not started | - |
 | 89. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
