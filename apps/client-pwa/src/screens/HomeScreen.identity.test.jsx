@@ -26,12 +26,14 @@ const useClientHome = vi.fn()
 const useClientBookings = vi.fn()
 const useClientTrainers = vi.fn()
 const useClientPlans = vi.fn()
+const useClientNotifications = vi.fn()
 vi.mock('@/data', () => ({
   useClientMe: (...args) => useClientMe(...args),
   useClientHome: (...args) => useClientHome(...args),
   useClientBookings: (...args) => useClientBookings(...args),
   useClientTrainers: (...args) => useClientTrainers(...args),
   useClientPlans: (...args) => useClientPlans(...args),
+  useClientNotifications: (...args) => useClientNotifications(...args),
 }))
 
 // Mock the direct @/data/trainers.js import used for STATIC_TRAINERS_FALLBACK (D-76-05)
@@ -77,11 +79,14 @@ beforeEach(() => {
   useClientBookings.mockReset()
   useClientTrainers.mockReset()
   useClientPlans.mockReset()
+  useClientNotifications.mockReset()
   // Safe default so pre-existing tests (which never set bookings) keep passing
   useClientBookings.mockReturnValue({ data: { items: [], total: 0 } })
   // Safe defaults: empty/no-loading so HomeNewbie renders without crashing
   useClientTrainers.mockReturnValue({ data: [], isLoading: false })
   useClientPlans.mockReturnValue({ data: [] })
+  // Phase 87: useClientNotifications used in HomeScreen for badge count
+  useClientNotifications.mockReturnValue({ data: { items: [], total: 0 } })
 })
 
 describe('HomeScreen identity + empty-membership (real /client/me)', () => {
