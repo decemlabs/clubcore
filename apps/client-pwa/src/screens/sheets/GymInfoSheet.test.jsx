@@ -19,11 +19,13 @@ function renderSheet(ui) {
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
 }
 
-// ─── Mock @/data: useClientGymInfo ────────────────────────────────────────────
+// ─── Mock @/lib/clientQueries: useClientGymInfo ──────────────────────────────
+// The sheet imports the hook directly from @/lib/clientQueries (D-71-09 swap-seam
+// boundary — net-new sheets must not import through the @/data barrel).
 const useClientGymInfo = vi.fn()
 
-vi.mock('@/data', async () => {
-  const actual = await vi.importActual('@/data')
+vi.mock('@/lib/clientQueries', async () => {
+  const actual = await vi.importActual('@/lib/clientQueries')
   return {
     ...actual,
     useClientGymInfo: (...args) => useClientGymInfo(...args),
