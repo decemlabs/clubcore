@@ -93,9 +93,11 @@ class ClientPushToken(Base, UUIDPkMixin, TimestampMixin):
     """Device/browser push-token registration for a client (Phase 87 INBOX-02).
 
     unregistered_at mirrors the soft-delete pattern of ClientPaymentMethod.unlinked_at.
-    Partial UNIQUE on (client_id, token) WHERE unregistered_at IS NULL enforces one
-    live token per (client, token) pair — reviving an unregistered token resets
-    unregistered_at to NULL (idempotent upsert, T-87-04 mitigate).
+    Partial UNIQUE on (token) WHERE unregistered_at IS NULL enforces a global
+    one-alive-row-per-device-token guarantee — device tokens are globally unique and
+    two clients must never hold alive rows for the same token (privacy-leak fanout risk,
+    CR-03). Reviving an unregistered token resets unregistered_at to NULL after first
+    soft-deleting any other client's alive row for the same token (repository logic).
     platform CheckConstraint restricts to web/android/ios (T-87-04 mitigate).
     """
 
@@ -119,11 +121,13 @@ class ClientPushToken(Base, UUIDPkMixin, TimestampMixin):
     __table_args__ = (
         # NAMING_CONVENTION expands to ck_client_push_tokens_platform
         CheckConstraint("platform IN ('web', 'android', 'ios')", name="platform"),
-        # Partial UNIQUE — must use Index (partial indexes are not expressible as
+        # Partial UNIQUE on (token) alone — device tokens are globally unique;
+        # CR-03: (client_id, token) only prevented one client registering the same
+        # token twice; it allowed two clients to hold alive rows for the same token.
+        # Must use Index (partial indexes are not expressible as
         # sa.UniqueConstraint inside __table_args__; mirrors migration 0052 pattern).
         Index(
-            "uq_client_push_tokens_client_token_alive",
-            "client_id",
+            "uq_client_push_tokens_token_alive",
             "token",
             unique=True,
             postgresql_where=text("unregistered_at IS NULL"),

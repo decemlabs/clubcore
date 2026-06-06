@@ -667,3 +667,84 @@ async def test_post_push_token_without_csrf_returns_403(
     assert resp.status_code == 403, (
         f"Expected 403 CSRF rejection for POST without header, got {resp.status_code}"
     )
+
+
+async def test_post_push_token_cross_client_reuse_leaves_only_one_alive_row(
+    http_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """CR-03: client B registering client A's still-alive token must NOT leave two alive rows.
+
+    A physical device token is globally unique — only one client must hold an alive row
+    for any given token. When client B registers a token already alive for client A,
+    client A's row must be soft-deleted (unregistered_at set) and client B's row created.
+    """
+    staff = await _seed_staff(db_session, "push-xc")
+    client_a = await _seed_client(db_session, staff, _phone(70))
+    client_b = await _seed_client(db_session, staff, _phone(71))
+    await db_session.commit()
+
+    shared_token = f"shared-device-token-{uuid4().hex[:12]}"
+
+    # Authenticate as client A and register the token.
+    await _auth_as_client(http_client, db_session, client_a)
+    csrf_a = http_client.cookies.get("clubcore_client_csrf") or ""
+    resp_a = await http_client.post(
+        "/api/v1/client/push-tokens",
+        json={"token": shared_token, "platform": "android"},
+        headers={"X-CSRF-Token": csrf_a},
+    )
+    assert resp_a.status_code == 204, f"client A register failed: {resp_a.text}"
+
+    # Verify client A has exactly one alive row.
+    alive_before = (
+        await db_session.execute(
+            text(
+                "SELECT COUNT(*) FROM client_push_tokens "
+                "WHERE token=:tok AND unregistered_at IS NULL"
+            ),
+            {"tok": shared_token},
+        )
+    ).scalar_one()
+    assert alive_before == 1, f"Expected 1 alive row after client A register, got {alive_before}"
+
+    # Now authenticate as client B and register the SAME token.
+    # The http_client fixture persists cookies; reset by creating a new client session.
+    # Re-auth as client B (overwrites session cookies).
+    await _auth_as_client(http_client, db_session, client_b)
+    csrf_b = http_client.cookies.get("clubcore_client_csrf") or ""
+    resp_b = await http_client.post(
+        "/api/v1/client/push-tokens",
+        json={"token": shared_token, "platform": "android"},
+        headers={"X-CSRF-Token": csrf_b},
+    )
+    assert resp_b.status_code == 204, f"client B register failed: {resp_b.text}"
+
+    # Assert exactly ONE alive row for the token globally (CR-03).
+    alive_after = (
+        await db_session.execute(
+            text(
+                "SELECT COUNT(*) FROM client_push_tokens "
+                "WHERE token=:tok AND unregistered_at IS NULL"
+            ),
+            {"tok": shared_token},
+        )
+    ).scalar_one()
+    assert alive_after == 1, (
+        f"CR-03: Expected exactly 1 alive row after client B registered client A's token, "
+        f"got {alive_after}. Two alive rows means dispatch fanout privacy leak."
+    )
+
+    # The surviving alive row must belong to client B (the new registrant).
+    owner_row = (
+        await db_session.execute(
+            text(
+                "SELECT client_id FROM client_push_tokens "
+                "WHERE token=:tok AND unregistered_at IS NULL"
+            ),
+            {"tok": shared_token},
+        )
+    ).scalar_one()
+    assert str(owner_row) == str(client_b.id), (
+        f"CR-03: Alive row should belong to client B ({client_b.id}), got {owner_row}"
+    )

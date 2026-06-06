@@ -206,22 +206,37 @@ async def upsert_push_token(
 ) -> None:
     """Idempotent upsert of a push token (alive or previously unregistered).
 
-    Strategy: UPDATE first (covers both "alive row" and "unregistered row");
-    if no row was found (truly new token), INSERT.
+    Global-token-unique strategy (CR-03): device tokens are physically unique
+    per device; no two clients may hold an alive row for the same token or
+    dispatch fanout would reach the wrong client (privacy leak).
 
-    UPDATE path: sets unregistered_at = NULL (revives a soft-deleted token) and
-    updates platform. This handles both "alive token re-register" (idempotent)
-    and "previously unregistered token revival".
+    Step 1 — Revoke any other client's alive row for this token (cross-client
+    soft-delete). Keyed on token alone (not client_id) so a device that moved
+    from client A to client B is cleanly reassigned.
 
-    INSERT path: only if no existing row for (client_id, token) at all.
+    Step 2 — UPDATE this client's own row for the token (alive or previously
+    unregistered). Sets unregistered_at = NULL (revival), updates platform.
+    Handles both "same client re-register" (idempotent) and "this client had
+    an old unregistered row for the token" (revival).
 
-    Partial UNIQUE on (client_id, token) WHERE unregistered_at IS NULL prevents
-    duplicates for alive tokens. The UPDATE-first approach handles the unregistered
-    revival case without needing a non-partial index.
+    Step 3 — INSERT only if no row existed for this (client_id, token) at all.
+
+    Partial UNIQUE on (token) WHERE unregistered_at IS NULL (migration 0061)
+    enforces the global guarantee at the DB level as a defence-in-depth layer.
 
     No session.commit() — caller-owns-txn.
     """
-    # Attempt UPDATE on any existing row (alive or unregistered) for this (client, token)
+    # Step 1 — soft-delete any alive row owned by a DIFFERENT client for the same token.
+    await session.execute(
+        text(
+            "UPDATE client_push_tokens "
+            "SET unregistered_at = now(), updated_at = now() "
+            "WHERE token = :tok AND client_id != :cid AND unregistered_at IS NULL"
+        ),
+        {"tok": token, "cid": str(client_id)},
+    )
+
+    # Step 2 — attempt UPDATE on any existing row (alive or unregistered) for THIS client.
     # Uses RETURNING id + scalar_one_or_none() to detect update vs. no-op.
     updated_id = (
         await session.execute(
@@ -235,7 +250,7 @@ async def upsert_push_token(
         )
     ).scalar_one_or_none()
     if updated_id is None:
-        # No existing row — insert a fresh one
+        # Step 3 — no existing row for this (client, token) — insert a fresh one.
         new_token = ClientPushToken(
             client_id=client_id,
             token=token,

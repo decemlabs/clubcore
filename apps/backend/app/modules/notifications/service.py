@@ -173,10 +173,12 @@ async def register_push_token(
 ) -> None:
     """Idempotent upsert of a push token for the calling client (INBOX-02).
 
-    Keyed by (client_id, token) alive: a second registration of the same token
-    is a no-op (alive row already exists). A previously unregistered token is
-    revived (unregistered_at → NULL). T-87-04: platform is constrained by the DB
-    CheckConstraint (web/android/ios).
+    Globally unique by token (CR-03): device tokens are physically unique per device;
+    registering an existing-alive token for a new client first soft-deletes any
+    other client's alive row for that token, then assigns it to the calling client.
+    A same-client re-registration of the same token is a no-op (alive row updated).
+    A previously unregistered token is revived (unregistered_at → NULL).
+    T-87-04: platform constrained by DB CheckConstraint (web/android/ios).
 
     No session.commit() — caller-owns-txn.
     """
