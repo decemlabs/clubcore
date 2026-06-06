@@ -145,12 +145,9 @@ describe('TrainerDetailSheet', () => {
       <TrainerDetailSheet trainer={TRAINER_PROP} onClose={vi.fn()} onBook={vi.fn()} />,
     )
 
-    // No img element should have the javascript: URL as its src
-    const imgs = document.querySelectorAll('img')
-    imgs.forEach((img) => {
-      expect(img.getAttribute('src')).not.toContain('javascript:')
-    })
-
+    // No img element at all — unsafe URL must produce zero <img> elements (WR-02).
+    // A forEach on an empty NodeList is vacuous; use a direct null assertion instead.
+    expect(document.querySelector('img')).toBeNull()
     // The avatar initials (АС) should be rendered instead
     expect(screen.getByText('АС')).toBeInTheDocument()
   })
@@ -164,11 +161,8 @@ describe('TrainerDetailSheet', () => {
       <TrainerDetailSheet trainer={TRAINER_PROP} onClose={vi.fn()} onBook={vi.fn()} />,
     )
 
-    const imgs = document.querySelectorAll('img')
-    imgs.forEach((img) => {
-      expect(img.getAttribute('src')).not.toContain('data:')
-    })
-
+    // No img element at all — unsafe URL must produce zero <img> elements (WR-02).
+    expect(document.querySelector('img')).toBeNull()
     expect(screen.getByText('АС')).toBeInTheDocument()
   })
 
