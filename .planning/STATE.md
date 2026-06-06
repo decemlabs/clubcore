@@ -28,7 +28,7 @@ See: .planning/PROJECT.md
 Phase: Milestone v2.4 complete
 Plan: —
 Status: Awaiting next milestone
-Last activity: 2026-06-06 — Completed quick task 260606-szy: integrated new Notifications design (real API, shared tokens, no frame)
+Last activity: 2026-06-06 — Completed quick task 260606-toj: verbatim port of BookingScreen.jsx (Запись), byte-for-byte, standalone
 
 ## v2.4 Roadmap Summary
 
@@ -155,6 +155,7 @@ None.
 |---|-------------|------|--------|-----------|
 | 260606-sqb | Pixel-perfect verbatim port of NotificationsScreen.jsx into apps/client-pwa (added, not yet routed/wired) | 2026-06-06 | ec675a9a | [260606-sqb-pixel-perfect-verbatim-port-of-notificat](./quick/260606-sqb-pixel-perfect-verbatim-port-of-notificat/) |
 | 260606-szy | Integrate new Notifications design into wired NotificationsSheet — no frame, shared tokens, real API, gestures→mark-read | 2026-06-06 | bb5832ec | [260606-szy-integrate-new-notifications-design-into](./quick/260606-szy-integrate-new-notifications-design-into/) |
+| 260606-toj | Pixel-perfect verbatim port of BookingScreen.jsx (Запись) into apps/client-pwa (added, not yet routed/wired) | 2026-06-06 | 870d0ce7 | [260606-toj-pixel-perfect-verbatim-port-of-the-user-](./quick/260606-toj-pixel-perfect-verbatim-port-of-the-user-/) |
 
 ## Deferred Items
 
