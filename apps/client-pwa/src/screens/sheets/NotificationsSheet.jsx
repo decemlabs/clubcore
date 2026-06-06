@@ -123,11 +123,8 @@ function SkeletonRows() {
 
 // ─── NotificationsSheet ───────────────────────────────────────────────────────
 export function NotificationsSheet({ onClose }) {
-  // Feature flag gate
-  if (!NOTIFICATIONS_FEATURE_FLAGS.notificationsInbox) {
-    return null
-  }
-
+  // IN-01 (Rules of Hooks): ALL hooks must run unconditionally before any early return.
+  // The feature-flag guard gates only the RENDER output below, never the hook calls.
   const [page, setPage] = React.useState(1)
   // Local items state with optimistic read-state tracking
   const [allItems, setAllItems] = React.useState([])
@@ -229,6 +226,12 @@ export function NotificationsSheet({ onClose }) {
         showToast('Не удалось отметить прочитанными')
       },
     })
+  }
+
+  // Feature flag gate — render placeholder when flag is off (INBOX-05 kill-switch).
+  // Guard is AFTER all hooks so React's Rules of Hooks are satisfied.
+  if (!NOTIFICATIONS_FEATURE_FLAGS.notificationsInbox) {
+    return null
   }
 
   return (
