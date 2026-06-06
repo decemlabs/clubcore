@@ -18,7 +18,7 @@ import { Icon } from '@/components/Icon.jsx'
 import { StatusBar } from '@/components/StatusBar.jsx'
 import { PullToRefresh } from '@/components/PullToRefresh.jsx'
 import { SubSheetHeader } from '@/screens/sheets/ProfileExtraSheets.jsx'
-import { useClientGymInfo } from '@/data'
+import { useClientGymInfo } from '@/lib/clientQueries'
 
 // ─── Static decorative photos (frontend-only — NOT from API) ─────────────────
 // Source shape from data/gym.js; photos are not stored in the DB (CONTEXT.md).
@@ -70,16 +70,19 @@ function getMoscowNow() {
 function getOpenStatus(hours) {
   if (!hours || hours.length === 0) return null
   const { todayIdx, nowMinutes } = getMoscowNow()
-  const todayRow = hours[todayIdx] ?? hours[0]
+  // Guard: if the array is shorter than a full week, bail out gracefully rather than
+  // falling back to hours[0] (which would display Monday as "today" on Saturday).
+  if (todayIdx >= hours.length) return null
+  const todayRow = hours[todayIdx]
   const openMinutes = parseHHMM(todayRow.open)
   const closeMinutes = parseHHMM(todayRow.close)
   const isOpen = nowMinutes >= openMinutes && nowMinutes < closeMinutes
 
   let nextOpenTime = todayRow.open
   if (!isOpen && nowMinutes >= closeMinutes) {
-    // Closed for the night — show tomorrow's open time
-    const tomorrowIdx = (todayIdx + 1) % 7
-    const tomorrowRow = hours[tomorrowIdx] ?? hours[0]
+    // Closed for the night — show tomorrow's open time (only if that day is in the array)
+    const tomorrowIdx = (todayIdx + 1) % hours.length
+    const tomorrowRow = hours[tomorrowIdx]
     nextOpenTime = tomorrowRow.open
   }
 
@@ -108,7 +111,7 @@ function SectionLabel({ children }) {
 
 // ─── Social URL derivation ────────────────────────────────────────────────────
 function socialUrl(item) {
-  const handle = item.handle.replace('@', '')
+  const handle = encodeURIComponent(item.handle.replaceAll('@', ''))
   if (item.kind === 'tg') return `https://t.me/${handle}`
   if (item.kind === 'ig') return `https://instagram.com/${handle}`
   return '#'
