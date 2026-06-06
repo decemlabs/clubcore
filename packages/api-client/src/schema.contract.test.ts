@@ -534,6 +534,44 @@ const _v23Checks: [
   _ClientCheckoutLoyaltyField,
 ] = [true, true, true, true]
 
+// --- v2.4 surface (Content & Communication — Gym / Inbox / Trainer-detail, Phases 86-88) ---
+// Seven new v2.4 paths + the trainers-PATCH requestBody realisation guard (8 entries total).
+//
+// Path set (verified against the regenerated openapi.json):
+//   GET   /api/v1/client/gym                                     (Phase 86, GYM-01)
+//   PUT   /api/v1/gym                                            (Phase 86, GYM-02 — owner write, additive staff path)
+//   GET   /api/v1/client/notifications                           (Phase 87, INBOX-01)
+//   PATCH /api/v1/client/notifications/{notification_id}/read    (Phase 87, INBOX-02)
+//   PATCH /api/v1/client/notifications/read-all                  (Phase 87, INBOX-02)
+//   POST  /api/v1/client/push-tokens                             (Phase 87, INBOX-04)
+//   GET   /api/v1/client/trainers/{trainer_id}                   (Phase 88, TRNR-01)
+//   PATCH /api/v1/trainers/{trainer_id} requestBody carrier      (Phase 88, TRNR-02 — additive bio/specialization/photoUrl on TrainerUpdateRequest)
+type _ClientGymGet = AssertNonNever<paths['/api/v1/client/gym']['get']>
+type _OwnerGymPut = AssertNonNever<paths['/api/v1/gym']['put']>
+type _ClientNotificationsGet = AssertNonNever<paths['/api/v1/client/notifications']['get']>
+type _ClientNotificationReadPatch = AssertNonNever<
+  paths['/api/v1/client/notifications/{notification_id}/read']['patch']
+>
+type _ClientNotificationsReadAllPatch = AssertNonNever<
+  paths['/api/v1/client/notifications/read-all']['patch']
+>
+type _ClientPushTokensPost = AssertNonNever<paths['/api/v1/client/push-tokens']['post']>
+type _ClientTrainerDetailGet = AssertNonNever<paths['/api/v1/client/trainers/{trainer_id}']['get']>
+type _TrainerPatchBodyRealised = AssertNonNever<
+  paths['/api/v1/trainers/{trainer_id}']['patch']['requestBody']
+>
+
+const _v24Checks: [
+  _ClientGymGet,
+  _OwnerGymPut,
+  _ClientNotificationsGet,
+  _ClientNotificationReadPatch,
+  _ClientNotificationsReadAllPatch,
+  _ClientPushTokensPost,
+  _ClientTrainerDetailGet,
+  _TrainerPatchBodyRealised,
+] = [true, true, true, true, true, true, true, true]
+
 describe('schema.contract', () => {
   it('compiles against the regenerated v1.2 typed paths surface', () => {
     // The real assertions are above (compile-time). This block exists so
@@ -579,5 +617,9 @@ describe('schema.contract', () => {
 
   it('compiles against the regenerated v2.3 Loyalty surface (Phases 82-84)', () => {
     expect(_v23Checks).toEqual([true, true, true, true])
+  })
+
+  it('compiles against the regenerated v2.4 Content & Communication surface (Gym / Inbox / Trainer-detail — Phases 86-88)', () => {
+    expect(_v24Checks).toHaveLength(8)
   })
 })
