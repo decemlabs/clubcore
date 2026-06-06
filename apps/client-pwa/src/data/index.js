@@ -10,7 +10,8 @@
 //   - VISIT_HISTORY, TRAINING_HISTORY → HistorySheets.jsx (detail sheet from ProfileScreen)
 //
 // REMOVED in Plan 06 (BookScreen + QRSheet wired to real backend):
-//   - TRAINERS, CALENDAR, TIME_SLOTS, BUSY_SLOTS → replaced by useClientAvailableSlots
+//   - CALENDAR, TIME_SLOTS, BUSY_SLOTS → replaced by useClientAvailableSlots
+// NOTE: TRAINERS was NOT removed — retained for TweaksRoot.jsx dev panel (trainer-detail tweak)
 //
 // REMOVED in Plan 05 (screens wired to real backend):
 //   - NOTIFICATIONS, GYM_INFO, TRAINER_CANCEL → HomeScreen (inlined as static demo data)
