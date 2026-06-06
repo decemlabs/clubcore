@@ -81,37 +81,37 @@
 
 ## Traceability
 
-Какие фазы покрывают какие требования. Заполняется при создании роадмапа.
+Какие фазы покрывают какие требования.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MSG-01 | TBD | Pending |
-| MSG-02 | TBD | Pending |
-| MSG-03 | TBD | Pending |
-| MSG-04 | TBD | Pending |
-| RT-01 | TBD | Pending |
-| RT-02 | TBD | Pending |
-| RT-03 | TBD | Pending |
-| RT-04 | TBD | Pending |
-| RCPT-01 | TBD | Pending |
-| RCPT-02 | TBD | Pending |
-| RCPT-03 | TBD | Pending |
-| ATT-01 | TBD | Pending |
-| ATT-02 | TBD | Pending |
-| ATT-03 | TBD | Pending |
-| BRDG-01 | TBD | Pending |
-| BRDG-02 | TBD | Pending |
-| BRDG-03 | TBD | Pending |
-| PWA-01 | TBD | Pending |
-| PWA-02 | TBD | Pending |
-| PWA-03 | TBD | Pending |
-| HND-01 | TBD | Pending |
+| MSG-01 | Phase 90 | Pending |
+| MSG-02 | Phase 90 | Pending |
+| MSG-03 | Phase 90 | Pending |
+| MSG-04 | Phase 90 | Pending |
+| RT-01 | Phase 90 | Pending |
+| RT-02 | Phase 90 | Pending |
+| RT-03 | Phase 90 | Pending |
+| RT-04 | Phase 90 | Pending |
+| RCPT-01 | Phase 91 | Pending |
+| RCPT-02 | Phase 91 | Pending |
+| RCPT-03 | Phase 91 | Pending |
+| ATT-01 | Phase 92 | Pending |
+| ATT-02 | Phase 92 | Pending |
+| ATT-03 | Phase 92 | Pending |
+| BRDG-01 | Phase 93 | Pending |
+| BRDG-02 | Phase 93 | Pending |
+| BRDG-03 | Phase 93 | Pending |
+| PWA-01 | Phase 94 | Pending |
+| PWA-02 | Phase 94 | Pending |
+| PWA-03 | Phase 94 | Pending |
+| HND-01 | Phase 95 | Pending |
 
 **Coverage:**
 - v1 requirements: 21 total
-- Mapped to phases: 0 (роадмап ещё не создан)
-- Unmapped: 21 ⚠️
+- Mapped to phases: 21 (100%)
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-06-06*
-*Last updated: 2026-06-06 after initial definition (v2.5 milestone open)*
+*Last updated: 2026-06-06 — traceability filled after roadmap creation*

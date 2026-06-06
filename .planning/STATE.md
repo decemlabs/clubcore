@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v2.5
 milestone_name: Chat / Messaging — Client↔Gym
 status: planning
-last_updated: "2026-06-06T19:38:50.073Z"
+last_updated: "2026-06-06"
 last_activity: 2026-06-06
 progress:
-  total_phases: 0
+  total_phases: 6
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,16 +20,32 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 999.1 — wr 06 restore pt session credit on owner force cancel (✅ done 2026 05 29 — quick task 260529 ny2)
+**Current focus:** Phase 90 — Messaging Domain + REST Foundation + WS Scaffold
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-06-06 — Milestone v2.5 started
+Phase: 90 of 95 (Messaging Domain + REST Foundation + WS Scaffold)
+Plan: — (not yet planned)
+Status: Ready to plan
+Last activity: 2026-06-06 — v2.5 roadmap created (Phases 90-95, 21/21 requirements mapped)
 
-## v2.4 Roadmap Summary
+Progress: [░░░░░░░░░░] 0%
+
+## v2.5 Roadmap Summary
+
+| Phase | Goal | Requirements |
+|-------|------|--------------|
+| 90. Messaging Domain + REST Foundation + WS Scaffold | DB schema + REST + WS + Redis pub/sub fan-out; all six WS invariants locked | MSG-01, MSG-02, MSG-03, MSG-04, RT-01, RT-02, RT-03, RT-04 |
+| 91. Read Receipts + Typing Indicators | Per-message read status + typing presence over WS; reply-as-read semantics | RCPT-01, RCPT-02, RCPT-03 |
+| 92. Photo Attachments | Authenticated upload + IDOR-safe serve; magic-byte validation; stored-XSS guards | ATT-01, ATT-02, ATT-03 |
+| 93. Telegram Bridge | Client→staff DM via ARQ + reply routing via chat_forwarding_log + echo-loop prevention | BRDG-01, BRDG-02, BRDG-03 |
+| 94. PWA ChatScreen Wiring | Graduate from D-71-09 ESLint zone; wire REST + WS + attachments; unread badge | PWA-01, PWA-02, PWA-03 |
+| 95. OpenAPI Handoff + Milestone Verification | Byte-stable openapi.json + schema.d.ts + _v25Checks + milestone gate green | HND-01 |
+
+**Coverage:** 21/21 v2.5 requirements mapped (zero orphans, zero duplicates). Execution order: 90 → 91 → 92 → 93 → 94 → 95.
+
+<details>
+<summary>v2.4 Roadmap Summary (shipped)</summary>
 
 | Phase | Goal | Requirements |
 |-------|------|--------------|
@@ -38,187 +54,75 @@ Last activity: 2026-06-06 — Milestone v2.5 started
 | 88. Trainer Detail / Bio | Полный профиль тренера (bio/специализация/фото); owner write-API; seed; PWA TrainerDetailSheet wired | TRNR-01, TRNR-02, TRNR-03, TRNR-04 |
 | 89. OpenAPI Handoff + Milestone Verification | Byte-stable openapi.json + schema.d.ts regen + `_v24Checks` forward-guards + milestone gate зелёный | HND-01 |
 
-**Coverage:** 13/13 v2.4 requirements mapped (zero orphans, zero duplicates). Execution order: 86 → 87 → 88 → 89.
-
-<details>
-<summary>v2.3 Roadmap Summary (shipped)</summary>
-
-| Phase | Goal | Requirements |
-|-------|------|--------------|
-| 82. Loyalty Foundation — Ledger + Balance + Accrual | Append-only бонус-ledger, balance + history read API, welcome auto-credit, owner-grant API, audit events | LOYL-01, LOYL-02, LOYL-03, ACCR-01, ACCR-02, ACCR-03 |
-| 83. Bonus Redemption at Checkout | Server-authoritative `discount_kopecks` recompute + webhook-locked redemption (образец `promo_codes`) + PWA `clubBonuses` flag flip | REDM-01, REDM-02, REDM-03 |
-| 84. Real Autopay Charge | Off-session YooKassa charge cron для истекающих autopay-абонементов + charge-ledger + notifications (изолированный highest-risk блок) | APAY-01, APAY-02, APAY-03, APAY-04 |
-| 85. OpenAPI Handoff + Milestone Verification | Byte-stable openapi.json + schema.d.ts regen + `_v23Checks` forward-guards + staff drift gate | HND-01 |
-
-**Coverage:** 14/14 v2.3 requirements mapped (zero orphans, zero duplicates). Execution order: 82 → 83 → 84 → 85.
-
-</details>
-
-<details>
-<summary>v2.2 Roadmap Summary (shipped)</summary>
-
-| Phase | Goal | Requirements |
-|-------|------|--------------|
-| 79. Payment Methods Foundation + Card-on-File | Клиент привязывает карту через чекаут и управляет ею через client-portal | PAYM-01, PAYM-02, PAYM-03, PAYM-04 |
-| 80. Booking Reschedule | Клиент переносит бронь атомарно (cancel+create) + PWA wiring | RESCH-01, RESCH-02, RESCH-03 |
-| 81. Weekly Activity + PWA Flag Flips + OpenAPI Handoff | Недельная активность + linkedCard/weeklyActivity ON + openapi regen | WACT-01, WACT-02, PAYM-05, HND-01 |
-
-**Coverage:** 11/11 v2.2 requirements mapped (zero orphans, zero duplicates).
-
 </details>
 
 ## Accumulated Context
 
-### Key v2.4 Milestone Constraints (locked, D-86-STAFF)
+### Key v2.5 Architecture Decisions (pre-locked by research)
 
-- **Staff gate**: owner-only write-API + seeds, NO admin-web UI; `apps/admin-web` frozen (не трогаем)
-- **Client-only**: все клиентские read-эндпоинты под `require_client()`, IDOR-safe (client_id только из principal)
-- **Staff contract**: байт-в-байт с `contract-freeze-v1.11.0` — drift gate должен быть зелёным
-- **Inbox source**: только системные события (бронь/платёж/autopay) — нет broadcast/ручного-composer
-- **Trainer reviews out of scope**: только bio/detail; REVW-* → v2
-- **Module discipline**: D-20-MODULE (raw-SQL reads / Protocol-slot writes; zero new `ignore_imports` по возможности) + D-20-IDOR
+- **WS endpoint location**: `app/modules/messaging/router.py`, mounted at `/client` prefix in `api/v1/router.py` (same pattern as loyalty.router, gym.router, notifications.router) — NOT in client_portal/router.py (would violate modules-independent)
+- **WS auth**: httpOnly cookie `cc_client_access` (sent automatically on same-origin WS upgrade); require_client() works unchanged inside @router.websocket(); no URL token; Origin check via verify_ws_origin dependency
+- **Open decision**: WS auth — confirm cc_client_access SameSite=Lax/Strict before Phase 90 plan (if SameSite=None, ws-ticket fallback required)
+- **Open decision**: Attachment storage — local filesystem adapter (recommended) vs S3-compatible from day one; decide at Phase 92 plan
+- **DB-first, pub/sub as notification only**: every message written to Postgres before any Redis publish; WS carries event frames (type + IDs), not full payloads; REST catch-up on reconnect via ?after= cursor
+- **Redis pub/sub**: per-WS-connection subscriber (redis.pubsub() creates dedicated connection); channel cc:messaging:client:{client_id} derived from principal ONLY; cleanup with await pubsub.aclose() in finally:
+- **Session-per-operation**: WS handler injects session_factory from app.state; opens AsyncSession per message operation (NOT Depends(get_db) which holds connection for connection lifetime)
+- **Telegram bridge**: D-06/D-10 worker→modules relaxation; telegram_bot.py imports messaging.service directly; HandlerContext gains messaging_service field appended at END; no .importlinter change for bridge
+- **One .importlinter change**: add app.modules.messaging to modules-independent contract; no new ignore_imports for core REST/WS path
+- **LOCKED_AUDIT_EVENTS**: pre-register ALL messaging events in Phase 90 (INFRA-15): ("message_sent","message"), ("message_read","message"), ("attachment_uploaded","message"), ("chat_staff_reply_sent","message")
+- **Migrations**: 0064=message_threads, 0065=messages, 0066=message_attachments (sequential; FKs ordered accordingly)
+- **WS test convention override**: httpx ASGITransport CANNOT do WS upgrade → use starlette.testclient.TestClient.websocket_connect() for ALL WS tests (overrides project default for WS endpoints only)
+- **camelCase wire format**: ALL messaging schemas inherit BackendSchemaBase (alias_generator=to_camel); validated with schema unit test
+- **Chat is human-only**: role ENUM is 'client' | 'staff'; no system_message type; hard boundary with v2.4 notification inbox
+- **Reply-as-read semantics**: "read" = staff replied; when bot stores staff reply, mark prior client messages read_at=now() and publish read_receipt events (Telegram has no per-message read receipt API)
+- **Typing is ephemeral**: never stored in Postgres; published to Redis pub/sub only with 5s TTL; PWA auto-dismisses
+- **Telegram forwarding via ARQ task**: NOT synchronous in-transaction (avoids 429 rate-limit cascade)
+- **chat_forwarding_log**: Redis key cc:messaging:tg_msg:{tg_message_id} → thread_id, TTL 7 days; set when bot sends DM to staff, consumed when reply arrives
+- **Staff identity**: v2.5 = anonymous (role='staff') with telegram_user_id/username as nullable audit fields; full identity → v2.6 admin-web inbox
+- **STAFF_TELEGRAM_CHAT_ID**: new Settings field (int | None); Telegram bridge disabled if absent
 
-### Key v2.4 Phase 87 Plan 03 Decisions
+### Key v2.4 Milestone Constraints (still active)
 
-- **D-87-03-IMPORTLINTER**: two narrow `ignore_imports` edges added — `bookings.service -> notifications.service` (5 booking hooks) + `autopay_charges.service -> notifications.service` (failure hook); service-function imports only (no ORM/repository cross-module); mirrors D-84-11 precedent
-- **D-87-03-TRAINER-FETCH**: `_fetch_trainer_full_name` helper uses raw `sa.text("SELECT full_name FROM trainers WHERE id = :trainer_id")` at hook sites where ORM joinedload chain does not include trainer relationship pre-commit (D-54-08 pattern)
-- **D-87-03-ANTI-ORACLE**: `handle_payment_canceled` has NO `create_notification` call — only `handle_payment_succeeded` fires payment hooks; anti-oracle test asserts 0 rows on cancellation (D-52-08)
+- **Staff gate**: owner-only write-API + seeds; apps/admin-web frozen
+- **Client-only**: all client read-endpoints under require_client(), IDOR-safe (client_id from principal only)
+- **Staff contract**: byte-for-byte with contract-freeze-v1.11.0 — drift gate must be green
+- **Module discipline**: D-20-MODULE + D-20-IDOR
 
-### Key v2.4 Phase 87 Plan 01 Decisions
+### Research Flags (plan-phase guidance)
 
-- **D-87-01-DEDUP-ON-CONFLICT**: `pg_insert ON CONFLICT DO NOTHING` on named UNIQUE constraint `uq_in_app_notifications_client_source_kind` — SAVEPOINT-safe dedup (not IntegrityError+rollback which breaks SAVEPOINT-mode test sessions and production webhook retry context); mirrors D-82 welcome-bonus approach
-- **D-87-02-PUSH-TOKEN-UPDATE-FIRST**: `register_push_token` uses UPDATE-first + INSERT-fallback — partial index `WHERE unregistered_at IS NULL` excludes unregistered rows, so ON CONFLICT cannot revive them; UPDATE-first covers both alive-idempotent and unregistered-revival paths
-- **D-87-03-ORDERING-TEST-RAW-SQL**: ordering test forces distinct `created_at` via raw SQL `now() - interval '10 seconds'` to avoid non-deterministic ORDER BY when both inserts land in the same transaction microsecond
-
-### Key v2.4 Phase 86 Plan 03 Decisions
-
-- **D-86-03-SCHEMA-FORWARD**: `/api/v1/client/gym` path + `client_get_gym_info` operation added as forward entry to `schema.d.ts` — Phase 89 will regenerate byte-stable; avoids TS2345 without weakening type safety
-- **D-86-03-STATIC-PHOTOS**: `STATIC_PHOTOS` inlined in `GymInfoSheet.jsx` — `gym.js` retained for other non-wired consumers per CONTEXT.md deferral; photos array shape identical
-- **D-86-03-INTL-BADGE**: Open/closed badge uses `Intl.DateTimeFormat.formatToParts` with `timeZone:'Europe/Moscow'` — DST-safe; no date-fns dependency
-
-### Key v2.2 Scope Decisions (locked)
-
-- **Autopay UI-only (locked)**: store card token + autopay preference + ФЗ-376 `consent_recorded_at`, NO recurring charges. `charge_expiring_autopay` ARQ cron deferred to v2.3 (APAY-01..03)
-- **Save-during-payment**: client sends `save_payment_method=true` in checkout body; token captured from `payment.succeeded` webhook (NEVER from sync `create_payment` response)
-- **New module**: `app/modules/payment_methods/` added to `.importlinter` `modules-independent` contract
-- **Webhook token-save**: raw SQL upsert inside `handle_payment_succeeded` 8-step atomic UoW (step 8.5), zero new `ignore_imports`
-- **Reschedule = cancel+create**: atomic cancel-old-slot + create-new-slot in one transaction, NOT in-place `slot_id` UPDATE
-- **Weekly activity**: group by `visits.gym_date` STORED column; never `DATE(checked_in_at)`; `minutes=null` (no duration column in schema)
-- **Migration sequence**: 0052 = `client_payment_methods`; 0053 = widen `booking_notifications.kind` CHECK for `'rescheduled'`
-- **Per-booking autopay toggle removed**: «Авто-оплата тренировок» is an anti-feature (double-billing vs PT-package credit model)
-
-### Key v2.3 Phase 83 Decisions
-
-- **REDM-03 PWA wiring**: `bonusOn` + `balanceKopecks` lifted to `CheckoutSheet` scope (mirrors `savePaymentMethod` pattern) so `launchCheckout` can include `loyaltyRedeemKopecks` in request body; `bonusEstimateKopecks` is display-only (D-06 invariant — never mutates server-derived `total`/`discount`)
-- **Bonus section hidden on zero/loading/error**: mirrors CardSheet "no card = no section" pattern — no empty state copy shown
-- **openapi.json regen**: additive only; Phase 85 owns byte-stable freeze
-
-### Key v2.3 Phase 84 Plan 03 Decisions
-
-- **D-84-09 Migration 0057 widen payment_notifications.kind CHECK**: 'autopay_charge_succeeded' added (4→5 kinds); raw DDL per D-84-01; Rule 2 auto-fix (missing constraint for correctness)
-- **D-84-10 Autopay success recipient via online_payments.client_id**: direct column read instead of payments-ledger chain (_resolve_client_row not applicable for online_payment_id-keyed kind)
-- **D-84-11 import-linter edge online_payments.tasks → autopay_charges.notifications**: one narrow ignore edge for success DM renderer import; scoped to tasks.py only
-
-### Key v2.3 Phase 84 Plan 02 Decisions
-
-- **D-84-05 Webhook discriminator test location**: plan specified test_charge_expiring_autopay.py but `async with session.begin()` in handler conflicts with SAVEPOINT db_session; moved to webhook_yookassa/ (real-commit fixtures)
-- **D-84-06 UUID→str at audit emit**: AutopayCharge audit payloads require str for JSONB; Pydantic validates UUID from str (matches all other v1.4 emit callsites)
-- **D-84-07 is_autopay_local capture**: row is detached after session.begin() exits; capture discriminator before commit boundary
-- **D-84-08 Literal kind via if/else**: notification_kind local var with if/else produces literal 'autopay_charge_succeeded'/'payment_succeeded' at assignment site
-
-### Key v2.3 Phase 84 Plan 01 Decisions
-
-- **D-84-01 Raw DDL for CHECK modification**: `op.drop_constraint` passes name through naming convention template → double-prefix on already-expanded names. Use `op.execute("ALTER TABLE ... DROP/ADD CONSTRAINT ...")` for modifying constraints on existing locked tables (migration 0056 precedent for online_payments check widening)
-- **D-84-02 Alembic _include_object skip-list for plain indexes**: Indexes created via `op.f()` in migration but absent from ORM `__table_args__` appear as "removed" orphans in `alembic check` autogenerate diff. Must add literal names to skip-list (same lineage as loyalty_ledger indexes)
-- **D-84-03 Dedicated autopay_charge_notifications table**: Phase 52 `payment_notifications` XOR CHECK + partial-unique indexes cannot accommodate a third subject FK (decline path has no online_payments row). Separate additive table per-plan discipline
-- **D-84-04 online_payment_id without FK on autopay_charges**: Cross-module nullable UUID column (D-54-08) — Plan 02 writes it via raw SQL after successful YooKassa call; no declarative FK to keep modules-independent
-
-### Key v2.0/v2.1 Decisions (carry-forward)
-
-- **D-20-PRINCIPAL**: `ClientPrincipal` + `require_client()` + `aud:"client"` — `Role.CLIENT` BANNED
-- **D-20-MODULE**: `client_portal/` raw-SQL reads (D-54-08); Protocol-slot writes; zero new `ignore_imports`
-- **D-20-IDOR**: Every client-scoped endpoint carries `client_id` from principal only; 404-collapse on non-owned
-- **D-06 webhook-locked activation**: membership activation locked to `payment.succeeded` only
+| Phase | Research Needed | Reason |
+|-------|----------------|--------|
+| Phase 90 | YES — high priority | 6 simultaneous WS invariants; highest pitfall density; WS test convention change |
+| Phase 91 | No | Standard WS event extension; established patterns from Phase 90 |
+| Phase 92 | No | OWASP attachment patterns documented; checklist from PITFALLS.md |
+| Phase 93 | YES | Telegram bridge routing complexity; echo loop; HandlerContext stability |
+| Phase 94 | No | v2.4 graduation pattern proven; D-71-09 lesson documented |
+| Phase 95 | No | Standard handoff following Phase 89 pattern |
 
 ### Pending Todos
 
-- **Future milestones sequence (post-v2.2)** — v2.3 autopay cron + v2.4 staff-side content domains. See `.planning/todos/pending/2026-06-02-future-milestones-sequence-post-v2-1.md`
+- **Future milestones sequence (post-v2.5)** — v2.6 admin-web chat inbox (расфриз admin-web + боевое API-wiring). See `.planning/todos/pending/2026-06-02-future-milestones-sequence-post-v2-1.md`
 
 ### Blockers/Concerns
 
-None.
-
-### Quick Tasks Completed
-
-| # | Description | Date | Commit | Directory |
-|---|-------------|------|--------|-----------|
-| 260606-sqb | Pixel-perfect verbatim port of NotificationsScreen.jsx into apps/client-pwa (added, not yet routed/wired) | 2026-06-06 | ec675a9a | [260606-sqb-pixel-perfect-verbatim-port-of-notificat](./quick/260606-sqb-pixel-perfect-verbatim-port-of-notificat/) |
-| 260606-szy | Integrate new Notifications design into wired NotificationsSheet — no frame, shared tokens, real API, gestures→mark-read | 2026-06-06 | bb5832ec | [260606-szy-integrate-new-notifications-design-into](./quick/260606-szy-integrate-new-notifications-design-into/) |
-| 260606-toj | Pixel-perfect verbatim port of BookingScreen.jsx (Запись) into apps/client-pwa (added, not yet routed/wired) | 2026-06-06 | 870d0ce7 | [260606-toj-pixel-perfect-verbatim-port-of-the-user-](./quick/260606-toj-pixel-perfect-verbatim-port-of-the-user-/) |
-| 260606-u22 | Replace BookScreen with the new «Запись» design (hybrid — real /client/slots+/booking, trainer rating/exp/price + duration as decor) | 2026-06-06 | 1e39219d | [260606-u22-replace-bookscreen-with-the-new-design-h](./quick/260606-u22-replace-bookscreen-with-the-new-design-h/) |
-| 260606-uxo | Replace GymInfoSheet with the new «О зале» design (hybrid — real /client/gym + live status; occupancy/staff as decor) | 2026-06-06 | 029b4f49 | [260606-uxo-replace-gyminfosheet-with-the-new-aboutg](./quick/260606-uxo-replace-gyminfosheet-with-the-new-aboutg/) |
+- Confirm cc_client_access SameSite value before Phase 90 plan (one-line code read in client_auth/router.py or app/core/security.py). If SameSite=None, Phase 90 needs ws-ticket endpoint added to scope.
 
 ## Deferred Items
 
-**v2.4 close (2026-06-06) — acknowledged open artifacts (15):** 8 stale pre-v2.4 quick-task slugs with empty status fields (historical shipped work — `260529-*`/`260601-*`/`260602-*`; NOT v2.4); 1 pending todo (`future-milestones-sequence` — intentional next-milestone planning); 3 verification gaps + 3 UAT gaps = the v2.4 live docker+browser deferrals below (Phases 86/87/88 `human_needed` — all automated checks passed, only live-stack/browser confirmation deferred per operator standing preference). None block v2.4 completion; logic paths covered by ASGITransport/vitest suites (drift gate + 2654 backend pytest + 175 PWA vitest green).
+Carrying forward from v2.4 close (see previous STATE.md for full list):
 
 | Category | Item | Status |
 |----------|------|--------|
-| human-verify | Phase 86 live GymInfoSheet render from DB + open/closed badge (Europe/Moscow) | ✅ VERIFIED in browser 2026-06-06 — sheet renders DB data; owner PUT→client GET round-trip; «Сейчас открыто» MSK badge live |
-| human-verify | Phase 87 live notification feed + mark-all bell-badge | ✅ VERIFIED in browser 2026-06-06 — 3-row feed (typed icons + relative ts + unread dots); «Всё прочитано» clears badge→0 (persisted unread=0). Real event→inbox hook covered by integration tests (feed seeded for UI surface) |
-| human-verify | Phase 88 live TrainerDetailSheet render + photo_url fallback (Plan 88-03 Task 3 checkpoint) | ✅ VERIFIED in browser 2026-06-06 — profile renders (name/spec/bio); owner PATCH→client GET round-trip; non-resolving https photo_url → graceful Avatar initials fallback |
-| advisory-ui | v2.4 UI-review nits (inline fontWeight:700 eyebrows; minor off-scale paddings; green-container cancellation icon; missing photo-strip icons dumbbell/run/yoga; no app-wide ErrorBoundary) | deferred — see 86/87/88-UI-REVIEW.md |
-| tech-debt | Pre-existing (NOT v2.4): flaky `test_freeze_race`; 7 promo F821 / whole-tree ruff DTZ debt; `test_alembic_clean` | carried forward |
-
-**v2.3 close (2026-06-06) — acknowledged open artifacts (10):** 8 quick-tasks with empty status fields (historical shipped work — the 999.x DONE/SHIPPED roadmap markers: `260529-ny2`, `260529-olc`, `260601-*` client-pwa tasks); 1 pending todo (`future-milestones-sequence` — intentional next-milestone planning); 1 verification gap (Phase 83 `human_needed` — live-ЮKassa bonus-redemption E2E, OPERATOR-PENDING by design, auto-deferred). None block v2.3 completion; logic paths covered by ASGITransport/respx suites.
-
-Items carried forward from v2.1 close:
-
-| Category | Item | Status |
-|----------|------|--------|
+| human-verify | Phase 86/87/88 live docker+browser verification (GymInfoSheet, NotificationsSheet, TrainerDetailSheet) | ✅ VERIFIED in browser 2026-06-06 (see v2.4 STATE.md) |
+| advisory-ui | v2.4 UI-review nits (inline fontWeight, icon gaps, no ErrorBoundary) | deferred — see 86/87/88-UI-REVIEW.md |
+| tech-debt | Pre-existing: flaky test_freeze_race; promo F821 ruff debt; test_alembic_clean | carried forward |
 | production | RUN-01 ЮKassa sandbox sale+refund walkthrough | N/A-until-production |
 | production | RUN-02 RU email deliverability probe | N/A-until-production |
-| backlog | RUN-05 trainer accrual scenario (D-67-03) | Phase 999.x / future |
-| security | Phase 70 CR-02/IN-01/IN-02 (proxy rate-limit bucket, QR post-decode existence, cancel idempotency) | deferred → `/gsd:secure-phase 70` |
-| backlog | Promo-code admin CRUD UI (999.4 — only seeded codes exist) | deferred (admin-web frozen) |
-| production | RUN-01 live ЮKassa credentialed checkout leg (D-72-06) | OPERATOR-PENDING by design |
-| tech-debt | Pre-existing `ruff I001` in `client_portal/router.py` | ✅ closed — folded into Phase 79 (79-04) |
-| correctness | WR-75-02: receipt-lookup join heuristic (repeat same-plan purchases) | deferred — out of v2.2 scope |
-| human-verify | Phase 76 PDATA-02 live persistence check | deferred by user |
-| human-verify | Phase 78 live checks (FIT15 chip + notif toggle) | deferred by user |
-| human-verify | Phase 83 live ЮKassa bonus-redemption end-to-end (checkout with loyaltyRedeemKopecks → webhook → loyalty_ledger redemption row + balance decrease) | deferred — OPERATOR-PENDING (live YooKassa); ASGITransport tests cover the logic path |
-| human-verify | Phase 82 PWA loyalty surface (Profile LoyaltyBalanceCard + BonusHistorySheet) | ✅ VERIFIED in browser 2026-06-06 — dev client w/ seeded 800₽ (welcome 500₽ + owner_grant 300₽): Profile shows «Бонусный счёт · ДОСТУПНО БОНУСОВ 800 ₽»; history sheet lists «Приветственный бонус +500 ₽» + «Бонус от зала +300 ₽» grouped under ИЮНЬ 2026 with correct dates (LOYL-01/02/03 read path live) |
-| human-verify | Phase 83 PWA CheckoutSheet bonus UX (toggle, estimate row + ~ chip + pay-button prefix, section-hidden-on-zero) | ✅ VERIFIED in browser 2026-06-06 — БОНУСЫ КЛУБА section shows real «На счёте 800 ₽»; toggle ON adds «Бонусы [~] −800 ₽» row, К оплате recalculates 5000→4200 ₽, «Ваша выгода 800 ₽», pay button «Оплатить · ~4 200 ₽» (the ~ prefix surfaces the D-06 display-only-estimate invariant). Section-hidden-on-zero still covered by 8 vitest behaviors |
-| human-verify | Phase 84 live off-session autopay charge (cron → real YooKassa charge on saved card → payment.succeeded webhook → renewal activation + charge-ledger + Telegram/email) | deferred — OPERATOR-PENDING (live YooKassa creds + a real saved card); respx tests + full skip/idempotency/double-charge/transient suites cover the logic path |
-| human-verify | Phase 79/81.1 live ЮKassa card-save round-trip (PWA checkout opt-in → webhook → CardSheet) | ✅ VERIFIED in browser 2026-06-03 — test card 5555…4477 → 3DS → success → webhook step-8.5 saved real 36-char token; `online_payments.save_payment_method=t`, status succeeded |
-| human-verify | Phase 80 live PWA reschedule slot-list population (dev server + reseed) | ✅ VERIFIED in browser 2026-06-03 — same-trainer slot listed + reschedule executed (atomic cancel+create, slot flip, PT-credit preserved, booking_rescheduled audit) |
-| human-verify | Phase 80 live Telegram reschedule-DM delivery | deferred (OPERATOR-PENDING; code+tests prove send; no live Telegram chat) |
-| human-verify | Phase 81 activity-bars visual rendering (heights/colors/zero-day baseline) | ✅ VERIFIED in browser 2026-06-03 — Пн/Ср/Пт filled, Вт/Чт/Сб/Вс flat, matches seeded visits |
-| human-verify | Phase 81 CardSheet with a real saved card | ✅ VERIFIED in browser 2026-06-03 — card •••• 4477 displayed; autopay+ФЗ-376 consent enable (consent_recorded_at set) + unlink (soft-delete, GET→null) all exercised |
-| compliance | Phase 81 ФЗ-376 consent disclosure shows generic "стоимость текущего тарифа" not a concrete ₽ amount (REVIEW IN-04) | **needs legal review** — interpolate concrete amount if required for compliance |
-| tech-debt | **Pre-existing (NOT Phase 79):** `alembic check` / `test_alembic_clean` fails — `app.modules.promo_codes.models` never registered in `alembic/env.py` since the `online_payments.promo_code_id` FK shipped in v2.0 (commit b61054f4). One-line env.py import fixes it. | noted — out of v2.2 scope |
-| tech-debt | **Pre-existing (NOT Phase 79):** whole-tree `ruff check` red (~44 errs) in `tests/test_client_promo_validate.py`, `test_client_checkout_promo.py`, `test_client_me_service.py`, `promo_codes/service.py` etc. (incl. F821 undefined names → those promo tests error on collection) | noted — out of v2.2 scope |
-| flaky-test | **Pre-existing (NOT Phase 79):** `test_freeze_race::test_concurrent_freeze_race_serialised_by_partial_unique_index` asserts exact 409 *reason-code* distribution under concurrency (timing-dependent: gets `invalid_transition` vs `already_frozen`) | noted — test-quality issue |
-
-## Post-Close Full Test + Browser Verification (2026-06-03)
-
-Ran the complete test suite + live browser verification of all v2.2 features after milestone close.
-
-**Automated:** PWA 131/131 Vitest; backend 2505 passed (full suite); mypy --strict app clean; lint-imports 3/0; openapi/schema.d.ts drift gates clean. Remaining backend failures all PRE-EXISTING (test_alembic_clean, flaky test_freeze_race, 7 promo-validate errors).
-
-**Browser (real PWA + live YooKassa test shop):** weekly-activity bars, CardSheet (display + ФЗ-376 autopay consent + unlink), booking reschedule (atomic + audit + PT-credit), and the full save-card checkout round-trip (test card → 3DS → webhook step-8.5 → real token in CardSheet) — all PASS.
-
-**Two bugs found & fixed during verification (committed):**
-
-1. `fix(v2.2)` — Phase 80 added `booking_rescheduled` to LOCKED_AUDIT_EVENTS but left the count-lock guard tests at 100; full-suite run caught it → bumped to 101 (`test_audit_taxonomy`, `test_phase51_audit_chain_invariants`).
-2. `fix(client-pwa)` — **BookingManageSheet white-screened on any real booking** (`b.price.toLocaleString()` on undefined; real `/client/home` nextBooking has no price/hoursTo) → made reschedule+cancel unreachable in the live PWA despite passing mock-based Vitest. Derived hoursTo/date/time from startTime, guarded price/refund, added a real-shape regression test.
+| security | Phase 70 CR-02/IN-01/IN-02 (proxy rate-limit, QR post-decode, cancel idempotency) | deferred → /gsd:secure-phase 70 |
+| compliance | Phase 81 ФЗ-376 consent wording (concrete ₽ amount vs generic) | needs legal review |
 
 ## Session Continuity
 
-Last session: 2026-06-06T12:44:17Z
-Stopped at: Phase 89 Plan 01 complete — v2.4 milestone gate green
-Resume: Run milestone audit/complete/cleanup with /gsd:milestone-complete v2.4
-
-## Operator Next Steps
-
-- Start the next milestone with /gsd-new-milestone
+Last session: 2026-06-06
+Stopped at: v2.5 roadmap created — ROADMAP.md + STATE.md + REQUIREMENTS.md traceability updated
+Resume: Run /gsd:plan-phase 90 to begin planning Phase 90

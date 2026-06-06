@@ -19,6 +19,7 @@
 - ✅ **v2.2 Membership self-service depth** — Phases 79-81 + 81.1 (shipped 2026-06-03) — see [milestones/v2.2-ROADMAP.md](milestones/v2.2-ROADMAP.md)
 - ✅ **v2.3 Loyalty / Club Bonuses + Real Autopay** — Phases 82-85 (shipped 2026-06-06) — see [milestones/v2.3-ROADMAP.md](milestones/v2.3-ROADMAP.md)
 - ✅ **v2.4 Content & Communication — Client-First** — Phases 86-89 (shipped 2026-06-06) — see [milestones/v2.4-ROADMAP.md](milestones/v2.4-ROADMAP.md)
+- 🚧 **v2.5 Chat / Messaging — Client↔Gym** — Phases 90-95 (in progress)
 
 ## Phases
 
@@ -118,6 +119,104 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 
 </details>
 
+### 🚧 v2.5 Chat / Messaging — Client↔Gym (In Progress)
+
+**Milestone Goal:** Клиент ведёт живую 1:1-переписку с залом из PWA в реальном времени; staff отвечает через Telegram-мост; всё под `require_client()`, IDOR-safe, staff-контракт байт-в-байт цел.
+
+**Note on granularity:** Config is `coarse` (3-5 phases recommended), but v2.5 introduces four genuinely new technical surfaces onto the monolith — WebSocket transport, Redis pub/sub fan-out, binary file handling, and bidirectional Telegram bridging — each with independent pitfall density. Research converged on 6 phases as the minimum safe decomposition. Compressing below 6 would require combining the Phase 90 WS-invariant cluster (6 simultaneous must-be-correct-from-day-one constraints) with the Phase 93 Telegram bridge cluster (second-highest pitfall density) into a single phase — an unacceptable risk for a pet project with no rollback mechanism. 6 phases accepted over the granularity hint.
+
+#### Phase 90: Messaging Domain + REST Foundation + WS Scaffold
+
+- [ ] **Phase 90: Messaging Domain + REST Foundation + WS Scaffold** - DB schema + REST send/list/mark-read + WS transport + Redis pub/sub fan-out; all six WS invariants locked from day one
+
+#### Phase 91: Read Receipts + Typing Indicators
+
+- [ ] **Phase 91: Read Receipts + Typing Indicators** - Per-message read status + typing presence delivered over the Phase 90 WS channel
+
+#### Phase 92: Photo Attachments
+
+- [ ] **Phase 92: Photo Attachments** - Authenticated upload + IDOR-safe serve with magic-byte validation and stored-XSS guards
+
+#### Phase 93: Telegram Bridge
+
+- [ ] **Phase 93: Telegram Bridge** - Bidirectional client↔staff relay through the existing Telegram bot worker
+
+#### Phase 94: PWA ChatScreen Wiring
+
+- [ ] **Phase 94: PWA ChatScreen Wiring** - Graduate ChatScreen from D-71-09 placeholder zone; wire REST + WS + attachments
+
+#### Phase 95: OpenAPI Handoff + Milestone Verification
+
+- [ ] **Phase 95: OpenAPI Handoff + Milestone Verification** - Byte-stable openapi.json + schema.d.ts regen + full milestone gate
+
+## Phase Details
+
+### Phase 90: Messaging Domain + REST Foundation + WS Scaffold
+**Goal**: Клиент может отправлять и получать текстовые сообщения в режиме реального времени — хранилище в PostgreSQL, доставка через WebSocket, Redis pub/sub fan-out корректен при нескольких worker-процессах
+**Depends on**: Phase 89 (v2.4 complete)
+**Requirements**: MSG-01, MSG-02, MSG-03, MSG-04, RT-01, RT-02, RT-03, RT-04
+**Success Criteria** (what must be TRUE):
+  1. Client can fetch their paginated thread history with `unreadCount` via `GET /client/messages`, and messages from a different client return 404 (IDOR-safe)
+  2. Client can send a text message via `POST /client/messages`; the message persists in Postgres and arrives on an open WebSocket connection within the same request cycle, including when the sender and subscriber are in different uvicorn workers (Redis pub/sub fan-out)
+  3. Client can mark all unread messages read via `PATCH /client/messages/read`; `unreadCount` returns 0 on the next `GET`
+  4. WS connection is authenticated via the `cc_client_access` httpOnly cookie (no URL token); a connection with a missing or expired token is rejected before the upgrade completes; a client cannot subscribe to another client's channel (Origin check + principal-derived channel name)
+  5. On WS reconnect, client can provide a `last_seen_message_id` cursor and receive all messages written during the disconnection from the REST catch-up endpoint
+**Plans**: TBD
+**Open question (decide at plan-phase)**: WS auth fallback — confirm `cc_client_access` SameSite=Lax/Strict (cookie path) vs SameSite=None (ws-ticket fallback needed)
+
+### Phase 91: Read Receipts + Typing Indicators
+**Goal**: Клиент видит статус своих сообщений («прочитано») и индикатор набора от зала; оба события доставляются через уже существующий WS-канал без сохранения в БД (typing — эфемерный)
+**Depends on**: Phase 90
+**Requirements**: RCPT-01, RCPT-02, RCPT-03
+**Success Criteria** (what must be TRUE):
+  1. Client sees a single-check indicator on sent messages (server-persisted) and a double-check indicator when staff has read the message (reply-as-read: when staff sends a reply, prior client messages are marked `read_at = now()` and a `read_receipt` WS event is published)
+  2. Client sees a "typing..." indicator that auto-dismisses after 5 seconds when staff begins composing in Telegram; the typing state is never written to Postgres
+  3. `PATCH /client/messages/read` REST endpoint persists read state correctly as a polling fallback when the WS is disconnected
+**Plans**: TBD
+
+### Phase 92: Photo Attachments
+**Goal**: Клиент прикрепляет фото к сообщению; вложения хранятся сервером и отдаются через аутентифицированный IDOR-safe endpoint с защитой от stored XSS
+**Depends on**: Phase 90
+**Requirements**: ATT-01, ATT-02, ATT-03
+**Success Criteria** (what must be TRUE):
+  1. Client can upload a JPEG, PNG, or WebP image (up to 5 MB) via `POST /client/messages/attachments`; the server validates by magic bytes (not the `Content-Type` header), rejects SVG and HTML with 422, and rejects oversized files with 413
+  2. Client can retrieve their own attachment via `GET /client/messages/attachments/{id}`; attempting to fetch another client's attachment by UUID returns 404 (IDOR-safe); the response carries `Content-Disposition: attachment` and `X-Content-Type-Options: nosniff`
+  3. Client can include an `attachment_id` in `POST /client/messages`; the photo appears in the thread history
+**Plans**: TBD
+**Open question (decide at plan-phase)**: Storage backend — local filesystem adapter (recommended, single-server pet project) vs S3-compatible from day one (Yandex Object Storage prod / SeaweedFS dev, avoids future migration)
+**UI hint**: yes
+
+### Phase 93: Telegram Bridge
+**Goal**: Staff получает клиентские сообщения в Telegram и может ответить через стандартный Reply; ответ маршрутизируется в правильный тред и доставляется клиенту по WS; эхо-петля невозможна
+**Depends on**: Phase 90, Phase 91
+**Requirements**: BRDG-01, BRDG-02, BRDG-03
+**Success Criteria** (what must be TRUE):
+  1. When a client sends a message, the staff Telegram account receives a DM (forwarded via ARQ task, not synchronously in-transaction); the DM is delivered even if a second client is writing simultaneously
+  2. Staff can reply using Telegram's native Reply function; the reply is stored in the correct client thread in Postgres and delivered to the client's WS connection; replying to an older forwarded message routes to the originating client, not the most recently active one (Redis `cc:messaging:tg_msg:{tg_message_id}` → `thread_id` mapping, TTL 7 days)
+  3. The bot does not echo-loop: a bot-forwarded message arriving back as an update is skipped (`is_bot` check + `chat_forwarding_log` as natural loop-breaker); each client message appears exactly once in each direction
+**Plans**: TBD
+
+### Phase 94: PWA ChatScreen Wiring
+**Goal**: ChatScreen выведен из ComingSoon и de-listed из D-71-09 placeholder-зоны; клиент переписывается с залом в реальном времени из PWA, видит статусы прочтения, typing-индикатор, фото и badge непрочитанных
+**Depends on**: Phase 90, Phase 91, Phase 92, Phase 93
+**Requirements**: PWA-01, PWA-02, PWA-03
+**Success Criteria** (what must be TRUE):
+  1. ChatScreen renders the thread history (bubbles: client right / staff left, timestamps in Europe/Moscow HH:MM), and is fully de-listed from the D-71-09 ESLint placeholder zone (3 spots removed, `grep` returns 0, import via `@/data`)
+  2. The unread badge on the Chat tab reflects the real `unreadCount` in real time via the WS connection, falling back to a 30-second React Query poll when the WS is disconnected
+  3. Client can select a photo from the device (or camera), see a preview thumbnail in the thread, and send it; previously sent photos are viewable full-screen on tap
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 95: OpenAPI Handoff + Milestone Verification
+**Goal**: Все endpoint'ы v2.5 зафиксированы в byte-stable openapi.json + schema.d.ts; WS-endpoint задокументирован вручную; milestone gate зелёный; staff-контракт байт-в-байт идентичен `contract-freeze-v1.11.0`
+**Depends on**: Phase 94
+**Requirements**: HND-01
+**Success Criteria** (what must be TRUE):
+  1. `openapi.json` regenerates byte-stably with all v2.5 REST messaging paths present under the `Messaging` tag; the WS endpoint is manually documented in `_customize_openapi()` post-processor; Redocly lint clean
+  2. `schema.d.ts` regenerates byte-stably; `_v25Checks` `AssertNonNever` tuple with `toHaveLength(N)` assertion covers all new v2.5 path×method combos; `git diff --exit-code` on staff paths is empty (drift gate green)
+  3. Full milestone gate passes: backend pytest + mypy --strict + lint-imports (including `app.modules.messaging` in `modules-independent` contract) + CISO-01 no-edit guard + frontend vitest + Redocly
+**Plans**: TBD
+
 ## Backlog
 
 ### Phase 999.1: WR-06 restore PT session credit on owner force-cancel (✅ DONE 2026-05-29 — quick task 260529-ny2)
@@ -159,11 +258,13 @@ Plans:
 
 ## Progress
 
-**Execution Order:** 86 → 87 → 88 → 89
+**Execution Order:** 90 → 91 → 92 → 93 → 94 → 95
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 86. Gym-Info / CMS | 3/3 | Complete    | 2026-06-06 |
-| 87. Notification Inbox | 4/4 | Complete    | 2026-06-06 |
-| 88. Trainer Detail / Bio | 3/3 | Complete    | 2026-06-06 |
-| 89. OpenAPI Handoff + Milestone Verification | 1/1 | Complete    | 2026-06-06 |
+| 90. Messaging Domain + REST Foundation + WS Scaffold | 0/TBD | Not started | - |
+| 91. Read Receipts + Typing Indicators | 0/TBD | Not started | - |
+| 92. Photo Attachments | 0/TBD | Not started | - |
+| 93. Telegram Bridge | 0/TBD | Not started | - |
+| 94. PWA ChatScreen Wiring | 0/TBD | Not started | - |
+| 95. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
