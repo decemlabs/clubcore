@@ -88,3 +88,66 @@ status: all_fixed
 _Fixed: 2026-06-06T12:10:00Z_
 _Fixer: Claude (gsd-code-fixer)_
 _Iteration: 1_
+
+---
+
+---
+phase: 87-notification-inbox
+fixed_at: 2026-06-06T12:17:00Z
+review_path: .planning/phases/87-notification-inbox/87-REVIEW.md
+iteration: 2
+findings_in_scope: 3
+fixed: 3
+skipped: 0
+status: all_fixed
+---
+
+# Phase 87: Code Review Fix Report — Iteration 2
+
+**Fixed at:** 2026-06-06T12:17:00Z
+**Source review:** .planning/phases/87-notification-inbox/87-REVIEW.md (iteration 2 findings)
+**Iteration:** 2
+
+**Summary:**
+- Findings in scope: 3 (1 Warning + 2 Info)
+- Fixed: 3
+- Skipped: 0
+
+## Fixed Issues
+
+### WR-01 (iter 2): upsert_push_token INSERT race — unguarded concurrent token INSERT
+
+**Files modified:** `apps/backend/app/modules/notifications/repository.py`, `apps/backend/tests/notifications/test_notifications_endpoints.py`
+**Commit:** `776544e4`
+**Applied fix:**
+- Replaced the bare `session.add(ClientPushToken(...)); await session.flush()` in Step 3 of `upsert_push_token` with `pg_insert(ClientPushToken).on_conflict_do_update(index_elements=["token"], index_where=ClientPushToken.unregistered_at.is_(None), set_={...})`.
+- The conflict target matches the partial-unique index `(token) WHERE unregistered_at IS NULL` (migration 0061). On conflict, the DO UPDATE branch re-points the alive row to the calling client (`client_id=client_id`) and clears `unregistered_at`, preserving the global-uniqueness invariant.
+- Two concurrent clients that both pass Steps 1-2 for the same token can no longer produce an unhandled `IntegrityError` → HTTP 500; the loser's INSERT resolves safely via DO UPDATE.
+- SAVEPOINT-safe: no exception raised, no rollback needed by the caller. Caller-owns-txn unchanged.
+- Updated the module-level docstring and function docstring to describe the WR-01 fix and the concurrent-race semantics.
+- Added a comment to the cross-client test docstring (`test_post_push_token_cross_client_reuse_leaves_only_one_alive_row`) noting that the deterministic sequential sequence also covers the concurrent race via the on-conflict path.
+
+### IN-01: NotificationsSheet — hooks called after conditional early return (Rules of Hooks)
+
+**Files modified:** `apps/client-pwa/src/screens/sheets/NotificationsSheet.jsx`
+**Commit:** `5ec2f625`
+**Applied fix:**
+- Moved ALL hook calls (`useState`, `useRef`, `useClientNotifications`, `useMarkNotificationRead`, `useMarkAllNotificationsRead`, all `useEffect` calls) to the top of `NotificationsSheet`, above any early return.
+- Relocated the feature-flag guard (`if (!NOTIFICATIONS_FEATURE_FLAGS.notificationsInbox) return null`) to just before the `return (...)` JSX, after all hooks run unconditionally.
+- Added inline comment explaining the Rules-of-Hooks constraint and the guard placement.
+- Vitest: all 10 tests pass unchanged (the existing test suite already exercises the full hook paths via mocked flags).
+
+### IN-02: test_post_push_token_invalid_platform_returns_error — assertion accepts 500
+
+**Files modified:** `apps/backend/tests/notifications/test_notifications_endpoints.py`
+**Commit:** `4bf42354`
+**Applied fix:**
+- Changed `assert resp.status_code != 204` to `assert resp.status_code == 422`.
+- Updated the test docstring to reflect that `ClientPushTokenRegisterRequest.platform` is `Literal["web", "android", "ios"]` (Pydantic v2), so invalid platforms are rejected with 422 before the service or DB layer — the DB `CheckConstraint` is a defence-in-depth second layer.
+- Error message in the assert now includes the actual status code and response body for easier diagnosis on failure.
+
+---
+
+_Fixed: 2026-06-06T12:17:00Z_
+_Fixer: Claude (gsd-code-fixer)_
+_Iteration: 2_
