@@ -116,52 +116,73 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 ## Phase Details
 
 ### Phase 86: Gym-Info / CMS
+
 **Goal**: Клиент видит актуальную информацию о зале из базы данных, а не захардкоженного файла
 **Depends on**: Phase 85 (v2.3 complete)
 **Requirements**: GYM-01, GYM-02, GYM-03
 **Success Criteria** (what must be TRUE):
+
   1. Клиент открывает экран зала в PWA и видит адрес, часы, удобства и правила, которые хранятся в БД (не `data/gym.js`)
   2. Owner может обновить gym-info через API (reception получает 403)
   3. На свежем `docker compose up` + seed PWA рендерит реальный контент без ручного вмешательства
+
 **Plans**: 3 plans
 Plans:
+**Wave 1**
+
 - [ ] 86-01-PLAN.md — Backend gym module (model/schemas/repo/service) + Resource.GYM + migrations 0058 DDL & 0059 idempotent seed (GYM-03)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 86-02-PLAN.md — gym router (client GET + owner PUT) + v1 registration + integration tests (GYM-01, GYM-02)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 86-03-PLAN.md — PWA useClientGymInfo hook + swap-seam export + GymInfoSheet rewrite + vitest (GYM-01)
+
 **UI hint**: yes
 
 ### Phase 87: Notification Inbox
+
 **Goal**: Клиент видит in-app ленту уведомлений, генерируемых системными событиями, и управляет статусом прочтения
 **Depends on**: Phase 86
 **Requirements**: INBOX-01, INBOX-02, INBOX-03, INBOX-04, INBOX-05
 **Success Criteria** (what must be TRUE):
+
   1. После подтверждения/отмены брони, успешного платежа или autopay-события в ленте `GET /client/notifications` клиента появляется запись
   2. Клиент помечает уведомление прочитанным (одно или все), и счётчик непрочитанных на бейдже PWA уменьшается до нуля
   3. Клиент регистрирует push-токен через API; ответ 200, токен сохранён; реальная доставка не требуется в этом milestone
   4. Экран уведомлений в PWA загружает реальные данные (не заглушку) за feature-флагом
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 88: Trainer Detail / Bio
+
 **Goal**: Клиент читает полный профиль тренера (bio, специализация, фото) в PWA; owner управляет профилями через API
 **Depends on**: Phase 87
 **Requirements**: TRNR-01, TRNR-02, TRNR-03, TRNR-04
 **Success Criteria** (what must be TRUE):
+
   1. `GET /client/trainers/{id}` возвращает bio, специализацию и ссылку на фото тренера
   2. Owner обновляет bio через write-API; reception получает 403
   3. На свежем окружении PWA TrainerDetailSheet показывает реальные seed-данные вместо заглушки ComingSoon
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 89: OpenAPI Handoff + Milestone Verification
+
 **Goal**: Контракт v2.4 заморожен byte-stable; все новые пути v2.4 покрыты forward-guards; milestone gate зелёный
 **Depends on**: Phase 88
 **Requirements**: HND-01
 **Success Criteria** (what must be TRUE):
+
   1. `openapi.json` и `schema.d.ts` регенерируются byte-stable (drift gate green в CI) со всеми новыми путями v2.4
   2. Staff-пути байт-в-байт идентичны `contract-freeze-v1.11.0` (staff drift gate green)
   3. `_v24Checks` `AssertNonNever` tuple с runtime `toHaveLength` — тест падает, если любой из новых путей исчезнет
   4. Полный milestone gate зелёный (pytest + typecheck + lint-imports + drift gates)
+
 **Plans**: TBD
 
 ## Backlog
