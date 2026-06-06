@@ -1616,6 +1616,14 @@ async def cancel_booking(
             title="Бронь отменена",
             body=f"{_cancel_slot_msk} — {_cancel_trainer_name}",
         )
+    else:
+        # WR-01: log unexpected actor role so it is detectable during development.
+        # Mirrors the else branch at the Step 9.5 DM dispatch path (cancel_booking_dm_unexpected_role).
+        _log.warning(
+            "cancel_booking_notification_unexpected_role",
+            booking_id=str(booking.id),
+            role=str(actor.role),
+        )
 
     # Step 9 — Commit (SVC001 gate).
     await session.commit()
