@@ -153,7 +153,7 @@ None.
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
-| 260606-sqb | Pixel-perfect verbatim port of NotificationsScreen.jsx into apps/client-pwa (added, not yet routed/wired) | 2026-06-06 | d9e0612f | [260606-sqb-pixel-perfect-verbatim-port-of-notificat](./quick/260606-sqb-pixel-perfect-verbatim-port-of-notificat/) |
+| 260606-sqb | Pixel-perfect verbatim port of NotificationsScreen.jsx into apps/client-pwa (added, not yet routed/wired) | 2026-06-06 | ec675a9a | [260606-sqb-pixel-perfect-verbatim-port-of-notificat](./quick/260606-sqb-pixel-perfect-verbatim-port-of-notificat/) |
 
 ## Deferred Items
 
