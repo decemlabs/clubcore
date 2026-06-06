@@ -109,6 +109,7 @@ from app.modules.fiscal_receipts.constants import (
 from app.modules.fiscal_receipts.models import FiscalReceipt
 from app.modules.fiscal_receipts.repository import insert_fiscal_receipt
 from app.modules.loyalty.service import record_loyalty_redemption
+from app.modules.notifications.service import create_notification
 from app.modules.online_payments.constants import (
     ONLINE_PAYMENT_STATUS_TRANSITIONS,
     STATUS_CANCELED,
@@ -620,6 +621,51 @@ async def handle_payment_succeeded(
                 "payment_method_saved",
                 client_id=str(row.client_id),
                 online_payment_id=str(row.id),
+            )
+
+        # Phase 87 INBOX-03 — in-app inbox row (co-transactional, inside async with session.begin()).
+        # Placed before the audit emits so the notification INSERT is atomic with the payment
+        # state change. Anti-oracle (D-52-08): hook lives ONLY in handle_payment_succeeded —
+        # handle_payment_canceled MUST NOT create a row. Webhook replay is covered by the
+        # UNIQUE(client_id, source_type, source_id, kind) dedup inside create_notification.
+        # Amount formatting: convert kopecks to rubles for display (1 ruble = 100 kopecks).
+        _notif_amount_rub = row.amount_kopecks // 100
+        _notif_amount_remainder = row.amount_kopecks % 100
+        if _notif_amount_remainder:
+            _notif_amount_str = f"{_notif_amount_rub},{_notif_amount_remainder:02d} ₽"
+        else:
+            _notif_amount_str = f"{_notif_amount_rub} ₽"
+        # Get plan name via raw SQL (D-54-08 — no cross-module ORM import).
+        # subject_kind / subject_id already resolved above in the subject-kind dispatch block.
+        _notif_plan_table = (
+            "membership_plans" if subject_kind == SUBJECT_KIND_MEMBERSHIP else "pt_package_plans"
+        )
+        _notif_plan_row = (
+            await session.execute(
+                text(f"SELECT name FROM {_notif_plan_table} WHERE id = :id"),  # noqa: S608
+                {"id": str(subject_id)},
+            )
+        ).mappings().one_or_none()
+        _notif_plan_name = str(_notif_plan_row["name"]) if _notif_plan_row else "абонемент"
+        if is_autopay:
+            await create_notification(
+                session,
+                client_id=row.client_id,
+                source_type="online_payment",
+                source_id=row.id,
+                kind="autopay_charge_succeeded",
+                title="Автоплатёж прошёл",
+                body=f"{_notif_plan_name}, {_notif_amount_str} — автопродление активировано",
+            )
+        else:
+            await create_notification(
+                session,
+                client_id=row.client_id,
+                source_type="online_payment",
+                source_id=row.id,
+                kind="payment_succeeded",
+                title="Оплата прошла",
+                body=f"{_notif_plan_name}, {_notif_amount_str}",
             )
 
         # CHILD audit emit — online_payment_succeeded chained to

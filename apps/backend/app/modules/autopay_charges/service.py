@@ -40,6 +40,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import audit
 from app.core.dependencies import get_yookassa_client_provider
+from app.modules.notifications.service import create_notification
 from app.integrations.yookassa.receipt import (
     PaymentMode,
     PaymentSubject,
@@ -431,6 +432,20 @@ async def _charge_expiring_autopay_memberships(  # noqa: SVC001 caller-owns-txn
                 period_end=str(period_end),
                 claim_id=str(claim_id),
                 failure_reason=failure_reason,
+            )
+
+            # Phase 87 INBOX-03 — in-app inbox row (co-transactional, BEFORE cron commit).
+            # Permanent failure = genuine decline; notify the client so they can check their card.
+            # Caller-owns-txn (SVC001 / # noqa): cron fn commits after this returns.
+            # source_type="autopay_charge" + source_id=claim_id per plan mapping.
+            await create_notification(  # noqa: SVC001 caller-owns-txn
+                session,
+                client_id=client_id,
+                source_type="autopay_charge",
+                source_id=claim_id,
+                kind="autopay_charge_failed",
+                title="Автоплатёж не прошёл",
+                body="Не удалось списать оплату. Проверьте привязанную карту.",
             )
 
             # Collect the claim id for the cron's post-commit failure notification enqueue.

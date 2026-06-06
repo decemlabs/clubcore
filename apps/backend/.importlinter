@@ -238,6 +238,10 @@ ignore_imports =
     # rescheduled). Service-function import only — no ORM or repository cross-module
     # access. Narrowly scoped to service.py (not repository, router, or models).
     app.modules.bookings.service -> app.modules.notifications.service
+    # Phase 87 INBOX-03 — D-87-03-IMPORTLINTER (continued): autopay_charges.service
+    # calls create_notification in the permanent-failure branch (co-transactional, cron
+    # owns commit). Service-function import only. Mirror of bookings edge above.
+    app.modules.autopay_charges.service -> app.modules.notifications.service
 # Phase 47 INFRA-40 — `warn` (not the default `error`) so the 3 preemptive
 # online_payments edges above do not fail the build before Phase 49 ships the
 # module body. Once 49 lands and the imports materialise, the warnings clear
