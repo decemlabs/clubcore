@@ -6,11 +6,24 @@ Request schema uses BackendSchemaBase (extra='forbid', camelCase inbound).
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import Field
+from pydantic import EmailStr, Field
 
 from app.core.schemas import BackendSchemaBase, ResponseData
+
+
+class SocialItem(BackendSchemaBase):
+    """Per-item schema for social network entries (WR-06 — T-86-11 mitigation).
+
+    kind is a closed enum so only tg/ig are accepted at PUT time.
+    handle is a simple @username pattern; encodeURIComponent in the PWA
+    covers any remaining URL-unsafe chars after @ stripping.
+    """
+
+    kind: Literal['tg', 'ig']
+    label: str = Field(max_length=64)
+    handle: str = Field(max_length=64, pattern=r'^@[\w.]+$')
 
 
 class GymInfoResponse(ResponseData):
@@ -40,6 +53,13 @@ class GymInfoUpdateRequest(BackendSchemaBase):
     Scalar str fields capped via Field(max_length=255) — T-86-03 mitigation
     (unbounded payload DoS deferred to Plan 02 router validation; scalar cap here).
     All fields are optional (partial upsert — exclude_unset semantics in repository).
+
+    CR-02 / T-86-12: email validated via EmailStr — rejects query-string injection
+    (e.g. "user@gym.ru?cc=evil@x.com") because the email grammar forbids '?', '#', '%'.
+    Seed value "tverskaya@mygym.ru" passes EmailStr validation.
+
+    WR-06 / T-86-11: social validated via SocialItem — rejects unknown kinds and
+    handles with embedded '@' sequences or non-username characters.
     """
 
     name: str | None = Field(default=None, max_length=255)
@@ -48,8 +68,8 @@ class GymInfoUpdateRequest(BackendSchemaBase):
     city: str | None = Field(default=None, max_length=255)
     metro: str | None = Field(default=None, max_length=255)
     phone: str | None = Field(default=None, max_length=255)
-    email: str | None = Field(default=None, max_length=255)
+    email: EmailStr | None = Field(default=None, max_length=255)
     hours: list[Any] | None = None
     amenities: list[Any] | None = None
     rules: list[str] | None = None
-    social: list[Any] | None = None
+    social: list[SocialItem] | None = None
