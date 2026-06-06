@@ -331,7 +331,12 @@ async def test_mark_notification_read_idempotent(
     db_session: AsyncSession,
     make_client: Callable[..., Awaitable[Client]],
 ) -> None:
-    """mark_notification_read on an already-read notification raises NotFoundError (WHERE read_at IS NULL)."""
+    """mark_notification_read on an already-read OWN notification is idempotent → returns item (WR-02 fix).
+
+    Previously this raised NotFoundError on the second call (WHERE read_at IS NULL filtered it out),
+    breaking the idempotent-retry contract. Now the second call succeeds and returns the item
+    with read_at already set.
+    """
     client = await make_client()
     src_id = uuid4()
     await service.create_notification(
@@ -357,13 +362,17 @@ async def test_mark_notification_read_idempotent(
     )
     notif_id = row["id"]
 
-    # First read succeeds
-    await service.mark_notification_read(db_session, client_id=client.id, notification_id=notif_id)
+    # First read succeeds and sets read_at.
+    item1 = await service.mark_notification_read(db_session, client_id=client.id, notification_id=notif_id)
     await db_session.flush()
+    assert item1.read_at is not None
 
-    # Second read on already-read row → NotFoundError (WHERE read_at IS NULL filters it out)
-    with pytest.raises(NotFoundError):
-        await service.mark_notification_read(db_session, client_id=client.id, notification_id=notif_id)
+    # Second read on already-read row → MUST succeed (idempotent, WR-02).
+    # read_at is still set on the returned item.
+    item2 = await service.mark_notification_read(db_session, client_id=client.id, notification_id=notif_id)
+    assert item2.read_at is not None, (
+        "WR-02: second mark-read on own already-read notification must return item with read_at set"
+    )
 
 
 # ── mark_all_notifications_read ───────────────────────────────────────────────
