@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.3
-milestone_name: Loyalty / Club Bonuses + Real Autopay
-status: Awaiting next milestone
-stopped_at: Phase 84 Plan 03 complete — autopay success+failure notifications, channel-idempotent, 3 tests; Phase 84 COMPLETE
-last_updated: "2026-06-06T03:57:32.499Z"
-last_activity: 2026-06-06 — Milestone v2.3 completed and archived
+milestone: v2.4
+milestone_name: Content & Communication — Client-First
+status: planning
+last_updated: "2026-06-06T04:20:59.848Z"
+last_activity: 2026-06-06
 progress:
-  total_phases: 8
-  completed_phases: 4
-  total_plans: 10
-  completed_plans: 10
-  percent: 50
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-03 — v2.2 Membership self-service d
 
 ## Current Position
 
-Phase: Milestone v2.3 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-06 — Milestone v2.3 completed and archived
+Status: Defining requirements
+Last activity: 2026-06-06 — Milestone v2.4 started
 
 ## v2.3 Roadmap Summary
 
