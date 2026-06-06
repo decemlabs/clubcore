@@ -1477,6 +1477,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/gym": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Owner-only: update gym info singleton (GYM-02; Phase 86)
+         * @description Full or partial upsert of the gym_info singleton (owner-only, GYM-02).
+         *     RBAC-04 ordering: require_permission(EDIT, GYM) → verify_csrf → get_db.
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        put: operations["owner_update_gym_info"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/membership-plans": {
         parameters: {
             query?: never;
@@ -7418,6 +7440,58 @@ export interface operations {
                     "application/json": components["schemas"]["ResponseEnvelope_ClientHomeResponse_"];
                 };
             };
+        };
+    };
+    owner_update_gym_info: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name?: string | null;
+                    address?: string | null;
+                    tagline?: string | null;
+                    city?: string | null;
+                    metro?: string | null;
+                    phone?: string | null;
+                    email?: string | null;
+                    hours?: { d: string; open: string; close: string }[] | null;
+                    amenities?: { icon: string; label: string }[] | null;
+                    rules?: string[] | null;
+                    social?: { kind: "tg" | "ig"; label: string; handle: string }[] | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ok: boolean;
+                        data: {
+                            name: string;
+                            tagline: string | null;
+                            address: string;
+                            city: string | null;
+                            metro: string | null;
+                            phone: string | null;
+                            email: string | null;
+                            hours: { d: string; open: string; close: string }[];
+                            amenities: { icon: string; label: string }[];
+                            rules: string[];
+                            social: { kind: string; label: string; handle: string }[];
+                        };
+                    };
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
         };
     };
     client_get_gym_info: {
