@@ -28,7 +28,7 @@ Requirements for this milestone (v2.4). Each maps to exactly one roadmap phase.
 - [x] **TRNR-01**: Клиент видит профиль/bio тренера (имя, фото, специализация, текст bio) через `GET /client/trainers/{id}`
 - [x] **TRNR-02**: Owner задаёт/обновляет профиль/bio тренера через owner-only write-API (reception 403; без admin-web UI)
 - [x] **TRNR-03**: Профили тренеров засеяны (seed) для baseline
-- [ ] **TRNR-04**: PWA TrainerDetailSheet подключён к реальному эндпоинту (сейчас ComingSoon)
+- [x] **TRNR-04**: PWA TrainerDetailSheet подключён к реальному эндпоинту (сейчас ComingSoon)
 
 ### OpenAPI Handoff
 
@@ -82,7 +82,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | TRNR-01 | Phase 88 | Complete |
 | TRNR-02 | Phase 88 | Complete |
 | TRNR-03 | Phase 88 | Complete |
-| TRNR-04 | Phase 88 | Pending |
+| TRNR-04 | Phase 88 | Complete |
 | HND-01 | Phase 89 | Pending |
 
 **Coverage:**
