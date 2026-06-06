@@ -186,7 +186,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 88-01-PLAN.md — Backend data layer: extend Trainer model + schemas (bio/specialization/photo_url) + migration 0062 DDL & 0063 idempotent seed backfill (TRNR-01, TRNR-02, TRNR-03)
+- [x] 88-01-PLAN.md — Backend data layer: extend Trainer model + schemas (bio/specialization/photo_url) + migration 0062 DDL & 0063 idempotent seed backfill (TRNR-01, TRNR-02, TRNR-03)
 
 **Wave 2** *(blocked on Wave 1)*
 
@@ -259,5 +259,5 @@ Plans:
 |-------|----------------|--------|-----------|
 | 86. Gym-Info / CMS | 3/3 | Complete    | 2026-06-06 |
 | 87. Notification Inbox | 4/4 | Complete    | 2026-06-06 |
-| 88. Trainer Detail / Bio | 0/3 | Planned | - |
+| 88. Trainer Detail / Bio | 1/3 | In Progress|  |
 | 89. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
