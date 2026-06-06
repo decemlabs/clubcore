@@ -130,7 +130,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 Plans:
 **Wave 1**
 
-- [ ] 86-01-PLAN.md — Backend gym module (model/schemas/repo/service) + Resource.GYM + migrations 0058 DDL & 0059 idempotent seed (GYM-03)
+- [x] 86-01-PLAN.md — Backend gym module (model/schemas/repo/service) + Resource.GYM + migrations 0058 DDL & 0059 idempotent seed (GYM-03)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -230,7 +230,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 86. Gym-Info / CMS | 0/3 | Planned | - |
+| 86. Gym-Info / CMS | 1/3 | In Progress|  |
 | 87. Notification Inbox | 0/TBD | Not started | - |
 | 88. Trainer Detail / Bio | 0/TBD | Not started | - |
 | 89. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |

@@ -13,7 +13,7 @@ Requirements for this milestone (v2.4). Each maps to exactly one roadmap phase.
 
 - [ ] **GYM-01**: Клиент видит инфо о зале (адрес, часы работы, удобства, правила) в PWA через `GET /client/gym`, заменяя статичный `data/gym.js`
 - [ ] **GYM-02**: Owner создаёт/обновляет содержимое gym-info через owner-only write-API (reception 403; без admin-web UI)
-- [ ] **GYM-03**: Базовая запись gym-info засеяна (seed/миграция), чтобы свежее окружение рендерило реальный контент
+- [x] **GYM-03**: Базовая запись gym-info засеяна (seed/миграция), чтобы свежее окружение рендерило реальный контент
 
 ### Notification inbox
 
@@ -73,7 +73,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 |-------------|-------|--------|
 | GYM-01 | Phase 86 | Pending |
 | GYM-02 | Phase 86 | Pending |
-| GYM-03 | Phase 86 | Pending |
+| GYM-03 | Phase 86 | Complete |
 | INBOX-01 | Phase 87 | Pending |
 | INBOX-02 | Phase 87 | Pending |
 | INBOX-03 | Phase 87 | Pending |
