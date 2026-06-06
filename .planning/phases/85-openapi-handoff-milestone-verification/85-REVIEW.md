@@ -7,73 +7,32 @@ files_reviewed_list:
   - packages/api-client/src/schema.contract.test.ts
 findings:
   critical: 0
-  warning: 2
+  warning: 0
   info: 1
-  total: 3
-status: issues_found
+  total: 1
+status: clean
 ---
 
 # Phase 85: Code Review Report
 
 **Reviewed:** 2026-06-06T00:00:00Z
 **Depth:** standard
+**Status:** clean
 **Files Reviewed:** 1
-**Status:** issues_found
+**Iteration:** 2 (re-review after --auto fix loop)
 
 ## Summary
 
-Reviewed the single hand-written change for Phase 85: the `_v23Checks` block
-(lines 507-533) plus its runtime `it(...)` assertion (lines 578-580) added to
-`packages/api-client/src/schema.contract.test.ts`. The two other changed files
-(`openapi.json`, `schema.d.ts`) are machine-generated and out of scope per the
-phase brief.
+Re-reviewed `packages/api-client/src/schema.contract.test.ts` after the two prior
+Warning findings (WR-01, WR-02) were addressed. Both fixes are confirmed sound and
+the edit introduced no new Critical or Warning issues. The sole remaining finding
+is the pre-existing Info-severity cosmetic comment nit (IN-01), which is acceptable.
 
-Verification performed against the regenerated `schema.d.ts`:
-
-- All four asserted v2.3 paths exist and expose the asserted method:
-  `/api/v1/client/loyalty/balance` GET (schema.d.ts:892-914),
-  `/api/v1/client/loyalty/history` GET (schema.d.ts:916+),
-  `/api/v1/clients/{client_id}/loyalty/grant` POST (schema.d.ts:1433-1451),
-  `/api/v1/client/checkout/memberships/{plan_id}` POST requestBody
-  (schema.d.ts:7253-7266).
-- The guards have real teeth: CI (`.github/workflows/ci.yml:142`) runs
-  `tsc --noEmit` across the api-client package, so a missing path key (direct
-  property-access error) or a `never`-collapsed operation (`AssertNonNever`
-  → `false` assigned to a `true`-typed tuple slot) fails the type build.
-
-The addition is structurally consistent with the eight prior version blocks and
-is substantively correct. No correctness or security defects. Findings below are
-quality/robustness issues: one guard is weaker than its comment claims, and the
-runtime assertion (matching pre-existing file convention) is near-vacuous.
-
-## Warnings
-
-### WR-01: `_ClientCheckoutMembershipBody` guard does not verify `loyaltyRedeemKopecks` — comment overclaims
-
-**File:** `packages/api-client/src/schema.contract.test.ts:524-526`
-**Issue:** The inline comment (lines 517-518) states this guard "proves
-ClientCheckoutRequest (carrying loyaltyRedeemKopecks) is realised." It does not.
-The guard only asserts that the `requestBody` member is non-`never`:
+**WR-01 (RESOLVED — checkout-body field guard) — verified sound.**
+The guard was replaced with `_ClientCheckoutLoyaltyField` (lines 524-528), which now
+drills into the actual field:
 
 ```ts
-type _ClientCheckoutMembershipBody = AssertNonNever<
-  paths['/api/v1/client/checkout/memberships/{plan_id}']['post']['requestBody']
->
-```
-
-In the generated schema (schema.d.ts:7262-7266) `requestBody` is an always-present
-`{ content: { "application/json": ClientCheckoutRequest } }` object. This path was
-already realised before v2.3 (the membership checkout POST shipped in Phase 71).
-The `loyaltyRedeemKopecks` field (schema.d.ts:3691, `loyaltyRedeemKopecks?: number | null`)
-is *optional*, so even if it were removed from `ClientCheckoutRequest` entirely the
-`requestBody` type would remain non-`never` and this guard would still pass. The
-REDM-01 contract surface this comment claims to lock is therefore not actually
-guarded — the test would not catch its regression.
-
-**Fix:** Assert the field itself, not just body presence:
-
-```ts
-// Proves the REDM-01 loyaltyRedeemKopecks field is present on the checkout body.
 type _ClientCheckoutLoyaltyField = AssertNonNever<
   NonNullable<
     paths['/api/v1/client/checkout/memberships/{plan_id}']['post']['requestBody']
@@ -81,51 +40,54 @@ type _ClientCheckoutLoyaltyField = AssertNonNever<
 >
 ```
 
-If pinning the exact field is judged out of scope, instead soften the comment to
-state the guard only confirms the checkout body type is realised — do not claim it
-proves the loyalty field exists.
+Verified against the regenerated schema:
+- `requestBody` is non-optional (schema.d.ts:7262, no `?`), so `NonNullable<...>` is a
+  safe no-op and the chain resolves cleanly.
+- `['content']['application/json']` resolves to `ClientCheckoutRequest` (schema.d.ts:7264).
+- `['loyaltyRedeemKopecks']` resolves to the field type `number | null` declared at
+  schema.d.ts:3691 (`loyaltyRedeemKopecks?: number | null`).
 
-### WR-02: v2.3 runtime `it(...)` asserts only tuple length, not guard values
+Because the field is optional, the property index yields `number | null | undefined`,
+which `AssertNonNever` correctly evaluates to `true`. The guard's real protection is
+the **property-existence** compile check: if `loyaltyRedeemKopecks` were removed from
+`ClientCheckoutRequest`, the `['loyaltyRedeemKopecks']` index would become a
+"property does not exist" TS error under strict mode and fail the `tsc --noEmit` CI
+step. This is exactly the right semantic for an optional contract field, and the
+inline comment (lines 517-518, "proves the REDM-01 loyaltyRedeemKopecks field is
+present on the checkout body") is now accurate — no overclaim. The previously-noted
+gap (a guard that would pass even if the field were deleted) is closed.
 
-**File:** `packages/api-client/src/schema.contract.test.ts:578-580`
-**Issue:** The runtime block checks `expect(_v23Checks).toHaveLength(4)` only. It
-never asserts the elements are `true`. The real enforcement lives entirely at the
-`tsc` layer; if `vitest run` were ever executed without the separate typecheck
-step (e.g. a local `pnpm -F @clubcore/api-client test` during development), a
-broken contract would still report a green test. The length check is satisfied by
-the literal `[true, true, true, true]` array regardless of type correctness, so
-the runtime assertion provides essentially no signal — it is a tsc-counter only.
-This mirrors the pre-existing convention in the file (acknowledged in the
-lines 537-539 comment), so it is not a regression, but the v2.3 block inherits the
-weakness.
+**WR-02 (RESOLVED — runtime assertion strengthened) — verified sound.**
+Line 581 now reads `expect(_v23Checks).toEqual([true, true, true, true])`, replacing
+the near-vacuous `.toHaveLength(4)`. The runtime assertion now pairs the element-count
+expectation with the boolean-value expectation, so a future edit that lets a guard
+slot resolve to `false` fails both the `tsc` build and a standalone `vitest` run. The
+fix matches the prior review's recommended remediation verbatim.
 
-**Fix:** Make the runtime assertion non-vacuous so a local `vitest` run carries
-signal independent of `tsc`:
+**New-issue scan — clean.**
+- The `_v23Checks` tuple type annotation (lines 530-535) still constrains each slot to
+  its `AssertNonNever<...>` result type; any `never`-collapse fails at `tsc`. No
+  regression in the static layer.
+- `_ClientCheckoutLoyaltyField` is consumed by the `_v23Checks` tuple (line 534),
+  satisfying `noUnusedLocals` — no dead/unused local introduced.
+- No new imports, no `any`, no eval/exec, no secrets, no dangerous patterns. This is a
+  pure type-level contract test with no runtime surface or security exposure.
 
-```ts
-it('compiles against the regenerated v2.3 Loyalty surface (Phases 82-84)', () => {
-  expect(_v23Checks).toEqual([true, true, true, true])
-})
-```
-
-`toEqual([true, true, true, true])` still passes trivially today, but pairs the
-count and the boolean expectation; if a future edit lets a guard tuple admit a
-`false` slot, the runtime test fails too. (Applying this to all version blocks
-would be the consistent fix, but is optional cleanup beyond this phase.)
+No correctness, security, or robustness defects remain. Status set to `clean`.
 
 ## Info
 
-### IN-01: v2.3 block omits the explanatory header comment style used by peer blocks for the runtime test
+### IN-01: v2.3 static-check tuple omits the conventional one-line header comment
 
-**File:** `packages/api-client/src/schema.contract.test.ts:528-533`
-**Issue:** Minor consistency nit. Every other static-check tuple in the file
-carries a leading `// Static checks for vX.Y surface — each must resolve to true
-at compile time.` comment (e.g. lines 377, 424, 476). The `_v23Checks` tuple
-(line 528) has no such header line; the surrounding `// --- v2.3 surface ---`
-banner documents the paths but not the tuple's compile-time-resolution contract.
-Purely cosmetic; does not affect behavior.
+**File:** `packages/api-client/src/schema.contract.test.ts:530`
+**Issue:** Minor consistency nit (carried over from iteration 1, acknowledged
+acceptable). Every other static-check tuple in the file carries a leading
+`// Static checks for vX.Y surface — each must resolve to true at compile time.`
+comment (e.g. lines 377, 424, 476). The `_v23Checks` tuple (line 530) lacks this
+header; the `// --- v2.3 surface ---` banner documents the paths but not the tuple's
+compile-time-resolution contract. Purely cosmetic; does not affect behavior.
 
-**Fix:** Add the conventional one-line header above line 528:
+**Fix:** Add the conventional one-line header above line 530:
 
 ```ts
 // Static checks for v2.3 surface — each must resolve to true at compile time.
