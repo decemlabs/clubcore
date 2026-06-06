@@ -718,6 +718,12 @@ async def test_post_push_token_cross_client_reuse_leaves_only_one_alive_row(
     A physical device token is globally unique — only one client must hold an alive row
     for any given token. When client B registers a token already alive for client A,
     client A's row must be soft-deleted (unregistered_at set) and client B's row created.
+
+    The deterministic sequential sequence exercised here also covers the concurrent race
+    described in WR-01: Step 3 in upsert_push_token now uses pg_insert ON CONFLICT DO UPDATE
+    keyed on the partial-unique index (token WHERE unregistered_at IS NULL), so two clients
+    that pass Steps 1-2 concurrently cannot both hit a bare INSERT — the loser's INSERT
+    resolves via DO UPDATE (re-pointing the alive row) rather than raising IntegrityError.
     """
     staff = await _seed_staff(db_session, "push-xc")
     client_a = await _seed_client(db_session, staff, _phone(70))

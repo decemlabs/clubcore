@@ -11,6 +11,13 @@ INVARIANTS:
   - INSERT uses pg_insert ON CONFLICT DO NOTHING + flush (SAVEPOINT-safe dedup path).
   - Reads (COUNT / SELECT) use raw SQL text() per D-54-08 discipline.
   - mark_read / mark_all_read / upsert_push_token use raw UPDATE / INSERT ... ON CONFLICT.
+
+upsert_push_token Step 3 uses pg_insert ON CONFLICT DO UPDATE (index_elements keyed on
+the partial-unique index over token WHERE unregistered_at IS NULL) so a concurrent
+registration of the same token by a different client never raises IntegrityError → HTTP 500.
+The conflict path re-points the alive row to the calling client and clears unregistered_at,
+preserving the global-uniqueness invariant.  SAVEPOINT-safe: no exception raised, no
+rollback needed by the caller.
 """
 
 from __future__ import annotations
@@ -220,6 +227,13 @@ async def upsert_push_token(
     an old unregistered row for the token" (revival).
 
     Step 3 — INSERT only if no row existed for this (client_id, token) at all.
+    Uses pg_insert ON CONFLICT DO UPDATE keyed on the partial-unique index
+    (token WHERE unregistered_at IS NULL) so a concurrent cross-client
+    registration that passes Steps 1-2 on both transactions cannot produce an
+    unhandled IntegrityError → HTTP 500 (WR-01).  The conflict path re-points
+    the alive row to the calling client and clears unregistered_at, preserving
+    the global-uniqueness invariant.  SAVEPOINT-safe: no exception raised, no
+    rollback needed by the caller.
 
     Partial UNIQUE on (token) WHERE unregistered_at IS NULL (migration 0061)
     enforces the global guarantee at the DB level as a defence-in-depth layer.
@@ -250,11 +264,30 @@ async def upsert_push_token(
         )
     ).scalar_one_or_none()
     if updated_id is None:
-        # Step 3 — no existing row for this (client, token) — insert a fresh one.
-        new_token = ClientPushToken(
-            client_id=client_id,
-            token=token,
-            platform=platform,
+        # Step 3 — no existing row for this (client, token): INSERT with ON CONFLICT DO UPDATE.
+        # The conflict target is the partial-unique index on (token) WHERE unregistered_at IS NULL
+        # (migration 0061).  If a concurrent transaction inserted a fresh alive row for this token
+        # between Steps 1 and 2 above, the INSERT hits the partial index and the DO UPDATE branch
+        # re-points that alive row to the calling client (client_id=:cid, unregistered_at=NULL).
+        # This is identical to the intent of Step 1 but SAVEPOINT-safe: no IntegrityError raised.
+        # The conflicting alive row that was alive for a different client was already soft-deleted
+        # by Step 1 in the non-concurrent case; in the concurrent case this DO UPDATE handles it.
+        stmt = (
+            pg_insert(ClientPushToken)
+            .values(
+                client_id=client_id,
+                token=token,
+                platform=platform,
+            )
+            .on_conflict_do_update(
+                index_elements=["token"],
+                index_where=ClientPushToken.unregistered_at.is_(None),
+                set_={
+                    "client_id": client_id,
+                    "platform": platform,
+                    "unregistered_at": None,
+                    "updated_at": text("now()"),
+                },
+            )
         )
-        session.add(new_token)
-        await session.flush()
+        await session.execute(stmt)
