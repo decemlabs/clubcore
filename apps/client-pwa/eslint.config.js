@@ -20,12 +20,13 @@ export default tseslint.config(
       // the D-71-09 import-boundary block can lint them for the restricted-paths rule.
       // GymInfoSheet graduated to a real data-backed screen in Phase 86 — removed
       // from the placeholder zone, now ignored like other real .jsx screens.
+      // Phase 87 (INBOX-05): the notifications sheet also graduated — removed from
+      // the placeholder zone, now ignored like other real .jsx screens.
       'src/**/*.jsx',
       'src/**/*.js',
       '!src/screens/ChatScreen.jsx',
       '!src/screens/sheets/ReferralSheet.jsx',
       '!src/screens/sheets/TrainerDetailSheet.jsx',
-      '!src/screens/sheets/NotificationsSheet.jsx',
     ],
   },
   {
@@ -68,7 +69,6 @@ export default tseslint.config(
       'src/screens/ChatScreen.jsx',
       'src/screens/sheets/ReferralSheet.jsx',
       'src/screens/sheets/TrainerDetailSheet.jsx',
-      'src/screens/sheets/NotificationsSheet.jsx',
     ],
     plugins: { import: importPlugin },
     languageOptions: {
@@ -93,7 +93,6 @@ export default tseslint.config(
                 './src/screens/ChatScreen.jsx',
                 './src/screens/sheets/ReferralSheet.jsx',
                 './src/screens/sheets/TrainerDetailSheet.jsx',
-                './src/screens/sheets/NotificationsSheet.jsx',
               ],
               from: [
                 './src/lib/clientFetcher.ts',

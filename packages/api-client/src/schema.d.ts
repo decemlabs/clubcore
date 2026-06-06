@@ -889,6 +889,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/client/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Paginated notification inbox for the authenticated client (INBOX-05; Phase 87)
+         * @description Return paginated notifications (newest-first) for the principal.
+         *     D-20-IDOR: client_id sourced from require_client() principal — never from URL.
+         */
+        get: operations["client_list_notifications"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/notifications/{notification_id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: { notification_id: string };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Mark a single notification as read (INBOX-05; Phase 87) */
+        patch: operations["client_mark_notification_read"];
+        trace?: never;
+    };
+    "/api/v1/client/notifications/read-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Mark all notifications as read (INBOX-05; Phase 87) */
+        patch: operations["client_mark_all_notifications_read"];
+        trace?: never;
+    };
     "/api/v1/client/gym": {
         parameters: {
             query?: never;
@@ -10071,6 +10126,95 @@ export interface operations {
                 };
             };
             422: components["responses"]["422_ValidationError"];
+        };
+    };
+    client_list_notifications: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ok: boolean;
+                        data: {
+                            items: {
+                                id: string;
+                                kind: string;
+                                title: string;
+                                body: string;
+                                readAt: string | null;
+                                createdAt: string;
+                            }[];
+                            total: number;
+                            page: number;
+                            pageSize: number;
+                            unreadCount: number;
+                        };
+                    };
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    client_mark_notification_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: { notification_id: string };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ok: boolean;
+                        data: {
+                            id: string;
+                            kind: string;
+                            title: string;
+                            body: string;
+                            readAt: string | null;
+                            createdAt: string;
+                        };
+                    };
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    client_mark_all_notifications_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response — 204 No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     health: {

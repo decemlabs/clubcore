@@ -41,6 +41,7 @@ export const clientPortalKeys = {
   loyaltyBalance: () => [...clientPortalKeys.all, 'loyalty-balance'] as const,
   loyaltyHistory: (page: number) => [...clientPortalKeys.all, 'loyalty-history', page] as const,
   gymInfo: () => [...clientPortalKeys.all, 'gym-info'] as const,
+  notifications: (page: number) => [...clientPortalKeys.all, 'notifications', page] as const,
 } as const
 
 // ---------------------------------------------------------------------------
@@ -816,6 +817,68 @@ export function useClientGymInfo() {
       return (res as { data: GymInfoData }).data
     },
     staleTime: 30_000,
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Phase-87 INBOX-05: notification inbox hooks
+// ---------------------------------------------------------------------------
+
+export interface NotificationItem {
+  id: string
+  kind: string
+  title: string
+  body: string
+  readAt: string | null
+  createdAt: string
+}
+
+interface NotificationsListData extends PaginatedResult<NotificationItem> {
+  unreadCount: number
+}
+
+/** GET /api/v1/client/notifications?page=N — paginated inbox (INBOX-05) */
+export function useClientNotifications(page = 1) {
+  return useQuery({
+    queryKey: clientPortalKeys.notifications(page),
+    queryFn: async () => {
+      const res = await clientRequest('get', '/api/v1/client/notifications', {
+        query: { page },
+      })
+      return (res as { data: NotificationsListData }).data
+    },
+    staleTime: 30_000,
+  })
+}
+
+/** PATCH /api/v1/client/notifications/{notification_id}/read — mark single read (INBOX-05) */
+export function useMarkNotificationRead() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (notificationId: string) => {
+      const res = await clientRequest(
+        'patch',
+        '/api/v1/client/notifications/{notification_id}/read',
+        { params: { notification_id: notificationId } },
+      )
+      return (res as { data: NotificationItem }).data
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: [...clientPortalKeys.all, 'notifications'] })
+    },
+  })
+}
+
+/** PATCH /api/v1/client/notifications/read-all — mark all read (INBOX-05) */
+export function useMarkAllNotificationsRead() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async () => {
+      await clientRequest('patch', '/api/v1/client/notifications/read-all')
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: [...clientPortalKeys.all, 'notifications'] })
+    },
   })
 }
 
