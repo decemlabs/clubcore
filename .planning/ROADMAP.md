@@ -190,7 +190,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 88-02-PLAN.md — client_portal GET /client/trainers/{id} (client-safe projection + 404-collapse) + owner PATCH bio integration tests (reception 403) (TRNR-01, TRNR-02)
+- [x] 88-02-PLAN.md — client_portal GET /client/trainers/{id} (client-safe projection + 404-collapse) + owner PATCH bio integration tests (reception 403) (TRNR-01, TRNR-02)
 
 **Wave 3** *(blocked on Wave 2)*
 
@@ -259,5 +259,5 @@ Plans:
 |-------|----------------|--------|-----------|
 | 86. Gym-Info / CMS | 3/3 | Complete    | 2026-06-06 |
 | 87. Notification Inbox | 4/4 | Complete    | 2026-06-06 |
-| 88. Trainer Detail / Bio | 1/3 | In Progress|  |
+| 88. Trainer Detail / Bio | 2/3 | In Progress|  |
 | 89. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
