@@ -8,7 +8,7 @@ import { PullToRefresh } from '@/components/PullToRefresh.jsx';
 import { QRPattern } from '@/components/QRPattern.jsx';
 import { StatusBar } from '@/components/StatusBar.jsx';
 import { SwipeRow } from '@/components/SwipeRow.jsx';
-import { useClientHome, useClientMe, useClientBookings, useClientTrainers, useClientPlans } from '@/data';
+import { useClientHome, useClientMe, useClientBookings, useClientTrainers, useClientPlans, useClientNotifications } from '@/data';
 import { TRAINERS as STATIC_TRAINERS_FALLBACK } from '@/data/trainers.js';
 import { GYM_INFO } from '@/data/gym.js';
 import { formatMoney } from '@/utils/format.js';
@@ -133,7 +133,12 @@ export function HomeHeroCard({ userName, unread, onOpenGymInfo, onOpenNotificati
   };
 
   const bellBtn = (
-    <button type="button" onClick={onOpenNotifications} className="press" aria-label="Уведомления" style={{
+    <button
+      type="button"
+      onClick={onOpenNotifications}
+      className="press"
+      aria-label={unread > 0 ? `Уведомления · ${unread} непрочитанных` : 'Уведомления'}
+      style={{
       position: 'relative', width: 38, height: 38, borderRadius: 12,
       border: '0.5px solid var(--border)', background: 'var(--surface)', boxShadow: 'var(--sh-1)',
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0,
@@ -259,8 +264,9 @@ export const HomeScreen = ({ tweaks, onOpenQR, onOpenPlans, onOpenManage, onOpen
   const userName = me?.firstName || tweaks.userName || '';
   const isEmpty = tweaks.dataMode === 'empty';
   const trainerCancelled = tweaks.gymEvent === 'trainer-cancelled';
-  // Notifications count: not in API — use 0 when loaded, show no badge.
-  const unread = 0;
+  // Notifications count: server unreadCount from GET /client/notifications page 1
+  const { data: notificationsData } = useClientNotifications(1);
+  const unread = notificationsData?.unreadCount ?? 0;
   const [showToast, setShowToast] = React.useState(false);
 
   if (isLoading) {
@@ -310,6 +316,7 @@ export const HomeScreen = ({ tweaks, onOpenQR, onOpenPlans, onOpenManage, onOpen
             onOpenNotifications={onOpenNotifications}
             onTab={onTab}
             onOpenOnboarding={() => navigate('/onboarding')}
+            unread={unread}
           />
         ) : (
           <>
@@ -820,7 +827,7 @@ export function QrPlaceholder() {
 }
 
 // Top-level newbie variant — composes all newbie sub-components with stagger (v2 mockup)
-export function HomeNewbie({ me, homeData, bookings, userName, isDark, onOpenPlans, onOpenGymInfo, onOpenNotifications, onTab, onOpenOnboarding }) {
+export function HomeNewbie({ me, homeData, bookings, userName, isDark, onOpenPlans, onOpenGymInfo, onOpenNotifications, onTab, onOpenOnboarding, unread = 0 }) {
   const { steps, doneCount, title, badge } = deriveOnboardingSteps(me, homeData, bookings)
   const { data: liveTrainers, isLoading: trainersLoading } = useClientTrainers()
 
@@ -859,10 +866,10 @@ export function HomeNewbie({ me, homeData, bookings, userName, isDark, onOpenPla
               <button
                 type="button"
                 onClick={onOpenNotifications}
-                aria-label="Уведомления"
+                aria-label={unread > 0 ? `Уведомления · ${unread} непрочитанных` : 'Уведомления'}
                 className="press"
                 style={{
-                  width: 38, height: 38, borderRadius: 12,
+                  position: 'relative', width: 38, height: 38, borderRadius: 12,
                   border: '0.5px solid var(--border)', background: 'var(--surface)',
                   boxShadow: 'var(--sh-1)', color: 'var(--text)',
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -871,6 +878,12 @@ export function HomeNewbie({ me, homeData, bookings, userName, isDark, onOpenPla
                 }}
               >
                 <Icon name="bell" size={19} color="var(--text)" strokeWidth={1.8} />
+                {unread > 0 && (
+                  <span style={{
+                    position: 'absolute', top: 8, right: 9, width: 7, height: 7, borderRadius: 999,
+                    background: '#f43f5e', border: '2px solid var(--surface)',
+                  }} />
+                )}
               </button>
               {/* Avatar: real initials from me.firstName (API-backed); no fake presence dot */}
               <div style={{
