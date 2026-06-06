@@ -110,6 +110,18 @@ from app.modules.loyalty.router import router as loyalty_router  # noqa: E402
 
 v1.include_router(loyalty_router, prefix="/client")
 
+# Phase 86 GYM-01/GYM-02 — gym-info client read + owner write.
+# Client read mounted at /api/v1/client/gym (require_client gate — GYM-01).
+# Owner write mounted at /api/v1/gym (require_permission(EDIT, GYM) + verify_csrf — GYM-02).
+# Separate routers avoid a cross-module edge and keep the two distinct auth gates clean
+# (D-20-MODULE). client_router prefix "/client" → /api/v1/client/gym;
+# owner_router prefix "/gym" → /api/v1/gym.
+from app.modules.gym.router import client_router as gym_client_router  # noqa: E402
+from app.modules.gym.router import owner_router as gym_owner_router  # noqa: E402
+
+v1.include_router(gym_client_router, prefix="/client")
+v1.include_router(gym_owner_router, prefix="/gym")
+
 # Phase 42 EMAIL-07 / D-42-17 — _internal namespace established here.
 # Transport-layer endpoints (provider webhooks, ops callbacks) sit under
 # /api/v1/_internal/* with their own auth model (HMAC signature in
