@@ -1306,6 +1306,22 @@ async def create_booking_via_bot(
         actor_role="telegram_bot",  # LITERAL — INFRA-11 AST gate / D-40-05
     )
 
+    # Step 8.5 — Phase 87 INBOX-03 — in-app inbox row (co-transactional, BEFORE commit).
+    # Placed here (after audit.emit, before session.commit) so the notification INSERT
+    # participates in the same UoW as the booking state change (UNIQUE dedup via
+    # uq_in_app_notifications_client_source_kind covers webhook/retry replay, WR-03 fix).
+    _bot_trainer_name = await _fetch_trainer_full_name(session, slot.trainer_id)
+    _bot_slot_start_msk = slot.start_time.astimezone(MOSCOW_TZ).strftime("%d.%m.%Y %H:%M")
+    await create_notification(
+        session,
+        client_id=client_id,
+        source_type="booking",
+        source_id=booking.id,
+        kind="booking_confirmed",
+        title="Бронь подтверждена",
+        body=f"{_bot_slot_start_msk} — {_bot_trainer_name}",
+    )
+
     # Step 9 — Commit (SVC001 gate).
     await session.commit()
 
@@ -1443,6 +1459,22 @@ async def create_booking_for_client(
         pt_package_id=str(booking.pt_package_id),
         created_by_user_id=None,  # payload-level; nullable per D-40-05 / D-70-07
         actor_role="client",  # LITERAL — INFRA-11 AST gate / D-70-07
+    )
+
+    # Step 8.5 — Phase 87 INBOX-03 — in-app inbox row (co-transactional, BEFORE commit).
+    # Placed here (after audit.emit, before session.commit) so the notification INSERT
+    # participates in the same UoW as the booking state change (UNIQUE dedup via
+    # uq_in_app_notifications_client_source_kind covers webhook/retry replay, WR-04 fix).
+    _client_trainer_name = await _fetch_trainer_full_name(session, slot.trainer_id)
+    _client_slot_start_msk = slot.start_time.astimezone(MOSCOW_TZ).strftime("%d.%m.%Y %H:%M")
+    await create_notification(
+        session,
+        client_id=client_id,
+        source_type="booking",
+        source_id=booking.id,
+        kind="booking_confirmed",
+        title="Бронь подтверждена",
+        body=f"{_client_slot_start_msk} — {_client_trainer_name}",
     )
 
     # Step 9 — Commit (SVC001 gate).

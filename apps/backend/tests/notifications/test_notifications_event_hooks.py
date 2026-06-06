@@ -264,6 +264,75 @@ async def test_create_booking_creates_booking_confirmed_row(
 
 
 # ---------------------------------------------------------------------------
+# Hook 1b — create_booking_via_bot → booking_confirmed (WR-03 fix)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_create_booking_via_bot_creates_booking_confirmed_row(
+    db_session: AsyncSession,
+    app: Any,
+) -> None:
+    """WR-03: create_booking_via_bot must insert one booking_confirmed inbox row for the client."""
+    from unittest.mock import AsyncMock, patch
+
+    owner = await _seed_owner_user(db_session, suffix=uuid4().hex[:6])
+    trainer = await _seed_trainer(db_session)
+    client = await _seed_client(db_session, owner=owner)
+    plan = await _seed_pt_plan(db_session)
+    pkg = await _seed_pt_package(db_session, client=client, plan=plan)
+    slot = await _seed_active_slot(db_session, trainer=trainer, owner=owner)
+
+    # Patch the post-commit DM dispatch so it doesn't fail without Telegram creds.
+    with patch(
+        "app.modules.bookings.service._dispatch_booking_lifecycle_notification",
+        new_callable=AsyncMock,
+    ):
+        await bookings_service.create_booking_via_bot(
+            db_session,
+            client_id=client.id,
+            slot_id=slot.id,
+            pt_package_id=pkg.id,
+        )
+
+    count = await _count_notifications(db_session, client_id=client.id, kind="booking_confirmed")
+    assert count == 1, (
+        f"WR-03: Expected 1 booking_confirmed row from create_booking_via_bot, got {count}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Hook 1c — create_booking_for_client → booking_confirmed (WR-04 fix)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_create_booking_for_client_creates_booking_confirmed_row(
+    db_session: AsyncSession,
+    app: Any,
+) -> None:
+    """WR-04: create_booking_for_client must insert one booking_confirmed inbox row for the client."""
+    owner = await _seed_owner_user(db_session, suffix=uuid4().hex[:6])
+    trainer = await _seed_trainer(db_session)
+    client = await _seed_client(db_session, owner=owner)
+    plan = await _seed_pt_plan(db_session)
+    pkg = await _seed_pt_package(db_session, client=client, plan=plan)
+    slot = await _seed_active_slot(db_session, trainer=trainer, owner=owner)
+
+    await bookings_service.create_booking_for_client(
+        db_session,
+        client_id=client.id,
+        slot_id=slot.id,
+        pt_package_id=pkg.id,
+    )
+
+    count = await _count_notifications(db_session, client_id=client.id, kind="booking_confirmed")
+    assert count == 1, (
+        f"WR-04: Expected 1 booking_confirmed row from create_booking_for_client, got {count}"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Hook 2 — cancel_booking (owner) → booking_cancelled_by_owner
 # ---------------------------------------------------------------------------
 
