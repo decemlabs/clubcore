@@ -123,7 +123,11 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
   1. Клиент открывает экран зала в PWA и видит адрес, часы, удобства и правила, которые хранятся в БД (не `data/gym.js`)
   2. Owner может обновить gym-info через API (reception получает 403)
   3. На свежем `docker compose up` + seed PWA рендерит реальный контент без ручного вмешательства
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 86-01-PLAN.md — Backend gym module (model/schemas/repo/service) + Resource.GYM + migrations 0058 DDL & 0059 idempotent seed (GYM-03)
+- [ ] 86-02-PLAN.md — gym router (client GET + owner PUT) + v1 registration + integration tests (GYM-01, GYM-02)
+- [ ] 86-03-PLAN.md — PWA useClientGymInfo hook + swap-seam export + GymInfoSheet rewrite + vitest (GYM-01)
 **UI hint**: yes
 
 ### Phase 87: Notification Inbox
@@ -205,7 +209,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 86. Gym-Info / CMS | 0/TBD | Not started | - |
+| 86. Gym-Info / CMS | 0/3 | Planned | - |
 | 87. Notification Inbox | 0/TBD | Not started | - |
 | 88. Trainer Detail / Bio | 0/TBD | Not started | - |
 | 89. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
