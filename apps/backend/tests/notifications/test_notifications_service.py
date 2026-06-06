@@ -129,28 +129,29 @@ async def test_list_client_notifications_returns_newest_first(
     db_session: AsyncSession,
     make_client: Callable[..., Awaitable[Client]],
 ) -> None:
-    """list_client_notifications returns items in DESC created_at order."""
+    """list_client_notifications returns items in DESC created_at order.
+
+    Force distinct created_at by inserting via raw SQL with explicit timestamps.
+    """
     client = await make_client()
     src1, src2 = uuid4(), uuid4()
-    await service.create_notification(
-        db_session,
-        client_id=client.id,
-        source_type="booking",
-        source_id=src1,
-        kind="booking_confirmed",
-        title="Первое",
-        body="",
+
+    # Insert row 1 with an earlier timestamp
+    await db_session.execute(
+        text(
+            "INSERT INTO in_app_notifications (client_id, source_type, source_id, kind, title, body, created_at, updated_at) "
+            "VALUES (:cid, 'booking', :sid, 'booking_confirmed', 'Первое', '', "
+            "now() - interval '10 seconds', now() - interval '10 seconds')"
+        ),
+        {"cid": str(client.id), "sid": str(src1)},
     )
-    await db_session.flush()
-    # Small delay is not needed — we rely on the DB insertion order via created_at
-    await service.create_notification(
-        db_session,
-        client_id=client.id,
-        source_type="booking",
-        source_id=src2,
-        kind="booking_rescheduled",
-        title="Второе",
-        body="",
+    # Insert row 2 with the current timestamp (newer)
+    await db_session.execute(
+        text(
+            "INSERT INTO in_app_notifications (client_id, source_type, source_id, kind, title, body) "
+            "VALUES (:cid, 'booking', :sid, 'booking_rescheduled', 'Второе', '')"
+        ),
+        {"cid": str(client.id), "sid": str(src2)},
     )
     await db_session.flush()
 
@@ -160,7 +161,7 @@ async def test_list_client_notifications_returns_newest_first(
     assert result.total == 2
     assert result.page == 1
     assert result.page_size == 20
-    # newest (rescheduled, src2) should be first
+    # newest (rescheduled, src2 — now()) should be first
     assert result.items[0].kind == "booking_rescheduled"
     assert result.items[1].kind == "booking_confirmed"
 
