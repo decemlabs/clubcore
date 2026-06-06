@@ -116,30 +116,36 @@ async def mark_notification_read(
     client_id: UUID,
     notification_id: UUID,
 ) -> ClientNotificationItem:
-    """Mark a single notification read; 404-collapse on non-owned or already-read rows.
+    """Mark a single notification read; idempotent for own rows, 404 for non-owned (WR-02 fix).
 
-    UPDATE WHERE id=:id AND client_id=:cid AND read_at IS NULL.
-    If no row was updated → NotFoundError (IDOR-safe: caller cannot distinguish
-    "wrong owner" from "already read" from "id doesn't exist", T-87-01).
+    Idempotency contract: marking an already-read OWN notification is a no-op → 200.
+    Only genuinely absent or cross-client IDs return 404 (IDOR-safe, T-87-01).
 
-    Returns the now-read item.
+    Two-phase approach (WR-02):
+      1. Attempt UPDATE WHERE id=:id AND client_id=:cid AND read_at IS NULL.
+         (Updates only if the row is unread — no-op if already read.)
+      2. Fetch the row owned by this client regardless of read state.
+         If None → the ID does not exist or belongs to another client → 404.
+         Otherwise → return current state (read or just-marked-read).
+
+    Returns the current item state.
     No session.commit() — caller-owns-txn.
     """
-    updated = await repository.mark_read(
+    # Attempt to mark as read (no-op if already read — UPDATE matches 0 rows).
+    await repository.mark_read(
         session,
         client_id=client_id,
         notification_id=notification_id,
     )
-    if not updated:
-        raise NotFoundError("notification_not_found")
 
+    # Fetch the row owned by this client (IDOR-safe: WHERE client_id = :cid).
     row = await repository.fetch_one_owned(
         session,
         client_id=client_id,
         notification_id=notification_id,
     )
     if row is None:
-        # Defensive: concurrent delete between mark_read and fetch (extremely rare).
+        # Genuinely not found or belongs to a different client — 404.
         raise NotFoundError("notification_not_found")
 
     return ClientNotificationItem(

@@ -413,6 +413,46 @@ async def test_patch_mark_read_marks_single_notification(
     )
 
 
+async def test_patch_mark_read_already_read_own_notification_returns_200(
+    http_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """WR-02: PATCH /{id}/read on an already-read OWN notification → 200 (idempotent).
+
+    Marking an own notification as read twice must succeed on the second call
+    (idempotent-retry contract). Only cross-client or nonexistent IDs return 404.
+    """
+    staff = await _seed_staff(db_session, "mark-idem")
+    client = await _seed_client(db_session, staff, _phone(25))
+    await db_session.commit()
+
+    notif_id = await _create_notif(db_session, client.id, kind="booking_confirmed")
+    await db_session.commit()
+
+    await _auth_as_client(http_client, db_session, client)
+    csrf_token = http_client.cookies.get("clubcore_client_csrf") or ""
+
+    # First call — marks the notification read.
+    resp1 = await http_client.patch(
+        f"/api/v1/client/notifications/{notif_id}/read",
+        headers={"X-CSRF-Token": csrf_token},
+    )
+    assert resp1.status_code == 200, f"First mark-read failed: {resp1.text}"
+    assert resp1.json()["data"]["readAt"] is not None
+
+    # Second call — notification is already read; must still return 200 (idempotent, WR-02).
+    resp2 = await http_client.patch(
+        f"/api/v1/client/notifications/{notif_id}/read",
+        headers={"X-CSRF-Token": csrf_token},
+    )
+    assert resp2.status_code == 200, (
+        f"WR-02: second mark-read on already-read own notification should return 200 "
+        f"(idempotent), got {resp2.status_code}: {resp2.text}"
+    )
+    # The returned item still has readAt set.
+    assert resp2.json()["data"]["readAt"] is not None
+
+
 async def test_patch_mark_read_cross_client_returns_404(
     http_client: AsyncClient,
     db_session: AsyncSession,
