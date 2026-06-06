@@ -210,7 +210,12 @@ Plans:
   3. `_v24Checks` `AssertNonNever` tuple с runtime `toHaveLength` — тест падает, если любой из новых путей исчезнет
   4. Полный milestone gate зелёный (pytest + typecheck + lint-imports + drift gates)
 
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+**Wave 1**
+
+- [ ] 89-01-PLAN.md — Authoritative byte-stable regen of openapi.json + schema.d.ts (adds 7 v2.4 paths + additive trainer body fields, replaces 86/87/88 stubs) + _v24Checks AssertNonNever forward-guards (8) + full milestone gate (drift/Redocly/pytest/mypy/lint-imports/PWA/no-edit guard) (HND-01)
 
 ## Backlog
 
@@ -260,4 +265,4 @@ Plans:
 | 86. Gym-Info / CMS | 3/3 | Complete    | 2026-06-06 |
 | 87. Notification Inbox | 4/4 | Complete    | 2026-06-06 |
 | 88. Trainer Detail / Bio | 3/3 | Complete    | 2026-06-06 |
-| 89. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
+| 89. OpenAPI Handoff + Milestone Verification | 0/1 | Not started | - |
