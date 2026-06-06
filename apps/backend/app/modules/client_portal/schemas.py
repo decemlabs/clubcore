@@ -205,8 +205,8 @@ class ClientAvailableSlotItem(ResponseData):
         status       String(16)
       trainers (app/modules/trainers/models.py:23-43):
         full_name    Text NOT NULL
-    specialization is NOT on the Trainer model in v1 (reserved for future);
-    omitted per ClientCatalogTrainerResponse precedent (schemas.py:105-113).
+    specialization is available on Trainer since Phase 88 but is not included
+    in the slot catalog projection per D-69-05 (slot list shows name only).
     """
 
     slot_id: UUID
