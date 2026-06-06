@@ -52,7 +52,6 @@ from app.modules.client_portal.schemas import (
     ClientCatalogPlanResponse,
     ClientCatalogPtPackageResponse,
     ClientCatalogTrainerResponse,
-    ClientTrainerDetailResponse,
     ClientCheckInRequest,
     ClientCheckInResponse,
     ClientCheckoutRequest,
@@ -70,6 +69,7 @@ from app.modules.client_portal.schemas import (
     ClientPtSessionItem,
     ClientQrTokenResponse,
     ClientRescheduleBookingRequest,
+    ClientTrainerDetailResponse,
     ClientVisitItem,
     ClientWeeklyActivityItem,
 )
