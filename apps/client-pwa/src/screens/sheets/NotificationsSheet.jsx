@@ -208,17 +208,24 @@ export function NotificationsSheet({ onClose }) {
   }
 
   const handleMarkAll = () => {
-    // Optimistic: mark all rendered items as read locally
+    // Capture pre-mutation state BEFORE any setState calls so the onError closure
+    // closes over the correct pre-optimistic values (CR-01 fix).
+    const prevItems = allItems
+    const prevReadIds = optimisticReadIds
+
+    // Optimistic: mark all rendered items as read locally.
+    // Only add IDs of items that were unread before mark-all — already-read items
+    // must not inflate optimisticReadIds (CR-01: snapshot was built from effectiveItems
+    // which already had optimisticReadIds applied, causing over-counting).
     const now = new Date().toISOString()
-    const snapshot = effectiveItems.map(item => ({ ...item, readAt: now }))
-    setAllItems(snapshot)
-    setOptimisticReadIds(new Set(snapshot.map(i => i.id)))
+    setAllItems(prev => prev.map(item => ({ ...item, readAt: item.readAt ?? now })))
+    setOptimisticReadIds(new Set(allItems.filter(i => i.readAt === null).map(i => i.id)))
 
     markAllRead.mutate(undefined, {
       onError: () => {
-        // Rollback: restore pre-optimistic state
-        setAllItems(allItems)
-        setOptimisticReadIds(optimisticReadIds)
+        // Rollback: restore pre-optimistic state using values captured before setState.
+        setAllItems(prevItems)
+        setOptimisticReadIds(prevReadIds)
         showToast('Не удалось отметить прочитанными')
       },
     })
