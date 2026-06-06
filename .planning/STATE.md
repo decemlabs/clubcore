@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.4
 milestone_name: Content & Communication — Client-First
-status: executing
-stopped_at: Phase 86 UI-SPEC approved
-last_updated: "2026-06-06T05:44:56.724Z"
+status: verifying
+stopped_at: "Phase 86 Plan 03 complete — GymInfoSheet wired to live backend (GYM-01)"
+last_updated: "2026-06-06T05:52:05.493Z"
 last_activity: 2026-06-06
 progress:
   total_phases: 8
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 2
-  percent: 0
+  completed_plans: 3
+  percent: 13
 ---
 
 # Project State
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 86 — Gym-Info / CMS
+**Current focus:** Phase 86 — Gym-Info / CMS (all 3 plans complete)
 
 ## Current Position
 
 Phase: 86 (Gym-Info / CMS) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-06
 
 ## v2.4 Roadmap Summary
@@ -78,6 +78,12 @@ Last activity: 2026-06-06
 - **Inbox source**: только системные события (бронь/платёж/autopay) — нет broadcast/ручного-composer
 - **Trainer reviews out of scope**: только bio/detail; REVW-* → v2
 - **Module discipline**: D-20-MODULE (raw-SQL reads / Protocol-slot writes; zero new `ignore_imports` по возможности) + D-20-IDOR
+
+### Key v2.4 Phase 86 Plan 03 Decisions
+
+- **D-86-03-SCHEMA-FORWARD**: `/api/v1/client/gym` path + `client_get_gym_info` operation added as forward entry to `schema.d.ts` — Phase 89 will regenerate byte-stable; avoids TS2345 without weakening type safety
+- **D-86-03-STATIC-PHOTOS**: `STATIC_PHOTOS` inlined in `GymInfoSheet.jsx` — `gym.js` retained for other non-wired consumers per CONTEXT.md deferral; photos array shape identical
+- **D-86-03-INTL-BADGE**: Open/closed badge uses `Intl.DateTimeFormat.formatToParts` with `timeZone:'Europe/Moscow'` — DST-safe; no date-fns dependency
 
 ### Key v2.2 Scope Decisions (locked)
 
@@ -178,7 +184,7 @@ Ran the complete test suite + live browser verification of all v2.2 features aft
 
 ## Session Continuity
 
-Last session: 2026-06-06T05:44:56.720Z
+Last session: 2026-06-06T05:52:05.488Z
 Stopped at: Phase 86 UI-SPEC approved
 Resume: Start Phase 86 with /gsd:plan-phase 86
 
