@@ -944,6 +944,23 @@ export interface paths {
         patch: operations["client_mark_all_notifications_read"];
         trace?: never;
     };
+    "/api/v1/client/push-tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Register (or revive) a push token for the authenticated client (INBOX-02; Phase 87) */
+        post: operations["client_register_push_token"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/client/gym": {
         parameters: {
             query?: never;
@@ -10214,6 +10231,40 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    client_register_push_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    token: string;
+                    platform: "web" | "android" | "ios";
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response — 204 No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
