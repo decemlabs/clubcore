@@ -122,6 +122,14 @@ from app.modules.gym.router import owner_router as gym_owner_router  # noqa: E40
 v1.include_router(gym_client_router, prefix="/client")
 v1.include_router(gym_owner_router, prefix="/gym")
 
+# Phase 87 INBOX-01/INBOX-02 — notification inbox + push-token registration.
+# Mounted at /api/v1/client (same prefix as client_portal_router) to expose
+# /api/v1/client/notifications and /api/v1/client/push-tokens.
+# Separate router avoids a client_portal→notifications cross-module edge (D-20-MODULE).
+from app.modules.notifications.router import router as notifications_router  # noqa: E402
+
+v1.include_router(notifications_router, prefix="/client")
+
 # Phase 42 EMAIL-07 / D-42-17 — _internal namespace established here.
 # Transport-layer endpoints (provider webhooks, ops callbacks) sit under
 # /api/v1/_internal/* with their own auth model (HMAC signature in

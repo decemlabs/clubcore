@@ -11,6 +11,7 @@ generic base definition, so we replicate the page/page_size/total/items shape he
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from app.core.schemas import BackendSchemaBase, ResponseData
@@ -50,8 +51,10 @@ class ClientPushTokenRegisterRequest(BackendSchemaBase):
     """Request body for POST /client/notifications/push-token (INBOX-02).
 
     extra='forbid' (inherited from BackendSchemaBase) rejects unknown fields (T-87-04).
-    platform constrained to web/android/ios by the DB CheckConstraint (T-87-04).
+    platform: Literal enum enforces allow-list at Pydantic layer → 422 before DB hit.
+    DB CheckConstraint 'ck_client_push_tokens_platform' provides a defence-in-depth
+    second layer for any bypass paths (T-87-04, T-87-09).
     """
 
     token: str
-    platform: str
+    platform: Literal["web", "android", "ios"]
