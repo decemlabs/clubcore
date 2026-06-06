@@ -1436,6 +1436,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/client/trainers/{trainer_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                trainer_id: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Single trainer profile for the authenticated client (TRNR-01)
+         * @description TRNR-01 — client-safe trainer detail (id, name, photo_url, spec, bio).
+         *
+         *     404 trainer_not_found for missing/soft-deleted/inactive trainers (D-20-IDOR).
+         *     No try/except — NotFoundError bubbles to _app_error_handler.
+         */
+        get: operations["client_get_trainer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/clients": {
         parameters: {
             query?: never;
@@ -3739,7 +3764,6 @@ export interface components {
          * @description Active trainer — client-safe projection (CPLAN-03, D-69-05).
          *
          *     NO rates, NO phone, NO is_active flag, NO audit fields.
-         *     specialization is not present in the Trainer model (reserved for future).
          */
         ClientCatalogTrainerResponse: {
             /** Fullname */
@@ -3749,6 +3773,28 @@ export interface components {
              * Format: uuid
              */
             id: string;
+        };
+        /**
+         * ClientTrainerDetailResponse
+         * @description Single trainer detail — client-safe projection (TRNR-01, Phase 88).
+         *
+         *     Client-safe fields only: id, full_name, photo_url, specialization, bio.
+         *     NO phone, NO is_active, NO rates, NO audit fields.
+         */
+        ClientTrainerDetailResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Fullname */
+            fullName: string;
+            /** Photo Url */
+            photoUrl: string | null;
+            /** Specialization */
+            specialization: string | null;
+            /** Bio */
+            bio: string | null;
         };
         /**
          * ClientCheckInRequest
@@ -5895,6 +5941,11 @@ export interface components {
             /** Data */
             data: components["schemas"]["ClientCatalogTrainerResponse"][];
         };
+        /** ResponseEnvelope[ClientTrainerDetailResponse] */
+        ResponseEnvelope_ClientTrainerDetailResponse_: {
+            /** Data */
+            data: components["schemas"]["ClientTrainerDetailResponse"];
+        };
         /** ResponseEnvelope[list[ClientWeeklyActivityItem]] */
         ResponseEnvelope_list_ClientWeeklyActivityItem__: {
             /** Data */
@@ -8013,6 +8064,38 @@ export interface operations {
                     "application/json": components["schemas"]["ResponseEnvelope_list_ClientCatalogTrainerResponse__"];
                 };
             };
+        };
+    };
+    client_get_trainer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                trainer_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_ClientTrainerDetailResponse_"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
         };
     };
     list_clients: {

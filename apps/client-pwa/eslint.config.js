@@ -22,11 +22,11 @@ export default tseslint.config(
       // from the placeholder zone, now ignored like other real .jsx screens.
       // Phase 87 (INBOX-05): the notifications sheet also graduated — removed from
       // the placeholder zone, now ignored like other real .jsx screens.
+      // Phase 88 (TRNR-04): trainer detail sheet graduated — wired to GET /client/trainers/{id}.
       'src/**/*.jsx',
       'src/**/*.js',
       '!src/screens/ChatScreen.jsx',
       '!src/screens/sheets/ReferralSheet.jsx',
-      '!src/screens/sheets/TrainerDetailSheet.jsx',
     ],
   },
   {
@@ -68,7 +68,6 @@ export default tseslint.config(
     files: [
       'src/screens/ChatScreen.jsx',
       'src/screens/sheets/ReferralSheet.jsx',
-      'src/screens/sheets/TrainerDetailSheet.jsx',
     ],
     plugins: { import: importPlugin },
     languageOptions: {
@@ -92,7 +91,6 @@ export default tseslint.config(
               target: [
                 './src/screens/ChatScreen.jsx',
                 './src/screens/sheets/ReferralSheet.jsx',
-                './src/screens/sheets/TrainerDetailSheet.jsx',
               ],
               from: [
                 './src/lib/clientFetcher.ts',

@@ -42,6 +42,7 @@ export const clientPortalKeys = {
   loyaltyHistory: (page: number) => [...clientPortalKeys.all, 'loyalty-history', page] as const,
   gymInfo: () => [...clientPortalKeys.all, 'gym-info'] as const,
   notifications: (page: number) => [...clientPortalKeys.all, 'notifications', page] as const,
+  trainerDetail: (id: string) => [...clientPortalKeys.all, 'trainer-detail', id] as const,
 } as const
 
 // ---------------------------------------------------------------------------
@@ -341,6 +342,36 @@ export function useClientTrainers() {
       const res = await clientRequest('get', '/api/v1/client/trainers')
       return (res as { data: unknown[] }).data
     },
+    staleTime: 30_000,
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Phase-88 TRNR-04: trainer detail hook
+// ---------------------------------------------------------------------------
+
+/** Wire shape for GET /api/v1/client/trainers/{trainer_id} envelope.data (camelCase). */
+interface TrainerDetailData {
+  id: string
+  fullName: string
+  photoUrl: string | null
+  specialization: string | null
+  bio: string | null
+}
+
+/** GET /api/v1/client/trainers/{trainer_id} — single trainer detail (TRNR-04, Phase 88) */
+export function useClientTrainerDetail(trainerId: string | null) {
+  return useQuery({
+    queryKey: clientPortalKeys.trainerDetail(trainerId ?? ''),
+    queryFn: async () => {
+      const res = await clientRequest(
+        'get',
+        '/api/v1/client/trainers/{trainer_id}',
+        { params: { trainer_id: trainerId! } },
+      )
+      return (res as { data: TrainerDetailData }).data
+    },
+    enabled: !!trainerId,
     staleTime: 30_000,
   })
 }

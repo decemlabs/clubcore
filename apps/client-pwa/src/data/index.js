@@ -61,6 +61,8 @@ export {
   useClientNotifications,
   useMarkNotificationRead,
   useMarkAllNotificationsRead,
+  // Phase-88 TRNR-04: trainer detail hook
+  useClientTrainerDetail,
 } from '../lib/clientQueries'
 
 // ─── Legacy mock constants (retained for non-wired consumers) ─────────────
