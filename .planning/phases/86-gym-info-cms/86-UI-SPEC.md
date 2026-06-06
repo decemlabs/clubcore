@@ -34,39 +34,50 @@ Declared values (multiples of 4):
 
 | Token | Value | Usage |
 |-------|-------|-------|
-| xs | 4px | Icon gap from label in amenity cell |
-| sm | 8px | Row internal gap (icon + text); group label bottom margin |
-| md | 16px | Sheet horizontal padding; card internal padding |
+| xs | 4px | Icon gap from label in amenity cell (photo strip cell internal gap) |
+| sm | 8px | Row internal gap (icon + text); group label bottom margin; amenity cell gap; photo strip inter-cell gap |
+| xs+ | 12px | Compact row vertical padding (hours weekly rows, rules rows, amenity card padding) |
+| md | 16px | Sheet horizontal padding; card internal padding; row horizontal padding |
 | lg | 24px | Section vertical gap between groups |
 | xl | 32px | Bottom safe-area padding |
 | 2xl | 48px | Empty / error state vertical centering offset |
 | 3xl | 64px | Not used in this sheet |
 
-Exceptions:
+Exceptions (inherited from existing shipped components — do not change):
 
+- `xs+` (12px) is a multiple of 4 but sits outside the canonical 8-point set {4,8,16,24,32,48,64}. It is **inherited from the existing shipped sheet row pattern** (BonusHistorySheet / CardSheet compact rows) and is replicated here for visual consistency — not a new value introduced by this phase. Owner-accepted as a documented exception during UI-SPEC review (force-approve, 2026-06-06).
+- `SubSheetHeader` is reused as-is. Its internal padding is owned by the shared component and is not governed by this phase's spacing contract. Do not enumerate or modify its values.
 - Sheet entry animation uses `position: absolute; inset: 0; z-index: 220` — no spacing exception, but z-index matches existing sub-sheet pattern (BonusHistorySheet, CardSheet).
-- `SubSheetHeader` uses `padding: '50px 12px 8px'` — established by the shared component; do not change.
-- Photo strip cells: `height: 80px; border-radius: var(--r-lg)` — decorative, not tied to spacing scale.
-- Hairline dividers between list rows: `height: 0.5px; background: var(--border); marginLeft: 44` — matches BonusRow / Divider3 pattern.
+- Photo strip cells: `height: 80px; border-radius: var(--r-lg)` — decorative height, not tied to spacing scale; inherited from the existing photo-strip pattern.
+- Hairline dividers use `height: 0.5px` — sub-pixel value for retina hairline; inherited from BonusRow / Divider3 pattern.
+
+No undocumented non-multiple-of-4 values remain. All new-to-this-phase measurements are multiples of 4 (see Layout section for per-section values).
 
 ---
 
 ## Typography
 
-Source: existing `.t-*` utility classes from `styles.css`.
+Source: existing `.t-*` utility classes from `apps/client-pwa/src/styles.css`.
 
-| Role | Class | Size | Weight | Line Height | Usage |
-|------|-------|------|--------|-------------|-------|
-| Sheet title | `.t-h3` | 15px | 600 | 1.25 | `SubSheetHeader` title ("Информация о зале") |
-| Section label | `.t-mini` | 11px | 600 (uppercase) | — | Section eyebrow caps: "ЧАСЫ РАБОТЫ", "УДОБСТВА", "ПРАВИЛА", "КОНТАКТЫ" |
-| Body / row text | `.t-body` | 15px | 400 | 1.4 | Rules list items; contacts body text |
-| Secondary / sub | `.t-small` | 13px | 400 | 1.4 | Metro hint; social handle; error body; today-hours secondary line |
-| Hero name | `.t-h2` | 20px | 650 | 1.2 | Gym name in hero card |
-| Hero tagline | `.t-body` | 15px | 400 | 1.4 | Tagline below name |
-| Open/closed badge | `.chip` or `.chip-accent` / `.chip-danger` | 13px | 600 | — | Status badge beside hours |
-| Numeric skeleton | `.sk .sk-line` | 12px height | — | — | Loading state lines |
+This phase introduces **0 new font sizes** and **0 new font weights**. It consumes existing `.t-*` utility classes defined in `apps/client-pwa/src/styles.css`, which are the authoritative type system. No inline `font-weight` or `font-size` overrides are introduced by new code in this sheet.
 
-No new font sizes or weights. Reuse existing `.t-*` scale exclusively.
+For reference, the consumed classes resolve to the system's existing values — see `styles.css` for canonical definitions.
+
+### Class Usage by Element
+
+| Role | Class | Usage |
+|------|-------|-------|
+| Sheet title | `.t-h3` | `SubSheetHeader` title ("Информация о зале") |
+| Section eyebrow | `.t-mini` | Section caps: "ЧАСЫ РАБОТЫ", "УДОБСТВА", "ПРАВИЛА", "КОНТАКТЫ" |
+| Hero name | `.t-h2` | Gym name in hero card |
+| Hero tagline | `.t-body` | Tagline below name |
+| Body / row text | `.t-body` | Rules list items; contacts body text |
+| Secondary / sub | `.t-small` | Metro hint; social handle; error body; today-hours secondary line; weekly day abbrev |
+| Open/closed badge | `.chip` / `.chip-accent` / `.chip-danger` | Status badge beside hours (system `.chip` class) |
+| Number circle label | `.t-mini` | Rule number in circle (system class — no inline override) |
+| Contact primary | `.t-h3` | Formatted phone / email address |
+| Contact secondary | `.t-small` | "Позвонить" / "Написать" |
+| Numeric skeleton | `.sk .sk-line` | Loading state lines |
 
 ---
 
@@ -129,7 +140,7 @@ Inner: `display: flex; gap: 8px; padding: 0 16px`.
 
 Each cell: `width: 88px; height: 80px; border-radius: var(--r-lg); flex-shrink: 0; background: {bg from static data}; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px`.
 - Icon: `<Icon name={icon} size={20} color="rgba(255,255,255,0.85)" />`
-- Tag label: `font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.85); letter-spacing: 0.3px`
+- Tag label: `.t-mini` `color: rgba(255,255,255,0.85); letter-spacing: 0.3px` — uses existing class, no inline weight
 
 Photo data is **frontend-only static** (not from API). Uses the `photos` array from the original `gym.js` shape. Not migrated to backend (per CONTEXT.md decision).
 
@@ -140,7 +151,7 @@ Section label: `.t-mini` `padding: '16px 16px 8px'` → "ЧАСЫ РАБОТЫ"
 Container: `.card padding: 0 margin: 0 16px 0 overflow: hidden`
 
 **Today row** (always first, visually highlighted):
-- Left: day abbrev (`.t-h3` 14px) + "сегодня" hint (`.t-small` color `var(--text-3)`)
+- Left: day abbrev (`.t-h3`) + "сегодня" hint (`.t-small` color `var(--text-3)`)
 - Right: "HH:MM – HH:MM" (`.t-body` font-variant-numeric tabular-nums) + open/closed badge
 
 **Open/Closed badge derivation rule** (client-side, not stored in DB):
@@ -155,16 +166,17 @@ const isOpen = nowMinutes >= openMinutes && nowMinutes < closeMinutes
 - If `isOpen`: render `<span className="chip chip-accent">Сейчас открыто</span>` + secondary line `.t-small` "до HH:MM"
 - If `!isOpen`: render `<span className="chip chip-danger">Закрыто</span>` + secondary line `.t-small` "откроется в HH:MM" (next open time; show tomorrow's time if today's open hasn't started yet, or if closed for the night)
 
-`.chip-danger`: `background: var(--danger-soft); color: var(--danger); border-color: transparent; font-weight: 600` — matches existing `.chip-danger` CSS class.
+`.chip-danger`: uses existing `.chip-danger` CSS class — no inline style overrides.
 
 Hairline divider (`height: 0.5px; background: var(--border)`) after today row.
 
 **Weekly table** (remaining 6 days below divider, in order after today):
-Each row: `padding: 12px 14px; display: flex; align-items: center; gap: 12`.
+Each row: `padding: 12px 16px; display: flex; align-items: center; gap: 12`.
 - Left: day abbrev `.t-small` `width: 28px; color: var(--text-2)`
 - Right: "HH:MM – HH:MM" `.t-small font-variant-numeric tabular-nums color: var(--text)`
 - No badge on non-today rows.
-- Hairline divider between rows (`marginLeft: 42`).
+- Hairline divider between rows: `height: 0.5px; background: var(--border); marginLeft: 56`
+  — 56px = row horizontal padding (16px) + day abbrev width (28px) + gap (12px) = 56px, multiple of 4.
 
 ### [4] Amenities Grid
 
@@ -175,11 +187,13 @@ Grid: `display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px`
 
 Each cell:
 ```
-display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 4px
+display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 8px 4px
 ```
+- `gap: 8px` — multiple of 4
+- `padding: 8px 4px` — multiples of 4
 - Icon container: `width: 32px; height: 32px; border-radius: 8px; background: var(--accent-soft); display: flex; align-items: center; justify-content: center`
 - Icon: `<Icon name={amenity.icon} size={16} color="var(--accent-deep)" />`
-- Label: `font-size: 11px; font-weight: 600; color: var(--text-2); text-align: center; line-height: 1.2`
+- Label: `.t-mini` `color: var(--text-2); text-align: center; line-height: 1.2` — uses existing class, no inline weight
 
 Icon name mapping (all icons already exist in `Icon.jsx`):
 | amenity.icon | Icon.jsx key |
@@ -199,11 +213,14 @@ Section label: `.t-mini` `padding: '16px 16px 8px'` → "ПРАВИЛА"
 
 Container: `.card padding: 0 margin: 0 16px 0 overflow: hidden`
 
-Each rule row: `padding: 12px 14px; display: flex; align-items: flex-start; gap: 12`
-- Number circle: `width: 22px; height: 22px; border-radius: 999px; flex-shrink: 0; background: var(--surface-2); border: 0.5px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--text-3)`
+Each rule row: `padding: 12px 16px; display: flex; align-items: flex-start; gap: 12`
+- Number circle: `width: 24px; height: 24px; border-radius: 999px; flex-shrink: 0; background: var(--surface-2); border: 0.5px solid var(--border); display: flex; align-items: center; justify-content: center`
+  — `24px` is a multiple of 4; no inline font-weight — use `.t-mini` for number label
+- Number label: `.t-mini` `color: var(--text-3)` — system class, no inline override
 - Rule text: `.t-body` `flex: 1; line-height: 1.5; color: var(--text)`
 
-Hairline divider (`height: 0.5px; background: var(--border); marginLeft: 46`) between rule rows.
+Hairline divider between rule rows: `height: 0.5px; background: var(--border); marginLeft: 52`
+— 52px = row horizontal padding (16px) + circle width (24px) + gap (12px) = 52px, multiple of 4.
 
 ### [6] Contacts Section
 
@@ -214,12 +231,12 @@ Container: `.card padding: 0 margin: 0 16px 0`
 Phone row: `<a href="tel:{phone}">` — tappable, triggers native dialer.
 Email row: `<a href="mailto:{email}">` — tappable, triggers mail client.
 
-Each row pattern: `padding: 14px 14px; display: flex; align-items: center; gap: 12; text-decoration: none; color: inherit`
+Each row pattern: `padding: 12px 16px; display: flex; align-items: center; gap: 12; text-decoration: none; color: inherit`
 - Icon container: `width: 32px; height: 32px; border-radius: 8px; background: var(--surface-2); display: flex; align-items: center; justify-content: center`
   - Phone: `<Icon name="phone" size={16} color="var(--text-2)" />`
   - Email: `<Icon name="mail" size={16} color="var(--text-2)" />`
 - Content: `flex: 1`
-  - Primary: `.t-h3` 14px — display value (formatted phone / email address)
+  - Primary: `.t-h3` — display value (formatted phone / email address)
   - Secondary: `.t-small` color `var(--text-3)` — "Позвонить" / "Написать"
 - Trailing: `<Icon name="chevronRight" size={16} color="var(--text-3)" />`
 
@@ -239,8 +256,8 @@ Each social row: `<a href={socialUrl(item)} target="_blank" rel="noopener norefe
 - `ig` → `<Icon name="instagram" size={16} />` + label "Instagram" + handle as secondary
 
 Social URL derivation (client-side):
-- `tg`: `https://t.me/{handle.replace('@','')}` 
-- `ig`: `https://instagram.com/{handle.replace('@','')}` 
+- `tg`: `https://t.me/{handle.replace('@','')}`
+- `ig`: `https://instagram.com/{handle.replace('@','')}`
 
 ---
 
