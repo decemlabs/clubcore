@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v2.4
 milestone_name: Content & Communication — Client-First
-status: verifying
-stopped_at: Phase 88 UI-SPEC approved
-last_updated: "2026-06-06T11:21:59.090Z"
+status: ready_to_plan
+stopped_at: Phase 88 complete (3/3) — ready to discuss Phase 89
+last_updated: 2026-06-06T11:40:52.154Z
 last_activity: 2026-06-06
 progress:
   total_phases: 8
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 88 — Trainer Detail / Bio
+**Current focus:** Phase 89 — openapi handoff + milestone verification
 
 ## Current Position
 
-Phase: 88 (Trainer Detail / Bio) — EXECUTING
-Plan: 3 of 3
-Status: Phase complete — ready for verification
+Phase: 89
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-06-06
 
 ## v2.4 Roadmap Summary
