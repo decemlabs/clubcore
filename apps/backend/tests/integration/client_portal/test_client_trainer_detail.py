@@ -238,3 +238,21 @@ async def test_client_get_trainer_inactive_and_unknown_indistinguishable(
     assert resp_inactive.json()["code"] == resp_unknown.json()["code"]
     assert resp_inactive.json()["message"] == resp_unknown.json()["message"]
     assert resp_inactive.json()["message"] == "trainer_not_found"
+
+
+# ---------------------------------------------------------------------------
+# WR-03: unauthenticated access must return 401
+# ---------------------------------------------------------------------------
+
+
+async def test_client_get_trainer_requires_auth(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """WR-03: GET /client/trainers/{id} without credentials → 401 (require_client gate)."""
+    trainer = Trainer(full_name="Auth Required Trainer", is_active=True)
+    db_session.add(trainer)
+    await db_session.commit()
+
+    resp = await async_client.get(f"/api/v1/client/trainers/{trainer.id}")
+    assert resp.status_code == 401, resp.json()
