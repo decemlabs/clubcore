@@ -576,6 +576,6 @@ describe('schema.contract', () => {
   })
 
   it('compiles against the regenerated v2.3 Loyalty surface (Phases 82-84)', () => {
-    expect(_v23Checks).toHaveLength(4)
+    expect(_v23Checks).toEqual([true, true, true, true])
   })
 })
