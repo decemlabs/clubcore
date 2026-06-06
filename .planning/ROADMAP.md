@@ -154,7 +154,21 @@ Plans:
   3. Клиент регистрирует push-токен через API; ответ 200, токен сохранён; реальная доставка не требуется в этом milestone
   4. Экран уведомлений в PWA загружает реальные данные (не заглушку) за feature-флагом
 
-**Plans**: TBD
+**Plans**: 4 plans
+Plans:
+**Wave 1**
+
+- [ ] 87-01-PLAN.md — Backend data layer: notifications models + migrations 0060/0061 + schemas/repository/service (create_notification, list/mark/upsert) (INBOX-01..04)
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 87-02-PLAN.md — Client router (GET list+unreadCount / PATCH read / PATCH read-all / POST push-tokens) + v1 registration + IDOR/CSRF integration tests (INBOX-01, INBOX-02, INBOX-04)
+- [ ] 87-03-PLAN.md — 6 system-event hooks (4 booking + payment-succeeded + autopay-failure) co-transactional create_notification + anti-oracle/replay tests (INBOX-03)
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 87-04-PLAN.md — PWA wiring: D-71-09 ESLint de-list + @/data hooks + NotificationsSheet rewrite + Home bell badge + vitest (INBOX-05)
+
 **UI hint**: yes
 
 ### Phase 88: Trainer Detail / Bio
@@ -231,6 +245,6 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 86. Gym-Info / CMS | 3/3 | Complete    | 2026-06-06 |
-| 87. Notification Inbox | 0/TBD | Not started | - |
+| 87. Notification Inbox | 0/4 | Planned     | - |
 | 88. Trainer Detail / Bio | 0/TBD | Not started | - |
 | 89. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
