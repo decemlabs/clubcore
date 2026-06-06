@@ -36,7 +36,7 @@ Requirements for this milestone. Each maps to a roadmap phase. All client-facing
 
 ### OpenAPI Handoff (HND)
 
-- [ ] **HND-01**: `openapi.json` + `schema.d.ts` byte-stable regen со всеми новыми loyalty/autopay client-путями + `AssertNonNever` forward-guards (`_v23Checks`); staff-пути байт-идентичны `contract-freeze-v1.11.0` (drift gate зелёный)
+- [x] **HND-01**: `openapi.json` + `schema.d.ts` byte-stable regen со всеми новыми loyalty/autopay client-путями + `AssertNonNever` forward-guards (`_v23Checks`); staff-пути байт-идентичны `contract-freeze-v1.11.0` (drift gate зелёный)
 
 ## v2 Requirements
 
@@ -85,7 +85,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | APAY-02 | Phase 84 | Complete |
 | APAY-03 | Phase 84 | Complete |
 | APAY-04 | Phase 84 | Complete |
-| HND-01 | Phase 85 | Pending |
+| HND-01 | Phase 85 | Complete |
 
 **Coverage:**
 - v1 requirements: 14 total
