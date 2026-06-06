@@ -1,498 +1,584 @@
-# Architecture Research: v2.2 Membership Self-Service Depth
+# Architecture Research: v2.5 Chat / Messaging — Client↔Gym
 
-**Domain:** Backend integration — modular monolith FastAPI + client PWA
-**Researched:** 2026-06-03
-**Confidence:** HIGH (all findings from live codebase inspection + YooKassa official docs)
+**Domain:** WebSocket real-time messaging integration into an existing FastAPI modular monolith
+**Researched:** 2026-06-06
+**Confidence:** HIGH (all findings from live codebase inspection; no guesses from training data)
 
 ---
 
 ## Established Architecture Constraints (DO NOT RE-RESEARCH)
 
-The following are locked decisions from v2.0–v2.1 and must be respected:
+These are locked invariants confirmed by reading `main.py`, `.importlinter`, `telegram_bot.py`, and `client_portal/router.py` directly:
 
-- **Modular monolith** `app/modules/<domain>/` with `import-linter` enforcing: `modules independent`, `core ⊥ modules`, `integrations ⊥ modules`.
-- **client_portal writes** go through Protocol-slot accessors in `app.core.dependencies` only — NO direct `from app.modules.bookings` / `app.modules.memberships` in `client_portal/`. Evidenced by: `cancel_booking_for_client`, `create_booking_for_client`, `create_visit_client_qr`, `invoke_client_checkout_core` slots.
-- **client_portal reads** use raw SQL `text()` cross-module SELECTs in `client_portal/repository.py` (D-54-08 precedent from reports), no ORM imports of foreign models.
-- **IDOR**: every owned-resource endpoint derives `client_id` from `require_client()` principal only, never from path/query/body. 404-collapse on non-owned resources (anti-oracle).
-- **Webhook-locked activation**: membership activation is LOCKED to `payment.succeeded` webhook — redirect-back screen shows only an anti-oracle "ожидаем подтверждение" message.
-- **SVC001** commit-gate: public mutating orchestrators commit their own UoW; `client_portal` router calls `await session.commit()` explicitly for write paths.
-- **Audit events**: all new events must be pre-registered in `LOCKED_AUDIT_EVENTS` frozenset BEFORE any callsite (INFRA-15 discipline).
-- **Money**: integer kopecks throughout; server-authoritative pricing (D-06).
-- **TZ**: Europe/Moscow for all user-facing dates; UTC for idempotency keys and wire-protocol invariants.
-- **Last migration**: `0051_seed_fit15_promo.py`. Next migration is `0052_*`.
-
----
-
-## Feature A: Card-on-File + Autopay
-
-### A.1 YooKassa Saved-Method API (HIGH confidence — official docs verified)
-
-YooKassa supports saving payment methods during a regular redirect checkout by including `save_payment_method: true` in the payment create body. After `payment.succeeded`, the `payment_method` object in the webhook payload contains:
-
-```
-payment_method.id       — the saved method token (opaque string)
-payment_method.type     — "bank_card"
-payment_method.saved    — true
-payment_method.title    — display string e.g. "Карта *4821"
-payment_method.card.last4
-payment_method.card.expiry_month / expiry_year
-payment_method.card.card_type  — Visa / MasterCard / Mir / etc.
-```
-
-To charge with a saved method (autopay): `POST /v3/payments` with `payment_method_id: <token>`, `capture: true`, `amount`, `description`. **No user confirmation required** — this is a server-initiated charge.
-
-Webhook events for autopay are the same as regular payments: `payment.succeeded` / `payment.canceled`. The activation discipline (webhook-locked, anti-oracle return screen) applies identically.
-
-YooKassa does NOT provide a DELETE endpoint for saved payment methods. "Unbind" means deleting the token from your own storage and stop using it. No API call to YooKassa is required for unbind.
-
-**Card type saving**: only `bank_card`, `yoo_money`, `sber_pay`, `t_pay`, `mir_pay`, `sbp` support saving. The PWA currently uses redirect checkout which supports all these.
-
-### A.2 New Table: `client_payment_methods`
-
-A new `client_payment_methods` table is needed to persist the token server-side. It does NOT belong in `online_payments` (that table is a per-payment ledger row, append-only, containing `yookassa_payment_id` — a different concept). It also should NOT be a column on `clients` — a client could have multiple saved methods in future, and token storage is a separate concern from identity.
-
-**Owner**: new `app/modules/payment_methods/` module (greenfield). Justified because:
-- The token is a durable client-owned credential, not a per-payment artifact.
-- `client_portal` reads and writes it via Protocol-slot (D-20-MODULE).
-- `online_payments` references it at autopay-charge time via raw SQL (same as plan-price reads with `text()` — no ORM import needed).
-- `import-linter`: add `app.modules.payment_methods` to the independence contract.
-
-**Schema** (Alembic `0052_client_payment_methods.py`):
-
-```
-client_payment_methods
-  id                UUID PK
-  client_id         UUID FK → clients.id ON DELETE RESTRICT NOT NULL
-  yookassa_method_id TEXT NOT NULL   — the token from payment_method.id
-  method_type       TEXT NOT NULL    — 'bank_card', 'yoo_money', etc.
-  card_last4        VARCHAR(4) NULL  — only for bank_card
-  card_expiry_month SMALLINT NULL
-  card_expiry_year  SMALLINT NULL
-  card_brand        TEXT NULL        — 'Visa', 'MasterCard', 'Mir', etc.
-  display_title     TEXT NOT NULL    — payment_method.title from YooKassa
-  is_active         BOOLEAN NOT NULL DEFAULT TRUE
-  autopay_enabled   BOOLEAN NOT NULL DEFAULT FALSE
-  created_at        TIMESTAMPTZ server_default now()
-  updated_at        TIMESTAMPTZ
-  UNIQUE (client_id, yookassa_method_id)  — prevents double-save same token
-  INDEX (client_id) WHERE is_active=TRUE
-```
-
-**Why `is_active` not soft-delete mixin**: Tokens don't expire at DB layer. `is_active=FALSE` is an explicit unbind (client request or method expired). The `SoftDeleteMixin` pattern (timestamp-based) would add `deleted_at` semantics, which is overkill here and inconsistent with how the existing payment tables track lifecycle.
-
-### A.3 Save Flow — Modification to Checkout
-
-The save-during-payment path modifies the existing `POST /client/checkout/memberships/{plan_id}` handler. The client sends an optional `save_payment_method: bool` field in the checkout body (`ClientCheckoutRequest`). When `true`:
-
-1. `online_payments.service._sell_subject_core` includes `save_payment_method: true` in the YooKassa payment create body (new optional parameter to `YooKassaClient.create_payment`).
-2. On `payment.succeeded` webhook, the handler reads `payment_method.saved=true` and `payment_method.id` from the webhook payload.
-3. The webhook handler upserts a `client_payment_methods` row via raw SQL inside the same `handle_payment_succeeded` 8-step atomic UoW.
-
-**Critical invariant preserved**: membership activation is still webhook-locked. The method-save is a side-effect inside the same webhook UoW — the same `handle_payment_succeeded` 8-step atomic UoW gains a step 8.5: if `payload.payment_method.saved==true`, raw SQL upsert `client_payment_methods` within the same session before commit. This keeps it atomic.
-
-The `online_payments` row should record `save_payment_method_requested: bool` (a new column on `online_payments`) so the webhook handler knows whether to look for a saved method — but this adds migration complexity. A simpler alternative: always check `payload.payment_method.saved` in the webhook handler and upsert if true, regardless of whether the checkout requested it. YooKassa only sets `saved=true` when explicitly requested, so there's no over-upsert risk.
-
-### A.4 Autopay Flow — New ARQ Cron
-
-Autopay requires a new cron job: `charge_expiring_autopay` that runs once per day (suggested 06:30 MSK, after `expire_memberships` at 06:05 and `send_expiring_notifications` at 06:15).
-
-**Logic**:
-1. SELECT clients with `autopay_enabled=TRUE` on their `client_payment_methods` (is_active=TRUE), whose membership `end_date = today + N` (e.g. N=1 — charge 1 day before expiry).
-2. For each client, call `online_payments.service._sell_subject_core` with `payment_method_id=<token>` (not `save_payment_method=true` — that's only for binding).
-3. YooKassa accepts `payment_method_id` in the create-payment body — no `confirmation` object needed (no user redirect; server-initiated).
-4. Wait for `payment.succeeded` webhook — which triggers the normal `handle_payment_succeeded` 8-step UoW that activates the membership.
-
-**Webhook-locked activation preserved**: the autopay charge is just another `POST /v3/payments`. Activation still happens exclusively on `payment.succeeded` webhook — identical discipline to manual checkout.
-
-**Idempotency**: cron idempotency key = `sha256("autopay:{client_id}:{membership_id}:{today_utc}")`. If the cron fires twice or the worker restarts, the idempotency key prevents double-charge.
-
-**Failure handling**: if the charge fails (`payment.canceled` or `transient_error`), the membership expires normally — the `expire_memberships` cron picks it up. Optionally: send a Telegram/email DM "автоплатёж не прошёл". No retry within the same day (too complex for v2.2 scope).
-
-### A.5 Import-Linter: Where Does the Token-Save Live?
-
-Two options for webhook token-save:
-
-**Option A (preferred for webhook)**: `online_payments.service` (specifically the webhook handler) saves the token using raw SQL `INSERT INTO client_payment_methods ... ON CONFLICT DO UPDATE` inside the webhook UoW. This mirrors the D-49-03 / D-54-08 discipline: cross-module writes done via raw `text()` SQL, no ORM import needed. Zero new `ignore_imports` entries required.
-
-**Option B**: Protocol-slot `SavePaymentMethodSlot` registered in `app.core.dependencies`, pointing to `payment_methods.service.save_method`. `online_payments` calls the slot. Cleaner architecturally, but adds composition-root plumbing for a simple INSERT.
-
-**Recommendation**: Option A for the save-in-webhook path (pure raw SQL, zero new edges). For the autopay cron and `client_portal` endpoint writes, go through Protocol-slots (Option B pattern) since the cron and portal need richer business logic.
-
-### A.6 Client-Portal Endpoints (New)
-
-All under `/api/v1/client/` gated by `require_client()`:
-
-| Endpoint | Method | Description | Auth |
-|---|---|---|---|
-| `/client/payment-method` | GET | Return active saved method (last4 + brand + expiry) or null | require_client |
-| `/client/payment-method` | DELETE | Unbind: set `is_active=FALSE`, `autopay_enabled=FALSE` | require_client + verify_client_csrf |
-| `/client/payment-method/autopay` | PATCH | Toggle `autopay_enabled` boolean | require_client + verify_client_csrf |
-
-GET response shape (client-safe, no token exposure):
-```json
-{
-  "id": "<uuid>",
-  "type": "bank_card",
-  "last4": "4821",
-  "brand": "Visa",
-  "expiryMonth": 12,
-  "expiryYear": 2027,
-  "displayTitle": "Карта *4821",
-  "autopayEnabled": true
-}
-```
-
-**IDOR**: `client_id` from `require_client()` only. GET returns 200/null (not 404) when no method exists (D-69-03 precedent).
-
-**Token never exposed to client**: `yookassa_method_id` is never included in any response schema. The client cannot reconstruct the token.
-
-### A.7 Data Flow: Card-on-File
-
-```
-[PWA checkout with save_payment_method=true]
-    ↓
-POST /client/checkout/memberships/{plan_id}
-    ↓
-client_portal/service.client_checkout_membership
-    ↓
-invoke_client_checkout_core (Protocol slot)
-    ↓
-online_payments.service._sell_subject_core
-  → YooKassaClient.create_payment(save_payment_method=True)
-  → INSERT online_payments row (status=pending)
-    ↓
-[User completes payment at YooKassa redirect URL]
-    ↓
-POST /_internal/yookassa/webhook
-  → handle_payment_succeeded (8-step atomic UoW)
-  → step 5: activate membership (existing)
-  → step 8.5: if payment_method.saved: raw SQL upsert client_payment_methods
-    ↓
-GET /client/payment-method → shows "•••• 4821"
-```
-
-```
-[Autopay cron: charge_expiring_autopay 06:30 MSK]
-    ↓
-SELECT clients with autopay_enabled + membership end_date = tomorrow
-    ↓
-For each: online_payments.service._sell_subject_core(payment_method_id=<token>)
-  → no confirmation object (server-initiated)
-  → INSERT online_payments row (status=pending)
-    ↓
-POST /_internal/yookassa/webhook (payment.succeeded)
-  → handle_payment_succeeded: renew membership (same 8-step UoW)
-```
+- **Three import-linter contracts** actively enforced:
+  1. `core-not-depend-on-modules`: `app.core` must not import `app.modules.*` (source_modules = app.core)
+  2. `modules-independent`: all listed modules cannot import each other; cross-module reads use raw SQL `text()`, cross-module writes use Protocol slots registered in `app.core.dependencies`
+  3. `integrations-not-depend-on-modules`: `app.integrations` must not import `app.modules.*` (with narrow `ignore_imports` exceptions for `email.dispatcher` importing module-scoped template registries)
+- **`app.main` is exempt** from `core-not-depend-on-modules` because `source_modules = app.core`, not `app`. The composition root can do `from app.modules.X import Y` inside `create_app()` body — this is the established carve-out pattern (D-15, D-10, REG-29-03).
+- **Telegram bot worker** (`app/workers/telegram_bot.py`) is a separate long-polling process. It is NOT an ARQ task. It opens `db_lifespan_manager()` + `redis_lifespan_manager()` independently, registers its own Protocol slots, builds a `HandlerContext` NamedTuple with module references, and passes that context to every handler function. D-06 allows `workers → app.modules.auth.telegram_service`; D-10 allows `workers → app.modules.visits.service`. Further worker→modules edges follow the same documented-exception pattern.
+- **HandlerContext** is a NamedTuple (field order is a stable contract; new fields must be appended at the END). Fields are module references (`visits_service`, `bookings_service`, `schedule_service`, etc.). Handler functions receive the context and dispatch through it — never by importing modules directly (because `integrations ⊥ modules`).
+- **`integrations/telegram/handlers.py`** uses `importlib.import_module` for type-only references that would otherwise break the `integrations ⊥ modules` contract. This is the established Option A pattern for that boundary.
+- **ClientPrincipal**: the `aud="client"` JWT decoded by `decode_client_token`. Carried in the `cc_client_access` httpOnly cookie. The dependency `require_client()` in `app.core.dependencies` resolves it. No role claim; isolation from staff token by `aud` assertion (CISO-01/02).
+- **Client-portal writes** go through Protocol-slot accessors in `app.core.dependencies` only. Direct imports of `app.modules.bookings`, `app.modules.visits`, etc. from `client_portal` are forbidden — evidenced by the 18+ `register_*` calls in `main.py`.
+- **Client-portal reads** use raw SQL `text()` cross-module SELECTs in `client_portal/repository.py` (D-54-08 precedent). No ORM model imports from foreign modules.
+- **IDOR discipline** (D-20-IDOR): `client_id` derived exclusively from `require_client()` principal, never from path/query/body. Non-owned resources → 404-collapse (anti-oracle). This must apply equally to WebSocket connections.
+- **INFRA-15**: all new `LOCKED_AUDIT_EVENTS` entries pre-registered in the frozenset BEFORE any callsite.
+- **Last confirmed migration revision**: around `0063` (Phase 88 trainer bio/photo). v2.5 starts at `0064_*`.
+- **`unmatched_ignore_imports_alerting = warn`** (not `error`) so pre-registered edges for not-yet-shipped module bodies don't fail CI.
 
 ---
 
-## Feature B: Booking Reschedule
+## Question 1: Where Does the WebSocket Endpoint Live?
 
-### B.1 Decision: Atomic Move vs. Cancel + Rebook
+### The Constraint
 
-**Recommendation: atomic move inside the bookings domain.** Rationale:
+The WS endpoint needs:
+1. Access to `app.modules.messaging` service (to persist messages, record read receipts, etc.)
+2. Authentication via `ClientPrincipal` (`require_client()` logic)
+3. Redis pub/sub subscriber loop (to receive fan-out events from other workers/requests)
 
-- Cancel + rebook would require two separate Protocol-slot calls and leave a window where the target slot could be taken between them — a race condition visible at the API level.
-- The bookings domain already has `update_slot_status_predicate_gated` (raw SQL cross-module UPDATE) for slot status flips. Reschedule adds a second flip: `old_slot: booked → active`, `new_slot: active → booked`, both within the same transaction.
-- A single `reschedule_booking` service function can do this atomically: SELECT FOR UPDATE the old booking, restore the old slot, flip the new slot, UPDATE the booking's `slot_id`.
-- This mirrors the `cancel_booking` + `create_booking` discipline but avoids credit deduction (no PT session consumed on reschedule).
+The `modules-independent` contract forbids `messaging` from being imported into `client_portal` directly.
 
-**Existing cancel_booking** already does: `old_slot: booked → active` (via `restore_booking_slot` Protocol slot). Reschedule is `cancel_booking` steps 1-4 + `create_booking` steps 5-9, atomically in one UoW, without emitting `booking_cancelled` — emitting `booking_rescheduled` instead.
+### The Answer: WS Endpoint Lives in `messaging/router.py`, Mounted at `/client` Prefix
 
-### B.2 New Audit Events (pre-register before any callsite)
+**Why NOT `api layer` (e.g. `app/api/v1/_internal/`)**: The `_internal` prefix is reserved for transport-layer webhooks (email, YooKassa). The WS endpoint is a client-facing endpoint that authenticates with `require_client()` — it belongs under `/api/v1/client/`.
 
-Add to `LOCKED_AUDIT_EVENTS` frozenset:
-- `("booking_rescheduled", "booking")` — payload: `booking_id`, `old_slot_id`, `new_slot_id`, `client_id`
+**Why NOT `client_portal/router.py`**: The messaging module owns its own data model (threads, messages, receipts, typing indicators). Putting the WS endpoint in `client_portal` would force either a direct `from app.modules.messaging import service` import (violates `modules-independent`), or routing everything through Protocol slots (excessive for a module that is specifically a messaging endpoint). The precedent for separate client-facing routers mounted at `/client` prefix is already established: `loyalty.router`, `gym.router`, `notifications.router`, and `client_auth.router` all mount at `/client` in `api/v1/router.py` (lines 95-131 of the router file).
 
-### B.3 IDOR + Ownership
+**Correct pattern**: Create `app/modules/messaging/router.py` with a `router = APIRouter(tags=["Messaging"])`. Mount it in `app/api/v1/router.py` with prefix `/client`. The messaging module is its own bounded module, registered in `.importlinter`'s `modules-independent` contract.
 
-The `POST /client/booking/{id}/reschedule` endpoint:
-- `booking_id` from path.
-- `client_id` from `require_client()` only — never from body.
-- Service layer verifies `bookings.client_id == client_id` — 404-collapse on mismatch (anti-oracle, same as cancel).
-- New slot: from `slot_id` in request body (client-supplied). Must be an available active future slot.
-- The client's PT-package trainer-pin check still applies (cannot reschedule to a different trainer if the package pins one).
+### WS Auth: How `require_client()` Applies
 
-### B.4 Cancel-Window Constraint
+FastAPI's `@app.websocket()` decorator accepts `Depends()` in the handler signature just like HTTP routes. However, there are two key constraints:
+1. WebSockets carry cookies from the browser's cookie jar automatically — the `cc_client_access` httpOnly cookie is sent on WS handshake.
+2. `require_client()` reads `request.cookies.get("cc_client_access")` — this works with `WebSocket` objects as well as `Request` objects because FastAPI's `WebSocket` also exposes `.cookies`.
 
-The existing `CANCEL_WINDOW_HOURS_CLIENT = 24h` applies to reschedule too — cannot reschedule within 24h of the original slot's `start_time`. This is enforced by checking the OLD slot's `start_time`, mirroring cancel logic. Error code: `reschedule_window_expired` (409).
+**Auth flow for WS**:
+```
+WS GET /api/v1/client/ws/messages
+  → Depends(require_client())  [reads cc_client_access cookie]
+  → decode_client_token(token) [asserts aud="client"]
+  → ClientLoader slot         [loads Client from DB]
+  → returns ClientPrincipal
+```
 
-### B.5 New Protocol Slot
+If the token is missing/expired, FastAPI raises `InvalidAccessToken` BEFORE the WS handshake completes (during the `Depends` resolution phase). This closes the connection with HTTP 401 (the upgrade never completes). The PWA handles this with a reconnect + redirect to login flow.
 
-Add `reschedule_booking_for_client` to `app.core.dependencies`, wired to `bookings.service.reschedule_booking_for_client` in `app/main.py`. Shape:
+**CSRF**: WebSocket connections are not subject to CSRF because the browser cannot send `X-CSRF-Token` headers on the WS handshake. The httpOnly cookie already provides sufficient authentication for the origin-same-site channel. The WS endpoint does NOT add `verify_client_csrf` — this is standard and correct.
+
+### Proposed WS Endpoint Signature
 
 ```python
-async def reschedule_booking_for_client(
-    session: AsyncSession,
-    *,
-    client_id: UUID,
-    booking_id: UUID,
-    new_slot_id: UUID,
-) -> BookingResponse: ...
+# app/modules/messaging/router.py
+
+@router.websocket("/ws/messages")
+async def client_ws_messages(
+    websocket: WebSocket,
+    client: Annotated[ClientPrincipal, Depends(require_client())],
+    redis: Annotated[Redis, Depends(get_redis)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    # 1. Accept the WS connection
+    await websocket.accept()
+    # 2. Subscribe to Redis pub/sub channel for this client
+    # 3. Start fan-out delivery loop (see Question 2)
 ```
 
-The `client_portal/service.py` calls this slot — zero new `ignore_imports` needed (same pattern as `cancel_booking_for_client`).
-
-### B.6 BookingManageSheet Backend — Available Slots Already Exist
-
-`GET /client/slots` already returns bookable active future slots filtered by trainer-pin (`client_portal/router.py`). The BookingManageSheet calendar in the PWA needs to call this existing endpoint when the client selects a reschedule date — no new backend read endpoint needed. The PWA just needs to pass the selected `slot_id` to the new reschedule endpoint.
-
-### B.7 Notification
-
-On successful reschedule, fire a `BOOKING_RESCHEDULED_DM` template (new locked constant in `bookings/notifications.py`) with the new slot time. This mirrors the create-booking `_dispatch_booking_lifecycle_notification` post-commit fire-and-forget pattern. Add `'rescheduled'` to the `booking_notifications.kind` CHECK (new migration needed to widen the CHECK constraint). Email-fallback follows the same Phase 45 D-45-05 pattern.
-
-### B.8 Schema Change
-
-Migration `0053_booking_notifications_reschedule_kind.py` widens `ck_booking_notifications_kind` CHECK to admit `'rescheduled'`.
-
-No new columns on `bookings` table — `slot_id` is updated in-place. The audit trail is preserved via `booking_rescheduled` audit event.
-
-### B.9 Data Flow: Reschedule
-
-```
-[PWA: BookingManageSheet user picks new slot]
-    ↓
-POST /client/booking/{id}/reschedule  { slotId: "<new_slot_uuid>" }
-    ↓
-client_portal/router  → require_client + verify_client_csrf
-    ↓
-client_portal/service.reschedule_client_booking
-  → reschedule_booking_for_client (Protocol slot)
-    ↓
-bookings/service.reschedule_booking_for_client
-  1. SELECT booking WHERE id=? AND client_id=? FOR UPDATE (IDOR + lock)
-  2. Assert booking.status == 'confirmed'  → 404/409
-  3. Assert old_slot.start_time > now + 24h  → 409 reschedule_window_expired
-  4. Resolve new slot (SlotById Protocol slot) → 404/409
-  5. Assert new_slot.status == 'active' AND future
-  6. Trainer-pin check (same as create_booking step 3)
-  7. UPDATE old_slot booked → active  (raw SQL restore)
-  8. UPDATE new_slot active → booked  (raw SQL flip)
-  9. UPDATE bookings SET slot_id = new_slot_id WHERE id = booking_id
- 10. session.flush() → uq_bookings_slot_confirmed race guard
- 11. audit.emit('booking_rescheduled', ...)
- 12. session.commit()
- 13. Post-commit: fire-and-forget DM notification (BOOKING_RESCHEDULED_DM)
-    ↓
-Returns updated ClientBookingResponse with new start_time + trainer_name
-```
-
----
-
-## Feature C: Weekly Activity Analytics
-
-### C.1 Data Sources
-
-- `visits` table: `client_id`, `gym_date` (STORED GENERATED column, Europe/Moscow), `checked_in_at`. One row per gym-day per client (UNIQUE constraint enforced).
-- `pt_sessions` table: `client_id`, `performed_at` (timestamptz), `cancelled_at` (null = active). Represents PT training sessions.
-
-**Critical finding**: there is NO `duration_minutes` column on either `visits` or `pt_sessions`. A "minutes per day" metric cannot be derived from the current schema. The milestone description says "серверный агрегат минут/тренировок по дням" — this requires a decision:
-
-(a) Add a `duration_minutes` column to `visits` (defaulting to null or a configured gym-session average, e.g. 60 min), or
-(b) Limit the aggregate to "workouts per day" (visit count + PT session count) rather than minutes.
-
-**Recommendation for v2.2**: deliver "workouts per day" (count-based). The `minutes` field in the response schema is `null` until a `duration_minutes` column is added in a later milestone. The endpoint name `GET /client/activity/weekly` remains unchanged.
-
-### C.2 Week Boundary Definition
-
-- **"Current week"**: Monday–Sunday in Europe/Moscow. ISO week convention.
-- Implementation: `date_trunc('week', now() AT TIME ZONE 'Europe/Moscow')` in Postgres returns Monday 00:00 of the current ISO week. Filter `gym_date >= <monday>` AND `gym_date <= <monday + 6 days>`.
-- Always return 7 rows (one per day of the current week), filling zero-activity days with `workouts=0`.
-
-### C.3 Read Pattern: Raw SQL in client_portal/repository.py
-
-Follows D-54-08 / D-69 read discipline:
-- No `from app.modules.visits import models` in `client_portal`.
-- Raw SQL `text()` SELECT over `visits` and `pt_sessions` tables directly.
-- `client_id` always in the WHERE clause (IDOR-safe: derived from `require_client()` principal).
-
-```sql
--- visits per day this week
-SELECT
-    v.gym_date,
-    COUNT(*) AS gym_visits
-FROM visits v
-WHERE v.client_id = :client_id
-  AND v.gym_date >= date_trunc('week', now() AT TIME ZONE 'Europe/Moscow')::date
-  AND v.gym_date <= (date_trunc('week', now() AT TIME ZONE 'Europe/Moscow')
-                     + interval '6 days')::date
-GROUP BY v.gym_date
-
--- pt sessions per day this week
-SELECT
-    (ps.performed_at AT TIME ZONE 'Europe/Moscow')::date AS session_date,
-    COUNT(*) AS pt_sessions
-FROM pt_sessions ps
-WHERE ps.client_id = :client_id
-  AND ps.cancelled_at IS NULL
-  AND (ps.performed_at AT TIME ZONE 'Europe/Moscow')::date
-      >= date_trunc('week', now() AT TIME ZONE 'Europe/Moscow')::date
-  AND (ps.performed_at AT TIME ZONE 'Europe/Moscow')::date
-      <= (date_trunc('week', now() AT TIME ZONE 'Europe/Moscow')
-          + interval '6 days')::date
-GROUP BY session_date
-```
-
-Merge both in Python: build a 7-element list (Mon–Sun), zero-fill missing days, combine `gym_visits + pt_sessions` into `workouts` per day.
-
-### C.4 Response Schema
+URL: `GET /api/v1/client/ws/messages` (HTTP → WS upgrade). The mount in `api/v1/router.py`:
 
 ```python
-class DayActivity(BackendSchemaBase):
-    date: date          # ISO date of the day
-    workouts: int       # visits + pt_sessions count
-    minutes: int | None # null until duration tracking added
-
-class WeeklyActivityResponse(BackendSchemaBase):
-    week_start: date       # Monday of the current week (Europe/Moscow)
-    week_end: date         # Sunday
-    days: list[DayActivity]  # always 7 elements
-    total_workouts: int
-    total_minutes: int | None
+from app.modules.messaging.router import router as messaging_router
+v1.include_router(messaging_router, prefix="/client")
 ```
 
-### C.5 Endpoint
+**Import-linter implication**: `app.modules.messaging` must be added to the `modules-independent` contract. The WS router imports `app.modules.messaging.service` directly (not via Protocol slot) because it IS the messaging module. No new `ignore_imports` edges needed — the module is self-contained.
 
-```
-GET /api/v1/client/activity/weekly
-```
+### Dependency on messaging.service from messaging.router
 
-- No path/query parameters — always returns the current week.
-- `require_client()` gate — no CSRF (safe GET).
-- `client_id` from principal only (IDOR-safe).
-- Empty week (no data) → 200 with 7 zero-workout days (D-69-03 precedent).
-- No session.commit() — read-only path.
-
-### C.6 No New Migration Required
-
-No schema changes needed for the count-based approach. The existing `visits.gym_date` STORED GENERATED column makes week-boundary filtering straightforward without TZ conversion. The existing `ix_visits_client_id_checked_in_at` index covers per-client queries. `pt_sessions` lacks a `(client_id, performed_at)` index but at single-gym scale this is not a problem. Deferred until profiling indicates a need.
-
-If minutes tracking is added later, that migration adds a nullable `duration_minutes INTEGER` column to `visits` + an app-layer default.
+Within the messaging module itself, `messaging/router.py` imports `messaging/service.py` — this is a same-module import, fully permitted. The messaging module does NOT import other modules directly. Cross-module reads (e.g. fetching client name for display) use raw SQL `text()` over the `clients` table (D-54-08 discipline). Cross-module writes (e.g. incrementing notification count in `notifications` module) use Protocol slots registered in `app.core.dependencies`.
 
 ---
 
-## New vs. Modified Components Summary
+## Question 2: Redis Pub/Sub Fan-Out — Who Owns the Subscriber Loop?
 
-| Component | Status | Change |
+### The Problem
+
+A message persisted in one HTTP worker (POST /client/messages) must reach a WebSocket connection held by a different uvicorn worker process. Redis pub/sub is the established backbone.
+
+### Architecture: Lifespan Task + Per-Connection Subscriber
+
+**Who publishes**: the HTTP handler `POST /client/messages` (in `messaging/service.py`), after persisting the message to Postgres, publishes to a Redis channel `cc:messaging:thread:{thread_id}` using `redis.publish()`. This is a fire-and-forget publish inside the same request handler after the DB commit.
+
+**Who subscribes**: each WebSocket connection owns its own Redis pub/sub subscriber. FastAPI WS handlers are `async` coroutines. The correct pattern is:
+
+```
+For each WS connection:
+  1. Subscribe to a per-client Redis channel: cc:messaging:client:{client_id}
+  2. Run an async loop: await message from pub/sub → forward to websocket
+  3. Simultaneously: receive messages from websocket → process → persist → publish
+  4. On disconnect: unsubscribe
+```
+
+The loop is an asyncio task spawned inside the WS handler coroutine. No separate "subscriber worker" process is needed.
+
+**Why not a global lifespan subscriber task**: A process-wide subscriber task would need to demultiplex connections across all clients — complex bookkeeping (`client_id → set[WebSocket]`), race conditions on connect/disconnect, harder to test. Per-connection subscribers are simpler, standard for FastAPI WS, and Redis pub/sub handles fan-out natively.
+
+**Channel naming**:
+- `cc:messaging:client:{client_id}` — per-client channel. The staff (Telegram bridge) publishes staff-→-client messages here. Multiple WS connections from the same client (multiple browser tabs) all subscribe to this channel and all receive the message (fan-out within a single client is free from Redis pub/sub).
+- The HTTP handler for `POST /client/messages` publishes to this channel after DB commit so the WS loop delivers the persisted message to the client's WS connection even when posted from a different uvicorn worker.
+
+**pub/sub is broadcast, not queue**: Redis pub/sub delivers to all current subscribers. If the client's WS is not connected, the message is not delivered (fire-and-forget). This is correct: the REST history endpoint (`GET /client/messages`) serves as the authoritative message source. The WS channel is a delivery optimization, not the source of truth.
+
+**Implementation sketch** (inside the WS handler coroutine):
+
+```python
+async def client_ws_messages(
+    websocket: WebSocket,
+    client: Annotated[ClientPrincipal, Depends(require_client())],
+    redis: Annotated[Redis, Depends(get_redis)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    await websocket.accept()
+    channel = f"cc:messaging:client:{client.id}"
+    
+    # Need a separate Redis connection for pub/sub (blocking subscribe)
+    # The request-scoped redis client is a shared pool — do NOT subscribe on it
+    pubsub = redis.pubsub()
+    await pubsub.subscribe(channel)
+    
+    async def _fan_out_loop() -> None:
+        async for raw in pubsub.listen():
+            if raw["type"] != "message":
+                continue
+            await websocket.send_text(raw["data"])
+    
+    fan_out_task = asyncio.create_task(_fan_out_loop())
+    
+    try:
+        while True:
+            data = await websocket.receive_text()
+            # parse + persist + publish (via messaging.service)
+            ...
+    except WebSocketDisconnect:
+        pass
+    finally:
+        fan_out_task.cancel()
+        await pubsub.unsubscribe(channel)
+        await pubsub.aclose()
+```
+
+**Critical nuance**: `redis.asyncio.Redis.pubsub()` creates a NEW internal connection for the pub/sub protocol. The `get_redis()` dependency returns the shared pool client — calling `.pubsub()` on it is safe and creates a dedicated connection for this subscriber. On WS disconnect, `await pubsub.aclose()` must be called to release the connection.
+
+**App lifespan task ownership**: None required. The WS handler coroutine IS the subscriber task. No lifespan modifications needed. The `combined_lifespan` in `main.py` does not change for messaging.
+
+---
+
+## Question 3: Telegram Bridge — How Staff Replies Enter the Messaging Domain
+
+### Bridge Architecture: Worker-to-Messaging via HandlerContext
+
+The Telegram bot worker (`app/workers/telegram_bot.py`) already has a documented exception for importing module service layers (D-06, D-10). The messaging bridge follows the same pattern: the bot worker imports `app.modules.messaging.service` directly, adds it to `HandlerContext`, and calls it from handler functions.
+
+### Data Flow: Staff Reply Path
+
+```
+Staff types reply in Telegram (bot DM or group message)
+    ↓
+telegram_bot.py long-polling receives update
+    ↓
+reply_handler(update, context, ctx)    # new handler in handlers.py
+    ↓
+ctx.messaging_service.record_staff_message(
+    session_factory, thread_id, text=...
+)   # persists to messages table
+    ↓
+messaging_service.record_staff_message()
+    → INSERT into messages (role='staff', ...)
+    → UPDATE thread.last_message_at
+    → redis.publish(f"cc:messaging:client:{thread_id_owner}", json_payload)
+    ↓
+PWA WebSocket receives the published payload
+    ↓
+ChatScreen displays new staff message
+```
+
+### Data Flow: Client Message Path (staff receives it)
+
+```
+Client sends POST /client/messages
+    ↓
+messaging/service.send_client_message()
+    → INSERT into messages (role='client', ...)
+    → UPDATE thread.last_message_at
+    → redis.publish("cc:messaging:staff", json_payload)
+    ↓
+ARQ task (or direct call): enqueue Telegram DM to staff
+    ↓
+Telegram bot (via integrations/telegram/sender.py):
+    send_message(STAFF_TELEGRAM_CHAT_ID, text)
+```
+
+For the client→staff direction, the Telegram DM is a fire-and-forget notification (not a pub/sub subscriber loop). This reuses the existing `telegram_sender` pattern. The staff chat ID (owner's Telegram account) must be configurable via `Settings` (e.g. `STAFF_TELEGRAM_CHAT_ID`). This is an environment variable, not a per-client setting.
+
+### HandlerContext Extension
+
+New fields appended at END of `HandlerContext` NamedTuple (preserving field-order stability contract):
+
+```python
+class HandlerContext(NamedTuple):
+    session_factory: async_sessionmaker[AsyncSession]
+    telegram_service: ModuleType
+    sender: ModuleType
+    visits_service: ModuleType
+    redis: Redis
+    bookings_service: ModuleType
+    schedule_service: ModuleType
+    # NEW — appended at end per HandlerContext stability contract:
+    messaging_service: ModuleType   # app.modules.messaging.service
+```
+
+The bot worker's `main()` function:
+1. Imports `from app.modules.messaging import service as messaging_service` (new D-06-style relaxation documented as e.g. D-90-BRIDGE).
+2. Adds `messaging_service=messaging_service` to the `HandlerContext` construction.
+3. Registers a new PTB command/message handler for staff replies (or simply handles any non-command message DM from the staff account as a reply).
+
+### Reply Threading: Matching Replies to Threads
+
+The bridge must know WHICH client thread a staff reply belongs to. Three approaches:
+
+**Option A (recommended)**: The bot DM to staff includes the `thread_id` (or `client_name + thread_id`) in the message text or as a custom keyboard button. When staff hits "Reply" in Telegram (standard telegram reply-to-message feature), the update carries `message.reply_to_message.message_id`. The bot persists a `telegram_message_id → thread_id` mapping in Redis (`cc:messaging:tg_msg:{tg_message_id}` → `thread_id` with TTL 7 days). When the reply arrives, lookup the thread_id from this mapping.
+
+**Option B (simpler for single-gym v2.5)**: There is only ONE gym, so there is only one active staff member at a time. All staff replies go to the most recently active thread (LIFO). This is fragile if multiple clients write simultaneously — acceptable for MVP if the gym handles one conversation at a time, but breaks immediately with concurrent clients.
+
+**Recommendation**: Option A. The `cc:messaging:tg_msg:{tg_message_id}` Redis key is set when the bot sends the DM to staff, and consumed when the reply arrives. TTL 7 days is sufficient (Telegram messages don't expire that fast). Zero new Postgres tables needed for this — Redis is the mapping store.
+
+### Import-Linter: New Worker→Modules Edge
+
+`app/workers/telegram_bot.py` already has documented exceptions for `auth.telegram_service`, `visits.service`, `bookings.service`, `schedule.service`, `clients.service`, `memberships.service`, `pt_packages.service`, `trainers.service`. Adding `messaging.service` follows the same precedent. No `.importlinter` change needed (workers are NOT in the `source_modules` of any contract — the worker module `app.workers` is not listed as a forbidden-source). The contracts only scope `app.core`, `app.integrations`, and the listed `app.modules.*`. Workers already import freely from modules with the documented exception acknowledgment.
+
+**Verify**: `app.workers` is not listed in `source_modules` of any contract in `.importlinter`. The D-06/D-10 "relaxation" is documented in the module docstring but is NOT enforced by import-linter — it's a team convention. Adding `messaging.service` to the worker requires only updating the module docstring, not `.importlinter`.
+
+---
+
+## Question 4: Attachment Storage — Integrations vs. Module
+
+### Attachment Requirements
+
+- Client uploads an image in ChatScreen → it appears in the message thread
+- Image stored server-side, served back via URL
+- Content-type allowlist (JPEG, PNG, WebP only — stored-XSS guard)
+- Max size cap (e.g. 5 MB)
+- XSS-safe serving: correct `Content-Type` response header + `Content-Disposition: attachment` to prevent inline execution
+
+### Where Attachments Live
+
+**Option A — Local filesystem storage in an `integrations/storage/` module**: Simpler for a single-server pet project. Files stored in a volume-mounted directory (e.g. `/app/uploads/`). Served by FastAPI itself with `FileResponse`. Zero external dependencies.
+
+**Option B — S3-compatible storage (e.g. Yandex Object Storage)**: Production-grade, separates storage from compute, enables CDN. Requires a new `app/integrations/object_storage/` adapter.
+
+**Recommendation for v2.5**: Local filesystem storage in `app/integrations/storage/` (Option A). Rationale: this is a pet project on a single server; adding an S3 integration is a separate concern. The integration module provides a clean interface so swapping to S3 later is a 1-file change in `integrations/storage/`. The `messaging` module calls storage through this adapter — it never touches filesystem paths directly.
+
+### Module Placement
+
+`app/integrations/storage/` — NOT a module. Rationale:
+- Attachment storage is infrastructure (like `integrations/email/`, `integrations/yookassa/`), not a business domain.
+- The `integrations ⊥ modules` contract would be violated if `storage` imported from `messaging`. The dependency direction is correct: `messaging` → calls → `storage` (a downstream integration). But wait — `integrations ⊥ modules` forbids `integrations` from importing `modules`, not the reverse. `messaging` importing `integrations.storage` is fine (modules CAN import integrations — the contracts don't forbid it).
+
+**Confirmed**: `messaging/service.py` can import `app.integrations.storage.save_file` — no import-linter violation. The forbidden direction is `integrations → modules`, not `modules → integrations`.
+
+### Serving Attachments
+
+Two patterns:
+1. **Redirect to static URL**: FastAPI serves files via `StaticFiles` mount at `/static/uploads/`. The message `attachment_url` field contains a path like `/static/uploads/{uuid}.jpg`. Simple but exposes upload paths to enumeration.
+2. **Authenticated proxy endpoint**: `GET /client/messages/attachments/{attachment_id}` — resolves to the file, checks that the attachment belongs to a thread owned by the requesting client (IDOR), then returns `FileResponse`. More secure; prevents unauthenticated access to uploaded images.
+
+**Recommendation**: Authenticated proxy endpoint. Pattern: `GET /api/v1/client/messages/attachments/{attachment_id}` gated by `require_client()`. The repository layer verifies the attachment's thread `client_id == principal.client_id` before returning the file path. Return `FileResponse(path, media_type=detected_mime, headers={"Content-Disposition": "attachment"})`.
+
+The `Content-Disposition: attachment` header prevents inline browser execution even if a malicious file slips past the type check. The `media_type` is set from the stored allowlisted MIME type (not re-detected from file contents at serve time — the allowlist check is at upload time).
+
+### Upload Endpoint
+
+`POST /api/v1/client/messages/attachments` — multipart form upload. FastAPI `UploadFile`. Returns `attachment_id` + `previewUrl`. The client then references this `attachment_id` in the subsequent `POST /client/messages` body.
+
+Security checks at upload:
+1. `UploadFile.content_type` must be in `{"image/jpeg", "image/png", "image/webp"}`.
+2. File size: read at most `MAX_ATTACHMENT_BYTES` (5 MB) — reject if `size > limit`.
+3. Magic bytes check: read first 12 bytes of the file and verify against known image magic bytes (JPEG: `FF D8 FF`, PNG: `89 50 4E 47`, WebP: `52 49 46 46 ... 57 45 42 50`). This prevents a renamed `.html` file with `Content-Type: image/jpeg` from being stored.
+4. Save to disk with a UUID filename (no extension in storage — the MIME type is stored in the `message_attachments` DB row).
+
+---
+
+## Question 5: Dependency-Ordered Build Sequence
+
+### Schema/Migration Decisions
+
+**New tables** (order matters for FK constraints):
+
+```
+0064_messaging_threads.py
+  — message_threads: id (UUID PK), client_id (FK clients.id), created_at, last_message_at
+
+0065_messaging_messages.py
+  — messages: id, thread_id (FK message_threads.id), role ('client'|'staff'),
+    body TEXT, attachment_id UUID NULL, sent_at TIMESTAMPTZ,
+    read_at TIMESTAMPTZ NULL (staff-reads; staff→client direction)
+    INDEX (thread_id, sent_at DESC)
+
+0066_messaging_attachments.py
+  — message_attachments: id UUID PK, thread_id FK, client_id FK (IDOR),
+    mime_type TEXT, file_path TEXT, size_bytes INT, created_at TIMESTAMPTZ
+    (must come BEFORE messages to satisfy FK if attachment_id references this table,
+     OR messages.attachment_id can be nullable with FK deferred — use separate table)
+
+0067_messaging_unread.py
+  — thread_unread_counts: thread_id FK (1:1), client_unread INT NOT NULL DEFAULT 0
+    (maintained by triggers or application logic; tracks messages unread by client)
+```
+
+**Note on unread count**: a simpler alternative to a separate table is a GENERATED column or an application-maintained counter. The safest approach for v2.5 is an `INTEGER` column on `message_threads` (`client_unread_count DEFAULT 0`) — incremented by `INSERT INTO messages ... WHERE role='staff'` and reset to 0 by the client mark-read endpoint. This avoids a separate table. The counter is not race-prone at single-gym scale.
+
+### REST Foundation Must Come Before WS
+
+The WS endpoint delivers messages; the REST endpoints persist them. The WS endpoint calling `messaging/service` functions means those functions must exist first.
+
+### Build Order (Phase Numbering Starts at Phase 90)
+
+**Phase 90 — Messaging Schema + REST Send/List**
+- Alembic migrations `0064_messaging_threads`, `0065_messaging_messages` (unified or split)
+- `app/modules/messaging/` scaffold: `models.py` + `repository.py` + `service.py` + `router.py` + `schemas.py`
+- REST endpoints only (NO WS yet):
+  - `GET /client/messages` — paginated thread history + `unreadCount`
+  - `POST /client/messages` — send text message (no attachments yet)
+  - `PATCH /client/messages/read` — mark thread as read (reset `client_unread_count`)
+- All under `require_client()` + `verify_client_csrf` on mutations
+- IDOR: `thread_id` resolved from `client_id` (principal); 404-collapse on non-owned
+- Audit events pre-registered: `("message_sent", "message")`, `("message_read", "message")`
+- Register `app.modules.messaging` in `.importlinter` `modules-independent` contract
+- Mount `messaging_router` at `/client` prefix in `api/v1/router.py`
+- Tests: send message → appears in list; IDOR (other client's thread → 404); unread count increments on staff send, resets on client read
+- **No pub/sub yet** — pure Postgres-backed REST
+
+**Phase 91 — WebSocket Transport + Redis Fan-Out**
+- WS endpoint `GET /api/v1/client/ws/messages` in `messaging/router.py`
+- `require_client()` dependency on WS handshake
+- Per-connection Redis pub/sub subscriber loop (see Question 2 above)
+- `POST /client/messages` now publishes to `cc:messaging:client:{client_id}` after DB commit
+- Message payload format over WS: JSON with `type: "new_message" | "typing" | "read_receipt"`
+- PWA WS reconnect strategy: exponential backoff (1s → 2s → 4s → max 30s), reset on successful message receipt
+- Tests: ASGI WS test client (`httpx.AsyncClient` does not support WS — use FastAPI's `TestClient` WS mode or `starlette.testclient.TestClient` WS context manager); verify message published via HTTP arrives on WS subscriber
+- **Depends on Phase 90**
+
+**Phase 92 — Read Receipts + Typing Indicators**
+- Client sends `{"type": "read_receipt", "thread_id": "..."}` over WS → persisted to DB + published to staff pub/sub channel
+- Client sends `{"type": "typing"}` over WS → published to pub/sub (NOT persisted to DB — ephemeral signal with 3s TTL)
+- Staff-side typing indicator: not yet visible (staff side is Telegram which has its own typing indicator); client-side: if staff sends a typing event via Telegram bot, publish to `cc:messaging:client:{client_id}` with `type: "typing"` — PWA shows "зал набирает..."
+- `PATCH /client/messages/read` REST endpoint also persists read state (for polling fallback when WS is disconnected)
+- **Depends on Phase 91**
+
+**Phase 93 — Attachments**
+- `app/integrations/storage/` adapter (local filesystem, UUID filenames, magic-bytes check)
+- Alembic `0066_messaging_attachments`
+- `POST /api/v1/client/messages/attachments` — upload endpoint, returns `attachment_id`
+- `GET /api/v1/client/messages/attachments/{attachment_id}` — authenticated proxy (IDOR-safe, `FileResponse`)
+- `POST /client/messages` extended to accept optional `attachment_id`
+- Size cap + content-type allowlist + magic-bytes check enforced at upload
+- `Content-Disposition: attachment` on serve
+- Tests: upload valid JPEG → GET returns file; upload oversized → 422; upload wrong type → 422; IDOR (another client's attachment → 404)
+- **Depends on Phase 90** (schema); **independent from Phases 91-92** in terms of code, but migration numbering requires sequential order
+
+**Phase 94 — Telegram Bridge (Staff-Side)**
+- `app/modules/messaging/service.py`: add `record_staff_message(session_factory, thread_id, text)` function
+- New handler in `app/integrations/telegram/handlers.py`: `reply_handler` — processes text messages from the staff Telegram account, resolves thread via `cc:messaging:tg_msg:{tg_message_id}` Redis mapping
+- Extend `HandlerContext` NamedTuple: append `messaging_service` field at END
+- `app/workers/telegram_bot.py`:
+  - Import `app.modules.messaging.service as messaging_service` (D-90-BRIDGE documented exception)
+  - Add `messaging_service=messaging_service` to `HandlerContext` construction
+  - Register the reply handler on PTB application
+- Client→Staff: `POST /client/messages` enqueues an ARQ task that sends a Telegram DM to staff (or calls `telegram_sender.send_message(STAFF_TELEGRAM_CHAT_ID, ...)` directly if fire-and-forget)
+- Redis mapping: when bot sends DM to staff, store `cc:messaging:tg_msg:{sent_tg_msg_id}` → `{thread_id}` with TTL 7 days
+- Settings: new `STAFF_TELEGRAM_CHAT_ID: int` in `app/core/config.py` (optional; Telegram bridge disabled if absent)
+- Tests: record_staff_message writes to DB + publishes to pub/sub; reply_handler resolves thread from Redis key; client→staff DM fires (via mock); thread_id mapping round-trip
+- **Depends on Phase 90 + Phase 91** (pub/sub publish in record_staff_message)
+
+**Phase 95 — PWA ChatScreen Wiring + OpenAPI Handoff**
+- Graduate ChatScreen from `D-71-09` placeholder zone (3 de-list spots + `@/data` import pattern — same lesson as v2.4 Phases 86/87/88)
+- Wire `GET /client/messages`, `POST /client/messages`, WS endpoint
+- Implement WS reconnect/backoff in PWA
+- Byte-stable regen `openapi.json` + `schema.d.ts` + `_v25Checks` `AssertNonNever` forward-guards
+- Staff-drift gate green (all staff paths byte-identical to `contract-freeze-v1.11.0`)
+- Full milestone verification gate: backend pytest + mypy strict + lint-imports + redocly + CISO-01 guard
+- **Depends on all prior phases**
+
+---
+
+## System Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          apps/client-pwa (PWA)                          │
+│  ChatScreen  →  HTTP REST (send/list)                                   │
+│              →  WebSocket /api/v1/client/ws/messages (real-time)        │
+└──────────────────────────────────┬──────────────────────────────────────┘
+                                   │ HTTP + WS upgrade (cc_client_access cookie)
+┌──────────────────────────────────▼──────────────────────────────────────┐
+│                   FastAPI app (uvicorn, async)                           │
+│  api/v1/router.py  →  messaging/router.py  (prefix="/client")          │
+│    REST: GET /client/messages                                            │
+│          POST /client/messages                                           │
+│          PATCH /client/messages/read                                     │
+│          POST /client/messages/attachments                               │
+│          GET  /client/messages/attachments/{id}                          │
+│    WS:   GET /api/v1/client/ws/messages                                  │
+│               ↓ Depends(require_client()) → ClientPrincipal             │
+│               ↓ messaging/service.py (same-module import, OK)            │
+│               ↓ per-connection pubsub subscriber loop                   │
+└──────────────┬────────────────────────────────────────┬─────────────────┘
+               │ write                                  │ pub/sub
+               ▼                                        ▼
+┌──────────────────────────┐         ┌──────────────────────────────────┐
+│       Postgres 16        │         │         Redis 7 (existing)        │
+│  message_threads         │         │  cc:messaging:client:{id}         │
+│  messages                │         │  cc:messaging:tg_msg:{tg_id}      │
+│  message_attachments     │         │  (pub/sub channels)               │
+└──────────────────────────┘         └──────────────────┬───────────────┘
+                                                        │ subscribe / publish
+┌───────────────────────────────────────────────────────▼────────────────┐
+│              app/workers/telegram_bot.py (long-polling)                 │
+│  HandlerContext.messaging_service = app.modules.messaging.service       │
+│  reply_handler:                                                          │
+│    → read cc:messaging:tg_msg:{tg_msg_id} → thread_id                  │
+│    → messaging_service.record_staff_message(thread_id, text)           │
+│    → publishes to cc:messaging:client:{client_id}                       │
+│  client→staff DM:                                                        │
+│    → telegram_sender.send_message(STAFF_TELEGRAM_CHAT_ID, text)        │
+│    → SET cc:messaging:tg_msg:{sent_msg_id} → thread_id (TTL 7d)        │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Component Boundaries and Responsibilities
+
+| Component | Status | Responsibility |
 |---|---|---|
-| `app/modules/payment_methods/` | **NEW module** | `models.py` + `repository.py` + `service.py` (thin) |
-| Alembic `0052_client_payment_methods.py` | **NEW migration** | `client_payment_methods` table |
-| `app/integrations/yookassa/client.py` | **MODIFIED** | Add `save_payment_method` param to `create_payment`; add `payment_method_id` param for autopay charge |
-| `app/integrations/yookassa/types.py` | **MODIFIED** | Add `payment_method_id` + `payment_method_saved` + `payment_method_title` + `payment_method_card` fields to `YooKassaPaymentResult` |
-| `app/modules/online_payments/service.py` | **MODIFIED** | `_sell_subject_core`: accept optional `save_payment_method`, `payment_method_id` params |
-| `app/modules/online_payments/router.py` (webhook) | **MODIFIED** | `handle_payment_succeeded`: step 8.5 — raw SQL upsert `client_payment_methods` when `payment_method.saved=true` |
-| `app/core/dependencies.py` | **MODIFIED** | Add `reschedule_booking_for_client` Protocol slot; optionally `BindPaymentMethodSlot` |
-| `app/main.py` | **MODIFIED** | Wire new Protocol slots at composition root |
-| `app/modules/client_portal/router.py` | **MODIFIED** | New endpoints: GET/DELETE `/client/payment-method`, PATCH `/client/payment-method/autopay`, POST `/client/booking/{id}/reschedule`, GET `/client/activity/weekly` |
-| `app/modules/client_portal/service.py` | **MODIFIED** | New service functions for all 3 features |
-| `app/modules/client_portal/schemas.py` | **MODIFIED** | New request/response schemas for all 3 features |
-| `app/modules/client_portal/repository.py` | **MODIFIED** | New raw SQL reads: payment-method GET, weekly activity aggregate |
-| `app/modules/bookings/service.py` | **MODIFIED** | New `reschedule_booking_for_client` orchestrator |
-| `app/modules/bookings/notifications.py` | **MODIFIED** | Add `BOOKING_RESCHEDULED_DM` locked template constant |
-| Alembic `0053_booking_notifications_reschedule.py` | **NEW migration** | Widen `ck_booking_notifications_kind` CHECK to include `'rescheduled'` |
-| `app/workers/scheduled/charge_expiring_autopay.py` | **NEW worker** | ARQ cron job for autopay charging |
-| `app/core/audit.py` `LOCKED_AUDIT_EVENTS` | **MODIFIED** | Pre-register `("booking_rescheduled", "booking")` + payment-method audit events |
-| `app/core/audit_payloads.py` | **MODIFIED** | New payload schemas for new audit events |
-| `.importlinter` | **MODIFIED** | Add `app.modules.payment_methods` to `modules-independent` contract |
-| `apps/client-pwa/` | **MODIFIED** | Flip `linkedCard`/`weeklyActivity` feature flags; wire new endpoint hooks |
-| `apps/backend/openapi.json` + `schema.d.ts` | **MODIFIED** | Per-milestone byte-stable regen + `AssertNonNever` forward-guards |
+| `app/modules/messaging/` | **NEW** | Thread + message domain model; REST read/write/receipts; WS endpoint; pub/sub publish |
+| `app/modules/messaging/models.py` | **NEW** | `MessageThread`, `Message`, `MessageAttachment` ORM models |
+| `app/modules/messaging/repository.py` | **NEW** | Raw SQL reads for cross-module data (client name from `clients` table); ORM writes for owned data |
+| `app/modules/messaging/service.py` | **NEW** | `send_client_message`, `record_staff_message`, `mark_thread_read`, `get_thread_history` |
+| `app/modules/messaging/router.py` | **NEW** | REST + WS endpoints; `require_client()` dependency; mounts in `api/v1/router.py` at `/client` |
+| `app/modules/messaging/schemas.py` | **NEW** | `MessageResponse`, `SendMessageRequest`, `AttachmentResponse`, WS payload types |
+| `app/integrations/storage/` | **NEW** | Local filesystem adapter: `save_file`, `get_file_path`, magic-bytes check, MIME allowlist |
+| `app/integrations/telegram/handlers.py` | **MODIFIED** | Add `reply_handler`; `HandlerContext` NamedTuple gains `messaging_service` field appended at END |
+| `app/workers/telegram_bot.py` | **MODIFIED** | Import `messaging.service`; add to `HandlerContext`; register reply handler on PTB application |
+| `app/core/config.py` | **MODIFIED** | Add `STAFF_TELEGRAM_CHAT_ID: int | None` setting |
+| `app/core/audit.py` `LOCKED_AUDIT_EVENTS` | **MODIFIED** | Pre-register `("message_sent", "message")`, `("message_read", "message")`, `("attachment_uploaded", "message")` |
+| `app/api/v1/router.py` | **MODIFIED** | Mount `messaging_router` at prefix `/client` |
+| `apps/backend/.importlinter` | **MODIFIED** | Add `app.modules.messaging` to `modules-independent` contract |
+| Alembic migrations `0064–0066` | **NEW** | `message_threads`, `messages`, `message_attachments` tables |
+| `apps/client-pwa/` ChatScreen | **MODIFIED** | Graduate from D-71-09 placeholder zone; wire REST + WS |
+| `apps/backend/openapi.json` + `schema.d.ts` | **MODIFIED** | Byte-stable regen + `_v25Checks` forward-guards |
 
 ---
 
-## Dependency-Aware Build Order
+## Import-Linter: Required Changes
 
-Dependencies chain as follows:
-- `client_payment_methods` table (migration 0052) must exist before webhook token-save and `client_portal` endpoints can reference it.
-- `charge_expiring_autopay` cron depends on both the table and the modified `_sell_subject_core` accepting `payment_method_id`.
-- `reschedule` depends on the `reschedule_booking_for_client` Protocol slot + migration 0053.
-- `weekly_activity` is independent — pure read, no new migrations needed.
+### `.importlinter` Changes
 
-### Recommended Phase Order
+1. **Add `app.modules.messaging` to `modules-independent` contract** (in the `modules =` block).
+   - The messaging module does NOT import other modules directly.
+   - Cross-module reads (e.g. `clients.first_name` for display): raw SQL `text()` in `messaging/repository.py` (D-54-08 discipline — zero new `ignore_imports`).
+   - Cross-module writes: if messaging needs to trigger a notification (e.g. increment `in_app_notifications` unread count when a staff message arrives), this goes through a Protocol slot. Add `register_messaging_notification_hook` to `app.core.dependencies`, wired in `main.py`. OR: keep it simple for v2.5 — no cross-module notification write; the `client_unread_count` on the thread itself is the unread signal.
 
-**Phase 79 — Payment Methods Foundation + YooKassa Adapter**
+2. **No new `ignore_imports` edges expected for Phase 90 (REST foundation)**. The messaging module is self-contained. The WS endpoint is inside the messaging module, not in `client_portal` — so no `client_portal → messaging` cross-module edge is needed.
 
-Scope:
-- New `app/modules/payment_methods/` (models + repo + thin service).
-- Alembic `0052_client_payment_methods.py`.
-- Extend `YooKassaClient.create_payment` with `save_payment_method` param and `payment_method_id` param (for autopay charges).
-- Extend `YooKassaPaymentResult` / `types.py` to surface `payment_method.*` fields from webhook payload.
-- Modify `_sell_subject_core` to pass `save_payment_method` to YooKassa when requested.
-- Modify `handle_payment_succeeded` webhook handler: step 8.5 — raw SQL upsert token.
-- New `GET /client/payment-method`, `DELETE /client/payment-method`, `PATCH /client/payment-method/autopay` endpoints in `client_portal`.
-- Pre-register new payment-method audit events.
-- Tests: checkout with save flag → webhook → token stored; GET returns masked card; unbind sets is_active=false; autopay_enabled toggle.
-- **No autopay cron yet** — foundation only.
+3. **If in-app notifications need to be triggered by messaging** (e.g. push notification when staff sends a message while PWA is closed): this is a Phase-87-style cross-module edge: `app.modules.messaging.service → app.modules.notifications.service`. This follows the Phase-87 `bookings.service → notifications.service` precedent (already in `.importlinter` `ignore_imports`). Declare the `ignore_imports` edge when the feature is built — not preemptively.
 
-**Phase 80 — Autopay Cron**
+### Worker Module (No Import-Linter Change Needed)
 
-Scope:
-- `app/workers/scheduled/charge_expiring_autopay.py` ARQ cron (06:30 MSK).
-- Extend `_sell_subject_core` to accept `payment_method_id` param and omit `confirmation` object in the YooKassa body (server-initiated charge path).
-- Wire cron in docker-compose / ARQ settings.
-- Tests: autopay charge fires for qualifying clients; idempotency key prevents double-charge; failed charge leaves membership to expire normally via existing `expire_memberships` cron.
-- **Depends on Phase 79**.
-
-**Phase 81 — Booking Reschedule**
-
-Scope:
-- New `reschedule_booking_for_client` Protocol slot in `app.core.dependencies` + wired in `app/main.py`.
-- `bookings/service.reschedule_booking_for_client` (atomic move: restore old slot + flip new slot + update booking.slot_id in one UoW).
-- Add `BOOKING_RESCHEDULED_DM` locked template constant in `bookings/notifications.py`.
-- Alembic `0053_booking_notifications_reschedule.py` (widen `ck_booking_notifications_kind` CHECK).
-- Pre-register `("booking_rescheduled", "booking")` in `LOCKED_AUDIT_EVENTS`.
-- `POST /client/booking/{id}/reschedule` endpoint in `client_portal/router.py`.
-- Frontend: BookingManageSheet wired to real `GET /client/slots` + new reschedule endpoint.
-- Tests: successful reschedule (old slot → active, new slot → booked); IDOR (non-owned booking → 404); window-expired (< 24h to start) → 409; race (new slot taken between lookup and flip) → 409 slot_already_booked.
-- **Independent from Phases 79–80** in terms of logic; must come after 79 for migration numbering continuity.
-
-**Phase 82 — Weekly Activity + PWA Flag Flips + OpenAPI Handoff**
-
-Scope:
-- `GET /client/activity/weekly` endpoint in `client_portal/router.py`.
-- Raw SQL weekly aggregate in `client_portal/repository.py` (visits + pt_sessions, 7-day result, zero-fill missing days).
-- `WeeklyActivityResponse` + `DayActivity` schemas.
-- PWA: flip `weeklyActivity` flag ON, wire `useWeeklyActivity()` hook.
-- PWA: flip `linkedCard` flag ON (connects to Phase 79 endpoints).
-- Byte-stable `openapi.json` + `schema.d.ts` regen + new `AssertNonNever` forward-guards for all v2.2 paths.
-- Milestone verification gate (live `docker compose up` + `pytest` green + drift gates).
-- **Depends on all prior phases** (captures all new endpoints for OpenAPI handoff).
+`app/workers/telegram_bot.py` is NOT listed as a `source_modules` in any import-linter contract. The contracts scope `app.core`, `app.integrations`, and `app.modules.*`. Workers can import modules freely (with team-convention D-06/D-10 acknowledgment in the module docstring). No `.importlinter` edit required for the bridge.
 
 ---
 
-## Architecture Constraints Checklist (v2.2 specific)
+## IDOR and Principal Discipline for WS
 
-| Constraint | How Respected |
+The WebSocket endpoint must enforce the same IDOR discipline as all REST endpoints:
+
+1. `client_id` is taken ONLY from `require_client()` principal (the `ClientPrincipal` from the cookie-decoded JWT). Never from a WS message payload.
+2. The WS subscriber channel is `cc:messaging:client:{client_id}` — keyed to the principal's `client_id`. A client cannot subscribe to another client's channel.
+3. When the client sends a message over WS, the `client_id` is injected from the principal — the PWA payload does not include `client_id`.
+4. Staff messages arriving via Telegram bridge carry NO client-supplied `client_id` — the thread_id lookup via the Telegram message reply chain is the only source.
+5. The attachment proxy endpoint `GET /client/messages/attachments/{attachment_id}` verifies `message_attachments.client_id == principal.client_id` before returning the file.
+
+---
+
+## Anti-Patterns to Avoid
+
+### Anti-Pattern 1: WS Endpoint in `client_portal/router.py`
+
+**What people do**: add the WS endpoint to `client_portal/router.py` because "it's a client endpoint."
+**Why it's wrong**: forces `client_portal` to import `messaging.service` directly (violates `modules-independent`) or route everything through Protocol slots (overkill for a module that owns its own data model).
+**Do this instead**: the WS endpoint lives in `messaging/router.py`, mounted at `/client` prefix in `api/v1/router.py` — the same pattern as `loyalty.router`, `gym.router`, `notifications.router`.
+
+### Anti-Pattern 2: Global Process-Wide Pub/Sub Subscriber in Lifespan
+
+**What people do**: create a single asyncio task in `combined_lifespan` that subscribes to all channels and dispatches to a `client_id → WebSocket` dict.
+**Why it's wrong**: requires thread-safe global state; hard to clean up on disconnect; harder to test; fanout to multiple tabs from a single subscriber requires extra demultiplex logic.
+**Do this instead**: per-WS-connection subscriber loop (each WS handler spawns its own asyncio task that subscribes and unsubscribes cleanly on disconnect).
+
+### Anti-Pattern 3: Pub/Sub on the Shared `get_redis()` Pool Client
+
+**What people do**: call `redis.subscribe()` on the same `Redis` object returned by `get_redis()`.
+**Why it's wrong**: `redis.asyncio` pub/sub puts the connection into subscribe mode — it can no longer be used for regular commands. The shared pool client would be corrupted for other requests.
+**Do this instead**: call `redis.pubsub()` which creates a dedicated internal connection for subscribe protocol. Dispose of it with `await pubsub.aclose()` on WS disconnect.
+
+### Anti-Pattern 4: Storing Typing Indicators in Postgres
+
+**What people do**: INSERT a row into a `typing_events` table on every keystroke.
+**Why it's wrong**: typing indicators are ephemeral (3-5s TTL); persisting them is noise that never needs to be read back.
+**Do this instead**: publish typing events to Redis pub/sub only (not to Postgres). The WS fan-out delivers them in real time; they are not persisted.
+
+### Anti-Pattern 5: Accepting `thread_id` or `client_id` from WS Payload
+
+**What people do**: let the client send `{"type": "send", "thread_id": "...", "client_id": "..."}` in WS messages.
+**Why it's wrong**: breaks IDOR — a client could specify another client's `thread_id` or forge `client_id`.
+**Do this instead**: `client_id` and `thread_id` are resolved server-side from the principal (`ClientPrincipal.id`) at WS handshake time. The client never sends ownership identifiers.
+
+### Anti-Pattern 6: Serving Attachments via Static Mount Without Auth
+
+**What people do**: `app.mount("/uploads", StaticFiles(directory="uploads"))` and put the URL in the message.
+**Why it's wrong**: uploaded files are accessible to anyone with the URL — no auth, no IDOR check.
+**Do this instead**: authenticated proxy endpoint `GET /client/messages/attachments/{id}` that verifies `message_attachments.client_id == principal.client_id` before `FileResponse`.
+
+---
+
+## Scaling Considerations (Single Gym — v2.5 Scope)
+
+| Concern | At 1 gym (v2.5 target) |
 |---|---|
-| `import-linter` modules independent | `payment_methods` added to independence contract; `client_portal` uses Protocol slots or raw SQL only; webhook uses raw SQL for token save — zero new `ignore_imports` needed for features B and C |
-| `core ⊥ modules` | New Protocol slots registered in `app.core.dependencies`; wired in composition root `main.py` |
-| Webhook-locked activation | Autopay: `payment_method_id` charge produces `payment.succeeded` → normal 8-step UoW activates membership; redirect screen invariant unchanged |
-| IDOR anti-oracle | All `client_portal` endpoints: `client_id` from `require_client()` only; non-owned resources → 404-collapse |
-| SVC001 commit-gate | `reschedule_booking_for_client` commits own UoW; `client_portal/router` calls `await session.commit()` for PATCH/DELETE payment-method endpoints |
-| INFRA-15 (audit events pre-registered) | `booking_rescheduled`, new payment-method events pre-registered in frozenset BEFORE any callsite |
-| Server-authoritative pricing (D-06) | Autopay: plan price read from `membership_plans.price_kopecks` via `_read_membership_plan_or_raise` inside `_sell_subject_core` — no price from caller |
-| Staff contract frozen | All new endpoints additive under `Client-Portal` tag; zero changes to staff paths; byte-parity drift guard remains green |
-| 54-ФЗ receipt on autopay | Autopay `_sell_subject_core` still builds `receipt_items` from plan name/price; `customer_phone` fallback always applies (phone is NOT NULL via OTP auth) |
-| D-69-03 empty states | GET payment-method returns 200/null (no method); GET weekly activity returns 200 with 7 zero-workout days |
+| Concurrent WS connections | 1-50 (one gym, few active clients) — no scaling concern |
+| Redis pub/sub | Single-node Redis 7 — adequate; fan-out is trivial at this scale |
+| Attachment storage | Local filesystem — adequate; single server deployment |
+| DB writes per message | 1 INSERT + 1 UPDATE (thread.last_message_at) — trivial |
 
----
-
-## Open Questions for Phase Planning
-
-1. **Autopay notification on failure**: should `payment.canceled` from an autopay charge trigger a Telegram/email DM to the client? Not strictly required for v2.2, but affects test coverage scope.
-2. **`save_payment_method` in checkout body vs. always-save**: should the PWA always request method saving when the client checks a UI checkbox (conditional save), or should v2.2 always save when the client completes checkout (unconditional)? Affects whether `ClientCheckoutRequest` schema needs a new boolean field.
-3. **Autopay renewal strategy**: when autopay fires, should it use `renew_membership` (creating a new membership row) or `sell_membership` (creating a new sale from scratch)? Given the existing `renew_membership` Protocol slot in memberships module, the autopay cron should probably call `renew_membership` after the webhook confirms payment, not `sell_membership` + activation. This is the cleaner domain model but requires the webhook handler to distinguish "autopay-initiated renewal" from "fresh purchase". Decision affects audit event shape.
-4. **Weekly activity scope**: does "current week" mean the 7 days Mon–Sun of the current ISO week, or the last 7 rolling days? ISO week (Mon–Sun) is the recommended default but confirm with user.
+If this were to scale to multiple gyms (v3.x), the Redis pub/sub channel namespace `cc:messaging:client:{id}` already isolates by client, so horizontal scaling of the FastAPI process is straightforward (all workers subscribe to the same Redis node). Local filesystem storage would need to become shared (NFS or S3) — the `integrations/storage/` adapter makes this a single-file swap.
 
 ---
 
 ## Sources
 
-- Live codebase inspection: `apps/backend/app/modules/client_portal/`, `bookings/service.py`, `online_payments/service.py`, `online_payments/models.py`, `visits/models.py`, `pt_sessions/models.py`, `app/integrations/yookassa/client.py`, `app/integrations/yookassa/types.py`, `apps/backend/.importlinter`, `apps/backend/alembic/versions/` (migrations 0001–0051).
-- YooKassa saved payment methods: [Привязка во время платежа](https://yookassa.ru/developers/payment-acceptance/scenario-extensions/recurring-payments/save-payment-method/save-during-payment) (MEDIUM confidence — page returns structure, full field schema requires sandbox testing).
-- YooKassa autopayments: [Автоплатежи](https://yookassa.ru/developers/payment-acceptance/scenario-extensions/recurring-payments/pay-with-saved) (HIGH confidence — `payment_method_id` param + no-user-confirmation pattern confirmed).
-- YooKassa unbind: no DELETE API endpoint per [YooKassa API reference](https://yookassa.ru/developers/api) — unbind = remove from local storage only (HIGH confidence).
-- Project architecture decisions: `.planning/PROJECT.md` (v2.0–v2.1 Current State section).
+All findings are HIGH confidence from direct live codebase inspection:
+
+- `apps/backend/app/main.py` — composition root: Protocol slot registration pattern, lifespan structure, composition-root carve-out precedents
+- `apps/backend/app/workers/telegram_bot.py` — HandlerContext pattern, D-06/D-10 relaxations, long-polling process lifecycle, Protocol slot registration in worker
+- `apps/backend/app/integrations/telegram/handlers.py` — HandlerContext NamedTuple definition, field order stability contract, importlib pattern for integrations → modules isolation
+- `apps/backend/app/modules/client_portal/router.py` — require_client() usage, IDOR enforcement, WebSocket dependency pattern (confirmed FastAPI applies Depends on WS routes)
+- `apps/backend/app/core/dependencies.py` — ClientPrincipal Protocol, require_client() implementation reading cc_client_access cookie, Protocol slot registration pattern
+- `apps/backend/app/core/redis.py` — Redis singleton pattern, get_redis() per-request dependency, redis.pubsub() availability on asyncio Redis client
+- `apps/backend/app/core/security.py` — decode_client_token(), aud="client" assertion, cc_client_access cookie name
+- `apps/backend/app/api/v1/router.py` — established pattern of mounting multiple separate routers at `/client` prefix (loyalty, gym, notifications, client_auth, client_portal)
+- `apps/backend/.importlinter` — exact contract text, existing ignore_imports edges, modules-independent module list, worker exemption (workers not in source_modules)
+- `.planning/PROJECT.md` — v2.5 milestone goal, target features, key constraints, out-of-scope items
 
 ---
-*Architecture research for: clubcore v2.2 — Membership self-service depth*
-*Researched: 2026-06-03*
+*Architecture research for: clubcore v2.5 — Chat / Messaging — Client↔Gym*
+*Researched: 2026-06-06*
