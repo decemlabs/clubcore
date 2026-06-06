@@ -89,6 +89,7 @@ from app.modules.bookings.schemas import (
     BookingStatus,
     SlotSnapshot,
 )
+from app.modules.notifications.service import create_notification
 
 if TYPE_CHECKING:
     from telegram import Bot
@@ -311,6 +312,26 @@ def _is_slot_confirmed_conflict(exc: IntegrityError) -> bool:
 # ---------------------------------------------------------------------------
 # Phase 39 NOTIFY-03/04 — Telegram DM dispatch helpers.
 # ---------------------------------------------------------------------------
+
+
+async def _fetch_trainer_full_name(session: AsyncSession, trainer_id: UUID) -> str:  # noqa: SVC001 caller-owns-txn
+    """Return trainer full_name for notification body rendering (D-54-08 raw SQL).
+
+    Used by Phase 87 INBOX-03 co-transactional inbox hooks where the ORM
+    joinedload chain is not available (trainer relationship not eagerly loaded
+    at the hook site). Falls back to an empty string when the row is missing
+    (defensive — slot FK ensures a trainer exists, but avoids masking a real error
+    with a notification failure).
+    """
+    row = (
+        await session.execute(
+            sa.text("SELECT full_name FROM trainers WHERE id = :trainer_id"),
+            {"trainer_id": str(trainer_id)},
+        )
+    ).mappings().one_or_none()
+    if row is None:
+        return ""
+    return str(row["full_name"])
 
 
 async def _load_booking_with_relationships(
@@ -1115,6 +1136,22 @@ async def create_booking(
             actor_role="reception",  # LITERAL — INFRA-11 AST gate / D-40-05
         )
 
+    # Step 8.5 — Phase 87 INBOX-03 — in-app inbox row (co-transactional, BEFORE commit).
+    # Placed here (after audit.emit, before session.commit) so the notification INSERT
+    # participates in the same UoW as the booking state change (UNIQUE dedup via
+    # uq_in_app_notifications_client_source_kind covers webhook/retry replay).
+    _trainer_name = await _fetch_trainer_full_name(session, slot.trainer_id)
+    _slot_start_msk = slot.start_time.astimezone(MOSCOW_TZ).strftime("%d.%m.%Y %H:%M")
+    await create_notification(
+        session,
+        client_id=booking.client_id,
+        source_type="booking",
+        source_id=booking.id,
+        kind="booking_confirmed",
+        title="Бронь подтверждена",
+        body=f"{_slot_start_msk} — {_trainer_name}",
+    )
+
     # Step 9 — Commit (SVC001 gate).
     await session.commit()
 
@@ -1518,6 +1555,36 @@ async def cancel_booking(
 
     # Step 8 — DM dispatch is post-commit (see Step 9.5 below per D-39-10).
 
+    # Step 8.5 — Phase 87 INBOX-03 — in-app inbox row (co-transactional, BEFORE commit).
+    # Actor-role discriminator (mirrors Step 9.5 post-commit DM kind semantics):
+    #   owner → kind="booking_cancelled_by_owner" (cancelled by venue)
+    #   reception → kind="booking_cancelled_by_client" (cancelled by client request)
+    # Both branches notify the AFFECTED CLIENT (booking.client_id) regardless of actor
+    # (INBOX-03: staff-initiated cancel MUST reach the client inbox). Placed pre-commit
+    # so the inbox INSERT is atomic with the booking state mutation (co-transactional).
+    _cancel_trainer_name = await _fetch_trainer_full_name(session, booking.slot.trainer_id)
+    _cancel_slot_msk = booking.slot.start_time.astimezone(MOSCOW_TZ).strftime("%d.%m.%Y %H:%M")
+    if actor.role is Role.OWNER:
+        await create_notification(
+            session,
+            client_id=booking.client_id,
+            source_type="booking",
+            source_id=booking.id,
+            kind="booking_cancelled_by_owner",
+            title="Бронь отменена залом",
+            body=f"{_cancel_slot_msk} — {_cancel_trainer_name}",
+        )
+    elif actor.role is Role.RECEPTION:
+        await create_notification(
+            session,
+            client_id=booking.client_id,
+            source_type="booking",
+            source_id=booking.id,
+            kind="booking_cancelled_by_client",
+            title="Бронь отменена",
+            body=f"{_cancel_slot_msk} — {_cancel_trainer_name}",
+        )
+
     # Step 9 — Commit (SVC001 gate).
     await session.commit()
 
@@ -1663,6 +1730,25 @@ async def cancel_booking_for_client(
 
     # Step 8 — NO Telegram DM dispatch (out of scope for this plan).
     # Step 9 — NO sessions_remaining mutation (D-70-06 — credit only at pt_sessions level).
+
+    # Step 8.5 — Phase 87 INBOX-03 — in-app inbox row (co-transactional, BEFORE commit).
+    # Client self-cancel: the only notification side-effect (no DM dispatch in this path).
+    # Placed pre-commit so the inbox INSERT is atomic with the booking state mutation.
+    _self_cancel_trainer_name = await _fetch_trainer_full_name(
+        session, booking.slot.trainer_id
+    )
+    _self_cancel_slot_msk = booking.slot.start_time.astimezone(MOSCOW_TZ).strftime(
+        "%d.%m.%Y %H:%M"
+    )
+    await create_notification(
+        session,
+        client_id=booking.client_id,
+        source_type="booking",
+        source_id=booking.id,
+        kind="booking_cancelled_by_client",
+        title="Бронь отменена",
+        body=f"{_self_cancel_slot_msk} — {_self_cancel_trainer_name}",
+    )
 
     # Step 9 — Commit (SVC001 gate).
     await session.commit()
@@ -1879,6 +1965,24 @@ async def reschedule_booking_for_client(
         new_start=new_slot.start_time.isoformat(),
         client_id=str(client_id),
         actor_role="client",  # LITERAL — INFRA-11 AST gate / D-70-07 parity
+    )
+
+    # Step 10.5 — Phase 87 INBOX-03 — in-app inbox row (co-transactional, BEFORE commit).
+    # MUST be placed here, NOT in the post-commit fire-and-forget DM try/except block
+    # (Step 13): that block's broad `except Exception` would silently swallow an inbox-
+    # insert failure, and it runs post-commit (non-atomic). The reschedule in-app
+    # notification fires for ALL clients regardless of Telegram-link state (unlike the DM
+    # which WR-05 skips for unlinked clients). source_id=new_booking.id per plan mapping.
+    _resch_trainer_name = await _fetch_trainer_full_name(session, new_slot.trainer_id)
+    _resch_slot_msk = new_slot.start_time.astimezone(MOSCOW_TZ).strftime("%d.%m.%Y %H:%M")
+    await create_notification(
+        session,
+        client_id=client_id,
+        source_type="booking",
+        source_id=new_booking.id,
+        kind="booking_rescheduled",
+        title="Бронь перенесена",
+        body=f"{_resch_slot_msk} — {_resch_trainer_name}",
     )
 
     # Step 11 — Commit (SVC001 gate). Slot implementation owns commit.

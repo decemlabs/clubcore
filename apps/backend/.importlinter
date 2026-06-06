@@ -232,6 +232,12 @@ ignore_imports =
     # Narrow scope: only tasks.py consumes the cross-module DM renderers (not
     # repository, service, or router). Mirror of Phase 45 memberships.service edge.
     app.modules.online_payments.tasks -> app.modules.autopay_charges.notifications
+    # Phase 87 INBOX-03 — D-87-03-IMPORTLINTER: bookings.service calls
+    # notifications.service.create_notification for co-transactional inbox inserts
+    # (5 booking lifecycle hooks: confirmed, cancelled_by_owner, cancelled_by_client×2,
+    # rescheduled). Service-function import only — no ORM or repository cross-module
+    # access. Narrowly scoped to service.py (not repository, router, or models).
+    app.modules.bookings.service -> app.modules.notifications.service
 # Phase 47 INFRA-40 — `warn` (not the default `error`) so the 3 preemptive
 # online_payments edges above do not fail the build before Phase 49 ships the
 # module body. Once 49 lands and the imports materialise, the warnings clear
