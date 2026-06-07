@@ -164,7 +164,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 **Plans**: 3 plans
 
 Plans:
-- [ ] 90-01-PLAN.md — Foundation: migrations 0064/0065 + ORM models + import-linter + audit-event pre-registration (INFRA-15)
+- [x] 90-01-PLAN.md — Foundation: migrations 0064/0065 + ORM models + import-linter + audit-event pre-registration (INFRA-15)
 - [ ] 90-02-PLAN.md — REST: schemas/repository/service/router for GET/POST/PATCH /client/messages (MSG-01..04 + RT-04 cursor + pub/sub publish seam)
 - [ ] 90-03-PLAN.md — WS transport: Starlette TestClient convention + verify_ws_origin + @router.websocket endpoint (six WS invariants) + cross-context fan-out tests (RT-01..04)
 
@@ -268,7 +268,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 90. Messaging Domain + REST Foundation + WS Scaffold | 0/3 | Planned | - |
+| 90. Messaging Domain + REST Foundation + WS Scaffold | 1/3 | In Progress|  |
 | 91. Read Receipts + Typing Indicators | 0/TBD | Not started | - |
 | 92. Photo Attachments | 0/TBD | Not started | - |
 | 93. Telegram Bridge | 0/TBD | Not started | - |

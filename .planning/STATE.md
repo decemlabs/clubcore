@@ -2,14 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.5
 milestone_name: Chat / Messaging — Client↔Gym
-status: planning
-last_updated: "2026-06-06"
-last_activity: 2026-06-06
+status: executing
+stopped_at: v2.5 roadmap created — ROADMAP.md + STATE.md + REQUIREMENTS.md traceability updated
+last_updated: "2026-06-07T09:26:14.307Z"
+last_activity: 2026-06-07
 progress:
-  total_phases: 6
+  total_phases: 10
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 3
+  completed_plans: 1
   percent: 0
 ---
 
@@ -20,16 +21,16 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 90 — Messaging Domain + REST Foundation + WS Scaffold
+**Current focus:** Phase 90 — messaging-domain-rest-foundation-ws-scaffold
 
 ## Current Position
 
-Phase: 90 of 95 (Messaging Domain + REST Foundation + WS Scaffold)
-Plan: — (not yet planned)
-Status: Ready to plan
-Last activity: 2026-06-06 — v2.5 roadmap created (Phases 90-95, 21/21 requirements mapped)
+Phase: 90 (messaging-domain-rest-foundation-ws-scaffold) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-06-07
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [███░░░░░░░] 33%
 
 ## v2.5 Roadmap Summary
 
@@ -123,6 +124,6 @@ Carrying forward from v2.4 close (see previous STATE.md for full list):
 
 ## Session Continuity
 
-Last session: 2026-06-06
+Last session: 2026-06-07T09:26:14.303Z
 Stopped at: v2.5 roadmap created — ROADMAP.md + STATE.md + REQUIREMENTS.md traceability updated
 Resume: Run /gsd:plan-phase 90 to begin planning Phase 90

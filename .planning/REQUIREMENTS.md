@@ -11,10 +11,10 @@
 
 ### Messaging Core (MSG)
 
-- [ ] **MSG-01**: Клиент видит историю своего 1:1-треда с залом (пагинированно, `{items,total,page,pageSize}`) с `unreadCount` — `GET /client/messages`
-- [ ] **MSG-02**: Клиент отправляет текстовое сообщение в свой тред — `POST /client/messages`; `client_id` только из принципала (IDOR-safe, 404-collapse на не-свой тред)
-- [ ] **MSG-03**: Сообщения упорядочены детерминированно (`created_at` + tiebreak) и идемпотентны на повтор отправки (`Idempotency-Key`)
-- [ ] **MSG-04**: Клиент сбрасывает непрочитанные своего треда (mark-read) — `PATCH /client/messages`
+- [x] **MSG-01**: Клиент видит историю своего 1:1-треда с залом (пагинированно, `{items,total,page,pageSize}`) с `unreadCount` — `GET /client/messages`
+- [x] **MSG-02**: Клиент отправляет текстовое сообщение в свой тред — `POST /client/messages`; `client_id` только из принципала (IDOR-safe, 404-collapse на не-свой тред)
+- [x] **MSG-03**: Сообщения упорядочены детерминированно (`created_at` + tiebreak) и идемпотентны на повтор отправки (`Idempotency-Key`)
+- [x] **MSG-04**: Клиент сбрасывает непрочитанные своего треда (mark-read) — `PATCH /client/messages`
 
 ### Real-time Transport (RT)
 
@@ -85,10 +85,10 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MSG-01 | Phase 90 | Pending |
-| MSG-02 | Phase 90 | Pending |
-| MSG-03 | Phase 90 | Pending |
-| MSG-04 | Phase 90 | Pending |
+| MSG-01 | Phase 90 | Complete |
+| MSG-02 | Phase 90 | Complete |
+| MSG-03 | Phase 90 | Complete |
+| MSG-04 | Phase 90 | Complete |
 | RT-01 | Phase 90 | Pending |
 | RT-02 | Phase 90 | Pending |
 | RT-03 | Phase 90 | Pending |
