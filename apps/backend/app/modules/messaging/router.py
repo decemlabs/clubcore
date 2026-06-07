@@ -1,19 +1,26 @@
-"""Messaging client-portal endpoints (Phase 90 MSG-01..04 + RT-04).
+"""Messaging client-portal endpoints (Phase 90 MSG-01..04 + RT-01..04).
 
 Mounted under /api/v1/client via a dedicated messaging_router — this avoids
 a client_portal→messaging cross-module edge (D-20-MODULE; mirrors notifications_router
 separation pattern at v1/router.py).
 
 Endpoints:
-  GET   /api/v1/client/messages               → MessageListResponse (paginated + unreadCount)
-  POST  /api/v1/client/messages               → MessageResponse (idempotent create)
-  PATCH /api/v1/client/messages/read          → 204 No Content
+  GET       /api/v1/client/messages               → MessageListResponse (paginated + unreadCount)
+  POST      /api/v1/client/messages               → MessageResponse (idempotent create)
+  PATCH     /api/v1/client/messages/read          → 204 No Content
+  WS        /api/v1/client/ws/messages            → real-time new_message frames (RT-01..04)
 
 Route ordering: /messages/read declared BEFORE any future /messages/{id} path-param route
 so the literal path segment "read" is not captured by the param route.
 
-All mutation endpoints are RBAC-04 ordered:
+All mutation REST endpoints are RBAC-04 ordered:
   require_client() → verify_client_csrf → get_db
+
+WS endpoint (RT-01..04):
+  Cookie auth (cc_client_access) via require_client() — NO URL token (T-90-10 / P1).
+  Origin guard via verify_ws_origin (T-90-11 / P1 CSWSH).
+  No verify_client_csrf — WS handshake cannot carry headers (per WS auth design).
+  Per-connection Redis pub/sub + session-per-operation via app.state.sessionmaker.
 
 IDOR safety: client_id comes from require_client() ClientPrincipal only — never
 from URL parameters or request body (D-20-IDOR / T-90-04).
@@ -27,12 +34,17 @@ import json
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Depends, Request, Response, WebSocket, status
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.dependencies import ClientPrincipal, require_client, verify_client_csrf
+from app.core.dependencies import (
+    ClientPrincipal,
+    require_client,
+    verify_client_csrf,
+    verify_ws_origin,
+)
 from app.core.idempotency import idempotent_execute, verify_client_idempotency
 from app.core.pagination import PageQuery
 from app.core.redis import get_redis
@@ -43,6 +55,7 @@ from app.modules.messaging.schemas import (
     MessageResponse,
     SendMessageRequest,
 )
+from app.modules.messaging.ws import run_connection
 
 router = APIRouter(tags=["Client-Portal"])
 
@@ -164,3 +177,46 @@ async def client_send_message(
         return status.HTTP_200_OK, body_bytes
 
     return await idempotent_execute(redis, idempotency_key, incoming_body, runner=_runner)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 90 RT-01..04 — WebSocket real-time messaging endpoint
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@router.websocket("/ws/messages")
+async def client_ws_messages(
+    websocket: WebSocket,
+    _origin: Annotated[None, Depends(verify_ws_origin)],
+    client: Annotated[ClientPrincipal, Depends(require_client())],
+) -> None:
+    """Real-time message delivery via WebSocket + Redis pub/sub (RT-01..04).
+
+    Auth:
+      - Origin validated by verify_ws_origin BEFORE accept() (CSWSH guard, T-90-11 / P1).
+      - Cookie auth via require_client() over the WS upgrade request (T-90-10 / P1).
+      - Missing/expired cc_client_access cookie → 401 pre-accept (upgrade rejected).
+      - Disallowed Origin → close 1008 pre-accept (verify_ws_origin).
+      - NO verify_client_csrf — WS handshake cannot carry X-CSRF-Token header.
+      - NO URL token (?token=...) — httpOnly cookie is the only auth mechanism.
+
+    Connection lifecycle (all in run_connection / ws.py):
+      - Dedicated Redis pub/sub subscriber for cc:messaging:client:{client.id}.
+      - Channel derived from principal ONLY — never from path/query/payload (P2 / T-90-12).
+      - Heartbeat every ~30s; idle close with 1001 after ~90s (P6 / T-90-14).
+      - DB sessions opened per-operation via app.state.sessionmaker (P3 / T-90-13).
+      - finally: cancel fan-out task, unsubscribe, pubsub.aclose() (P6).
+
+    Frames (server → client):
+      {"type": "new_message", "messageId": "<uuid>"}  (id-only — PWA refetches via REST)
+      {"type": "ping"}  (heartbeat; client may respond with any text)
+
+    No REST response — this endpoint does not return an HTTP body.
+    """
+    await websocket.accept()
+    await run_connection(
+        websocket=websocket,
+        client_id=client.id,
+        redis=websocket.app.state.redis,
+        session_factory=websocket.app.state.sessionmaker,
+    )

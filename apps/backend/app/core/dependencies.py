@@ -22,6 +22,7 @@ from uuid import UUID
 
 from fastapi import Depends, Request, WebSocket, WebSocketException
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from starlette.requests import HTTPConnection
 
 from app.core import audit
 from app.core.database import get_db
@@ -1189,10 +1190,15 @@ def register_client_loader(loader: ClientLoader) -> None:
 
 
 async def get_current_client(
-    request: Request,
+    request: HTTPConnection,
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> ClientPrincipal:
     """Resolve the authenticated client from the `cc_client_access` cookie.
+
+    Uses ``HTTPConnection`` (common base of ``Request`` and ``WebSocket``)
+    so this dependency works for both HTTP and WS endpoints (Phase 90 RT-01).
+    ``Request.cookies`` and ``WebSocket.cookies`` both exist on ``HTTPConnection``
+    so the cookie-reading path is identical for both transport types.
 
     Failure modes (all → 401 InvalidAccessToken with a specific message):
       - missing cookie → 'missing_access_cookie'

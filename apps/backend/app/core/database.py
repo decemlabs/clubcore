@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from uuid import UUID as UUIDType  # noqa: N811
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from sqlalchemy import DateTime, MetaData, func, text
 from sqlalchemy.dialects.postgresql import UUID as PgUUID  # noqa: N811
 from sqlalchemy.ext.asyncio import (
@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from starlette.requests import HTTPConnection
 
 from app.core.config import get_settings
 
@@ -142,8 +143,14 @@ async def db_lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
 
 
-async def get_db(request: Request) -> AsyncIterator[AsyncSession]:
-    """Per-request AsyncSession from app.state.sessionmaker (D-07)."""
+async def get_db(request: HTTPConnection) -> AsyncIterator[AsyncSession]:
+    """Per-request AsyncSession from app.state.sessionmaker (D-07).
+
+    Uses ``HTTPConnection`` (the common base of ``Request`` and ``WebSocket``)
+    so the same dependency works for both HTTP routes and WS endpoints.
+    FastAPI injects the WebSocket object as ``request`` when the endpoint is
+    a ``@router.websocket(...)`` handler (Phase 90 RT-01).
+    """
     session_factory = request.app.state.sessionmaker
     async with session_factory() as session:
         yield session
