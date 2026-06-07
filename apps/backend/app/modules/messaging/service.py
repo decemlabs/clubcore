@@ -31,15 +31,19 @@ Public API:
 from __future__ import annotations
 
 from datetime import datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import structlog
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import audit
+from app.core.exceptions import PayloadTooLargeError, UnsupportedMediaTypeError
+from app.integrations.storage.mime import MAGIC_BYTE_READ_LEN, guess_allowed_mime
+from app.integrations.storage.types import Storage
 from app.modules.messaging import repository
 from app.modules.messaging.schemas import (
+    AttachmentUploadResponse,
     MessageItem,
     MessageListResponse,
     MessageResponse,
@@ -322,6 +326,91 @@ async def list_thread_history(
         page=page,
         page_size=page_size,
         unread_count=unread_count,
+    )
+
+
+_MAX_UPLOAD_BYTES: int = 5 * 1024 * 1024  # 5 MB cap (ATT-02 / T-92-06)
+
+
+async def create_attachment(
+    session: AsyncSession,
+    storage: Storage,
+    *,
+    client_id: UUID,
+    raw_bytes: bytes,
+    claimed_content_type: str | None,
+) -> AttachmentUploadResponse:
+    """Validate, store, and persist a client file attachment (Phase 92 ATT-01/02).
+
+    Sequence (all co-transactional, no commit — caller-owns-txn):
+      1. Size cap: len(raw_bytes) > 5MB → PayloadTooLargeError (T-92-06, P17).
+      2. Magic-byte allowlist: guess_allowed_mime(head) → None → UnsupportedMediaTypeError.
+         claimed_content_type is NEVER trusted (T-92-05 LOCKED INVARIANT).
+      3. get_or_create_thread — ensure thread exists for this client.
+      4. Generate UUID4 object key `attachments/{uuid4()}` — no user filename (T-92-08).
+      5. await storage.put(key, raw_bytes, content_type=validated_mime) — S3 upload.
+      6. insert_attachment — persist row with client_id ownership (T-92-07 IDOR anchor).
+      7. audit.emit("attachment_uploaded") co-transactionally (T-92-09).
+      8. Return AttachmentUploadResponse with previewUrl = relative serve path.
+
+    IDOR: client_id MUST come from require_client() principal (D-20-IDOR / T-92-07).
+    No session.commit() — caller (router) commits after this returns.
+    """
+    # Step 1: size cap BEFORE any I/O (P17 — never buffer the whole body first).
+    if len(raw_bytes) > _MAX_UPLOAD_BYTES:
+        raise PayloadTooLargeError(
+            f"Upload exceeds the 5MB size limit ({len(raw_bytes)} bytes received)"
+        )
+
+    # Step 2: magic-byte validation — Content-Type header is NEVER trusted (T-92-05).
+    validated_mime = guess_allowed_mime(raw_bytes[:MAGIC_BYTE_READ_LEN])
+    if validated_mime is None:
+        raise UnsupportedMediaTypeError(
+            "Unsupported file type: only JPEG, PNG, and WebP images are accepted"
+        )
+
+    # Step 3: ensure thread exists.
+    thread_id = await repository.get_or_create_thread(session, client_id)
+
+    # Step 4: server-generated UUID object key — no user filename, no extension (T-92-08).
+    object_key = f"attachments/{uuid4()}"
+
+    # Step 5: upload to S3 using the VALIDATED mime type (not claimed_content_type).
+    await storage.put(object_key, raw_bytes, content_type=validated_mime)
+
+    # Step 6: persist the attachment row (IDOR anchor: client_id from principal only).
+    attachment_id = await repository.insert_attachment(
+        session,
+        thread_id=thread_id,
+        client_id=client_id,
+        mime_type=validated_mime,
+        object_key=object_key,
+        size_bytes=len(raw_bytes),
+    )
+
+    # Step 7: emit audit co-transactionally (T-92-09).
+    await audit.emit(
+        session,
+        "attachment_uploaded",
+        actor_user_id=None,  # client-initiated; no staff actor (mirrors message_sent)
+        resource_type="message",
+        resource_id=attachment_id,
+        client_id=str(client_id),
+    )
+
+    _log.info(
+        "attachment_created",
+        client_id=str(client_id),
+        attachment_id=str(attachment_id),
+        thread_id=str(thread_id),
+        mime_type=validated_mime,
+        size_bytes=len(raw_bytes),
+    )
+
+    # Step 8: return response with relative serve path previewUrl.
+    return AttachmentUploadResponse(
+        attachment_id=attachment_id,
+        preview_url=f"/api/v1/client/messages/attachments/{attachment_id}",
     )
 
 

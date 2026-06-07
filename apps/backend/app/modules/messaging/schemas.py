@@ -183,3 +183,23 @@ class TypingEvent(ResponseData):
     # (e.g. actor="staf") or an unexpected actor="client" relay. Widen to
     # Literal["staff", "client"] if/when the deferred client→staff relay lands.
     actor: Literal["staff"] = "staff"
+
+
+class AttachmentUploadResponse(ResponseData):
+    """Response for POST /client/messages/attachments (Phase 92 ATT-01).
+
+    Returned by service.create_attachment after the file is stored in S3 and
+    a message_attachments row is persisted.
+
+    attachment_id (→ attachmentId on wire via alias_generator=to_camel): the
+    new message_attachments.id UUID, used by the client to attach to a message.
+    preview_url (→ previewUrl on wire): relative path to the authenticated
+    serve endpoint /api/v1/client/messages/attachments/{attachment_id}. The
+    PWA must fetch this URL with credentials — NOT a presigned URL (D-92-ATT-03).
+
+    The Python attribute is named attachment_id (not id) so the to_camel
+    alias generator produces attachmentId on the wire (per plan contract).
+    """
+
+    attachment_id: UUID
+    preview_url: str

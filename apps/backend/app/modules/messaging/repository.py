@@ -224,6 +224,43 @@ async def list_thread_history(
     return [dict(r) for r in rows], total, unread_count
 
 
+async def insert_attachment(
+    session: AsyncSession,
+    *,
+    thread_id: UUID,
+    client_id: UUID,
+    mime_type: str,
+    object_key: str,
+    size_bytes: int,
+) -> UUID:
+    """Insert a message_attachments row and return the new attachment id (Phase 92 ATT-01).
+
+    Raw-SQL text() INSERT ... RETURNING id (D-54-08 cross-module read discipline).
+    No session.commit() — caller-owns-txn (D-32-10/D-49-19).
+
+    client_id is ALWAYS the principal's id (IDOR anchor — T-92-07): callers must
+    source it from require_client() only, never from user input.
+    object_key is a server-generated UUID-based path (T-92-08: no user filename).
+    """
+    result = await session.execute(
+        text(
+            "INSERT INTO message_attachments "
+            "    (thread_id, client_id, mime_type, object_key, size_bytes) "
+            "VALUES (:tid, :cid, :mime, :key, :size) "
+            "RETURNING id"
+        ),
+        {
+            "tid": str(thread_id),
+            "cid": str(client_id),
+            "mime": mime_type,
+            "key": object_key,
+            "size": size_bytes,
+        },
+    )
+    row = result.scalar_one()
+    return UUID(str(row))
+
+
 async def mark_client_messages_read(
     session: AsyncSession,
     client_id: UUID,

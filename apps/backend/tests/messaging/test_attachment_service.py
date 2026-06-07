@@ -193,7 +193,7 @@ async def test_valid_jpeg_upload_returns_response_and_calls_put(
     UUID(key_uuid_part)  # raises ValueError if not a valid UUID
 
     # Response fields
-    assert result.id == attachment_id
+    assert result.attachment_id == attachment_id
     assert result.preview_url == f"/api/v1/client/messages/attachments/{attachment_id}"
 
     # Audit was emitted exactly once
@@ -254,12 +254,12 @@ async def test_valid_jpeg_upload_calls_insert_attachment_with_correct_args(
 
 
 def test_attachment_upload_response_camelcase_wire() -> None:
-    """AttachmentUploadResponse serialises id→attachmentId, preview_url→previewUrl."""
+    """AttachmentUploadResponse serialises attachment_id→attachmentId, preview_url→previewUrl."""
     from app.modules.messaging.schemas import AttachmentUploadResponse
 
     rid = uuid4()
     resp = AttachmentUploadResponse(
-        id=rid,
+        attachment_id=rid,
         preview_url=f"/api/v1/client/messages/attachments/{rid}",
     )
     data = resp.model_dump(by_alias=True)
