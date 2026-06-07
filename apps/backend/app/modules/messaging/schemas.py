@@ -142,6 +142,16 @@ class ReadReceiptEvent(ResponseData):
 
     type is a Literal discriminator; read_at → readAt on the wire.
 
+    WR-02 — read_at SEMANTICS (LOCKED field name, do NOT rename — 91-CONTEXT.md:41-42):
+      Despite the name, this field carries the max(sent_at) WATERMARK of the just-read
+      client messages — i.e. a SEND-TIME cutoff, NOT the moment the messages were read.
+      The DB column messages.read_at is set to now() and is strictly LATER than this
+      value. The thread-level marker contract is: the client marks every message it sent
+      with sent_at <= readAt as ✓✓ (lighter than a per-message id list). A consumer
+      (Phase 94 PWA / Phase 93 bridge) MUST treat readAt as a comparison cutoff and MUST
+      NOT render it as a "прочитано в HH:MM" read timestamp — for that, use the REST
+      MessageItem.readAt (the persisted now()), which will legitimately differ.
+
     CR-02: callers MUST invoke publish_read_receipt AFTER session.commit() so
     the receipt is never emitted for an uncommitted read_at change (T-91-PHANTOM).
 
@@ -149,6 +159,9 @@ class ReadReceiptEvent(ResponseData):
     """
 
     type: Literal["read_receipt"] = "read_receipt"
+    # WR-02: send-time WATERMARK (max sent_at of marked client rows), NOT a read clock.
+    # Wire alias is `readAt` (LOCKED, do NOT rename). Client marks every sent message with
+    # sent_at <= this value as ✓✓. See the class docstring for the full semantics.
     read_at: datetime
 
 
@@ -165,4 +178,8 @@ class TypingEvent(ResponseData):
     """
 
     type: Literal["typing"] = "typing"
-    actor: str = "staff"
+    # IN-02: actor is a CLOSED Literal, not an open str — only staff→client typing
+    # is supported in Phase 91. This locks the wire contract and fails fast on a typo
+    # (e.g. actor="staf") or an unexpected actor="client" relay. Widen to
+    # Literal["staff", "client"] if/when the deferred client→staff relay lands.
+    actor: Literal["staff"] = "staff"
