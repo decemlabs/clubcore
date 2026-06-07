@@ -228,10 +228,18 @@ async def mark_thread_read(
     session: AsyncSession,
     client_id: UUID,
 ) -> bool:
-    """Mark all unread staff messages as read; reset client_unread_count to 0 (MSG-04).
+    """Mark all unread staff messages as read; recompute client_unread_count (MSG-04).
 
     UPDATE messages SET read_at=now() WHERE role='staff' AND read_at IS NULL
-    for the client's thread. Resets message_threads.client_unread_count = 0.
+    for the client's thread.
+
+    WR-01: the unread counter is RECOMPUTED from the source of truth (the message
+    rows) in the SAME statement, rather than blindly set to 0. A blind zero would
+    clobber a staff increment that races in between the mark-read UPDATE and the
+    counter write — leaving the client showing 0 unread while an unread staff
+    message exists. Deriving the count from
+    ``COUNT(*) WHERE role='staff' AND read_at IS NULL`` keeps the counter and the
+    actual unread row set consistent under concurrent staff sends.
 
     Uses RETURNING to detect whether any row was changed (mypy-safe, no .rowcount).
     Returns True if anything was marked; False if there was nothing to mark.
@@ -253,11 +261,16 @@ async def mark_thread_read(
         )
     ).fetchall()
 
-    # Always reset client_unread_count to 0 for the thread (idempotent).
+    # WR-01: recompute the unread counter from the message rows rather than
+    # blind-zeroing, so a concurrent staff increment is not clobbered.
     await session.execute(
         text(
             "UPDATE message_threads "
-            "SET client_unread_count = 0, updated_at = now() "
+            "SET client_unread_count = ("
+            "        SELECT COUNT(*) FROM messages "
+            "        WHERE thread_id = :tid AND role = 'staff' AND read_at IS NULL"
+            "    ), "
+            "    updated_at = now() "
             "WHERE id = :tid"
         ),
         {"tid": str(thread_id)},
