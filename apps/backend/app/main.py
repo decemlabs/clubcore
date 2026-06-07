@@ -50,7 +50,7 @@ from typing import Any
 
 import structlog
 from arq.connections import RedisSettings, create_pool
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.openapi.utils import get_openapi
 from fastapi.routing import APIRoute
 
@@ -92,6 +92,9 @@ from app.integrations.email.dispatcher import (
     enqueue_email_dispatch,
     register_arq_pool,
 )
+from app.integrations.storage.factory import build_storage
+from app.integrations.storage.settings import StorageSettings
+from app.integrations.storage.types import Storage
 from app.integrations.yookassa.client import YooKassaClient
 from app.integrations.yookassa.factory import build_yookassa_client
 from app.integrations.yookassa.settings import YooKassaSettings
@@ -372,6 +375,13 @@ async def combined_lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Phase 48 D-48-25 — construct the long-lived YooKassaClient.
         yookassa_settings = YooKassaSettings()
         app.state.yookassa_client = await build_yookassa_client(settings=yookassa_settings)
+        # Phase 92 ATT-01 — build the S3-compatible storage adapter once at startup.
+        # aioboto3 sessions are factories (fresh client per operation, mirroring
+        # the EmailClient discipline at D-42-01/02) — no teardown call is needed.
+        # ensure_bucket() is idempotent; safe against docker S3 service races.
+        storage_settings = StorageSettings()
+        app.state.storage = build_storage(settings=storage_settings)
+        await app.state.storage.ensure_bucket()
         try:
             yield
         finally:
@@ -795,3 +805,17 @@ def create_app() -> FastAPI:
     app.openapi = _customize_openapi  # type: ignore[method-assign]
 
     return app
+
+
+def get_storage(request: Request) -> Storage:
+    """Resolve the S3 storage adapter from app.state (Phase 92 ATT-01).
+
+    Per-request dependency — reads the single process-scoped ``S3Storage``
+    instance populated by ``combined_lifespan`` at startup.  No construction
+    per request (mirrors ``get_redis`` reading ``app.state.redis`` lazily).
+
+    Usage in router handlers:
+        storage: Annotated[Storage, Depends(get_storage)]
+    """
+    adapter: Storage = request.app.state.storage
+    return adapter
