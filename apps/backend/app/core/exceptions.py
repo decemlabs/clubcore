@@ -450,6 +450,28 @@ class InvitationExpiredError(ConflictError):
     status_code = 409
 
 
+class PayloadTooLargeError(AppError):
+    """Raised when an upload body exceeds the enforced size cap (Phase 92 ATT-02).
+
+    HTTP 413 — the client must reduce the file size and retry.
+    Mapped via the shared AppError handler; no special response envelope needed.
+    """
+
+    code = "payload_too_large"
+    status_code = 413
+
+
+class UnsupportedMediaTypeError(AppError):
+    """Raised when magic-byte validation rejects the uploaded file type (Phase 92 ATT-02).
+
+    HTTP 415 — the file's magic bytes do not match the JPEG/PNG/WebP allowlist.
+    Content-Type header is never trusted (T-92-05 LOCKED INVARIANT).
+    """
+
+    code = "unsupported_media_type"
+    status_code = 415
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Attach AppError handler to the FastAPI app. Called once during create_app()."""
 
