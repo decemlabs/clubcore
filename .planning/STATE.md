@@ -114,7 +114,7 @@ Progress: [█████████░] 92%
 
 ### Blockers/Concerns
 
-- Confirm cc_client_access SameSite value before Phase 90 plan (one-line code read in client_auth/router.py or app/core/security.py). If SameSite=None, Phase 90 needs ws-ticket endpoint added to scope.
+- None active. (Resolved: cc_client_access SameSite concern — Phase 90 shipped WS auth over the httpOnly cookie successfully; no ws-ticket fallback needed.)
 
 ## Deferred Items
 
