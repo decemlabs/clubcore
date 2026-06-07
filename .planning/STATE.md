@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.5
 milestone_name: Chat / Messaging — Client↔Gym
 status: executing
-stopped_at: Phase 92 complete — photo attachments (upload + magic-byte validation + IDOR-safe authenticated serve + two-step send flow). Verified 3/3. Next Phase 93 (Telegram Bridge).
-last_updated: "2026-06-07T12:07:17.135Z"
-last_activity: 2026-06-07 -- Phase 92 complete
+stopped_at: Phase 92 complete — photo attachments (upload + magic-byte validation + IDOR-safe authenticated serve with anti-XSS header triad + two-step send-with-attachment flow). Verified 3/3, 106/106 messaging tests green. Code review applied (CR-01); 4 warnings deferred (see Deferred Items).
+last_updated: "2026-06-07T16:49:07.715Z"
+last_activity: 2026-06-07 -- Phase 93 planning complete
 progress:
-  total_phases: 6
+  total_phases: 10
   completed_phases: 3
-  total_plans: 8
+  total_plans: 10
   completed_plans: 8
-  percent: 50
+  percent: 30
 ---
 
 # Project State
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md
 
 Phase: 92 (photo-attachments) — COMPLETE ✅ (verified 3/3, 106/106 messaging tests green)
 Plan: 3 of 3
-Status: Phase 92 verified passed — next Phase 93 (Telegram Bridge)
-Last activity: 2026-06-07 -- Phase 92 complete (upload + IDOR-safe serve + anti-XSS)
+Status: Ready to execute
+Last activity: 2026-06-07 -- Phase 93 planning complete
 
 Progress: [█████████░] 92%
 
