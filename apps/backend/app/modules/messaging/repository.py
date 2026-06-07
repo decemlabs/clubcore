@@ -188,11 +188,12 @@ async def list_thread_history(
 
     # Build message list query with LEFT JOIN on message_attachments for attachment sub-object.
     # Phase 92 ATT-03: attachment columns projected so service can build MessageAttachmentItem.
-    _SELECT_COLS = (
+    # Columns and JOIN clause are fixed server-side strings (no user input, no injection risk).
+    select_cols = (
         "m.id, m.role, m.body, m.sent_at, m.read_at, m.thread_id, "
         "ma.id AS att_id, ma.mime_type AS att_mime, ma.size_bytes AS att_size"
     )
-    _FROM_JOIN = (
+    from_join = (
         "FROM messages m "
         "LEFT JOIN message_attachments ma ON ma.id = m.attachment_id"
     )
@@ -203,8 +204,8 @@ async def list_thread_history(
         rows = (
             await session.execute(
                 text(
-                    f"SELECT {_SELECT_COLS} "
-                    f"{_FROM_JOIN} "
+                    f"SELECT {select_cols} "  # noqa: S608 — columns are server-defined constants
+                    f"{from_join} "
                     "WHERE m.thread_id = :tid "
                     "  AND (m.sent_at, m.id) > "
                     "      (SELECT sent_at, id FROM messages "
@@ -224,8 +225,8 @@ async def list_thread_history(
         rows = (
             await session.execute(
                 text(
-                    f"SELECT {_SELECT_COLS} "
-                    f"{_FROM_JOIN} "
+                    f"SELECT {select_cols} "
+                    f"{from_join} "
                     "WHERE m.thread_id = :tid "
                     "ORDER BY m.sent_at DESC, m.id DESC "
                     "LIMIT :limit OFFSET :offset"

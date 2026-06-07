@@ -26,6 +26,7 @@ Public API:
   publish_typing        — ephemeral typing Redis frame; no DB, no commit dependency (RCPT-02)
   list_thread_history   — paginated read with unreadCount (MSG-01)
   mark_thread_read      — mark staff messages read, reset unreadCount (MSG-04)
+  serve_attachment      — IDOR-safe proxy-stream with anti-XSS headers (Phase 92 ATT-03)
 """
 
 from __future__ import annotations
@@ -36,6 +37,7 @@ from uuid import UUID, uuid4
 import structlog
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.responses import StreamingResponse
 
 from app.core import audit
 from app.core.exceptions import NotFoundError, PayloadTooLargeError, UnsupportedMediaTypeError
@@ -460,6 +462,64 @@ async def create_attachment(
     return AttachmentUploadResponse(
         attachment_id=attachment_id,
         preview_url=f"/api/v1/client/messages/attachments/{attachment_id}",
+    )
+
+
+async def serve_attachment(
+    session: AsyncSession,
+    storage: Storage,
+    *,
+    attachment_id: UUID,
+    client_id: UUID,
+) -> StreamingResponse:
+    """IDOR-safe proxy-stream for a client attachment (Phase 92 ATT-03, T-92-10..13).
+
+    Sequence (read path — no commit, no audit):
+      1. get_owned_attachment(session, attachment_id, client_id=client_id):
+         returns the DB row if owned by this client; None for non-owned or missing id.
+      2. If None → NotFoundError (404-collapse — NEVER 403, no existence leak, P8/MSG-02).
+      3. Build StreamingResponse over storage.open_stream(row['object_key']) with the
+         anti-XSS header triad (T-92-11 LOCKED):
+           Content-Type        = stored validated mime_type (NEVER client-derived)
+           Content-Disposition = attachment (NEVER inline)
+           X-Content-Type-Options = nosniff
+
+    Security properties:
+      - IDOR (T-92-10): ownership check via message_attachments.client_id == principal;
+        client_id from require_client() only — never from URL param or body.
+      - Object key read from owned DB row (T-92-12): no path traversal — the
+        {attachment_id} UUID maps to a DB-stored key; never built from user input.
+      - Unauthenticated (T-92-13): require_client() gates the route; 401 before this runs.
+      - Anti-stored-XSS (T-92-11): the three-header triad is enforced here; the caller
+        returns the StreamingResponse directly so FastAPI does NOT override these headers.
+      - No session.commit() — read path, caller-owns-txn.
+    """
+    row = await repository.get_owned_attachment(session, attachment_id, client_id=client_id)
+    if row is None:
+        # T-92-10: 404-collapse — never 403 (no existence leak), MSG-02 precedent.
+        raise NotFoundError(
+            f"Attachment {attachment_id} not found or not owned by client"
+        )
+
+    object_key = str(row["object_key"])
+    mime_type = str(row["mime_type"])
+
+    _log.info(
+        "attachment_served",
+        client_id=str(client_id),
+        attachment_id=str(attachment_id),
+        mime_type=mime_type,
+    )
+
+    # T-92-11 LOCKED: Content-Type from STORED validated mime only; Content-Disposition:
+    # attachment (never inline); X-Content-Type-Options: nosniff.
+    return StreamingResponse(
+        storage.open_stream(object_key),
+        media_type=mime_type,
+        headers={
+            "Content-Disposition": "attachment",
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 

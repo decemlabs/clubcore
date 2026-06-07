@@ -24,11 +24,10 @@ Phase 92 Plan 03 additions:
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 from uuid import UUID
 
 from pydantic import Field, model_validator
-from typing_extensions import Self
 
 from app.core.schemas import BackendSchemaBase, ResponseData
 

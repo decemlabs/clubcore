@@ -37,6 +37,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, Request, Response, UploadFile, WebSocket, status
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.responses import StreamingResponse
 
 from app.core.database import get_db
 from app.core.dependencies import (
@@ -177,6 +178,52 @@ async def client_upload_attachment(
     )
     await session.commit()
     return envelope(result)
+
+
+@router.get(
+    "/messages/attachments/{attachment_id}",
+    operation_id="client_serve_attachment",
+    summary=(
+        "Stream a client-owned photo attachment (ATT-03; authenticated proxy; "
+        "IDOR-safe 404-collapse; anti-XSS headers)"
+    ),
+    tags=["Client-Portal"],
+    # response_model is intentionally omitted — the handler returns a StreamingResponse
+    # directly (raw binary bytes), which FastAPI must not wrap or serialise.
+)
+async def client_serve_attachment(
+    attachment_id: UUID,
+    client: Annotated[ClientPrincipal, Depends(require_client())],
+    storage: Annotated[Storage, Depends(get_storage)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> StreamingResponse:
+    """Stream a client-owned attachment from S3 with anti-XSS headers (ATT-03).
+
+    Route ordering: /messages/attachments/{attachment_id} is declared after
+    /messages/attachments (POST) and after /messages/read (PATCH) so:
+      - The literal '/attachments/' segment distinguishes this route from
+        '/messages/read' — no overlap, ordering is safe (see route-ordering note).
+      - The UUID-validated path param prevents arbitrary path capture.
+
+    Security model (T-92-10..13):
+      - require_client() gates the endpoint; missing/expired cc_client_access → 401.
+      - service.serve_attachment performs IDOR check via get_owned_attachment:
+        non-owned or non-existent id → NotFoundError (404-collapse, never 403).
+      - Content-Type forced from STORED validated mime (never client-derived, T-92-11).
+      - Content-Disposition: attachment (never inline, T-92-11).
+      - X-Content-Type-Options: nosniff (T-92-11).
+      - Object key from DB-owned row only — no path traversal (T-92-12).
+
+    No CSRF dep (safe GET method per RBAC-04).
+    No session.commit() — read path.
+    No try/except — AppError bubbles to _app_error_handler.
+    """
+    return await service.serve_attachment(
+        session,
+        storage,
+        attachment_id=attachment_id,
+        client_id=client.id,
+    )
 
 
 @router.post(
