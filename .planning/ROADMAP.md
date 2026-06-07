@@ -210,7 +210,9 @@ Plans:
   1. When a client sends a message, the staff Telegram account receives a DM (forwarded via ARQ task, not synchronously in-transaction); the DM is delivered even if a second client is writing simultaneously
   2. Staff can reply using Telegram's native Reply function; the reply is stored in the correct client thread in Postgres and delivered to the client's WS connection; replying to an older forwarded message routes to the originating client, not the most recently active one (Redis `cc:messaging:tg_msg:{tg_message_id}` → `thread_id` mapping, TTL 7 days)
   3. The bot does not echo-loop: a bot-forwarded message arriving back as an update is skipped (`is_bot` check + `chat_forwarding_log` as natural loop-breaker); each client message appears exactly once in each direction
-**Plans**: TBD
+**Plans**: 2 plans
+- [ ] 93-01-PLAN.md — Client→staff forward path: forward_to_staff ARQ task + send_photo + config + post-commit router enqueue (BRDG-01)
+- [ ] 93-02-PLAN.md — Staff→client reply path: staff_reply_handler + HandlerContext.messaging_service + chat_forwarding_log routing + echo/misroute guards (BRDG-02, BRDG-03)
 
 ### Phase 94: PWA ChatScreen Wiring
 **Goal**: ChatScreen выведен из ComingSoon и de-listed из D-71-09 placeholder-зоны; клиент переписывается с залом в реальном времени из PWA, видит статусы прочтения, typing-индикатор, фото и badge непрочитанных
