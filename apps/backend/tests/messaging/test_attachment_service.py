@@ -17,9 +17,8 @@ Coverage:
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import AsyncIterator
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 
 import pytest
@@ -55,11 +54,11 @@ class StubStorage:
         self.put_calls.append({"key": key, "data": data, "content_type": content_type})
 
     async def open_stream(self, key: str) -> AsyncIterator[bytes]:
-        async def _empty() -> AsyncIterator[bytes]:
-            return
-            yield b""  # type: ignore[misc]  # makes this an async generator
-
-        return _empty()
+        # True async generator (matches the real S3 adapter): calling open_stream(key)
+        # returns an AsyncIterator directly, NOT a coroutine. A coroutine here would make
+        # StreamingResponse stream nothing if this stub were ever used on the serve path.
+        return
+        yield b""  # unreachable; the bare `yield` is what makes this an async generator
 
     async def ensure_bucket(self) -> None:
         pass
