@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v2.5
 milestone_name: Chat / Messaging — Client↔Gym
-status: verifying
-stopped_at: Phase 90 Plan 02 complete — messaging REST surface (GET/POST/PATCH /client/messages) + schemas + repository + service + router. Plan 03 (WS scaffold) next.
-last_updated: "2026-06-07T10:54:48.788Z"
+status: ready_to_plan
+stopped_at: Phase 91 complete (2/2) — ready to discuss Phase 92
+last_updated: 2026-06-07T11:06:16.711Z
 last_activity: 2026-06-07
 progress:
   total_phases: 10
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 91 — read-receipts-typing-indicators
+**Current focus:** Phase 92 — photo attachments
 
 ## Current Position
 
-Phase: 91 (read-receipts-typing-indicators) — EXECUTING
-Plan: 2 of 2
-Status: Phase complete — ready for verification
+Phase: 92
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-06-07
 
 Progress: [██████████] 100%

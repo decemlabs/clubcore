@@ -276,7 +276,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 90. Messaging Domain + REST Foundation + WS Scaffold | 3/3 | Complete    | 2026-06-07 |
-| 91. Read Receipts + Typing Indicators | 2/2 | Complete   | 2026-06-07 |
+| 91. Read Receipts + Typing Indicators | 2/2 | Complete    | 2026-06-07 |
 | 92. Photo Attachments | 0/TBD | Not started | - |
 | 93. Telegram Bridge | 0/TBD | Not started | - |
 | 94. PWA ChatScreen Wiring | 0/TBD | Not started | - |
