@@ -227,6 +227,8 @@ async def list_thread_history(
 async def mark_client_messages_read(
     session: AsyncSession,
     client_id: UUID,
+    *,
+    thread_id: UUID | None = None,
 ) -> datetime | None:
     """Mark all unread role='client' messages as read; return max sent_at (Phase 91 RCPT-03).
 
@@ -238,11 +240,22 @@ async def mark_client_messages_read(
       mark_thread_read     → role='staff'  (client reads staff messages → resets unread counter)
       mark_client_messages_read → role='client' (staff replies → client's ✓✓ display, RCPT-01/03)
 
+    thread_id (WR-01): callers that have ALREADY resolved the thread (e.g.
+    record_staff_message resolves it once to scope the staff-message insert) MUST pass
+    the pre-resolved thread_id so this UPDATE is scoped by the SAME id the insert uses.
+    This eliminates a redundant second get_or_create_thread round-trip and removes the
+    latent inconsistency seam where two independent resolutions could diverge (e.g. under
+    a future soft-delete/re-create path), landing the staff message in a different thread
+    than the one whose client messages were marked read. When None (no pre-resolved id is
+    available), the thread is resolved here via get_or_create_thread.
+
     Returns:
-      max sent_at of the rows whose read_at was set in this call, or None if there was
-      nothing to mark (no unread role='client' messages in the thread).
+      The max sent_at WATERMARK of the rows whose read_at was set in this call, or None if
+      there was nothing to mark (no unread role='client' messages in the thread).
+      This is a SEND-TIME watermark (the original client send times), NOT a read-clock
+      value: the DB read_at is set to now() and is strictly later than this max(sent_at).
       The returned datetime drives the thread-level readAt in the WS read_receipt event
-      (client marks all its sent messages with sent_at <= readAt as ✓✓).
+      (client marks all its sent messages with sent_at <= readAt as ✓✓ — see WR-02).
 
     Does NOT touch client_unread_count — that counter tracks staff→client unread (MSG-04),
     not the reply-as-read direction.
@@ -252,11 +265,22 @@ async def mark_client_messages_read(
     No session.commit() — caller-owns-txn (D-32-10/D-49-19).
 
     T-91-XTHREAD: WHERE clause is scoped to thread_id from get_or_create_thread(client_id)
-    so cross-thread / cross-client read-marking is impossible.
+    (or the caller-supplied pre-resolved thread_id) so cross-thread / cross-client
+    read-marking is impossible.
     """
-    thread_id = await get_or_create_thread(session, client_id)
+    if thread_id is None:
+        thread_id = await get_or_create_thread(session, client_id)
 
     # Mark unread client messages as read; RETURNING sent_at to compute max.
+    #
+    # WR-03: under the default READ COMMITTED isolation this watermark may
+    # transiently OVER-COVER a concurrent same-thread client send. A client
+    # message that commits after this UPDATE's snapshot but with sent_at earlier
+    # than the computed max satisfies `sent_at <= readAt` on the client and would
+    # be shown ✓✓ even though its read_at stays NULL in the DB. This thread-level
+    # marker tradeoff is explicitly ACCEPTED (91-CONTEXT.md:40-42): the next REST
+    # refetch (triggered by the new_message frame) is the source of truth and
+    # self-heals the display. Do NOT "tighten" this into a per-message guarantee.
     updated = (
         await session.execute(
             text(
@@ -272,7 +296,8 @@ async def mark_client_messages_read(
     if not updated:
         return None
 
-    # Return the maximum sent_at so the caller can drive the thread-level readAt.
+    # Return the maximum sent_at watermark so the caller can drive the thread-level
+    # readAt. This is a send-time cutoff, not a read timestamp (see docstring / WR-02).
     max_sent_at: datetime = max(row[0] for row in updated)
     return max_sent_at
 
