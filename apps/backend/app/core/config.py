@@ -124,6 +124,18 @@ class Settings(BaseSettings):
     # flag is captured (D-43-14 / Pitfall 4 anti-oracle).
     frontend_base_url: str = "http://localhost:5173"
 
+    # Phase 90 RT-02 — CSWSH guard allowlist for the WebSocket endpoint.
+    # verify_ws_origin (app/core/dependencies.py) compares the WS upgrade
+    # Origin header against this list. Defaults cover the admin-web dev server
+    # and the client PWA dev port (5173 + testserver). Production overrides via
+    # WS_ALLOWED_ORIGINS env var (comma-separated or JSON list). Empty list
+    # means same-origin only (no cross-origin WS accepted).
+    ws_allowed_origins: list[str] = [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://testserver",
+    ]
+
     # Phase 62 D-62-03 — env-driven email FROM override.
     # CLUBCORE_EMAIL_FROM overrides EmailProviderSettings.from_address default.
     # Typed as EmailStr (REVIEW-62.1 WR-02): pydantic rejects malformed addresses

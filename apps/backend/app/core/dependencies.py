@@ -20,7 +20,7 @@ from datetime import date, datetime
 from typing import Annotated, Any, Literal, Protocol
 from uuid import UUID
 
-from fastapi import Depends, Request
+from fastapi import Depends, Request, WebSocket, WebSocketException
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core import audit
@@ -1286,6 +1286,50 @@ async def verify_client_csrf(
             has_header=header_val is not None,
         )
         raise CsrfMismatch("csrf_mismatch")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 90 RT-02 / T-90-11 — CSWSH guard for WebSocket endpoints (P1).
+#
+# The WebSocket handshake is SameSite=Lax cookie-based (cc_client_access), so the
+# cookie arrives automatically on same-origin upgrades. Cross-site upgrades can
+# still carry the cookie if the user is logged into a third-party page on the
+# same browser. The Origin header is the only reliable gate for CSWSH.
+#
+# This dependency validates the Origin before accept() so the upgrade is rejected
+# pre-handshake (1008 Policy Violation) rather than after the connection is open.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+async def verify_ws_origin(websocket: WebSocket) -> None:
+    """CSWSH guard — validate WS upgrade Origin against the configured allowlist (P1 / T-90-11).
+
+    Reads websocket.headers.get("origin") and rejects with code 1008 (Policy Violation)
+    if:
+      - The Origin header is absent (cannot confirm same-origin intent).
+      - The Origin is not in settings.ws_allowed_origins.
+
+    Uses the SAME allowlist as the configured CORS middleware (settings.ws_allowed_origins)
+    so there is a single source of truth for allowed origins.
+
+    Raises WebSocketException(code=1008) before accept() so the upgrade is rejected
+    pre-handshake. No DB session required — pure header inspection.
+
+    Usage::
+
+        @router.websocket("/ws/messages")
+        async def client_ws(
+            websocket: WebSocket,
+            _origin: Annotated[None, Depends(verify_ws_origin)],
+            ...
+        ) -> None: ...
+    """
+    from app.core.config import get_settings  # local import avoids circular at module level
+
+    origin = websocket.headers.get("origin")
+    if origin is None or origin not in get_settings().ws_allowed_origins:
+        await websocket.close(code=1008)
+        raise WebSocketException(code=1008, reason="origin_not_allowed")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
