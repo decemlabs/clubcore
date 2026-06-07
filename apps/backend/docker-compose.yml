@@ -9,6 +9,13 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://app:app@postgres:5432/clubcore
       REDIS_URL: redis://redis:6379/0
+      # Phase 92 ATT-01 — point backend at the in-network SeaweedFS S3 service.
+      # Bucket auto-create runs at app startup (ensure_bucket() in Plan 02 lifespan).
+      S3_ENDPOINT_URL: http://s3:8333
+      S3_BUCKET: clubcore-local
+      S3_ACCESS_KEY_ID: dev-access-key
+      S3_SECRET_ACCESS_KEY: dev-secret-key
+      S3_REGION: ru-central1
     ports:
       - "8000:8000"
     volumes:
@@ -18,6 +25,34 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_started
+      s3:
+        condition: service_healthy
+
+  # Phase 92 ATT-01 — S3-compatible local dev object storage.
+  # SeaweedFS weed server in S3 API mode; dev-default credentials.
+  # The S3 port is 8333; HTTP API for weed's internal management is 9333.
+  # Bucket auto-created at app startup by ensure_bucket() (Plan 02 lifespan);
+  # this service provides the endpoint only (no pre-created bucket needed).
+  s3:
+    image: chrislusf/seaweedfs:3.84
+    command: >
+      server -s3 -s3.config=/etc/seaweedfs/s3.json
+      -master.volumeSizeLimitMB=128
+    environment:
+      # IAM is off by default in SeaweedFS; dev creds are passed via s3.json.
+      WEED_S3_ACCESS_KEY: dev-access-key
+      WEED_S3_SECRET_KEY: dev-secret-key
+    volumes:
+      - seaweedfs-data:/data
+      - ./docker/seaweedfs-s3.json:/etc/seaweedfs/s3.json:ro
+    ports:
+      - "8333:8333"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8333/status || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
 
   telegram-bot:
     build: .
@@ -89,3 +124,4 @@ services:
 
 volumes:
   postgres-data:
+  seaweedfs-data:

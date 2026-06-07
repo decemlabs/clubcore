@@ -24,11 +24,8 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from typing import Any
 
-import aioboto3
 import structlog
 from botocore.exceptions import ClientError
-
-from app.integrations.storage.settings import StorageSettings
 
 _log = structlog.get_logger("integrations.storage.s3")
 
@@ -113,13 +110,19 @@ class S3Storage:
                 await client.head_bucket(Bucket=self._bucket)
                 _log.debug("s3_bucket_exists", bucket=self._bucket)
             except ClientError as exc:
-                error_code = exc.response.get("Error", {}).get("Code", "") if isinstance(exc.response, dict) else ""
+                resp = exc.response if isinstance(exc.response, dict) else {}
+                error_code = resp.get("Error", {}).get("Code", "")
                 if error_code in ("404", "NoSuchBucket"):
                     try:
                         await client.create_bucket(Bucket=self._bucket)
                         _log.info("s3_bucket_created", bucket=self._bucket)
                     except ClientError as create_exc:
-                        create_code = create_exc.response.get("Error", {}).get("Code", "") if isinstance(create_exc.response, dict) else ""
+                        create_resp = (
+                            create_exc.response
+                            if isinstance(create_exc.response, dict)
+                            else {}
+                        )
+                        create_code = create_resp.get("Error", {}).get("Code", "")
                         if create_code == "BucketAlreadyOwnedByYou":
                             _log.debug(
                                 "s3_bucket_already_owned",
