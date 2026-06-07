@@ -34,7 +34,7 @@ import json
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, Response, WebSocket, status
+from fastapi import APIRouter, Depends, File, Request, Response, UploadFile, WebSocket, status
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -45,12 +45,15 @@ from app.core.dependencies import (
     verify_client_csrf,
     verify_ws_origin,
 )
+from app.core.exceptions import PayloadTooLargeError
 from app.core.idempotency import idempotent_execute, verify_client_idempotency
 from app.core.pagination import PageQuery
 from app.core.redis import get_redis
 from app.core.schemas import ResponseEnvelope, envelope
+from app.integrations.storage import Storage, get_storage
 from app.modules.messaging import service
 from app.modules.messaging.schemas import (
+    AttachmentUploadResponse,
     MessageListResponse,
     MessageResponse,
     SendMessageRequest,
@@ -120,6 +123,60 @@ async def client_mark_messages_read(
     await service.mark_thread_read(session, client_id=client.id)
     await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/messages/attachments",
+    response_model=ResponseEnvelope[AttachmentUploadResponse],
+    operation_id="client_upload_attachment",
+    summary=(
+        "Upload a photo attachment (ATT-01/02; magic-byte validated; 5MB cap; "
+        "IDOR-safe; CSRF required)"
+    ),
+    tags=["Client-Portal"],
+)
+async def client_upload_attachment(
+    file: Annotated[UploadFile, File()],
+    client: Annotated[ClientPrincipal, Depends(require_client())],
+    _csrf: Annotated[None, Depends(verify_client_csrf)],
+    storage: Annotated[Storage, Depends(get_storage)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[AttachmentUploadResponse]:
+    """Upload a client photo attachment via multipart and return {attachmentId, previewUrl}.
+
+    RBAC-04 ordering: require_client() → verify_client_csrf → get_storage/get_db.
+
+    D-20-IDOR (T-92-07): client_id from principal ONLY — never from form field or
+    header. The attachment row records the principal's client_id as the ownership anchor.
+
+    Size guard (T-92-06 / P17): body is read with a bounded `file.read(5MB+1)` call;
+    if the result exceeds 5MB a PayloadTooLargeError (413) is raised BEFORE any other
+    processing. Never uses unbounded `await file.read()`.
+
+    Magic-byte validation (T-92-05 LOCKED): service.create_attachment calls
+    guess_allowed_mime on the first ≤261 bytes. The Content-Type header (file.content_type)
+    is passed as claimed_content_type but is NEVER trusted for validation or S3 storage
+    ContentType — the validated mime from guess_allowed_mime is the ground truth.
+
+    No idempotency wrapper — attachment creation is a fresh-object create (not a
+    financial mutation). No try/except — AppError bubbles to _app_error_handler.
+    """
+    # P17: bounded read — refuse to buffer more than 5MB+1 bytes before validation.
+    raw = await file.read(5 * 1024 * 1024 + 1)
+    if len(raw) > 5 * 1024 * 1024:
+        raise PayloadTooLargeError(
+            f"Upload exceeds the 5MB size limit ({len(raw)} bytes received)"
+        )
+
+    result = await service.create_attachment(
+        session,
+        storage,
+        client_id=client.id,
+        raw_bytes=raw,
+        claimed_content_type=file.content_type,
+    )
+    await session.commit()
+    return envelope(result)
 
 
 @router.post(

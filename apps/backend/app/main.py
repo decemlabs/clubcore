@@ -50,7 +50,7 @@ from typing import Any
 
 import structlog
 from arq.connections import RedisSettings, create_pool
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
 from fastapi.routing import APIRoute
 
@@ -94,7 +94,6 @@ from app.integrations.email.dispatcher import (
 )
 from app.integrations.storage.factory import build_storage
 from app.integrations.storage.settings import StorageSettings
-from app.integrations.storage.types import Storage
 from app.integrations.yookassa.client import YooKassaClient
 from app.integrations.yookassa.factory import build_yookassa_client
 from app.integrations.yookassa.settings import YooKassaSettings
@@ -805,17 +804,3 @@ def create_app() -> FastAPI:
     app.openapi = _customize_openapi  # type: ignore[method-assign]
 
     return app
-
-
-def get_storage(request: Request) -> Storage:
-    """Resolve the S3 storage adapter from app.state (Phase 92 ATT-01).
-
-    Per-request dependency — reads the single process-scoped ``S3Storage``
-    instance populated by ``combined_lifespan`` at startup.  No construction
-    per request (mirrors ``get_redis`` reading ``app.state.redis`` lazily).
-
-    Usage in router handlers:
-        storage: Annotated[Storage, Depends(get_storage)]
-    """
-    adapter: Storage = request.app.state.storage
-    return adapter
