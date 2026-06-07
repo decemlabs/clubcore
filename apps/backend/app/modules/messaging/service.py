@@ -215,11 +215,17 @@ async def record_staff_message(
     Returns StaffMessageResult — a superset of MessageResponse that adds reply_read_at.
     Existing callers that only use .id continue to work unchanged.
     """
+    # WR-01: resolve the thread ONCE and reuse the same thread_id for BOTH the
+    # reply-as-read UPDATE and the staff-message insert, so they can never diverge.
+    # mark_client_messages_read previously re-resolved the thread internally — a
+    # latent inconsistency seam under any future non-idempotent thread resolution.
     thread_id = await repository.get_or_create_thread(session, client_id)
 
     # Phase 91 reply-as-read: mark prior unread client messages read before/co-transactionally
     # with the staff message insert. Returns the max sent_at of marked rows (or None).
-    reply_read_at = await repository.mark_client_messages_read(session, client_id)
+    reply_read_at = await repository.mark_client_messages_read(
+        session, client_id, thread_id=thread_id
+    )
 
     if reply_read_at is not None:
         # Emit message_read audit co-transactionally with the reply-as-read marks.
