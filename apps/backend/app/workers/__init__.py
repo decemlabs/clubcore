@@ -123,6 +123,7 @@ from app.workers.scheduled.poll_pending_refunds import poll_pending_refunds
 from app.workers.scheduled.send_booking_reminders import send_booking_reminders
 from app.workers.scheduled.send_expiring_notifications import send_expiring_notifications
 from app.workers.tasks.dispatch_email import dispatch_email
+from app.workers.tasks.forward_to_staff import forward_to_staff
 
 _log = structlog.get_logger("workers")
 
@@ -175,6 +176,10 @@ class WorkerSettings:
         # Keyed on autopay_charges.id (NOT online_payment_id — decline has no online_payments row).
         # Idempotent via AutopayChargeNotification UNIQUE(autopay_charge_id, kind, channel).
         dispatch_autopay_failure_notification,
+        # Phase 93 BRDG-01 — post-commit Telegram forward task.
+        # Bare callable per dispatch_email convention (Option B); per-enqueue
+        # _max_tries=2, _expires=20 carries the ARQ retry contract from D-42-13.
+        forward_to_staff,
     ]
 
     # NOTE (Rule 4 deviation, 2026-05-07): The plan locked
@@ -427,6 +432,20 @@ class WorkerSettings:
         # reusing it for re-enqueue (e.g., when a scheduled cron emits an
         # email later in Phase 45) is the project-canonical wiring.
         register_arq_pool(ctx["redis"])
+
+        # Phase 93 BRDG-01 — wire storage + bot for forward_to_staff task.
+        # Local imports per the on_startup convention (avoids eager-loading
+        # storage/telegram integration code in cron-only worker invocations).
+        # build_storage is sync; build_bot is sync — no await needed.
+        # Do NOT call ensure_bucket here; the API process owns bucket bootstrap.
+        from app.integrations.storage.factory import build_storage
+        from app.integrations.storage.settings import StorageSettings
+        from app.integrations.telegram.bot import build_bot
+
+        ctx["storage"] = build_storage(settings=StorageSettings())
+        ctx["bot"] = build_bot(
+            token=settings_local.telegram_bot_token.get_secret_value()
+        )
 
         _log.info("worker_startup_complete", function_count=len(function_names))
 
