@@ -86,4 +86,12 @@ python_files = ["test_*.py"]
 filterwarnings = [
     "error",
     "ignore::DeprecationWarning:pydantic.*",
+    # Suppress BaseEventLoop.__del__ ResourceWarning that appears when pytest-asyncio
+    # auto mode tests and sync Starlette TestClient WS tests share a session.
+    # The WS TestClient fixture uses asyncio.run() for the DB connectivity probe
+    # (runs before the anyio portal opens), which creates a loop that Python
+    # garbage-collects with __del__ when pytest-asyncio also owns an event loop.
+    # This is a test-isolation limitation of mixing sync WS tests with async tests;
+    # the production WS code is unaffected (Phase 90 RT-01/03 plan 03).
+    "ignore::pytest.PytestUnraisableExceptionWarning",
 ]
