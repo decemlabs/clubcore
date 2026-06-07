@@ -98,6 +98,27 @@ class MessageResponse(ResponseData):
     thread_id: UUID
 
 
+class StaffMessageResult(ResponseData):
+    """Return value of service.record_staff_message (Phase 91 extension).
+
+    Extends the MessageResponse shape with reply_read_at — the thread-level
+    readAt from reply-as-read (max sent_at of client messages marked read in
+    the same call). None if no prior unread client messages existed.
+
+    reply_read_at → replyReadAt on the wire via alias_generator=to_camel.
+    Callers that only use .id (e.g. WS fanout tests) are unaffected — .id
+    is inherited from the same field set as MessageResponse.
+    """
+
+    id: UUID
+    role: str
+    body: str
+    sent_at: datetime
+    read_at: datetime | None = None
+    thread_id: UUID
+    reply_read_at: datetime | None = None
+
+
 class NewMessageEvent(ResponseData):
     """WS event frame for a new message notification (RT-03 pub/sub side).
 

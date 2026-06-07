@@ -224,6 +224,59 @@ async def list_thread_history(
     return [dict(r) for r in rows], total, unread_count
 
 
+async def mark_client_messages_read(
+    session: AsyncSession,
+    client_id: UUID,
+) -> datetime | None:
+    """Mark all unread role='client' messages as read; return max sent_at (Phase 91 RCPT-03).
+
+    Reply-as-read path: when a staff member replies to a client, all prior unread
+    messages sent by the CLIENT (role='client') are marked read. This is the INVERSE
+    of mark_thread_read (which marks role='staff' messages read when the CLIENT reads them).
+
+    Role split (do NOT conflate — 91-CONTEXT.md):
+      mark_thread_read     → role='staff'  (client reads staff messages → resets unread counter)
+      mark_client_messages_read → role='client' (staff replies → client's ✓✓ display, RCPT-01/03)
+
+    Returns:
+      max sent_at of the rows whose read_at was set in this call, or None if there was
+      nothing to mark (no unread role='client' messages in the thread).
+      The returned datetime drives the thread-level readAt in the WS read_receipt event
+      (client marks all its sent messages with sent_at <= readAt as ✓✓).
+
+    Does NOT touch client_unread_count — that counter tracks staff→client unread (MSG-04),
+    not the reply-as-read direction.
+
+    Uses RETURNING sent_at to detect changes (mypy-safe, no .rowcount).
+    Uses text() + :name bind params; UUIDs cast to str (D-54-08).
+    No session.commit() — caller-owns-txn (D-32-10/D-49-19).
+
+    T-91-XTHREAD: WHERE clause is scoped to thread_id from get_or_create_thread(client_id)
+    so cross-thread / cross-client read-marking is impossible.
+    """
+    thread_id = await get_or_create_thread(session, client_id)
+
+    # Mark unread client messages as read; RETURNING sent_at to compute max.
+    updated = (
+        await session.execute(
+            text(
+                "UPDATE messages "
+                "SET read_at = now(), updated_at = now() "
+                "WHERE thread_id = :tid AND role = 'client' AND read_at IS NULL "
+                "RETURNING sent_at"
+            ),
+            {"tid": str(thread_id)},
+        )
+    ).fetchall()
+
+    if not updated:
+        return None
+
+    # Return the maximum sent_at so the caller can drive the thread-level readAt.
+    max_sent_at: datetime = max(row[0] for row in updated)
+    return max_sent_at
+
+
 async def mark_thread_read(
     session: AsyncSession,
     client_id: UUID,
