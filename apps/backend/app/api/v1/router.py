@@ -130,6 +130,14 @@ from app.modules.notifications.router import router as notifications_router  # n
 
 v1.include_router(notifications_router, prefix="/client")
 
+# Phase 90 MSG-01..04 / RT-01..04 — messaging REST + WS endpoint.
+# Mounted at /api/v1/client (same prefix as client_portal_router) to expose
+# /api/v1/client/messages and (Plan 03) the WS endpoint /api/v1/client/ws/messages.
+# Separate router avoids a client_portal→messaging cross-module edge (D-20-MODULE).
+from app.modules.messaging.router import router as messaging_router  # noqa: E402
+
+v1.include_router(messaging_router, prefix="/client")
+
 # Phase 42 EMAIL-07 / D-42-17 — _internal namespace established here.
 # Transport-layer endpoints (provider webhooks, ops callbacks) sit under
 # /api/v1/_internal/* with their own auth model (HMAC signature in
