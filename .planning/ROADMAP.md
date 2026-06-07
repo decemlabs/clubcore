@@ -134,7 +134,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 
 #### Phase 91: Read Receipts + Typing Indicators
 
-- [ ] **Phase 91: Read Receipts + Typing Indicators** - Per-message read status + typing presence delivered over the Phase 90 WS channel
+- [ ] **Phase 91: Read Receipts + Typing Indicators** - Per-message read status + typing presence delivered over the Phase 90 WS channel (2 plans)
 
 #### Phase 92: Photo Attachments
 
@@ -181,7 +181,11 @@ Plans:
   1. Client sees a single-check indicator on sent messages (server-persisted) and a double-check indicator when staff has read the message (reply-as-read: when staff sends a reply, prior client messages are marked `read_at = now()` and a `read_receipt` WS event is published)
   2. Client sees a "typing..." indicator that auto-dismisses after 5 seconds when staff begins composing in Telegram; the typing state is never written to Postgres
   3. `PATCH /client/messages/read` REST endpoint persists read state correctly as a polling fallback when the WS is disconnected
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 91-01-PLAN.md — Service surface: read_receipt/typing event schemas + reply-as-read repository fn (role='client') + record_staff_message wiring + publish_read_receipt/publish_typing helpers (RCPT-01, RCPT-03)
+- [ ] 91-02-PLAN.md — Starlette WS tests: read_receipt/typing fan-out + IDOR isolation + e2e reply-as-read + PATCH polling fallback (RCPT-01, RCPT-02, RCPT-03)
 
 ### Phase 92: Photo Attachments
 **Goal**: Клиент прикрепляет фото к сообщению; вложения хранятся сервером и отдаются через аутентифицированный IDOR-safe endpoint с защитой от stored XSS
@@ -272,7 +276,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 90. Messaging Domain + REST Foundation + WS Scaffold | 3/3 | Complete    | 2026-06-07 |
-| 91. Read Receipts + Typing Indicators | 0/TBD | Not started | - |
+| 91. Read Receipts + Typing Indicators | 0/2 | Not started | - |
 | 92. Photo Attachments | 0/TBD | Not started | - |
 | 93. Telegram Bridge | 0/TBD | Not started | - |
 | 94. PWA ChatScreen Wiring | 0/TBD | Not started | - |
