@@ -2,9 +2,14 @@
 
 No session.commit() — caller-owns-txn (D-32-10/D-49-19).
 
-The Redis publish side of the pub/sub fan-out (RT-03) is wired here as notification-only:
-  - DB write happens first (DB-first, P5).
-  - An id-only frame is published to cc:messaging:client:{client_id} AFTER the DB write.
+The Redis publish side of the pub/sub fan-out (RT-03) is notification-only and is
+performed by the CALLER strictly AFTER a successful DB commit (CR-02 / DB-first, P5):
+  - The persist functions (send_client_message / record_staff_message) do NOT publish;
+    they neither commit nor touch Redis (caller-owns-txn).
+  - The caller commits, then calls publish_new_message(redis, client_id, message_id)
+    once the row is durable — so a failed commit can never emit a phantom new_message
+    frame for a row that does not exist.
+  - The id-only frame is published to cc:messaging:client:{client_id}.
   - The WS subscriber (Plan 03) receives the frame and notifies the PWA to refetch via REST.
   - The full message payload is NEVER published over pub/sub (at-most-once loss risk, P5).
 
@@ -15,8 +20,9 @@ the Phase 93 Telegram bridge.
 A Phase 93 forward seam is documented here as a clearly-marked no-op TODO.
 
 Public API:
-  send_client_message   — persist role='client', audit, publish (MSG-02)
-  record_staff_message  — persist role='staff', audit, publish (internal — no endpoint)
+  send_client_message   — persist role='client', audit (MSG-02; caller publishes after commit)
+  record_staff_message  — persist role='staff', audit (internal — no endpoint)
+  publish_new_message   — id-only Redis frame; call AFTER a successful commit (CR-02 / RT-03)
   list_thread_history   — paginated read with unreadCount (MSG-01)
   mark_thread_read      — mark staff messages read, reset unreadCount (MSG-04)
 """
@@ -42,23 +48,44 @@ from app.modules.messaging.schemas import (
 _log = structlog.get_logger("modules.messaging.service")
 
 
+async def publish_new_message(
+    redis: Redis,
+    *,
+    client_id: UUID,
+    message_id: UUID,
+) -> None:
+    """Publish the id-only new_message WS frame (RT-03 notification-only).
+
+    CR-02 / DB-first (P5): callers MUST invoke this STRICTLY AFTER a successful
+    session.commit(), so a failed commit can never emit a phantom new_message frame
+    for a row that does not exist.
+
+    Channel is derived ONLY from the principal's client_id (T-90-04 / T-90-07 — never
+    from request payload). The frame carries only the id; the WS subscriber (Plan 03)
+    triggers a REST refetch (the full payload is never published, P5).
+    """
+    await redis.publish(
+        f"cc:messaging:client:{client_id}",
+        NewMessageEvent(message_id=message_id).model_dump_json(by_alias=True),
+    )
+
+
 async def send_client_message(
     session: AsyncSession,
     *,
     client_id: UUID,
     payload: SendMessageRequest,
-    redis: Redis,
 ) -> MessageResponse:
-    """Persist a client message, emit audit, publish id-only WS frame (MSG-02 + RT-03).
+    """Persist a client message and emit audit (MSG-02).
 
     Sequence (DB-first, P5):
       1. get_or_create_thread — ensures the thread exists.
       2. insert_message(role='client') — persists the message.
       3. audit.emit("message_sent") co-transactionally.
-      4. redis.publish — id-only frame AFTER the DB write (notification-only).
 
-    The caller (router) commits the session after this function returns.
-    No session.commit() here — caller-owns-txn.
+    This function does NOT publish to Redis and does NOT commit (caller-owns-txn).
+    CR-02: the caller (router) commits FIRST, then calls publish_new_message() so the
+    notification frame is only emitted once the row is durable (no phantom notify).
     IDOR: client_id MUST come from the require_client() principal (D-20-IDOR / T-90-04).
     """
     thread_id = await repository.get_or_create_thread(session, client_id)
@@ -85,14 +112,6 @@ async def send_client_message(
         thread_id=str(thread_id),
     )
 
-    # DB-first (P5): publish id-only frame AFTER the DB write.
-    # The WS subscriber (Plan 03) receives this and triggers a REST refetch.
-    # Channel derived ONLY from principal client_id (T-90-04 / T-90-07 — no payload).
-    await redis.publish(
-        f"cc:messaging:client:{client_id}",
-        NewMessageEvent(message_id=message_id).model_dump_json(by_alias=True),
-    )
-
     # TODO Phase 93: Telegram bridge forward seam (record + enqueue ARQ DM)
     # When the bridge is active, enqueue an ARQ task here to forward the message
     # body to STAFF_TELEGRAM_CHAT_ID via bot.send_message(). This is a no-op in
@@ -113,11 +132,10 @@ async def record_staff_message(
     *,
     client_id: UUID,
     body: str,
-    redis: Redis,
     telegram_user_id: int | None = None,
     telegram_username: str | None = None,
 ) -> MessageResponse:
-    """Persist a staff message, emit audit, publish id-only WS frame (internal — no endpoint).
+    """Persist a staff message and emit audit (internal — no endpoint).
 
     This function is NOT exposed via a REST endpoint (admin-web frozen → v2.6).
     It is called by integration tests and will be called by the Phase 93 Telegram bridge.
@@ -131,9 +149,10 @@ async def record_staff_message(
       1. get_or_create_thread — ensures the thread exists.
       2. insert_message(role='staff') — persists + increments client_unread_count.
       3. audit.emit("message_sent") co-transactionally.
-      4. redis.publish — id-only frame AFTER the DB write so client WS (Plan 03) is notified.
 
-    No session.commit() — caller-owns-txn.
+    This function does NOT publish to Redis and does NOT commit (caller-owns-txn).
+    CR-02: the caller commits FIRST, then calls publish_new_message(redis, ...) with
+    the returned message id so the notification is only emitted once the row is durable.
     """
     thread_id = await repository.get_or_create_thread(session, client_id)
     message_id, sent_at = await repository.insert_message(
@@ -158,13 +177,6 @@ async def record_staff_message(
         message_id=str(message_id),
         thread_id=str(thread_id),
         telegram_user_id=telegram_user_id,
-    )
-
-    # DB-first (P5): publish id-only frame AFTER the DB write.
-    # Notifies the client's WS connection (Plan 03) so the PWA refetches.
-    await redis.publish(
-        f"cc:messaging:client:{client_id}",
-        NewMessageEvent(message_id=message_id).model_dump_json(by_alias=True),
     )
 
     return MessageResponse(

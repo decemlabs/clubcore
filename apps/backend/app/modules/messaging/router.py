@@ -152,9 +152,10 @@ async def client_send_message(
     write so duplicate key+body replays the cached response without creating a second row.
     Same key + different body → 422 idempotency_key_reuse. No bespoke dedup table.
 
-    DB-first (P5): service.send_client_message writes to DB first, then publishes the
-    id-only Redis frame. The session is committed inside the idempotent runner so the
-    publish is co-located with the commit (publish AFTER commit).
+    DB-first (P5 / CR-02): service.send_client_message writes the row but does NOT
+    publish. The runner commits FIRST, then publishes the id-only Redis frame via
+    service.publish_new_message — so a failed commit can never emit a phantom
+    new_message frame for a row that does not exist.
 
     No try/except — AppError bubbles to _app_error_handler.
     """
@@ -166,9 +167,14 @@ async def client_send_message(
             session,
             client_id=client_id,
             payload=payload,
-            redis=redis,
         )
         await session.commit()
+        # CR-02: publish ONLY after the row is durable (post-commit).
+        await service.publish_new_message(
+            redis,
+            client_id=client_id,
+            message_id=result.id,
+        )
         body_bytes = json.dumps(
             envelope(result).model_dump(mode="json", by_alias=True),
             separators=(",", ":"),

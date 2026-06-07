@@ -179,9 +179,14 @@ def test_ws_reconnect_catchup_via_rest_cursor(ws_tc: TestClient) -> None:
                             session,
                             client_id=client.id,
                             body=body,
-                            redis=redis,
                         )
                         await session.commit()
+                        # CR-02: publish only AFTER commit (post-commit notification).
+                        await messaging_service.publish_new_message(
+                            redis,
+                            client_id=client.id,
+                            message_id=result.id,
+                        )
                         return str(result.id)
 
                 _portal_call(ws_tc, _send_msg())
@@ -203,9 +208,14 @@ def test_ws_reconnect_catchup_via_rest_cursor(ws_tc: TestClient) -> None:
                     session,
                     client_id=client.id,
                     body="missed while disconnected",
-                    redis=redis,
                 )
                 await session.commit()
+                # CR-02: publish only AFTER commit (post-commit notification).
+                await messaging_service.publish_new_message(
+                    redis,
+                    client_id=client.id,
+                    message_id=result.id,
+                )
                 return str(result.id)
 
         missed_msg_id = _portal_call(ws_tc, _send_while_disconnected())

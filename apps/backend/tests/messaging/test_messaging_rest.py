@@ -370,7 +370,6 @@ async def test_idor_client_b_does_not_see_client_a_messages(
         db_session,
         client_id=client_a.id,
         body="Это сообщение для клиента А",
-        redis=app.state.redis,
     )
     await db_session.commit()
 
@@ -480,7 +479,6 @@ async def test_staff_message_increments_unread_count_and_patch_read_clears_it(
         db_session,
         client_id=client.id,
         body="Сотрудник: ответ на вопрос",
-        redis=app.state.redis,
     )
     await db_session.commit()
 

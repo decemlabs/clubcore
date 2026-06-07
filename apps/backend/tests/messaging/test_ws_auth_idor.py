@@ -162,13 +162,18 @@ def test_ws_idor_client_a_does_not_receive_client_b_messages(ws_tc: TestClient) 
             # Publish a message for client B -- A's WS must NOT receive it.
             async def _send_to_b() -> None:
                 async with session_factory() as session:
-                    await messaging_service.record_staff_message(
+                    result_b = await messaging_service.record_staff_message(
                         session,
                         client_id=client_b.id,
                         body="Hello client B -- should not reach client A",
-                        redis=redis,
                     )
                     await session.commit()
+                    # CR-02: publish only AFTER commit (post-commit notification).
+                    await messaging_service.publish_new_message(
+                        redis,
+                        client_id=client_b.id,
+                        message_id=result_b.id,
+                    )
 
             # Publish a message for client A -- A MUST receive it.
             client_a_message_id: str | None = None
@@ -180,9 +185,14 @@ def test_ws_idor_client_a_does_not_receive_client_b_messages(ws_tc: TestClient) 
                         session,
                         client_id=client_a.id,
                         body="Hello client A -- you SHOULD receive this",
-                        redis=redis,
                     )
                     await session.commit()
+                    # CR-02: publish only AFTER commit (post-commit notification).
+                    await messaging_service.publish_new_message(
+                        redis,
+                        client_id=client_a.id,
+                        message_id=result.id,
+                    )
                     client_a_message_id = str(result.id)
 
             # Strategy: publish B's message, then A's message immediately.
