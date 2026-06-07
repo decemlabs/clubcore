@@ -1,4 +1,4 @@
-"""Messaging module Pydantic schemas (Phase 90 MSG-01..04 + Phase 91 RCPT-01/03).
+"""Messaging module Pydantic schemas (Phase 90 MSG-01..04 + Phase 91 RCPT-01/03 + Phase 92 ATT-03).
 
 Response schemas use ResponseData (camelCase wire via alias_generator=to_camel).
 Request schemas use BackendSchemaBase (extra='forbid', camelCase inbound).
@@ -14,6 +14,11 @@ WS event discriminated union — three event types published to cc:messaging:cli
   TypingEvent      — ephemeral {type, actor} frame (Phase 91 RCPT-02); never persisted.
 Each event type uses a Literal discriminator and is published independently via its own
 model_dump_json(by_alias=True) call — matching the NewMessageEvent pattern.
+
+Phase 92 Plan 03 additions:
+  MessageAttachmentItem — sub-object carrying {id, mimeType, sizeBytes, url} for served attachments.
+  MessageItem.attachment / MessageResponse.attachment — optional attachment sub-object on messages.
+  SendMessageRequest — body made optional; body-OR-attachment model_validator (two-step flow).
 """
 
 from __future__ import annotations
@@ -22,9 +27,29 @@ from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import Field, field_validator
+from pydantic import Field, model_validator
+from typing_extensions import Self
 
 from app.core.schemas import BackendSchemaBase, ResponseData
+
+
+class MessageAttachmentItem(ResponseData):
+    """Attachment sub-object returned on messages that have a photo (Phase 92 ATT-03).
+
+    id: UUID of the message_attachments row.
+    mime_type (→ mimeType on wire): validated MIME type (image/jpeg, image/png, or image/webp).
+    size_bytes (→ sizeBytes on wire): file size in bytes.
+    url: relative path to the authenticated serve endpoint
+         /api/v1/client/messages/attachments/{id}.
+
+    Aliases are camelCase via alias_generator=to_camel on the ResponseData base.
+    The url field is intentionally not camel-cased (single word, no transform needed).
+    """
+
+    id: UUID
+    mime_type: str
+    size_bytes: int
+    url: str
 
 
 class MessageItem(ResponseData):
@@ -33,6 +58,7 @@ class MessageItem(ResponseData):
     role: 'client' = sent by the client; 'staff' = sent by gym/staff.
     read_at: None = unread; timestamp = read.
     sent_at + id provide the composite tiebreak ordering (newest-first).
+    attachment: None for text-only messages; MessageAttachmentItem when an attachment exists.
     """
 
     id: UUID
@@ -41,6 +67,7 @@ class MessageItem(ResponseData):
     sent_at: datetime
     read_at: datetime | None = None
     thread_id: UUID
+    attachment: MessageAttachmentItem | None = None
 
 
 class MessageListResponse(ResponseData):
@@ -61,33 +88,52 @@ class MessageListResponse(ResponseData):
 
 
 class SendMessageRequest(BackendSchemaBase):
-    """Request body for POST /client/messages (MSG-02).
+    """Request body for POST /client/messages (MSG-02 + Phase 92 ATT-03 two-step flow).
 
     extra='forbid' (inherited from BackendSchemaBase) rejects unknown fields (T-90-05).
     Ownership fields (client_id, thread_id) are intentionally absent — client_id is
     derived ONLY from the require_client() principal (D-20-IDOR / T-90-04).
 
-    body: min_length=1 rejects empty strings at the Field level.
-    field_validator strips whitespace and re-checks non-empty so body="   " → 422
-    (T-90-09: whitespace-only body is rejected before any DB write).
-    max_length=4000 guards against oversized input.
+    Phase 92 two-step flow changes (Plan 03):
+      body is now optional (str | None = None) — valid to omit when attachment_id is present.
+      attachment_id (→ attachmentId on wire): optional UUID referencing a previously uploaded
+        message_attachments row. When present without body, the empty-body 422 is relaxed.
+
+    Validity matrix (enforced by model_validator):
+      body only             → valid (unchanged Phase 90 path)
+      attachment_id only    → valid (Phase 92 two-step flow)
+      both                  → valid
+      neither               → 422 (must have at least one)
+      whitespace-only body  → 422 (whitespace guard preserved even when attachment_id present)
+
+    max_length=4000 guards against oversized body input.
     """
 
-    body: Annotated[str, Field(min_length=1, max_length=4000)]
+    body: Annotated[str | None, Field(default=None, max_length=4000)] = None
+    attachment_id: UUID | None = None
 
-    @field_validator("body")
-    @classmethod
-    def body_not_whitespace_only(cls, v: str) -> str:
-        stripped = v.strip()
-        if not stripped:
-            raise ValueError("body must not be whitespace-only")
-        return v
+    @model_validator(mode="after")
+    def body_or_attachment_required(self) -> Self:
+        """Enforce: at least one of body / attachment_id must be present.
+
+        If body is present, it must not be whitespace-only (preserves T-90-09).
+        If body is absent and attachment_id is absent → 422.
+        """
+        if self.body is not None:
+            stripped = self.body.strip()
+            if not stripped:
+                raise ValueError("body must not be whitespace-only")
+        if self.body is None and self.attachment_id is None:
+            raise ValueError("at least one of body or attachment_id must be provided")
+        return self
 
 
 class MessageResponse(ResponseData):
     """Single message returned after POST /client/messages (MSG-02 send path).
 
     Field layout mirrors MessageItem; returned from send_client_message service call.
+    attachment: None for text-only messages; MessageAttachmentItem when an attachment was
+    attached to the sent message (Phase 92 ATT-03 two-step flow).
     """
 
     id: UUID
@@ -96,6 +142,7 @@ class MessageResponse(ResponseData):
     sent_at: datetime
     read_at: datetime | None = None
     thread_id: UUID
+    attachment: MessageAttachmentItem | None = None
 
 
 class StaffMessageResult(ResponseData):
