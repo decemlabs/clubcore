@@ -18,10 +18,10 @@
 
 ### Real-time Transport (RT)
 
-- [ ] **RT-01**: Клиент получает новые сообщения в реальном времени через WebSocket, без ручного refresh
-- [ ] **RT-02**: WS-соединение аутентифицируется по client-принципалу (`aud:"client"`); подписка на чужой тред невозможна (IDOR over WS → close 1008/401)
-- [ ] **RT-03**: Доставка корректна при >1 worker — fan-out через Redis pub/sub (не module-level state)
-- [ ] **RT-04**: При обрыве PWA переподключается (reconnect/backoff) и догружает пропущенные сообщения через REST catch-up
+- [x] **RT-01**: Клиент получает новые сообщения в реальном времени через WebSocket, без ручного refresh
+- [x] **RT-02**: WS-соединение аутентифицируется по client-принципалу (`aud:"client"`); подписка на чужой тред невозможна (IDOR over WS → close 1008/401)
+- [x] **RT-03**: Доставка корректна при >1 worker — fan-out через Redis pub/sub (не module-level state)
+- [x] **RT-04**: При обрыве PWA переподключается (reconnect/backoff) и догружает пропущенные сообщения через REST catch-up
 
 ### Receipts & Presence (RCPT)
 
@@ -89,10 +89,10 @@
 | MSG-02 | Phase 90 | Complete |
 | MSG-03 | Phase 90 | Complete |
 | MSG-04 | Phase 90 | Complete |
-| RT-01 | Phase 90 | Pending |
-| RT-02 | Phase 90 | Pending |
-| RT-03 | Phase 90 | Pending |
-| RT-04 | Phase 90 | Pending |
+| RT-01 | Phase 90 | Complete |
+| RT-02 | Phase 90 | Complete |
+| RT-03 | Phase 90 | Complete |
+| RT-04 | Phase 90 | Complete |
 | RCPT-01 | Phase 91 | Pending |
 | RCPT-02 | Phase 91 | Pending |
 | RCPT-03 | Phase 91 | Pending |

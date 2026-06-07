@@ -127,7 +127,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 
 #### Phase 90: Messaging Domain + REST Foundation + WS Scaffold
 
-- [ ] **Phase 90: Messaging Domain + REST Foundation + WS Scaffold** - DB schema + REST send/list/mark-read + WS transport + Redis pub/sub fan-out; all six WS invariants locked from day one (3 plans)
+- [x] **Phase 90: Messaging Domain + REST Foundation + WS Scaffold** - DB schema + REST send/list/mark-read + WS transport + Redis pub/sub fan-out; all six WS invariants locked from day one (3 plans) (completed 2026-06-07)
   - [x] **Plan 01** (DB + models + migrations + audit events) — completed 2026-06-07
   - [x] **Plan 02** (schemas + repository + service + REST router + integration tests) — completed 2026-06-07
   - [ ] **Plan 03** (WS endpoint + per-connection pub/sub subscriber + WS tests)
@@ -168,8 +168,8 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 
 Plans:
 - [x] 90-01-PLAN.md — Foundation: migrations 0064/0065 + ORM models + import-linter + audit-event pre-registration (INFRA-15)
-- [ ] 90-02-PLAN.md — REST: schemas/repository/service/router for GET/POST/PATCH /client/messages (MSG-01..04 + RT-04 cursor + pub/sub publish seam)
-- [ ] 90-03-PLAN.md — WS transport: Starlette TestClient convention + verify_ws_origin + @router.websocket endpoint (six WS invariants) + cross-context fan-out tests (RT-01..04)
+- [x] 90-02-PLAN.md — REST: schemas/repository/service/router for GET/POST/PATCH /client/messages (MSG-01..04 + RT-04 cursor + pub/sub publish seam)
+- [x] 90-03-PLAN.md — WS transport: Starlette TestClient convention + verify_ws_origin + @router.websocket endpoint (six WS invariants) + cross-context fan-out tests (RT-01..04)
 
 **Resolved (was open question)**: WS auth — `cc_client_access` is SameSite=Lax (confirmed in app/core/security.py), so httpOnly cookie-based WS auth works; the ws-ticket fallback is NOT required.
 
@@ -271,7 +271,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 90. Messaging Domain + REST Foundation + WS Scaffold | 1/3 | In Progress|  |
+| 90. Messaging Domain + REST Foundation + WS Scaffold | 3/3 | Complete   | 2026-06-07 |
 | 91. Read Receipts + Typing Indicators | 0/TBD | Not started | - |
 | 92. Photo Attachments | 0/TBD | Not started | - |
 | 93. Telegram Bridge | 0/TBD | Not started | - |
