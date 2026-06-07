@@ -55,6 +55,13 @@ modules =
     # Idempotency ledger (autopay_charges) + per-channel claim store (autopay_charge_notifications).
     # Cross-module reads (memberships, client_payment_methods, clients) go via raw SQL text() SELECTs
     # (D-54-08), so ZERO new ignore_imports edges are needed in Plan 01.
+    app.modules.messaging
+    # Phase 90 MSG-01..04 / RT-01..04 — messaging module registered per INFRA-15 discipline.
+    # Cross-module reads (clients.name for display) go via raw SQL text() (D-54-08) — ZERO
+    # ignore_imports edges. WS endpoint lives INSIDE messaging/router.py (not client_portal)
+    # so no client_portal→messaging edge is needed. unmatched_ignore_imports_alerting=warn
+    # cushions any timing gap before later-plan bodies land.
+    # This is the ONLY .importlinter change for the entire v2.5 milestone.
     app.modules.loyalty
     # Phase 82 LOYL-03 — loyalty module registered per INFRA-15 discipline.
     # Welcome accrual (ACCR-01) called from clients.service via ignore_imports edge in Plan 02.

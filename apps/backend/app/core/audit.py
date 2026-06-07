@@ -470,6 +470,12 @@ LOCKED_AUDIT_EVENTS: frozenset[tuple[str, str]] = frozenset(
         # Pre-registered BEFORE any callsite per INFRA-15 discipline.
         ("autopay_charge_initiated", "autopay"),
         ("autopay_charge_failed", "autopay"),
+        # v2.5 (Phase 90 lock — INFRA-15; messaging domain. All four events pre-registered
+        # BEFORE any callsite, including Phase 93 bridge events.)
+        ("message_sent", "message"),
+        ("message_read", "message"),
+        ("attachment_uploaded", "message"),
+        ("chat_staff_reply_sent", "message"),
     }
 )
 
