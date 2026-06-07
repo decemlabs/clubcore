@@ -127,7 +127,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 
 #### Phase 90: Messaging Domain + REST Foundation + WS Scaffold
 
-- [ ] **Phase 90: Messaging Domain + REST Foundation + WS Scaffold** - DB schema + REST send/list/mark-read + WS transport + Redis pub/sub fan-out; all six WS invariants locked from day one
+- [ ] **Phase 90: Messaging Domain + REST Foundation + WS Scaffold** - DB schema + REST send/list/mark-read + WS transport + Redis pub/sub fan-out; all six WS invariants locked from day one (3 plans)
 
 #### Phase 91: Read Receipts + Typing Indicators
 
@@ -161,8 +161,14 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
   3. Client can mark all unread messages read via `PATCH /client/messages/read`; `unreadCount` returns 0 on the next `GET`
   4. WS connection is authenticated via the `cc_client_access` httpOnly cookie (no URL token); a connection with a missing or expired token is rejected before the upgrade completes; a client cannot subscribe to another client's channel (Origin check + principal-derived channel name)
   5. On WS reconnect, client can provide a `last_seen_message_id` cursor and receive all messages written during the disconnection from the REST catch-up endpoint
-**Plans**: TBD
-**Open question (decide at plan-phase)**: WS auth fallback — confirm `cc_client_access` SameSite=Lax/Strict (cookie path) vs SameSite=None (ws-ticket fallback needed)
+**Plans**: 3 plans
+
+Plans:
+- [ ] 90-01-PLAN.md — Foundation: migrations 0064/0065 + ORM models + import-linter + audit-event pre-registration (INFRA-15)
+- [ ] 90-02-PLAN.md — REST: schemas/repository/service/router for GET/POST/PATCH /client/messages (MSG-01..04 + RT-04 cursor + pub/sub publish seam)
+- [ ] 90-03-PLAN.md — WS transport: Starlette TestClient convention + verify_ws_origin + @router.websocket endpoint (six WS invariants) + cross-context fan-out tests (RT-01..04)
+
+**Resolved (was open question)**: WS auth — `cc_client_access` is SameSite=Lax (confirmed in app/core/security.py), so httpOnly cookie-based WS auth works; the ws-ticket fallback is NOT required.
 
 ### Phase 91: Read Receipts + Typing Indicators
 **Goal**: Клиент видит статус своих сообщений («прочитано») и индикатор набора от зала; оба события доставляются через уже существующий WS-канал без сохранения в БД (typing — эфемерный)
@@ -262,7 +268,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 90. Messaging Domain + REST Foundation + WS Scaffold | 0/TBD | Not started | - |
+| 90. Messaging Domain + REST Foundation + WS Scaffold | 0/3 | Planned | - |
 | 91. Read Receipts + Typing Indicators | 0/TBD | Not started | - |
 | 92. Photo Attachments | 0/TBD | Not started | - |
 | 93. Telegram Bridge | 0/TBD | Not started | - |
