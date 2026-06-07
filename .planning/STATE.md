@@ -4,8 +4,8 @@ milestone: v2.5
 milestone_name: Chat / Messaging — Client↔Gym
 status: executing
 stopped_at: Phase 90 Plan 02 complete — messaging REST surface (GET/POST/PATCH /client/messages) + schemas + repository + service + router. Plan 03 (WS scaffold) next.
-last_updated: "2026-06-07T11:44:21.977Z"
-last_activity: 2026-06-07
+last_updated: "2026-06-07T12:07:17.135Z"
+last_activity: 2026-06-07 -- Phase 92 execution started
 progress:
   total_phases: 10
   completed_phases: 2
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 92 (photo-attachments) — EXECUTING
-Plan: 3 of 3
-Status: Ready to execute
-Last activity: 2026-06-07
+Plan: 1 of 3
+Status: Executing Phase 92
+Last activity: 2026-06-07 -- Phase 92 execution started
 
 Progress: [█████████░] 88%
 

@@ -138,10 +138,10 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 
 #### Phase 92: Photo Attachments
 
-- [ ] **Phase 92: Photo Attachments** - Authenticated upload + IDOR-safe serve with magic-byte validation and stored-XSS guards (3 plans)
+- [x] **Phase 92: Photo Attachments** - Authenticated upload + IDOR-safe serve with magic-byte validation and stored-XSS guards (3 plans) (completed 2026-06-07)
   - [x] 92-01-PLAN.md — Storage seam (S3Storage + magic-byte guard) + migration 0066 + docker S3 service
   - [x] 92-02-PLAN.md — Server-side validated upload endpoint (magic-byte allowlist + 5MB cap) + lifespan wiring
-  - [ ] 92-03-PLAN.md — Authenticated IDOR-safe serve endpoint (anti-XSS headers) + two-step flow + security suite
+  - [x] 92-03-PLAN.md — Authenticated IDOR-safe serve endpoint (anti-XSS headers) + two-step flow + security suite
 
 #### Phase 93: Telegram Bridge
 
@@ -280,7 +280,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 90. Messaging Domain + REST Foundation + WS Scaffold | 3/3 | Complete    | 2026-06-07 |
 | 91. Read Receipts + Typing Indicators | 2/2 | Complete    | 2026-06-07 |
-| 92. Photo Attachments | 2/3 | In Progress|  |
+| 92. Photo Attachments | 3/3 | Complete   | 2026-06-07 |
 | 93. Telegram Bridge | 0/TBD | Not started | - |
 | 94. PWA ChatScreen Wiring | 0/TBD | Not started | - |
 | 95. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
