@@ -26,11 +26,9 @@ Security assertions (T-92-10..14):
 
 from __future__ import annotations
 
-import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
-from typing import Any
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 import pytest_asyncio
@@ -44,7 +42,7 @@ from app.core.database import get_db
 from app.core.permissions import Role
 from app.core.redis import get_redis
 from app.core.security import generate_otp_code, hash_password
-from app.integrations.storage import Storage, get_storage
+from app.integrations.storage import get_storage
 from app.modules.auth.models import OtpCode, User
 from app.modules.clients.models import Client
 
@@ -58,7 +56,7 @@ _BASE_PHONE = "+79169002"
 
 
 def _phone(n: int) -> str:
-    """Return a stable E.164 phone for test client n (1–99)."""
+    """Return a stable E.164 phone for test client n (1-99)."""
     return f"{_BASE_PHONE}{n:04d}"
 
 
@@ -97,13 +95,12 @@ class InMemoryStorage:
         self._content_types[key] = content_type
 
     async def open_stream(self, key: str) -> AsyncIterator[bytes]:  # type: ignore[override]
+        # Async generator (matches the real S3 adapter): calling open_stream(key)
+        # returns an async iterator directly, NOT a coroutine — StreamingResponse
+        # consumes it as-is (a coroutine here raises "'coroutine' object is not iterable").
         data = self._store.get(key, b"")
-
-        async def _gen() -> AsyncIterator[bytes]:
-            if data:
-                yield data
-
-        return _gen()
+        if data:
+            yield data
 
     async def ensure_bucket(self) -> None:
         pass
@@ -281,11 +278,7 @@ async def test_serve_own_attachment_returns_200_with_anti_xss_headers(
     # Upload a JPEG attachment
     resp = await http_client.post(
         "/api/v1/client/messages/attachments",
-        content=JPEG_BYTES,
-        headers={
-            "Content-Type": "multipart/form-data; boundary=boundary",
-            "X-CSRF-Token": csrf,
-        },
+        headers={"X-CSRF-Token": csrf},
         files={"file": ("photo.jpg", JPEG_BYTES, "image/jpeg")},
     )
     assert resp.status_code == 200, f"Upload failed: {resp.text}"
@@ -305,11 +298,13 @@ async def test_serve_own_attachment_returns_200_with_anti_xss_headers(
     )
     # Content-Disposition: attachment (never inline) — T-92-11
     assert "attachment" in serve_resp.headers.get("content-disposition", ""), (
-        f"Expected Content-Disposition: attachment, got: {serve_resp.headers.get('content-disposition')}"
+        f"Expected Content-Disposition: attachment, "
+        f"got: {serve_resp.headers.get('content-disposition')}"
     )
     # X-Content-Type-Options: nosniff — T-92-11
     assert serve_resp.headers.get("x-content-type-options") == "nosniff", (
-        f"Expected X-Content-Type-Options: nosniff, got: {serve_resp.headers.get('x-content-type-options')}"
+        f"Expected X-Content-Type-Options: nosniff, "
+        f"got: {serve_resp.headers.get('x-content-type-options')}"
     )
 
 
