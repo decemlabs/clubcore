@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.5
 milestone_name: Chat / Messaging — Client↔Gym
-status: ready_to_plan
-stopped_at: Phase 90 complete (3/3) — ready to discuss Phase 91
-last_updated: 2026-06-07T10:30:48.597Z
+status: executing
+stopped_at: Phase 90 Plan 02 complete — messaging REST surface (GET/POST/PATCH /client/messages) + schemas + repository + service + router. Plan 03 (WS scaffold) next.
+last_updated: "2026-06-07T10:49:00.698Z"
 last_activity: 2026-06-07
 progress:
   total_phases: 10
   completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 5
+  completed_plans: 4
   percent: 10
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 91 — read receipts + typing indicators
+**Current focus:** Phase 91 — read-receipts-typing-indicators
 
 ## Current Position
 
-Phase: 91
-Plan: Not started
-Status: Ready to plan
+Phase: 91 (read-receipts-typing-indicators) — EXECUTING
+Plan: 2 of 2
+Status: Ready to execute
 Last activity: 2026-06-07
 
-Progress: [██████████] 100%
+Progress: [████████░░] 80%
 
 ## v2.5 Roadmap Summary
 
@@ -132,6 +132,6 @@ Carrying forward from v2.4 close (see previous STATE.md for full list):
 
 ## Session Continuity
 
-Last session: 2026-06-07T10:09:28.200Z
+Last session: 2026-06-07T10:49:00.694Z
 Stopped at: Phase 90 Plan 02 complete — messaging REST surface (GET/POST/PATCH /client/messages) + schemas + repository + service + router. Plan 03 (WS scaffold) next.
 Resume: Run /gsd:execute-phase 90 to execute Plan 03 (WS scaffold)

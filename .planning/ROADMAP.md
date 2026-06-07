@@ -184,7 +184,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 91-01-PLAN.md — Service surface: read_receipt/typing event schemas + reply-as-read repository fn (role='client') + record_staff_message wiring + publish_read_receipt/publish_typing helpers (RCPT-01, RCPT-03)
+- [x] 91-01-PLAN.md — Service surface: read_receipt/typing event schemas + reply-as-read repository fn (role='client') + record_staff_message wiring + publish_read_receipt/publish_typing helpers (RCPT-01, RCPT-03)
 - [ ] 91-02-PLAN.md — Starlette WS tests: read_receipt/typing fan-out + IDOR isolation + e2e reply-as-read + PATCH polling fallback (RCPT-01, RCPT-02, RCPT-03)
 
 ### Phase 92: Photo Attachments
@@ -276,7 +276,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 90. Messaging Domain + REST Foundation + WS Scaffold | 3/3 | Complete    | 2026-06-07 |
-| 91. Read Receipts + Typing Indicators | 0/2 | Not started | - |
+| 91. Read Receipts + Typing Indicators | 1/2 | In Progress|  |
 | 92. Photo Attachments | 0/TBD | Not started | - |
 | 93. Telegram Bridge | 0/TBD | Not started | - |
 | 94. PWA ChatScreen Wiring | 0/TBD | Not started | - |
