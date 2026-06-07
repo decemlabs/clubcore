@@ -38,6 +38,7 @@ services:
     command: >
       server -s3 -s3.config=/etc/seaweedfs/s3.json
       -master.volumeSizeLimitMB=128
+      -ip.bind=0.0.0.0
     environment:
       # IAM is off by default in SeaweedFS; dev creds are passed via s3.json.
       WEED_S3_ACCESS_KEY: dev-access-key
@@ -48,7 +49,12 @@ services:
     ports:
       - "8333:8333"
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:8333/status || exit 1"]
+      # SeaweedFS S3 answers anonymous GET / with 403 Forbidden — a live server.
+      # BusyBox wget prints "server returned error: HTTP/1.1 403 Forbidden" to
+      # stderr (even with -q); a dead server prints "can't connect". Grepping for
+      # Forbidden distinguishes the two reliably. (No /status path on S3; service
+      # binds eth0 unless -ip.bind=0.0.0.0, both fixed here.)
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8333/ 2>&1 | grep -q Forbidden"]
       interval: 5s
       timeout: 5s
       retries: 10
