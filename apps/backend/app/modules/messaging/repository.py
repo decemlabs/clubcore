@@ -148,12 +148,18 @@ async def list_thread_history(
     Resolves (get-or-create) the thread for client_id so a first GET works even
     before the first message is sent (returns empty list, not 404 — per CONTEXT.md).
 
-    Ordered newest-first (sent_at DESC, id DESC) for wire delivery; PWA reverses
-    for display.
+    Non-cursor (paged) wire delivery is newest-first (sent_at DESC, id DESC);
+    PWA reverses for display.
 
-    RT-04 catch-up cursor: when ``after`` is provided, only messages with
-    (sent_at, id) > cursor are returned (composite comparison for same-millisecond
-    tiebreak safety). The cursor is resolved via a subquery.
+    RT-04 catch-up cursor (CR-01 + WR-04): when ``after`` is provided, only
+    messages STRICTLY NEWER than the cursor message are returned, using native
+    composite ``(sent_at, id)`` tuple comparison (NOT lexicographic ``id::text``)
+    so the boundary is stable even for same-``sent_at`` rows. The catch-up band is
+    delivered chronological-forward (``sent_at ASC, id ASC``) with NO offset —
+    cursor and offset pagination are mutually exclusive, and DESC+OFFSET on the
+    newer-than set would silently drop an arbitrary middle band of missed messages.
+    The cursor subquery is thread-scoped so a foreign/unknown message id cannot be
+    used as a recency-probing oracle and resolves to no boundary (empty page).
 
     total = COUNT(*) for the entire thread (not affected by the after cursor).
     unread_count = message_threads.client_unread_count.
@@ -176,29 +182,32 @@ async def list_thread_history(
     total = int(counts["total"])
     unread_count = int(counts["client_unread_count"])
 
-    # Build message list query with optional after-cursor (RT-04).
-    offset = (page - 1) * page_size
+    # Build message list query.
     if after is not None:
+        # CR-01 / WR-04 catch-up cursor: native (sent_at, id) tuple comparison
+        # (not id::text), thread-scoped cursor subquery, chronological-forward
+        # order, and NO offset (cursor + offset are mutually exclusive).
         rows = (
             await session.execute(
                 text(
                     "SELECT id, role, body, sent_at, read_at, thread_id "
                     "FROM messages "
                     "WHERE thread_id = :tid "
-                    "  AND (sent_at, id::text) > "
-                    "      (SELECT sent_at, id::text FROM messages WHERE id = :after_id) "
-                    "ORDER BY sent_at DESC, id DESC "
-                    "LIMIT :limit OFFSET :offset"
+                    "  AND (sent_at, id) > "
+                    "      (SELECT sent_at, id FROM messages "
+                    "       WHERE id = :after_id AND thread_id = :tid) "
+                    "ORDER BY sent_at ASC, id ASC "
+                    "LIMIT :limit"
                 ),
                 {
                     "tid": str(thread_id),
                     "after_id": str(after),
                     "limit": page_size,
-                    "offset": offset,
                 },
             )
         ).mappings().all()
     else:
+        offset = (page - 1) * page_size
         rows = (
             await session.execute(
                 text(
