@@ -130,11 +130,11 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 - [x] **Phase 90: Messaging Domain + REST Foundation + WS Scaffold** - DB schema + REST send/list/mark-read + WS transport + Redis pub/sub fan-out; all six WS invariants locked from day one (3 plans) (completed 2026-06-07)
   - [x] **Plan 01** (DB + models + migrations + audit events) — completed 2026-06-07
   - [x] **Plan 02** (schemas + repository + service + REST router + integration tests) — completed 2026-06-07
-  - [ ] **Plan 03** (WS endpoint + per-connection pub/sub subscriber + WS tests)
+  - [x] **Plan 03** (WS endpoint + per-connection pub/sub subscriber + WS tests) — completed 2026-06-07
 
 #### Phase 91: Read Receipts + Typing Indicators
 
-- [x] **Phase 91: Read Receipts + Typing Indicators** - Per-message read status + typing presence delivered over the Phase 90 WS channel (completed 2026-06-07)
+- [ ] **Phase 91: Read Receipts + Typing Indicators** - Per-message read status + typing presence delivered over the Phase 90 WS channel
 
 #### Phase 92: Photo Attachments
 
