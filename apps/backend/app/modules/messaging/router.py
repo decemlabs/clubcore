@@ -124,6 +124,13 @@ async def client_mark_messages_read(
 
 @router.post(
     "/messages",
+    # WR-03: response_model here is DOCUMENTATION-ONLY for the OpenAPI schema. The
+    # handler returns a pre-serialised starlette Response built by idempotent_execute
+    # (so the cached idempotent replay is byte-identical), which makes FastAPI bypass
+    # response_model validation/serialisation entirely. The runner hand-builds the
+    # body from envelope(MessageResponse) at _runner() below, so the declared shape and
+    # the actual bytes are kept in sync by construction — but FastAPI does NOT enforce
+    # it. Keep this annotation purely so the OpenAPI contract documents the 200 shape.
     response_model=ResponseEnvelope[MessageResponse],
     operation_id="client_send_message",
     summary=(
