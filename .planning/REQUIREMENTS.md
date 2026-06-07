@@ -33,7 +33,7 @@
 
 - [x] **ATT-01**: Клиент прикрепляет фото к сообщению (upload)
 - [x] **ATT-02**: Загрузка валидируется по magic-bytes (allowlist JPEG/PNG/WebP) + size cap; `Content-Type` заголовку не доверяем
-- [ ] **ATT-03**: Вложения отдаются через authenticated IDOR-safe endpoint с `Content-Disposition: attachment` + `X-Content-Type-Options: nosniff` (anti-stored-XSS)
+- [x] **ATT-03**: Вложения отдаются через authenticated IDOR-safe endpoint с `Content-Disposition: attachment` + `X-Content-Type-Options: nosniff` (anti-stored-XSS)
 
 ### Telegram Bridge (BRDG)
 
@@ -98,7 +98,7 @@
 | RCPT-03 | Phase 91 | Complete |
 | ATT-01 | Phase 92 | Complete |
 | ATT-02 | Phase 92 | Complete |
-| ATT-03 | Phase 92 | Pending |
+| ATT-03 | Phase 92 | Complete |
 | BRDG-01 | Phase 93 | Pending |
 | BRDG-02 | Phase 93 | Pending |
 | BRDG-03 | Phase 93 | Pending |
