@@ -71,6 +71,7 @@ async def insert_message(
     role: Literal["client", "staff"],
     body: str,
     sent_at: datetime | None = None,
+    attachment_id: UUID | None = None,
 ) -> tuple[UUID, datetime]:
     """Insert a message row and update thread metadata; return (message_id, sent_at).
 
@@ -83,6 +84,8 @@ async def insert_message(
     Python rather than poisoning the caller's open transaction with an IntegrityError.
 
     sent_at defaults to now() if not provided.
+    attachment_id (optional): set messages.attachment_id for attachment-bearing messages
+    (Phase 92 ATT-03 two-step flow). Must be an already-persisted message_attachments.id.
     No session.commit() — caller-owns-txn.
     """
     if role not in ("client", "staff"):
@@ -92,11 +95,11 @@ async def insert_message(
 
     effective_sent_at = sent_at or datetime.now(tz=UTC)
 
-    # Insert the message row.
+    # Insert the message row (with optional attachment_id).
     result = await session.execute(
         text(
-            "INSERT INTO messages (thread_id, role, body, sent_at) "
-            "VALUES (:tid, :role, :body, :sent_at) "
+            "INSERT INTO messages (thread_id, role, body, sent_at, attachment_id) "
+            "VALUES (:tid, :role, :body, :sent_at, :att_id) "
             "RETURNING id, sent_at"
         ),
         {
@@ -104,6 +107,7 @@ async def insert_message(
             "role": role,
             "body": body,
             "sent_at": effective_sent_at,
+            "att_id": str(attachment_id) if attachment_id is not None else None,
         },
     )
     row = result.mappings().one()
@@ -182,7 +186,16 @@ async def list_thread_history(
     total = int(counts["total"])
     unread_count = int(counts["client_unread_count"])
 
-    # Build message list query.
+    # Build message list query with LEFT JOIN on message_attachments for attachment sub-object.
+    # Phase 92 ATT-03: attachment columns projected so service can build MessageAttachmentItem.
+    _SELECT_COLS = (
+        "m.id, m.role, m.body, m.sent_at, m.read_at, m.thread_id, "
+        "ma.id AS att_id, ma.mime_type AS att_mime, ma.size_bytes AS att_size"
+    )
+    _FROM_JOIN = (
+        "FROM messages m "
+        "LEFT JOIN message_attachments ma ON ma.id = m.attachment_id"
+    )
     if after is not None:
         # CR-01 / WR-04 catch-up cursor: native (sent_at, id) tuple comparison
         # (not id::text), thread-scoped cursor subquery, chronological-forward
@@ -190,13 +203,13 @@ async def list_thread_history(
         rows = (
             await session.execute(
                 text(
-                    "SELECT id, role, body, sent_at, read_at, thread_id "
-                    "FROM messages "
-                    "WHERE thread_id = :tid "
-                    "  AND (sent_at, id) > "
+                    f"SELECT {_SELECT_COLS} "
+                    f"{_FROM_JOIN} "
+                    "WHERE m.thread_id = :tid "
+                    "  AND (m.sent_at, m.id) > "
                     "      (SELECT sent_at, id FROM messages "
                     "       WHERE id = :after_id AND thread_id = :tid) "
-                    "ORDER BY sent_at ASC, id ASC "
+                    "ORDER BY m.sent_at ASC, m.id ASC "
                     "LIMIT :limit"
                 ),
                 {
@@ -211,10 +224,10 @@ async def list_thread_history(
         rows = (
             await session.execute(
                 text(
-                    "SELECT id, role, body, sent_at, read_at, thread_id "
-                    "FROM messages "
-                    "WHERE thread_id = :tid "
-                    "ORDER BY sent_at DESC, id DESC "
+                    f"SELECT {_SELECT_COLS} "
+                    f"{_FROM_JOIN} "
+                    "WHERE m.thread_id = :tid "
+                    "ORDER BY m.sent_at DESC, m.id DESC "
                     "LIMIT :limit OFFSET :offset"
                 ),
                 {"tid": str(thread_id), "limit": page_size, "offset": offset},
@@ -222,6 +235,37 @@ async def list_thread_history(
         ).mappings().all()
 
     return [dict(r) for r in rows], total, unread_count
+
+
+async def get_owned_attachment(
+    session: AsyncSession,
+    attachment_id: UUID,
+    *,
+    client_id: UUID,
+) -> dict[str, object] | None:
+    """Return attachment row dict if attachment_id is owned by client_id; else None (ATT-03 IDOR).
+
+    The client_id predicate IS the IDOR gate (P8 / MSG-02 precedent):
+    a non-owned or missing id yields no row → None. The caller maps None to
+    404 (never 403 — no existence leak, 404-collapse).
+
+    Returns dict with keys: id, object_key, mime_type, size_bytes, thread_id.
+    Raw-SQL text() per D-54-08.
+    No session.commit() — caller-owns-txn.
+    """
+    row = (
+        await session.execute(
+            text(
+                "SELECT id, object_key, mime_type, size_bytes, thread_id "
+                "FROM message_attachments "
+                "WHERE id = :aid AND client_id = :cid"
+            ),
+            {"aid": str(attachment_id), "cid": str(client_id)},
+        )
+    ).mappings().one_or_none()
+    if row is None:
+        return None
+    return dict(row)
 
 
 async def insert_attachment(

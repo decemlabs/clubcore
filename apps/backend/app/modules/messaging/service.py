@@ -38,12 +38,13 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import audit
-from app.core.exceptions import PayloadTooLargeError, UnsupportedMediaTypeError
+from app.core.exceptions import NotFoundError, PayloadTooLargeError, UnsupportedMediaTypeError
 from app.integrations.storage.mime import MAGIC_BYTE_READ_LEN, guess_allowed_mime
 from app.integrations.storage.types import Storage
 from app.modules.messaging import repository
 from app.modules.messaging.schemas import (
     AttachmentUploadResponse,
+    MessageAttachmentItem,
     MessageItem,
     MessageListResponse,
     MessageResponse,
@@ -129,24 +130,46 @@ async def send_client_message(
     client_id: UUID,
     payload: SendMessageRequest,
 ) -> MessageResponse:
-    """Persist a client message and emit audit (MSG-02).
+    """Persist a client message and emit audit (MSG-02 + Phase 92 ATT-03 two-step flow).
 
     Sequence (DB-first, P5):
-      1. get_or_create_thread — ensures the thread exists.
-      2. insert_message(role='client') — persists the message.
-      3. audit.emit("message_sent") co-transactionally.
+      1. If payload.attachment_id is present: IDOR check via get_owned_attachment.
+         If the attachment is not owned by this client → NotFoundError (404-collapse;
+         never 403 — no existence leak, P8/MSG-02 precedent). No message is written.
+      2. get_or_create_thread — ensures the thread exists.
+      3. insert_message(role='client') — persists the message (with attachment_id if present).
+      4. audit.emit("message_sent") co-transactionally.
 
     This function does NOT publish to Redis and does NOT commit (caller-owns-txn).
     CR-02: the caller (router) commits FIRST, then calls publish_new_message() so the
     notification frame is only emitted once the row is durable (no phantom notify).
     IDOR: client_id MUST come from the require_client() principal (D-20-IDOR / T-90-04).
     """
+    # Phase 92 ATT-03: IDOR check for attachment ownership BEFORE any thread or message write.
+    attachment_row: dict[str, object] | None = None
+    if payload.attachment_id is not None:
+        attachment_row = await repository.get_owned_attachment(
+            session, payload.attachment_id, client_id=client_id
+        )
+        if attachment_row is None:
+            # T-92-14: foreign or non-existent attachment_id → 404-collapse (never 403).
+            raise NotFoundError(
+                f"Attachment {payload.attachment_id} not found or not owned by client"
+            )
+
     thread_id = await repository.get_or_create_thread(session, client_id)
+
+    # body is str | None; body-only and both-body-and-attachment are valid. Use empty
+    # string sentinel for attachment-only messages so the DB NOT NULL body constraint
+    # is satisfied while the UI displays the attachment as the message content.
+    effective_body = payload.body if payload.body is not None else ""
+
     message_id, sent_at = await repository.insert_message(
         session,
         thread_id=thread_id,
         role="client",
-        body=payload.body,
+        body=effective_body,
+        attachment_id=payload.attachment_id,
     )
 
     await audit.emit(
@@ -163,6 +186,7 @@ async def send_client_message(
         client_id=str(client_id),
         message_id=str(message_id),
         thread_id=str(thread_id),
+        has_attachment=payload.attachment_id is not None,
     )
 
     # TODO Phase 93: Telegram bridge forward seam (record + enqueue ARQ DM)
@@ -170,13 +194,26 @@ async def send_client_message(
     # body to STAFF_TELEGRAM_CHAT_ID via bot.send_message(). This is a no-op in
     # Phase 90 — the seam is documented here so Phase 93 has a clear insertion point.
 
+    # Build attachment sub-object if the message has one.
+    attachment_item: MessageAttachmentItem | None = None
+    if attachment_row is not None and payload.attachment_id is not None:
+        raw_size = attachment_row["size_bytes"]
+        assert isinstance(raw_size, int)
+        attachment_item = MessageAttachmentItem(
+            id=payload.attachment_id,
+            mime_type=str(attachment_row["mime_type"]),
+            size_bytes=raw_size,
+            url=f"/api/v1/client/messages/attachments/{payload.attachment_id}",
+        )
+
     return MessageResponse(
         id=message_id,
         role="client",
-        body=payload.body,
+        body=effective_body,
         sent_at=sent_at,
         read_at=None,
         thread_id=thread_id,
+        attachment=attachment_item,
     )
 
 
@@ -308,17 +345,29 @@ async def list_thread_history(
         after=after,
     )
 
-    items = [
-        MessageItem(
-            id=row["id"],
-            role=row["role"],
-            body=row["body"],
-            sent_at=row["sent_at"],
-            read_at=row["read_at"],
-            thread_id=row["thread_id"],
+    items = []
+    for row in rows:
+        # Phase 92 ATT-03: build attachment sub-object from LEFT JOIN columns if present.
+        attachment_item: MessageAttachmentItem | None = None
+        att_id = row.get("att_id")
+        if att_id is not None:
+            attachment_item = MessageAttachmentItem(
+                id=UUID(str(att_id)),
+                mime_type=str(row["att_mime"]),
+                size_bytes=int(row["att_size"]),
+                url=f"/api/v1/client/messages/attachments/{att_id}",
+            )
+        items.append(
+            MessageItem(
+                id=row["id"],
+                role=row["role"],
+                body=row["body"],
+                sent_at=row["sent_at"],
+                read_at=row["read_at"],
+                thread_id=row["thread_id"],
+                attachment=attachment_item,
+            )
         )
-        for row in rows
-    ]
 
     return MessageListResponse(
         items=items,
