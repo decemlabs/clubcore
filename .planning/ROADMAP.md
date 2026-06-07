@@ -138,7 +138,10 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 
 #### Phase 92: Photo Attachments
 
-- [ ] **Phase 92: Photo Attachments** - Authenticated upload + IDOR-safe serve with magic-byte validation and stored-XSS guards
+- [ ] **Phase 92: Photo Attachments** - Authenticated upload + IDOR-safe serve with magic-byte validation and stored-XSS guards (3 plans)
+  - [ ] 92-01-PLAN.md — Storage seam (S3Storage + magic-byte guard) + migration 0066 + docker S3 service
+  - [ ] 92-02-PLAN.md — Server-side validated upload endpoint (magic-byte allowlist + 5MB cap) + lifespan wiring
+  - [ ] 92-03-PLAN.md — Authenticated IDOR-safe serve endpoint (anti-XSS headers) + two-step flow + security suite
 
 #### Phase 93: Telegram Bridge
 
@@ -195,8 +198,8 @@ Plans:
   1. Client can upload a JPEG, PNG, or WebP image (up to 5 MB) via `POST /client/messages/attachments`; the server validates by magic bytes (not the `Content-Type` header), rejects SVG and HTML with 422, and rejects oversized files with 413
   2. Client can retrieve their own attachment via `GET /client/messages/attachments/{id}`; attempting to fetch another client's attachment by UUID returns 404 (IDOR-safe); the response carries `Content-Disposition: attachment` and `X-Content-Type-Options: nosniff`
   3. Client can include an `attachment_id` in `POST /client/messages`; the photo appears in the thread history
-**Plans**: TBD
-**Open question (decide at plan-phase)**: Storage backend — local filesystem adapter (recommended, single-server pet project) vs S3-compatible from day one (Yandex Object Storage prod / SeaweedFS dev, avoids future migration)
+**Plans**: 3 plans (Wave 1: 92-01 storage seam + migration + docker S3; Wave 2: 92-02 upload; Wave 3: 92-03 serve + integration + security suite)
+**Resolved (92-CONTEXT.md)**: Storage backend — S3-compatible from day one (USER OVERRIDE over the research-recommended local fs) via `app/integrations/storage/` (aioboto3, env-driven); local dev uses a self-hosted S3-compatible docker service. Upload is server-side validated (not presigned PUT); serve is an authenticated proxy-stream (not presigned GET).
 **UI hint**: yes
 
 ### Phase 93: Telegram Bridge
