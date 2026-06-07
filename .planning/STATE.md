@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.5
 milestone_name: Chat / Messaging — Client↔Gym
 status: executing
-stopped_at: v2.5 roadmap created — ROADMAP.md + STATE.md + REQUIREMENTS.md traceability updated
-last_updated: "2026-06-07T09:26:14.307Z"
+stopped_at: Phase 90 Plan 02 complete — messaging REST surface + schemas + repository + service + router
+last_updated: "2026-06-07T10:35:00.000Z"
 last_activity: 2026-06-07
 progress:
   total_phases: 10
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 90 (messaging-domain-rest-foundation-ws-scaffold) — EXECUTING
-Plan: 2 of 3
-Status: Ready to execute
+Plan: 3 of 3
+Status: Ready to execute (Plan 02 complete — Plan 03 WS scaffold next)
 Last activity: 2026-06-07
 
-Progress: [███░░░░░░░] 33%
+Progress: [██████░░░░] 67%
 
 ## v2.5 Roadmap Summary
 
@@ -82,6 +82,14 @@ Progress: [███░░░░░░░] 33%
 - **Staff identity**: v2.5 = anonymous (role='staff') with telegram_user_id/username as nullable audit fields; full identity → v2.6 admin-web inbox
 - **STAFF_TELEGRAM_CHAT_ID**: new Settings field (int | None); Telegram bridge disabled if absent
 
+### Key v2.5 Plan 02 Decisions (REST surface)
+
+- **verify_client_idempotency for POST /messages:** Staff dependency `verify_idempotency` (uses `get_current_user`) would 401 on client requests. `verify_client_idempotency` (Phase 70 D-70-02) is the correct client-scoped dependency.
+- **idempotent_execute runner commits session internally:** DB-first semantics (P5) require Redis publish after commit. The runner function calls `session.commit()`, serialises response, returns — publish fires inside service before commit, co-transactionally (fire-and-forget post-return).
+- **after-cursor composite `(sent_at, id::text)`:** Casting UUID to text for composite comparison avoids asyncpg type coercion issues with row-value syntax.
+- **PATCH /messages/read returns 204:** Consistent with notifications read-all analog.
+- **record_staff_message internal (no endpoint):** admin-web frozen until v2.6; function exercised by tests + Phase 93 bridge.
+
 ### Key v2.4 Milestone Constraints (still active)
 
 - **Staff gate**: owner-only write-API + seeds; apps/admin-web frozen
@@ -124,6 +132,6 @@ Carrying forward from v2.4 close (see previous STATE.md for full list):
 
 ## Session Continuity
 
-Last session: 2026-06-07T09:26:14.303Z
-Stopped at: v2.5 roadmap created — ROADMAP.md + STATE.md + REQUIREMENTS.md traceability updated
-Resume: Run /gsd:plan-phase 90 to begin planning Phase 90
+Last session: 2026-06-07T10:35:00.000Z
+Stopped at: Phase 90 Plan 02 complete — messaging REST surface (GET/POST/PATCH /client/messages) + schemas + repository + service + router. Plan 03 (WS scaffold) next.
+Resume: Run /gsd:execute-phase 90 to execute Plan 03 (WS scaffold)
