@@ -248,3 +248,198 @@ class TestTypingEventCamelCase:
         assert set(data.keys()) == {"type", "actor"}, (
             f"TypingEvent must have exactly {{type, actor}} but got: {set(data.keys())}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Phase 92 Plan 03 — MessageAttachmentItem + SendMessageRequest body-OR-attachment
+# ---------------------------------------------------------------------------
+
+
+class TestMessageAttachmentItemCamelCase:
+    """Test 8 — MessageAttachmentItem serialises to camelCase {id, mimeType, sizeBytes, url}."""
+
+    def test_mime_type_alias_is_camel_case(self) -> None:
+        from app.modules.messaging.schemas import MessageAttachmentItem
+
+        assert MessageAttachmentItem.model_fields["mime_type"].alias == "mimeType"
+
+    def test_size_bytes_alias_is_camel_case(self) -> None:
+        from app.modules.messaging.schemas import MessageAttachmentItem
+
+        assert MessageAttachmentItem.model_fields["size_bytes"].alias == "sizeBytes"
+
+    def test_url_field_present(self) -> None:
+        from app.modules.messaging.schemas import MessageAttachmentItem
+
+        assert "url" in MessageAttachmentItem.model_fields
+
+    def test_attachment_item_serializes_camel_case_keys(self) -> None:
+        from uuid import uuid4
+
+        from app.modules.messaging.schemas import MessageAttachmentItem
+
+        item = MessageAttachmentItem(
+            id=uuid4(),
+            mime_type="image/jpeg",
+            size_bytes=1024,
+            url="/api/v1/client/messages/attachments/some-id",
+        )
+        data = item.model_dump(by_alias=True)
+        assert "mimeType" in data
+        assert "sizeBytes" in data
+        assert "url" in data
+        assert "mime_type" not in data
+        assert "size_bytes" not in data
+        assert data["mimeType"] == "image/jpeg"
+        assert data["sizeBytes"] == 1024
+
+
+class TestMessageItemAttachmentField:
+    """Test 9 — MessageItem.attachment defaults to None, present for attachment-bearing messages."""
+
+    def test_message_item_attachment_defaults_to_none(self) -> None:
+        from datetime import UTC, datetime
+        from uuid import uuid4
+
+        from app.modules.messaging.schemas import MessageItem
+
+        item = MessageItem(
+            id=uuid4(),
+            role="client",
+            body="hello",
+            sent_at=datetime.now(tz=UTC),
+            read_at=None,
+            thread_id=uuid4(),
+        )
+        assert item.attachment is None
+
+    def test_message_item_attachment_field_serializes_none_as_none(self) -> None:
+        from datetime import UTC, datetime
+        from uuid import uuid4
+
+        from app.modules.messaging.schemas import MessageItem
+
+        item = MessageItem(
+            id=uuid4(),
+            role="client",
+            body="hello",
+            sent_at=datetime.now(tz=UTC),
+            thread_id=uuid4(),
+        )
+        data = item.model_dump(by_alias=True)
+        assert "attachment" in data
+        assert data["attachment"] is None
+
+    def test_message_item_attachment_with_sub_object(self) -> None:
+        from datetime import UTC, datetime
+        from uuid import uuid4
+
+        from app.modules.messaging.schemas import MessageAttachmentItem, MessageItem
+
+        att_id = uuid4()
+        att = MessageAttachmentItem(
+            id=att_id,
+            mime_type="image/png",
+            size_bytes=2048,
+            url="/api/v1/client/messages/attachments/" + str(att_id),
+        )
+        item = MessageItem(
+            id=uuid4(),
+            role="client",
+            body="",
+            sent_at=datetime.now(tz=UTC),
+            thread_id=uuid4(),
+            attachment=att,
+        )
+        data = item.model_dump(by_alias=True)
+        assert data["attachment"] is not None
+        assert data["attachment"]["mimeType"] == "image/png"
+        assert data["attachment"]["sizeBytes"] == 2048
+
+
+class TestSendMessageRequestBodyOrAttachment:
+    """Test 10 — SendMessageRequest body-OR-attachment validity matrix (Phase 92 two-step)."""
+
+    def test_body_only_valid(self) -> None:
+        """Body present, no attachmentId → valid (unchanged Phase 90 path)."""
+        from app.modules.messaging.schemas import SendMessageRequest
+
+        req = SendMessageRequest(body="привет")
+        assert req.body == "привет"
+        assert req.attachment_id is None
+
+    def test_attachment_id_only_valid(self) -> None:
+        """attachmentId present, body absent → valid (relax empty-body 422)."""
+        from uuid import uuid4
+
+        from app.modules.messaging.schemas import SendMessageRequest
+
+        att_id = uuid4()
+        req = SendMessageRequest(attachment_id=att_id)
+        assert req.attachment_id == att_id
+        assert req.body is None
+
+    def test_both_body_and_attachment_id_valid(self) -> None:
+        """Both body and attachmentId present → valid."""
+        from uuid import uuid4
+
+        from app.modules.messaging.schemas import SendMessageRequest
+
+        att_id = uuid4()
+        req = SendMessageRequest(body="message with photo", attachment_id=att_id)
+        assert req.body == "message with photo"
+        assert req.attachment_id == att_id
+
+    def test_neither_body_nor_attachment_id_raises_validation_error(self) -> None:
+        """Neither body nor attachmentId → 422 (still rejected)."""
+        import pytest
+        from pydantic import ValidationError
+
+        from app.modules.messaging.schemas import SendMessageRequest
+
+        with pytest.raises(ValidationError):
+            SendMessageRequest()
+
+    def test_whitespace_only_body_with_no_attachment_raises_validation_error(self) -> None:
+        """body='   ' and no attachmentId → 422 (whitespace guard preserved)."""
+        import pytest
+        from pydantic import ValidationError
+
+        from app.modules.messaging.schemas import SendMessageRequest
+
+        with pytest.raises(ValidationError):
+            SendMessageRequest(body="   ")
+
+    def test_whitespace_only_body_with_attachment_id_raises_validation_error(self) -> None:
+        """body='   ' even when attachmentId present → 422 (whitespace guard still applies)."""
+        import pytest
+        from uuid import uuid4
+
+        from pydantic import ValidationError
+
+        from app.modules.messaging.schemas import SendMessageRequest
+
+        with pytest.raises(ValidationError):
+            SendMessageRequest(body="   ", attachment_id=uuid4())
+
+    def test_attachment_id_wire_alias_is_camel_case(self) -> None:
+        """attachment_id field serializes as attachmentId on the wire."""
+        from uuid import uuid4
+
+        from app.modules.messaging.schemas import SendMessageRequest
+
+        att_id = uuid4()
+        req = SendMessageRequest(attachment_id=att_id)
+        # BackendSchemaBase uses alias_generator=to_camel with populate_by_name=True
+        data = req.model_dump(by_alias=True)
+        assert "attachmentId" in data or "attachment_id" in data
+
+    def test_extra_field_still_raises_validation_error(self) -> None:
+        """extra='forbid' preserved after schema change."""
+        import pytest
+        from pydantic import ValidationError
+
+        from app.modules.messaging.schemas import SendMessageRequest
+
+        with pytest.raises(ValidationError):
+            SendMessageRequest(body="hello", client_id="injected")  # type: ignore[call-arg]
