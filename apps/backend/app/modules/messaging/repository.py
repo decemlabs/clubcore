@@ -20,7 +20,7 @@ INVARIANTS:
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from sqlalchemy import text
@@ -68,7 +68,7 @@ async def insert_message(
     session: AsyncSession,
     *,
     thread_id: UUID,
-    role: str,
+    role: Literal["client", "staff"],
     body: str,
     sent_at: datetime | None = None,
 ) -> tuple[UUID, datetime]:
@@ -78,9 +78,18 @@ async def insert_message(
     For role='staff': bump last_message_at AND increment client_unread_count by 1
     (staff sends → client has new unread message).
 
+    WR-05: ``role`` is typed ``Literal['client','staff']`` (the DB CHECK domain) and
+    validated explicitly before any SQL is issued, so a bad value fails fast in
+    Python rather than poisoning the caller's open transaction with an IntegrityError.
+
     sent_at defaults to now() if not provided.
     No session.commit() — caller-owns-txn.
     """
+    if role not in ("client", "staff"):
+        # Defensive: fail fast in Python before entering the DB round-trip so a
+        # bad role never poisons the caller's open UoW (WR-05).
+        raise ValueError(f"invalid message role: {role!r} (expected 'client' or 'staff')")
+
     effective_sent_at = sent_at or datetime.now(tz=UTC)
 
     # Insert the message row.
