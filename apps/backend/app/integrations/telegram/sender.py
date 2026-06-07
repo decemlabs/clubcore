@@ -29,11 +29,17 @@ class SendResult:
     - ok=False, blocked=False, error=...     : transient (network, rate-limit). Same
                                                outcome for FE; future ARQ retry only
                                                retries this branch (D-12 deferred).
+
+    message_id: staff-side Telegram message_id returned by bot.send_* calls.
+    Phase 93 BRDG-01: forward_to_staff uses this to write the chat_forwarding_log
+    Redis key (cc:messaging:tg_msg:{message_id}). None for OTP/text DMs that do
+    not need the routing anchor.
     """
 
     ok: bool
     blocked: bool = False
     error: str | None = None
+    message_id: int | None = None
 
 
 async def send_otp_dm(bot: Bot, chat_id: int, code: str) -> SendResult:
@@ -71,14 +77,17 @@ async def send_text_dm(
     underlying ``bot.send_message``. The /book command (Phase 40 BOT-02)
     consumes this to attach the slot-picker keyboard. Existing 3-arg
     positional callers are unaffected by the default.
+
+    Phase 93 BRDG-01: returns message_id from the sent Message for
+    chat_forwarding_log routing anchor.
     """
     try:
-        await bot.send_message(
+        sent = await bot.send_message(
             chat_id=chat_id,
             text=text,
             reply_markup=reply_markup,
         )
-        return SendResult(ok=True)
+        return SendResult(ok=True, message_id=sent.message_id)
     except Forbidden:
         return SendResult(ok=False, blocked=True)
     except BadRequest as exc:
@@ -87,4 +96,37 @@ async def send_text_dm(
             return SendResult(ok=False, blocked=True)
         return SendResult(ok=False, blocked=False, error=str(exc))
     except Exception as exc:  # outbound boundary -- mirror send_otp_dm classification
+        return SendResult(ok=False, blocked=False, error=str(exc))
+
+
+async def send_photo(
+    bot: Bot,
+    chat_id: int,
+    photo: bytes,
+    caption: str | None = None,
+) -> SendResult:
+    """Send a photo (bytes) DM to chat_id with optional caption.
+
+    Same SendResult contract as send_text_dm. Used by forward_to_staff ARQ task
+    to forward client image attachments to the staff DM. Never re-raises transport
+    errors (outbound boundary contract, D-07).
+
+    Phase 93 BRDG-01: returns message_id from the sent Message for
+    chat_forwarding_log routing anchor (cc:messaging:tg_msg:{message_id}).
+    """
+    try:
+        sent = await bot.send_photo(
+            chat_id=chat_id,
+            photo=photo,
+            caption=caption,
+        )
+        return SendResult(ok=True, message_id=sent.message_id)
+    except Forbidden:
+        return SendResult(ok=False, blocked=True)
+    except BadRequest as exc:
+        msg = str(exc).lower()
+        if "chat not found" in msg or "chat_id" in msg:
+            return SendResult(ok=False, blocked=True)
+        return SendResult(ok=False, blocked=False, error=str(exc))
+    except Exception as exc:  # outbound boundary -- classify all transport failures
         return SendResult(ok=False, blocked=False, error=str(exc))

@@ -100,6 +100,14 @@ class Settings(BaseSettings):
     owner_alert_telegram_chat_id: int | None = None
     owner_alert_email: str | None = None
 
+    # Phase 93 BRDG-01 — staff Telegram chat for client message forwarding.
+    # When absent (None), the Telegram bridge (forward_to_staff ARQ task +
+    # staff_reply_handler) is disabled with a structured log line.
+    # Mirrors the owner_alert_telegram_chat_id sentinel pattern (D-52-09).
+    # Env var: STAFF_TELEGRAM_CHAT_ID (int). Set to the staff DM chat_id or
+    # group chat_id. Leave unset in dev to keep bridge disabled.
+    staff_telegram_chat_id: int | None = None
+
     # Phase 42 addition (D-42-28): Email transport settings nested block.
     # Defaults are sandbox-safe so fresh-clone dev boot does NOT require setting
     # email credentials first (mirrors Telegram block discipline above).
