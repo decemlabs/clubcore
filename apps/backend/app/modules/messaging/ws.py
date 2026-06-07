@@ -94,12 +94,24 @@ async def run_connection(
                     break
                 try:
                     await websocket.send_text(raw["data"])
+                    # WR-02: do NOT log the full frame body (information exposure for
+                    # messaging); log the frame size only.
                     _log.debug(
                         "ws_frame_sent",
                         client_id=str(client_id),
-                        data=raw["data"],
+                        frame_bytes=len(raw["data"]) if raw["data"] is not None else 0,
                     )
-                except Exception:  # BLE001: WS may have closed mid-send -- break silently
+                except (WebSocketDisconnect, RuntimeError):
+                    # Connection closed mid-send -- expected; stop forwarding.
+                    break
+                except Exception:  # BLE001
+                    # WR-02: narrow the broad swallow -- a serialization/logic bug
+                    # must not silently leave a half-dead connection with no signal.
+                    _log.warning(
+                        "ws_fan_out_send_failed",
+                        client_id=str(client_id),
+                        exc_info=True,
+                    )
                     break
         except asyncio.CancelledError:
             pass
