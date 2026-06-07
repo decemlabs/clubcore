@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.5
 milestone_name: Chat / Messaging — Client↔Gym
-status: executing
+status: verifying
 stopped_at: Phase 90 Plan 02 complete — messaging REST surface (GET/POST/PATCH /client/messages) + schemas + repository + service + router. Plan 03 (WS scaffold) next.
-last_updated: "2026-06-07T10:49:00.698Z"
+last_updated: "2026-06-07T10:54:48.788Z"
 last_activity: 2026-06-07
 progress:
   total_phases: 10
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 5
-  completed_plans: 4
-  percent: 10
+  completed_plans: 5
+  percent: 20
 ---
 
 # Project State
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md
 
 Phase: 91 (read-receipts-typing-indicators) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-07
 
-Progress: [████████░░] 80%
+Progress: [██████████] 100%
 
 ## v2.5 Roadmap Summary
 
@@ -132,6 +132,6 @@ Carrying forward from v2.4 close (see previous STATE.md for full list):
 
 ## Session Continuity
 
-Last session: 2026-06-07T10:49:00.694Z
+Last session: 2026-06-07T10:54:48.784Z
 Stopped at: Phase 90 Plan 02 complete — messaging REST surface (GET/POST/PATCH /client/messages) + schemas + repository + service + router. Plan 03 (WS scaffold) next.
 Resume: Run /gsd:execute-phase 90 to execute Plan 03 (WS scaffold)

@@ -26,7 +26,7 @@
 ### Receipts & Presence (RCPT)
 
 - [x] **RCPT-01**: Клиент видит статус своих сообщений «доставлено / прочитано» (✓ / ✓✓)
-- [ ] **RCPT-02**: Клиент видит индикатор «печатает…» от стороны зала
+- [x] **RCPT-02**: Клиент видит индикатор «печатает…» от стороны зала
 - [x] **RCPT-03**: Ответ staff помечает предшествующие клиентские сообщения прочитанными («reply-as-read») + WS read-receipt событие
 
 ### Attachments (ATT)
@@ -94,7 +94,7 @@
 | RT-03 | Phase 90 | Complete |
 | RT-04 | Phase 90 | Complete |
 | RCPT-01 | Phase 91 | Complete |
-| RCPT-02 | Phase 91 | Pending |
+| RCPT-02 | Phase 91 | Complete |
 | RCPT-03 | Phase 91 | Complete |
 | ATT-01 | Phase 92 | Pending |
 | ATT-02 | Phase 92 | Pending |
