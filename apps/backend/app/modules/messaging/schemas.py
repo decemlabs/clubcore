@@ -1,4 +1,4 @@
-"""Messaging module Pydantic schemas (Phase 90 MSG-01..04).
+"""Messaging module Pydantic schemas (Phase 90 MSG-01..04 + Phase 91 RCPT-01/03).
 
 Response schemas use ResponseData (camelCase wire via alias_generator=to_camel).
 Request schemas use BackendSchemaBase (extra='forbid', camelCase inbound).
@@ -8,9 +8,12 @@ paginated fields — PaginatedData[T] cannot carry extra fields per the generic 
 definition, so we replicate the page/page_size/total/items shape here.
 This mirrors ClientNotificationsListResponse from app.modules.notifications.schemas.
 
-NewMessageEvent uses a Literal discriminator type for extensibility — only
-"new_message" is in scope for Phase 90; future event types extend the union
-without changing the wire format for existing events.
+WS event discriminated union — three event types published to cc:messaging:client:{client_id}:
+  NewMessageEvent  — id-only notification (Phase 90 RT-03); triggers REST refetch on client.
+  ReadReceiptEvent — thread-level readAt marker (Phase 91 RCPT-01/03); post-commit, DB-first.
+  TypingEvent      — ephemeral {type, actor} frame (Phase 91 RCPT-02); never persisted.
+Each event type uses a Literal discriminator and is published independently via its own
+model_dump_json(by_alias=True) call — matching the NewMessageEvent pattern.
 """
 
 from __future__ import annotations
@@ -101,13 +104,44 @@ class NewMessageEvent(ResponseData):
     Minimal id-only frame — the PWA reacts by invalidating the messages query
     and refetching via REST (DB-first; pub/sub is notification-only, P5).
 
-    type is a Literal discriminator for extensibility — only "new_message" is
-    implemented in Phase 90. Future event types (e.g. "message_read_receipt",
-    "typing_indicator") extend the discriminated union without changing the wire
-    format for this member.
-
-    message_id → messageId on the wire via alias_generator=to_camel (P16).
+    type is a Literal discriminator; message_id → messageId on the wire via
+    alias_generator=to_camel (P16).
     """
 
     type: Literal["new_message"] = "new_message"
     message_id: UUID
+
+
+class ReadReceiptEvent(ResponseData):
+    """WS event frame for a thread-level read receipt (Phase 91 RCPT-01/03).
+
+    Published post-commit (CR-02 / DB-first) after reply-as-read marks prior
+    unread role='client' messages read. The client marks all its sent messages
+    with sent_at <= readAt as ✓✓.
+
+    type is a Literal discriminator; read_at → readAt on the wire.
+
+    CR-02: callers MUST invoke publish_read_receipt AFTER session.commit() so
+    the receipt is never emitted for an uncommitted read_at change (T-91-PHANTOM).
+
+    Channel is always cc:messaging:client:{client_id} — never from payload (T-91-IDOR).
+    """
+
+    type: Literal["read_receipt"] = "read_receipt"
+    read_at: datetime
+
+
+class TypingEvent(ResponseData):
+    """WS event frame for a staff→client typing indicator (Phase 91 RCPT-02).
+
+    Ephemeral — never persisted to DB; published directly to the principal
+    channel with no commit dependency. Auto-dismiss is client-side (~5 s).
+
+    Payload carries ONLY type + actor (T-91-LEAK: no body, preview, or message id).
+    actor defaults to "staff" — only staff→client typing is supported in Phase 91.
+
+    Channel is always cc:messaging:client:{client_id} — never from payload (T-91-IDOR).
+    """
+
+    type: Literal["typing"] = "typing"
+    actor: str = "staff"
