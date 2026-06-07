@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.5
 milestone_name: Chat / Messaging — Client↔Gym
 status: executing
-stopped_at: Phase 90 Plan 02 complete — messaging REST surface (GET/POST/PATCH /client/messages) + schemas + repository + service + router. Plan 03 (WS scaffold) next.
+stopped_at: Phase 92 complete — photo attachments (upload + magic-byte validation + IDOR-safe authenticated serve + two-step send flow). Verified 3/3. Next Phase 93 (Telegram Bridge).
 last_updated: "2026-06-07T12:07:17.135Z"
-last_activity: 2026-06-07 -- Phase 92 execution started
+last_activity: 2026-06-07 -- Phase 92 complete
 progress:
-  total_phases: 10
-  completed_phases: 2
+  total_phases: 6
+  completed_phases: 3
   total_plans: 8
-  completed_plans: 7
-  percent: 20
+  completed_plans: 8
+  percent: 50
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 92 (photo-attachments) — EXECUTING
-Plan: 1 of 3
-Status: Executing Phase 92
-Last activity: 2026-06-07 -- Phase 92 execution started
+Phase: 92 (photo-attachments) — COMPLETE ✅ (verified 3/3, 106/106 messaging tests green)
+Plan: 3 of 3
+Status: Phase 92 verified passed — next Phase 93 (Telegram Bridge)
+Last activity: 2026-06-07 -- Phase 92 complete (upload + IDOR-safe serve + anti-XSS)
 
-Progress: [█████████░] 88%
+Progress: [█████████░] 92%
 
 ## v2.5 Roadmap Summary
 
@@ -129,9 +129,12 @@ Carrying forward from v2.4 close (see previous STATE.md for full list):
 | production | RUN-02 RU email deliverability probe | N/A-until-production |
 | security | Phase 70 CR-02/IN-01/IN-02 (proxy rate-limit, QR post-decode, cancel idempotency) | deferred → /gsd:secure-phase 70 |
 | compliance | Phase 81 ФЗ-376 consent wording (concrete ₽ amount vs generic) | needs legal review |
+| contract | Phase 92 WR-01: `MessageItem.body: str` uses `""` sentinel for attachment-only messages (asymmetric with request `body: str \| None`). Decide null-vs-sentinel before Phase 95 contract freeze; Phase 94 PWA consumes it | deferred — contract owner decision |
+| tech-debt | Phase 92 WR-02: `storage.put()` (S3) before DB `insert_attachment()` → orphaned S3 object on DB failure, no GC path | out of v2.5 scope |
+| production | Phase 92 WR-03/WR-04: S3 `ensure_bucket` lacks `CreateBucketConfiguration(LocationConstraint)` for non-us-east-1 (Yandex `ru-central1`) + does not handle `403 AccessDenied` from `head_bucket`. Works on local SeaweedFS; needs hardening before Yandex prod deploy | N/A-until-production |
 
 ## Session Continuity
 
-Last session: 2026-06-07T11:44:21.973Z
-Stopped at: Phase 90 Plan 02 complete — messaging REST surface (GET/POST/PATCH /client/messages) + schemas + repository + service + router. Plan 03 (WS scaffold) next.
-Resume: Run /gsd:execute-phase 90 to execute Plan 03 (WS scaffold)
+Last session: 2026-06-07 (autonomous run)
+Stopped at: Phase 92 complete — photo attachments (upload + magic-byte validation + IDOR-safe authenticated serve with anti-XSS header triad + two-step send-with-attachment flow). Verified 3/3, 106/106 messaging tests green. Code review applied (CR-01); 4 warnings deferred (see Deferred Items).
+Resume: Phase 93 (Telegram Bridge) — discuss → plan → execute
