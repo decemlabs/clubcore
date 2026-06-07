@@ -173,14 +173,32 @@ async def run_connection(
     finally:
         # P6 / T-90-14: unconditional teardown -- runs on normal exit, disconnect,
         # timeout, or unhandled exception.
+        # WR-06: suppress only CancelledError for the task await; a genuine teardown
+        # failure (e.g. aclose() raising) must be LOGGED, not silently swallowed —
+        # blanket Exception suppression hides the one failure mode (pooled pub/sub
+        # subscriber-connection leak) the teardown exists to prevent.
         fan_out_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError, Exception):
+        with contextlib.suppress(asyncio.CancelledError):
             await fan_out_task
 
-        with contextlib.suppress(Exception):
+        try:
             await pubsub.unsubscribe(channel)
+        except Exception:  # BLE001
+            _log.warning(
+                "ws_pubsub_teardown_failed",
+                client_id=str(client_id),
+                step="unsubscribe",
+                exc_info=True,
+            )
 
-        with contextlib.suppress(Exception):
+        try:
             await pubsub.aclose()  # type: ignore[no-untyped-call]
+        except Exception:  # BLE001
+            _log.warning(
+                "ws_pubsub_teardown_failed",
+                client_id=str(client_id),
+                step="aclose",
+                exc_info=True,
+            )
 
         _log.info("ws_connection_closed", client_id=str(client_id), channel=channel)
