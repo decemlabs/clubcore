@@ -134,7 +134,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 
 #### Phase 91: Read Receipts + Typing Indicators
 
-- [ ] **Phase 91: Read Receipts + Typing Indicators** - Per-message read status + typing presence delivered over the Phase 90 WS channel
+- [x] **Phase 91: Read Receipts + Typing Indicators** - Per-message read status + typing presence delivered over the Phase 90 WS channel (completed 2026-06-07)
 
 #### Phase 92: Photo Attachments
 
@@ -271,7 +271,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 90. Messaging Domain + REST Foundation + WS Scaffold | 3/3 | Complete   | 2026-06-07 |
+| 90. Messaging Domain + REST Foundation + WS Scaffold | 3/3 | Complete    | 2026-06-07 |
 | 91. Read Receipts + Typing Indicators | 0/TBD | Not started | - |
 | 92. Photo Attachments | 0/TBD | Not started | - |
 | 93. Telegram Bridge | 0/TBD | Not started | - |
