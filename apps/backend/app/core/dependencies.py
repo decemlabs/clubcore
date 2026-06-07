@@ -1334,7 +1334,12 @@ async def verify_ws_origin(websocket: WebSocket) -> None:
 
     origin = websocket.headers.get("origin")
     if origin is None or origin not in get_settings().ws_allowed_origins:
-        await websocket.close(code=1008)
+        # Raise WebSocketException only -- do NOT call websocket.close() here.
+        # FastAPI's websocket_exception handler (starlette/middleware/exceptions.py)
+        # will send the close frame with code 1008 automatically. Calling close()
+        # before accept() and then raising causes a double-close RuntimeError in
+        # TestClient (T-90-11 regression: "Cannot call send once a close message has
+        # been sent"). The WebSocketException is sufficient for pre-accept rejection.
         raise WebSocketException(code=1008, reason="origin_not_allowed")
 
 

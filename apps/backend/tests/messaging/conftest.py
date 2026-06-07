@@ -61,6 +61,8 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
+import queue
+import threading
 from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -69,7 +71,7 @@ from typing import Any
 import pytest
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from starlette.testclient import TestClient
+from starlette.testclient import TestClient, WebSocketTestSession
 
 from app.core.config import get_settings
 from app.core.permissions import Role
@@ -320,6 +322,47 @@ def cleanup_client_sync(ws_tc: TestClient, *, phone: str) -> None:
 
     with contextlib.suppress(Exception):
         _portal_call(ws_tc, _cleanup())
+
+
+# ---------------------------------------------------------------------------
+# WS receive helper -- receive_text() with a timeout (used in IDOR/fan-out tests)
+# ---------------------------------------------------------------------------
+
+
+def ws_receive_text_timeout(ws: WebSocketTestSession, timeout: float) -> str | None:
+    """Receive one text frame from a WS TestSession with a wall-clock timeout.
+
+    ``WebSocketTestSession.receive_text()`` has no timeout parameter -- it blocks
+    indefinitely. This helper runs the receive in a daemon thread and returns
+    the frame, or ``None`` if ``timeout`` seconds elapse without a frame.
+
+    Usage::
+
+        raw = ws_receive_text_timeout(ws, timeout=1.0)
+        assert raw is None  # no frame arrived within 1 second
+
+    Do NOT use ``receive_text()`` directly in timeout-dependent assertions --
+    the test will hang on failure.
+    """
+    result_q: queue.Queue[Any] = queue.Queue()
+
+    def _receiver() -> None:
+        try:
+            result_q.put(ws.receive_text())
+        except Exception as exc:
+            result_q.put(exc)
+
+    t = threading.Thread(target=_receiver, daemon=True)
+    t.start()
+    t.join(timeout=timeout)
+
+    if t.is_alive():
+        # Timeout elapsed -- no frame arrived.
+        return None
+    item = result_q.get_nowait()
+    if isinstance(item, Exception):
+        return None
+    return item  # type: ignore[return-value]
 
 
 # ---------------------------------------------------------------------------
