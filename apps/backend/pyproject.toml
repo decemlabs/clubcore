@@ -88,6 +88,12 @@ python_files = ["test_*.py"]
 filterwarnings = [
     "error",
     "ignore::DeprecationWarning:pydantic.*",
+    # botocore uses datetime.utcnow() which is deprecated in Python 3.12; this is
+    # an upstream issue in botocore/aiobotocore — not actionable in this codebase.
+    # Suppressed so the deprecation warning does not break app lifespan setup in tests
+    # (Phase 92 Plan 02 added S3/aioboto3 to the lifespan; botocore fires this warning
+    # during SigV4 signing when the lifespan runs ensure_bucket()).
+    "ignore::DeprecationWarning:botocore.*",
     # Suppress BaseEventLoop.__del__ ResourceWarning that appears when pytest-asyncio
     # auto mode tests and sync Starlette TestClient WS tests share a session.
     # The WS TestClient fixture uses asyncio.run() for the DB connectivity probe
