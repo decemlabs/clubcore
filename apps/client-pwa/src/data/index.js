@@ -1,9 +1,8 @@
 // Phase 71: React Query hooks are the primary data source for wired screens.
 // Re-exported from the single mock→real swap point (D-71-07).
-// Net-new screens (ChatScreen, ReferralSheet, TrainerDetailSheet) must NOT import
-// from this file — ESLint boundary enforced (D-71-09).
-// GymInfoSheet and NotificationsSheet have graduated (Phase 86 / Phase 87) and now
-// import freely from this file via the @/data alias.
+// All net-new screens have graduated (D-71-09 fully resolved as of Phase 98):
+//   GymInfoSheet (Phase 86), NotificationsSheet (Phase 87), TrainerDetailSheet (Phase 88),
+//   ChatScreen (Phase 94), ReferralSheet (Phase 98) — all import freely via @/data alias.
 //
 // RETAINED MOCKS (post Plan 06 wiring):
 //   - UPCOMING_BOOKING → BookingManageSheet.jsx (manage sheet; read-only display)
@@ -69,6 +68,8 @@ export {
   useSendMessage,
   useUploadAttachment,
   useMarkMessagesRead,
+  // Phase-98 REFER-06: referral summary hook
+  useClientReferralSummary,
 } from '../lib/clientQueries'
 
 // ─── Legacy mock constants (retained for non-wired consumers) ─────────────
