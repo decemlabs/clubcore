@@ -749,11 +749,10 @@ async def staff_reply_handler(
         return
     chat_id: int = effective_chat.id
 
-    # T-93-08: replay guard — reuse the existing SET-NX dedup helper.
-    if not await _dedupe_update_id(ctx.redis, update_id, chat_id):
-        return
-
-    # T-93-06: defensive in-handler chat-id check (belt-and-suspenders).
+    # T-93-06 / WR-04: defensive in-handler chat-id check (belt-and-suspenders).
+    # This MUST run BEFORE _dedupe_update_id so the cheap, side-effect-free chat
+    # guard does not burn the update_id dedup key (mutating shared Redis state)
+    # for updates that were never destined for the staff routing path.
     staff_chat_id = get_settings().staff_telegram_chat_id
     if staff_chat_id is None or chat_id != staff_chat_id:
         logger.debug(
@@ -761,6 +760,10 @@ async def staff_reply_handler(
             chat_id=chat_id,
             staff_chat_id=staff_chat_id,
         )
+        return
+
+    # T-93-08: replay guard — reuse the existing SET-NX dedup helper.
+    if not await _dedupe_update_id(ctx.redis, update_id, chat_id):
         return
 
     reply_to = update.message.reply_to_message
