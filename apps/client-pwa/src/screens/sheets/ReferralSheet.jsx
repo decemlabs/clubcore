@@ -853,11 +853,18 @@ export function ReferralSheet({ onClose, userName: _userName }) {
               </span>
             )}
           </div>
-          <div className="e-bar-track">
-            <div className="e-bar-fill" />
-          </div>
-          {/* Gamification tier tracker — hidden-for-future (SC-5) */}
+          {/* Gamification tier tracker — hidden-for-future (SC-5).
+              WR-02: the .e-bar-track progress fill is tier/gamification progress
+              (toward the next reward tier), not the accrued figure. With no goal
+              denominator defined this phase it could only ever render a permanently
+              empty width:0 bar in the visible "Уже накоплено" area — a broken
+              affordance. Moved into the hidden tier-tracker block so it stays
+              consistent with .milestones until tiers ship. The real accrued amount
+              (formatMoney above) remains visible. */}
           <div className="milestones" hidden aria-hidden="true">
+            <div className="e-bar-track">
+              <div className="e-bar-fill" />
+            </div>
             <span className="ms-track"><i /></span>
             <span className="ms-node done" />
             <span className="ms-node done" />
