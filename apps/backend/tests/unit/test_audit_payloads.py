@@ -30,6 +30,7 @@ from app.core.audit_payloads import (
     PasswordResetRequestedPayload,
     PaymentReceiptEmailedPayload,
     PtSessionRecordedPayload,
+    ReferralBonusAccruedPayload,
     SlotCancelledPayload,
     SlotPublishedPayload,
     UserDeactivatedPayload,
@@ -760,3 +761,91 @@ def test_v16_pairs_all_have_payload_schemas() -> None:
         AUDIT_PAYLOAD_SCHEMAS[("payment_receipt_emailed", "payment")]
         is PaymentReceiptEmailedPayload
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase 97 — ReferralBonusAccruedPayload (REFER-04 / INFRA-15)
+# ---------------------------------------------------------------------------
+
+
+def test_referral_bonus_accrued_event_is_locked() -> None:
+    """("referral_bonus_accrued", "referral") must be in LOCKED_AUDIT_EVENTS (INFRA-15)."""
+    from app.core.audit import LOCKED_AUDIT_EVENTS
+
+    assert ("referral_bonus_accrued", "referral") in LOCKED_AUDIT_EVENTS
+
+
+def test_referral_bonus_accrued_registry_maps_to_payload_class() -> None:
+    """AUDIT_PAYLOAD_SCHEMAS maps ("referral_bonus_accrued", "referral") to the payload class."""
+    assert (
+        AUDIT_PAYLOAD_SCHEMAS[("referral_bonus_accrued", "referral")] is ReferralBonusAccruedPayload
+    )
+
+
+def test_referral_bonus_accrued_payload_valid_referrer_role() -> None:
+    """A well-formed payload with role='referrer' validates without error."""
+    p = ReferralBonusAccruedPayload(
+        client_id=uuid4(),
+        entry_id=uuid4(),
+        amount_kopecks=50000,
+        referral_capture_id=uuid4(),
+        online_payment_id=uuid4(),
+        role="referrer",
+    )
+    assert p.amount_kopecks == 50000
+    assert p.role == "referrer"
+    assert isinstance(p.client_id, UUID)
+
+
+def test_referral_bonus_accrued_payload_valid_referee_role() -> None:
+    """A well-formed payload with role='referee' validates without error."""
+    p = ReferralBonusAccruedPayload(
+        client_id=uuid4(),
+        entry_id=uuid4(),
+        amount_kopecks=30000,
+        referral_capture_id=uuid4(),
+        online_payment_id=uuid4(),
+        role="referee",
+    )
+    assert p.role == "referee"
+    assert isinstance(p.online_payment_id, UUID)
+
+
+def test_referral_bonus_accrued_payload_rejects_extra_field() -> None:
+    """extra='forbid' — unknown field raises ValidationError."""
+    with pytest.raises(ValidationError):
+        ReferralBonusAccruedPayload(  # type: ignore[call-arg]
+            client_id=uuid4(),
+            entry_id=uuid4(),
+            amount_kopecks=50000,
+            referral_capture_id=uuid4(),
+            online_payment_id=uuid4(),
+            role="referrer",
+            spurious="nope",
+        )
+
+
+def test_referral_bonus_accrued_payload_rejects_invalid_role() -> None:
+    """role must be Literal['referrer', 'referee'] — 'admin' raises ValidationError."""
+    with pytest.raises(ValidationError):
+        ReferralBonusAccruedPayload(
+            client_id=uuid4(),
+            entry_id=uuid4(),
+            amount_kopecks=50000,
+            referral_capture_id=uuid4(),
+            online_payment_id=uuid4(),
+            role="admin",  # type: ignore[arg-type]
+        )
+
+
+def test_referral_bonus_accrued_payload_rejects_missing_required_field() -> None:
+    """Omitting a required field (referral_capture_id) raises ValidationError."""
+    with pytest.raises(ValidationError):
+        ReferralBonusAccruedPayload(  # type: ignore[call-arg]
+            client_id=uuid4(),
+            entry_id=uuid4(),
+            amount_kopecks=50000,
+            online_payment_id=uuid4(),
+            role="referrer",
+            # referral_capture_id intentionally omitted
+        )
