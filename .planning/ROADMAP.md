@@ -153,7 +153,9 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 
 #### Phase 95: OpenAPI Handoff + Milestone Verification
 
-- [ ] **Phase 95: OpenAPI Handoff + Milestone Verification** - Byte-stable openapi.json + schema.d.ts regen + full milestone gate
+- [ ] **Phase 95: OpenAPI Handoff + Milestone Verification** - Byte-stable openapi.json + schema.d.ts regen + full milestone gate (2 plans)
+  - [ ] 95-01-PLAN.md — openapi.json: Messaging tag + retag routes + manual WS doc in _customize_openapi() + byte-stable regen + staff-drift gate + Redocly clean
+  - [ ] 95-02-PLAN.md — schema.d.ts regen + _v25Checks AssertNonNever[7] + full milestone gate green + REQUIREMENTS.md HND-01 complete
 
 ## Phase Details
 
@@ -238,7 +240,11 @@ Plans:
   1. `openapi.json` regenerates byte-stably with all v2.5 REST messaging paths present under the `Messaging` tag; the WS endpoint is manually documented in `_customize_openapi()` post-processor; Redocly lint clean
   2. `schema.d.ts` regenerates byte-stably; `_v25Checks` `AssertNonNever` tuple with `toHaveLength(N)` assertion covers all new v2.5 path×method combos; `git diff --exit-code` on staff paths is empty (drift gate green)
   3. Full milestone gate passes: backend pytest + mypy --strict + lint-imports (including `app.modules.messaging` in `modules-independent` contract) + CISO-01 no-edit guard + frontend vitest + Redocly
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 95-01-PLAN.md — openapi.json byte-stable regen: add `Messaging` tag, retag the 5 messaging REST routes, inject manual WS doc into `_customize_openapi()`, staff-drift gate vs `contract-freeze-v1.11.0`, Redocly clean
+- [ ] 95-02-PLAN.md — `schema.d.ts` byte-stable regen + `_v25Checks` AssertNonNever[7] forward-guards + full milestone gate green + mark HND-01 complete in REQUIREMENTS.md
 
 ## Backlog
 
