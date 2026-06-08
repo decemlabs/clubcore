@@ -233,13 +233,21 @@ def test_locked_audit_events_has_expected_count() -> None:
     poll_pending_refunds cron synthesising a settle UoW after a missed
     webhook (Plan 51-09 / D-51-17). The v1.7 count grows 11 → 14 and the
     frozenset total becomes 82 + 3 = 85. See 51-02-SUMMARY.md.
+
+    Phase 90 (INFRA-15 / D-90 messaging lock) ADDS 4 v2.5 messaging pairs
+    pre-registered BEFORE any callsite (Phases 90-93 implement the emitters):
+    ``('message_sent', 'message')``, ``('message_read', 'message')``,
+    ``('attachment_uploaded', 'message')``,
+    ``('chat_staff_reply_sent', 'message')``.
+    The frozenset total becomes 105 + 4 = 109. See 90-*-SUMMARY.md.
     """
-    assert len(LOCKED_AUDIT_EVENTS) == 105, (
-        "LOCKED_AUDIT_EVENTS size drifted: expected 105 "
+    assert len(LOCKED_AUDIT_EVENTS) == 109, (
+        "LOCKED_AUDIT_EVENTS size drifted: expected 109 "
         "(18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4 + 5 v1.5 + 13 v1.6 + 14 v1.7 "
         "+ 4 v1.9/P58 + 4 v1.9/P59 + 1 pre-P68 + 6 v2.0/P68 + 1 v2.2/P80 booking_rescheduled "
         "+ 1 v2.3/P82 loyalty_accrued + 1 v2.3/P83 loyalty_redeemed "
-        "+ 2 v2.3/P84: autopay_charge_initiated + autopay_charge_failed (APAY-01/APAY-03, INFRA-15)), "
+        "+ 2 v2.3/P84: autopay_charge_initiated + autopay_charge_failed (APAY-01/APAY-03, INFRA-15) "
+        "+ 4 v2.5/P90: message_sent + message_read + attachment_uploaded + chat_staff_reply_sent), "
         f"got {len(LOCKED_AUDIT_EVENTS)}"
     )
     # v2.3 Phase 82 INFRA-15 / ACCR-01/ACCR-02: +1 loyalty accrual lifecycle pair

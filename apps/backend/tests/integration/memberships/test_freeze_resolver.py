@@ -192,6 +192,9 @@ def _build_ctx(db_session: AsyncSession, redis_client: Any) -> HandlerContext:
         # NamedTuple constructor requires every field — benign placeholders.
         bookings_service=cast(Any, None),
         schedule_service=cast(Any, None),
+        # Phase 93 D-06 relaxation: messaging_service appended; not consumed by
+        # the freeze-resolver checkin path — benign placeholder.
+        messaging_service=cast(Any, None),
     )
 
 

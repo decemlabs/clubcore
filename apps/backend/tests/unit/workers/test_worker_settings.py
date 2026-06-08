@@ -158,14 +158,19 @@ def test_worker_settings_functions_registered() -> None:
 
     Phase 84 (Plan 84-03 APAY-04) appended ``dispatch_autopay_failure_notification`` —
     the decline-path failure notification ARQ task. List now has 14 entries.
+
+    Phase 93 (Plan 93-01 BRDG-01) appended ``forward_to_staff`` — the post-commit
+    Telegram forward task for client→staff messaging. List now has 15 entries.
     """
     from app.modules.autopay_charges.tasks import dispatch_autopay_failure_notification
     from app.workers.scheduled.charge_expiring_autopay import charge_expiring_autopay
+    from app.workers.tasks.forward_to_staff import forward_to_staff
 
     assert expire_memberships in WorkerSettings.functions
     assert charge_expiring_autopay in WorkerSettings.functions
     assert dispatch_autopay_failure_notification in WorkerSettings.functions
-    assert len(WorkerSettings.functions) == 14
+    assert forward_to_staff in WorkerSettings.functions
+    assert len(WorkerSettings.functions) == 15
 
 
 def test_worker_settings_redis_settings_resolved() -> None:
