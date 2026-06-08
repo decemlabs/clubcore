@@ -6,7 +6,8 @@ Enforces INFRA-15 invariant: pairs registered BEFORE any callsite ships.
 Group 1 (referral_code_generated):
   1. ("referral_code_generated", "referral") is in LOCKED_AUDIT_EVENTS.
   2. ReferralCodeGeneratedPayload validates a correct sample AND rejects extra fields.
-  3. AUDIT_PAYLOAD_SCHEMAS maps ("referral_code_generated", "referral") → ReferralCodeGeneratedPayload.
+  3. AUDIT_PAYLOAD_SCHEMAS maps ("referral_code_generated", "referral")
+     → ReferralCodeGeneratedPayload.
 
 Group 2 (referral_captured):
   4. ("referral_captured", "referral") is in LOCKED_AUDIT_EVENTS.

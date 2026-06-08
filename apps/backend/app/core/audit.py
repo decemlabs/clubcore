@@ -476,6 +476,10 @@ LOCKED_AUDIT_EVENTS: frozenset[tuple[str, str]] = frozenset(
         ("message_read", "message"),
         ("attachment_uploaded", "message"),
         ("chat_staff_reply_sent", "message"),
+        # v2.6 (Phase 96 lock — INFRA-15; referral domain. Pre-registered BEFORE
+        # any callsite per INFRA-15 discipline.)
+        ("referral_code_generated", "referral"),
+        ("referral_captured", "referral"),
     }
 )
 
