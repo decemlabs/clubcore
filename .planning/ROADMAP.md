@@ -171,7 +171,10 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
   2. Webhook replay (same `online_payment_id`) inserts nothing and emits no second audit event — idempotent by `(referral_id, online_payment_id)` partial UNIQUE guard
   3. A second membership purchase by the same referee does NOT trigger another referral bonus (one-bonus-per-referee invariant)
   4. Bonus amounts come exclusively from the owner-configurable config (Phase 96); no hardcoded amounts at the crediting callsite
-**Plans**: TBD
+**Plans**: 3 plans
+  - [ ] 97-01-PLAN.md — INFRA-15 audit foundation: lock referral_bonus_accrued + typed payload + registry + unit test (before any callsite)
+  - [ ] 97-02-PLAN.md — Data layer: loyalty_ledger referral_capture_id FK + entry_type CHECK widen + migration 0069 partial UNIQUE + accrue_referral_bonus primitive
+  - [ ] 97-03-PLAN.md — Webhook orchestration in handle_payment_succeeded (first-purchase gate, referrer-alive void, config-sourced amounts) + 7-case integration suite
 
 ### Phase 98: PWA ReferralScreen
 **Goal**: Экран «Приведи друга» выведен из ComingSoon и отображает реальные данные: персональный код, список приглашённых, сумму накопленных бонусов
@@ -243,6 +246,6 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 96. Referral Domain Backend | 3/3 | Complete    | 2026-06-08 |
-| 97. Reward Crediting | 0/TBD | Not started | - |
+| 97. Reward Crediting | 0/3 | Not started | - |
 | 98. PWA ReferralScreen | 0/TBD | Not started | - |
 | 99. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
