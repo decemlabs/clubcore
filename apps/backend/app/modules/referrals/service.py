@@ -294,7 +294,15 @@ async def get_referral_summary(
 
     All cross-module reads use raw text() SQL (D-54-08: no ORM import of Client
     or LoyaltyLedger). UUIDs bound as str(client_id). deleted_at IS NULL on clients.
-    Read-only after get_or_create_referral_code (which commits only on first mint).
+
+    Side effect (WR-03): this is NOT a pure read. Step 1 idempotently mints-or-fetches
+    the client's stable referral code via get_or_create_referral_code, which COMMITS on
+    the first call for a client (mint path) and is a read-only no-op thereafter. This is
+    intentional and consistent with GET /client/referral/code, which the PWA also calls
+    and which mints+commits the same way — the summary screen needs the code to exist.
+    So the first GET /client/referral/summary for a client performs a write+commit;
+    subsequent calls do not. (Steps 2-3 are pure reads — no flush, no commit.)
+
     IDOR-safe: client_id is always the caller's principal (T-98-02).
     """
     # Step 1: code + shareUrl (minting on first call — idempotent).
