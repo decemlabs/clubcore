@@ -4,14 +4,14 @@ milestone: v2.5
 milestone_name: Chat / Messaging — Client↔Gym
 status: verifying
 stopped_at: Phase 93 complete — Telegram Bridge BRDG-01/02/03 shipped. 168/168 messaging+telegram tests green.
-last_updated: "2026-06-08T04:50:36.107Z"
+last_updated: "2026-06-08T05:01:06.153Z"
 last_activity: 2026-06-08
 progress:
   total_phases: 10
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 12
-  completed_plans: 11
-  percent: 40
+  completed_plans: 12
+  percent: 50
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 93 — telegram-bridge
+**Current focus:** Phase 94 — pwa-chatscreen-wiring
 
 ## Current Position
 
-Phase: 93 (telegram-bridge) — COMPLETE ✅
-Plan: 2 of 2 (plan 01 ✅ BRDG-01 outbound forward; plan 02 ✅ BRDG-02/BRDG-03 inbound reply routing)
+Phase: 94 (pwa-chatscreen-wiring) — COMPLETE ✅
+Plan: 2 of 2 (plan 01 ✅ messaging data layer hooks + WS + badge plumbing; plan 02 ✅ PWA-01/PWA-03 pixel-perfect ChatScreen port + photo flow)
 Status: Phase complete — ready for verification
 Last activity: 2026-06-08
 
-Progress: [█████████░] 92%
+Progress: [██████████] 100%
 
 ## v2.5 Roadmap Summary
 
@@ -135,6 +135,6 @@ Carrying forward from v2.4 close (see previous STATE.md for full list):
 
 ## Session Continuity
 
-Last session: 2026-06-08T04:50:36.103Z
-Stopped at: Phase 93 complete — Telegram Bridge BRDG-01/02/03 shipped. 168/168 messaging+telegram tests green.
-Resume: Phase 94 (PWA ChatScreen Wiring) — next milestone phase
+Last session: 2026-06-08
+Stopped at: Phase 94 complete — ChatScreen graduated from D-71-09 + pixel-perfect port wired to messaging REST/WS/attachments (PWA-01/02/03). 210/210 client-pwa tests green; tsc + lint + build clean.
+Resume: Phase 95 (OpenAPI Handoff + Milestone Verification) — next milestone phase

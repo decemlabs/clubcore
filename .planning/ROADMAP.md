@@ -149,7 +149,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 
 #### Phase 94: PWA ChatScreen Wiring
 
-- [ ] **Phase 94: PWA ChatScreen Wiring** - Graduate ChatScreen from D-71-09 placeholder zone; wire REST + WS + attachments
+- [x] **Phase 94: PWA ChatScreen Wiring** - Graduate ChatScreen from D-71-09 placeholder zone; wire REST + WS + attachments (completed 2026-06-08)
 
 #### Phase 95: OpenAPI Handoff + Milestone Verification
 
@@ -226,7 +226,7 @@ Plans:
 
 Plans:
 - [x] 94-01-PLAN.md — Data layer: messaging React Query hooks + useClientMessagingWS + @/data barrel + UIContext unreadChat + App-level WS mount & TabBar badge (PWA-01, PWA-02)
-- [ ] 94-02-PLAN.md — Pixel-perfect ChatScreen port: de-list from D-71-09 + scoped CSS list+thread + read ticks/typing/unread + photo picker & full-screen overlay (PWA-01, PWA-03)
+- [x] 94-02-PLAN.md — Pixel-perfect ChatScreen port: de-list from D-71-09 + scoped CSS list+thread + read ticks/typing/unread + photo picker & full-screen overlay (PWA-01, PWA-03)
 
 **UI hint**: yes
 
@@ -289,5 +289,5 @@ Plans:
 | 91. Read Receipts + Typing Indicators | 2/2 | Complete    | 2026-06-07 |
 | 92. Photo Attachments | 3/3 | Complete   | 2026-06-07 |
 | 93. Telegram Bridge | 2/2 | Complete   | 2026-06-08 |
-| 94. PWA ChatScreen Wiring | 1/2 | In Progress|  |
+| 94. PWA ChatScreen Wiring | 2/2 | Complete   | 2026-06-08 |
 | 95. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |

@@ -45,7 +45,7 @@
 
 - [x] **PWA-01**: ChatScreen подключён к реальному API + WS (убрать ComingSoon, graduate из D-71-09 placeholder-зоны — де-листинг 3 spots + импорт через `@/data`)
 - [x] **PWA-02**: Бейдж непрочитанных в PWA (таб/иконка) отражает реальный `unreadCount`
-- [ ] **PWA-03**: Фото-picker при отправке + просмотр вложений (preview/full) в треде
+- [x] **PWA-03**: Фото-picker при отправке + просмотр вложений (preview/full) в треде
 
 ### OpenAPI Handoff (HND)
 
@@ -104,7 +104,7 @@
 | BRDG-03 | Phase 93 | Complete |
 | PWA-01 | Phase 94 | Complete |
 | PWA-02 | Phase 94 | Complete |
-| PWA-03 | Phase 94 | Pending |
+| PWA-03 | Phase 94 | Complete |
 | HND-01 | Phase 95 | Pending |
 
 **Coverage:**
