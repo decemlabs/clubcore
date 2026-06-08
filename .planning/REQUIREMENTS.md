@@ -38,8 +38,8 @@
 ### Telegram Bridge (BRDG)
 
 - [ ] **BRDG-01**: Клиентское сообщение (текст + фото) пересылается staff в Telegram через существующий bot-worker
-- [ ] **BRDG-02**: Ответ staff (native Reply) маршрутизируется в правильный клиентский тред и доставляется клиенту по WS
-- [ ] **BRDG-03**: Маршрутизация reply якорится в БД/Redis (`tg_message_id → thread/client`); защита от эхо-петли и misroute (видимо только при ≥2 активных тредах)
+- [x] **BRDG-02**: Ответ staff (native Reply) маршрутизируется в правильный клиентский тред и доставляется клиенту по WS
+- [x] **BRDG-03**: Маршрутизация reply якорится в БД/Redis (`tg_message_id → thread/client`); защита от эхо-петли и misroute (видимо только при ≥2 активных тредах)
 
 ### PWA Wiring (PWA)
 
@@ -100,8 +100,8 @@
 | ATT-02 | Phase 92 | Complete |
 | ATT-03 | Phase 92 | Complete |
 | BRDG-01 | Phase 93 | Pending |
-| BRDG-02 | Phase 93 | Pending |
-| BRDG-03 | Phase 93 | Pending |
+| BRDG-02 | Phase 93 | Complete |
+| BRDG-03 | Phase 93 | Complete |
 | PWA-01 | Phase 94 | Pending |
 | PWA-02 | Phase 94 | Pending |
 | PWA-03 | Phase 94 | Pending |

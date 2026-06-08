@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.5
 milestone_name: Chat / Messaging — Client↔Gym
-status: executing
-stopped_at: Phase 92 complete — photo attachments (upload + magic-byte validation + IDOR-safe authenticated serve with anti-XSS header triad + two-step send-with-attachment flow). Verified 3/3, 106/106 messaging tests green. Code review applied (CR-01); 4 warnings deferred (see Deferred Items).
-last_updated: "2026-06-08T00:00:00.000Z"
-last_activity: 2026-06-08 -- Phase 93 plan 01 complete (forward_to_staff bridge outbound)
+status: complete
+stopped_at: Phase 93 complete — Telegram Bridge BRDG-01/02/03 shipped. Outbound forward (plan 01) + inbound reply routing (plan 02). 168/168 messaging+telegram tests green.
+last_updated: "2026-06-08T03:30:00.000Z"
+last_activity: 2026-06-08 -- Phase 93 plan 02 complete (BRDG-02/BRDG-03 inbound reply routing)
 progress:
   total_phases: 10
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 10
-  completed_plans: 8
-  percent: 30
+  completed_plans: 10
+  percent: 40
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 93 (telegram-bridge) — EXECUTING
-Plan: 2 of 2 (plan 01 complete ✅ — BRDG-01 outbound forward; 118/118 messaging green)
-Status: Executing Phase 93 — plan 02 (inbound reply routing) next
-Last activity: 2026-06-08 -- Phase 93 plan 01 complete (forward_to_staff bridge outbound)
+Phase: 93 (telegram-bridge) — COMPLETE ✅
+Plan: 2 of 2 (plan 01 ✅ BRDG-01 outbound forward; plan 02 ✅ BRDG-02/BRDG-03 inbound reply routing)
+Status: Phase 93 complete — all BRDG requirements satisfied; 168/168 tests green
+Last activity: 2026-06-08 -- Phase 93 plan 02 complete (BRDG-02/BRDG-03 inbound reply routing)
 
-Progress: [█████████░] 92%
+Progress: [██████████] 100%
 
 ## v2.5 Roadmap Summary
 
@@ -135,6 +135,6 @@ Carrying forward from v2.4 close (see previous STATE.md for full list):
 
 ## Session Continuity
 
-Last session: 2026-06-07 (autonomous run)
-Stopped at: Phase 92 complete — photo attachments (upload + magic-byte validation + IDOR-safe authenticated serve with anti-XSS header triad + two-step send-with-attachment flow). Verified 3/3, 106/106 messaging tests green. Code review applied (CR-01); 4 warnings deferred (see Deferred Items).
-Resume: Phase 93 (Telegram Bridge) — discuss → plan → execute
+Last session: 2026-06-08 (autonomous run)
+Stopped at: Phase 93 complete — Telegram Bridge BRDG-01/02/03 shipped. 168/168 messaging+telegram tests green.
+Resume: Phase 94 (PWA ChatScreen Wiring) — next milestone phase

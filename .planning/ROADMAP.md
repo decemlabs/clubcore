@@ -145,7 +145,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 
 #### Phase 93: Telegram Bridge
 
-- [ ] **Phase 93: Telegram Bridge** - Bidirectional client↔staff relay through the existing Telegram bot worker
+- [x] **Phase 93: Telegram Bridge** - Bidirectional client↔staff relay through the existing Telegram bot worker (completed 2026-06-08)
 
 #### Phase 94: PWA ChatScreen Wiring
 
@@ -211,8 +211,8 @@ Plans:
   2. Staff can reply using Telegram's native Reply function; the reply is stored in the correct client thread in Postgres and delivered to the client's WS connection; replying to an older forwarded message routes to the originating client, not the most recently active one (Redis `cc:messaging:tg_msg:{tg_message_id}` → `thread_id` mapping, TTL 7 days)
   3. The bot does not echo-loop: a bot-forwarded message arriving back as an update is skipped (`is_bot` check + `chat_forwarding_log` as natural loop-breaker); each client message appears exactly once in each direction
 **Plans**: 2 plans
-- [ ] 93-01-PLAN.md — Client→staff forward path: forward_to_staff ARQ task + send_photo + config + post-commit router enqueue (BRDG-01)
-- [ ] 93-02-PLAN.md — Staff→client reply path: staff_reply_handler + HandlerContext.messaging_service + chat_forwarding_log routing + echo/misroute guards (BRDG-02, BRDG-03)
+- [x] 93-01-PLAN.md — Client→staff forward path: forward_to_staff ARQ task + send_photo + config + post-commit router enqueue (BRDG-01)
+- [x] 93-02-PLAN.md — Staff→client reply path: staff_reply_handler + HandlerContext.messaging_service + chat_forwarding_log routing + echo/misroute guards (BRDG-02, BRDG-03)
 
 ### Phase 94: PWA ChatScreen Wiring
 **Goal**: ChatScreen выведен из ComingSoon и de-listed из D-71-09 placeholder-зоны; клиент переписывается с залом в реальном времени из PWA, видит статусы прочтения, typing-индикатор, фото и badge непрочитанных
@@ -283,6 +283,6 @@ Plans:
 | 90. Messaging Domain + REST Foundation + WS Scaffold | 3/3 | Complete    | 2026-06-07 |
 | 91. Read Receipts + Typing Indicators | 2/2 | Complete    | 2026-06-07 |
 | 92. Photo Attachments | 3/3 | Complete   | 2026-06-07 |
-| 93. Telegram Bridge | 0/TBD | Not started | - |
+| 93. Telegram Bridge | 2/2 | Complete   | 2026-06-08 |
 | 94. PWA ChatScreen Wiring | 0/TBD | Not started | - |
 | 95. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
