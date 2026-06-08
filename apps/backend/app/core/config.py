@@ -132,6 +132,12 @@ class Settings(BaseSettings):
     # flag is captured (D-43-14 / Pitfall 4 anti-oracle).
     frontend_base_url: str = "http://localhost:5173"
 
+    # Phase 96 addition (REFER-01): client-pwa base URL for server-authoritative
+    # deep-link shareUrl construction. The referral deep-link path /i/<code> is
+    # consumed by the PWA (port 5174), not the admin-web (port 5173). Override
+    # via PWA_BASE_URL env var in production. Never stored in audit payloads.
+    pwa_base_url: str = "http://localhost:5174"
+
     # Phase 90 RT-02 — CSWSH guard allowlist for the WebSocket endpoint.
     # verify_ws_origin (app/core/dependencies.py) compares the WS upgrade
     # Origin header against this list. Defaults cover the admin-web dev server
