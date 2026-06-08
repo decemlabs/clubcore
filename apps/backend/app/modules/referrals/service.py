@@ -1,6 +1,7 @@
 """Referral service (Phase 96 REFER-01/REFER-02/REFER-03/REFER-07).
 
-No session.commit() in non-singleton paths — caller-owns-txn (D-32-10/D-49-19).
+Transaction discipline (D-03 caller-owns-txn): all three mutating service functions
+flush + commit inside the service layer, matching gym.service.update_gym_info.
 All cross-module client reads use raw SQL text() — no ORM import of Client (D-54-08).
 
 INFRA-15: both audit pairs (referral_code_generated, referral_captured) are pre-
@@ -8,8 +9,10 @@ registered in LOCKED_AUDIT_EVENTS + AUDIT_PAYLOAD_SCHEMAS by Plan 96-01 before
 any callsite here.
 
 Idempotency:
-  get_or_create_referral_code — reads existing code first; emits only on real insert.
-  capture_referral — checks existing capture first; emits only on real insert.
+  get_or_create_referral_code — DB UNIQUE on client_id + flush+commit; audit emitted
+    only on real insert (RETURNING-gated via code_row.id population from flush).
+  capture_referral — pg_insert on_conflict_do_nothing with RETURNING; audit emitted
+    only when RETURNING returns a new id (RETURNING-gated, CR-WR-01 fix).
 
 IDOR safety:
   capture_referral receives the referee identity as an explicit argument from the
@@ -23,6 +26,7 @@ from uuid import UUID
 
 import structlog
 from sqlalchemy import text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import audit
@@ -117,11 +121,13 @@ async def get_or_create_referral_code(
     Idempotent: if a code already exists, returns it without emitting a second
     referral_code_generated audit event (INFRA-15 gating — no duplicate audit).
 
-    flush only — never commit (caller-owns-txn, D-32-10).
+    Caller-owns-txn: flush + commit here (D-03). Matches gym.service.update_gym_info
+    discipline. DB UNIQUE on client_id (uq_referral_codes_client_id) is the
+    authoritative idempotency guarantee; this read-first check is a fast-path guard.
     """
     existing = await repository.get_code_by_client_id(session, client_id)
     if existing is not None:
-        # Idempotent return — no audit emit.
+        # Idempotent return — no audit emit, no commit (no writes).
         share_url = f"{settings.pwa_base_url}/i/{existing.code}"
         _log.debug(
             "referral_code_existing",
@@ -130,7 +136,7 @@ async def get_or_create_referral_code(
         )
         return ReferralCodeResponse(code=existing.code, share_url=share_url)
 
-    # No existing code — generate, insert, flush, audit.
+    # No existing code — generate, insert, flush, audit, commit.
     new_code_str = await _generate_unique_code(session)
     code_row = ReferralCode(client_id=client_id, code=new_code_str)
     session.add(code_row)
@@ -144,10 +150,11 @@ async def get_or_create_referral_code(
         actor_user_id=None,  # client-initiated; no staff actor
         resource_type="referral",
         resource_id=code_row.id,
-        client_id=str(client_id),
-        referral_code_id=str(code_row.id),
+        client_id=client_id,           # UUID, not str() — CR-03 fix
+        referral_code_id=code_row.id,  # UUID, not str() — CR-03 fix
         code=new_code_str,
     )
+    await session.commit()  # CR-01 fix: service owns the transactional moment
     _log.info(
         "referral_code_generated",
         client_id=str(client_id),
@@ -185,6 +192,8 @@ async def resolve_public_code(
         )
 
     # Fetch referrer first_name via raw SQL — D-54-08: no ORM import of Client.
+    # WR-02: filter deleted_at IS NULL; missing row means referrer is soft-deleted
+    # → treat code as invalid (anti-oracle: still 200, valid=False).
     row = (
         await session.execute(
             text(
@@ -195,11 +204,21 @@ async def resolve_public_code(
         )
     ).mappings().one_or_none()
 
-    referrer_first_name: str | None = row["first_name"] if row is not None else None
+    if row is None:
+        # Referrer is soft-deleted — code is no longer valid.
+        _log.debug(
+            "referral_code_resolve_deleted_referrer",
+            code=code_str.upper(),
+        )
+        return ReferralResolveResponse(
+            valid=False,
+            referrer_first_name=None,
+            welcome_bonus_kopecks=0,
+        )
 
     return ReferralResolveResponse(
         valid=True,
-        referrer_first_name=referrer_first_name,
+        referrer_first_name=row["first_name"],
         welcome_bonus_kopecks=welcome_bonus,
     )
 
@@ -211,30 +230,24 @@ async def capture_referral(
 ) -> None:
     """Bind referee→referrer using the referral code string.
 
-    Idempotent: if the referee already has a capture row (any code), returns
-    immediately — first binding wins. No audit event on no-op path.
+    Idempotent via pg_insert on_conflict_do_nothing — concurrent requests
+    for the same referee produce one insert; the second gets RETURNING=None and returns
+    silently (WR-01 fix: no TOCTOU 500 from IntegrityError).
 
     Raises:
-        ReferralCodeNotFoundError (404): code_str does not match any live code.
+        ReferralCodeNotFoundError (404): code_str does not match any live code, or
+            the referrer client is soft-deleted (WR-02 fix).
         SelfReferralError (422): resolved referrer is the same as the referee.
 
     IDOR safety: referee identity comes ONLY from *referee_principal_id* (the
     require_client() principal argument), never from any request body field
     (T-96-05 mitigate).
 
-    flush only — never commit (caller-owns-txn, D-32-10).
+    Caller-owns-txn: flush + commit here (D-03). Matches gym.service.update_gym_info
+    discipline. Audit emitted only when RETURNING returns a new id (RETURNING-gated,
+    INFRA-15 — no duplicate audit on concurrent no-op).
     """
-    # Idempotency gate — first binding wins.
-    existing_capture = await repository.get_capture_by_referee(session, referee_principal_id)
-    if existing_capture is not None:
-        _log.info(
-            "referral_capture_no_op",
-            referee_client_id=str(referee_principal_id),
-            msg="capture already exists — no-op",
-        )
-        return
-
-    # Resolve the code.
+    # Resolve the code first (raises 404 if absent).
     code_row = await repository.get_code_by_value(session, code_str)
     if code_row is None:
         raise ReferralCodeNotFoundError("referral_code_not_found")
@@ -243,31 +256,58 @@ async def capture_referral(
     if code_row.client_id == referee_principal_id:
         raise SelfReferralError("self_referral_not_allowed")
 
-    # Insert capture row.
-    capture = ReferralCapture(
-        referee_client_id=referee_principal_id,
-        referrer_client_id=code_row.client_id,
-        referral_code_id=code_row.id,
-    )
-    session.add(capture)
-    await session.flush()  # get capture.id
+    # WR-02: reject capture against a soft-deleted referrer's code.
+    referrer_alive = (
+        await session.execute(
+            text("SELECT 1 FROM clients WHERE id = :cid AND deleted_at IS NULL"),
+            {"cid": str(code_row.client_id)},
+        )
+    ).fetchone()
+    if referrer_alive is None:
+        raise ReferralCodeNotFoundError("referral_code_not_found")
 
+    # WR-01: idempotent insert via ON CONFLICT DO NOTHING + RETURNING.
+    # Concurrent second insert for the same referee_client_id hits the DB UNIQUE
+    # constraint (uq_referral_captures_referee_client_id) and returns RETURNING=None
+    # → no-op path, no IntegrityError 500.
+    stmt = (
+        pg_insert(ReferralCapture)
+        .values(
+            referee_client_id=referee_principal_id,
+            referrer_client_id=code_row.client_id,
+            referral_code_id=code_row.id,
+        )
+        .on_conflict_do_nothing(index_elements=["referee_client_id"])
+        .returning(ReferralCapture.id)
+    )
+    capture_id: UUID | None = await session.scalar(stmt)
+    if capture_id is None:
+        # Conflict — idempotent no-op (referee already captured, first binding wins).
+        _log.info(
+            "referral_capture_no_op",
+            referee_client_id=str(referee_principal_id),
+            msg="capture already exists — no-op",
+        )
+        return
+
+    # RETURNING-gated audit emit — only on real insert (INFRA-15).
     await audit.emit(
         session,
         "referral_captured",
         actor_user_id=None,  # client-initiated; no staff actor
         resource_type="referral",
-        resource_id=capture.id,
-        referee_client_id=str(referee_principal_id),
-        referrer_client_id=str(code_row.client_id),
-        referral_capture_id=str(capture.id),
-        referral_code_id=str(code_row.id),
+        resource_id=capture_id,
+        referee_client_id=referee_principal_id,    # UUID, not str() — CR-03 fix
+        referrer_client_id=code_row.client_id,     # UUID, not str() — CR-03 fix
+        referral_capture_id=capture_id,            # UUID, not str() — CR-03 fix
+        referral_code_id=code_row.id,              # UUID, not str() — CR-03 fix
     )
+    await session.commit()  # CR-01 fix: service owns the transactional moment
     _log.info(
         "referral_captured",
         referee_client_id=str(referee_principal_id),
         referrer_client_id=str(code_row.client_id),
-        referral_capture_id=str(capture.id),
+        referral_capture_id=str(capture_id),
         referral_code_id=str(code_row.id),
     )
 
