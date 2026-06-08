@@ -714,12 +714,22 @@ export function ChatScreen({ tweaks, initialConv, onClearInitial, onThreadOpen }
   const cameraInputRef = useRef(null);
   const galleryInputRef = useRef(null);
 
-  // WR-02: object URLs созданные для оптимистичного превью фото. Нельзя
-  // отзывать в finally на успешном пути — серверный refetch, заменяющий
+  // WR-01: лечч per-open-session для mark-read. Не шлём повторный PATCH за
+  // одно открытие треда: лatch сбрасывается при openThread и устанавливается
+  // при первом PATCH, поэтому backend lag / eventual-consistency не порождает
+  // серийный цикл PATCH→invalidate→refetch→PATCH.
+  const markedForOpenRef = useRef(false);
+
+  // WR-02 (объект URLs): object URLs созданные для оптимистичного превью фото.
+  // Нельзя отзывать в finally на успешном пути — серверный refetch, заменяющий
   // оптимистичное сообщение, асинхронен, и полноэкранный оверлей может всё ещё
   // ссылаться на этот URL. Храним и отзываем только когда URL больше нигде не
   // отрисован (см. эффект ниже) и при размонтировании.
   const photoObjectUrlsRef = useRef(new Set());
+
+  // WR-02 (unmount guard): gate post-await setState calls so they don't run
+  // after ChatScreen unmounts (lazy-routed, unmounts on tab switch).
+  const mountedRef = useRef(true);
 
   /* ── Toast ── */
   const toast = useCallback((msg) => {
@@ -825,7 +835,11 @@ export function ChatScreen({ tweaks, initialConv, onClearInitial, onThreadOpen }
     setAnimateId(null);
     setInput('');
     setLocallyUnread(false);
+    // WR-01: сброс latch — новый open-session допускает ровно один PATCH.
+    markedForOpenRef.current = false;
     // Mark-read: на бэкенде + оптимистично гасим бейдж.
+    // Устанавливаем latch сразу, так как этот вызов уже является первым PATCH.
+    markedForOpenRef.current = true;
     markReadM.mutate();
     ui.setUnreadChat(0);
     setViewAnim('enter');
@@ -935,12 +949,23 @@ export function ChatScreen({ tweaks, initialConv, onClearInitial, onThreadOpen }
     };
   }, []);
 
-  // mark-read при входящем сообщении пока тред открыт.
-  // WR-03: guard против PATCH-петли. onSettled инвалидирует messages → refetch;
-  // если бэкенд ещё не сошёлся (eventual consistency) и unreadCount остаётся > 0,
-  // эффект сработал бы снова. Не шлём новую мутацию, пока предыдущая в полёте.
+  // WR-02: unmount guard — set mountedRef false on cleanup so post-await
+  // setState calls in sendTextMessage / sendPhoto don't run after unmount.
   useEffect(() => {
-    if (openIdRef.current != null && unreadCount > 0 && !markReadM.isPending) {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  // mark-read при входящем сообщении пока тред открыт.
+  // WR-03: guard против PATCH-петли — не шлём новую мутацию пока предыдущая
+  // в полёте.
+  // WR-01: latch per-open-session — markedForOpenRef предотвращает серийный
+  // цикл PATCH→invalidate→refetch→PATCH при backend lag (eventual consistency).
+  // Latch сброшен в openThread, поэтому genuinely новые unread (пришедшие через
+  // WS пока тред открыт) снова взведут его только если unreadCount вырос.
+  useEffect(() => {
+    if (openIdRef.current != null && unreadCount > 0 && !markReadM.isPending && !markedForOpenRef.current) {
+      markedForOpenRef.current = true;
       markReadM.mutate();
       ui.setUnreadChat(0);
     }
@@ -971,10 +996,13 @@ export function ChatScreen({ tweaks, initialConv, onClearInitial, onThreadOpen }
     try {
       await sendMessageM.mutateAsync({ body: t, idempotencyKey: uuidV4() });
       // WS new_message → App invalidate → refetch заменит оптимистичное.
-      setOptimistic((prev) => prev.filter((o) => o.id !== optimisticId));
+      // WR-02: guard — component may unmount (tab switch) while send is in flight.
+      if (mountedRef.current) setOptimistic((prev) => prev.filter((o) => o.id !== optimisticId));
     } catch {
-      setOptimistic((prev) => prev.filter((o) => o.id !== optimisticId));
-      toast('Не удалось отправить');
+      if (mountedRef.current) {
+        setOptimistic((prev) => prev.filter((o) => o.id !== optimisticId));
+        toast('Не удалось отправить');
+      }
     }
   }, [sendMessageM, toast]);
 
@@ -1005,14 +1033,17 @@ export function ChatScreen({ tweaks, initialConv, onClearInitial, onThreadOpen }
     try {
       const { attachmentId } = await uploadM.mutateAsync({ file });
       await sendMessageM.mutateAsync({ attachmentId, idempotencyKey: uuidV4() });
-      setOptimistic((prev) => prev.filter((o) => o.id !== optimisticId));
-      // WR-02: НЕ отзываем objectUrl здесь — refetch, заменяющий оптимистичное
+      // WR-02: guard — component may unmount while upload/send is in flight.
+      // НЕ отзываем objectUrl здесь — refetch, заменяющий оптимистичное
       // сообщение реальным серверным изображением, асинхронен, и оверлей может
       // всё ещё показывать этот URL. Отзыв делает эффект-сборщик ниже, когда URL
       // больше нигде не используется.
+      if (mountedRef.current) setOptimistic((prev) => prev.filter((o) => o.id !== optimisticId));
     } catch {
-      setOptimistic((prev) => prev.filter((o) => o.id !== optimisticId));
-      toast('Не удалось отправить фото');
+      if (mountedRef.current) {
+        setOptimistic((prev) => prev.filter((o) => o.id !== optimisticId));
+        toast('Не удалось отправить фото');
+      }
       // WR-02: отзыв также откладываем эффекту-сборщику (оверлей мог уже открыться
       // на этом URL до ошибки).
     }
