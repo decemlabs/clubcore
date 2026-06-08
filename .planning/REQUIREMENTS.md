@@ -14,8 +14,8 @@ Client-facing referral program. All client surfaces under `require_client()`, ID
 - [x] **REFER-07**: Суммы реферальных бонусов (бонус рефереру, приветственный другу) конфигурируемы через owner-only API + seed (admin-web заморожен); сервер — единственный источник сумм.
 
 ### Referral screen — client PWA (REFER)
-- [ ] **REFER-05**: Экран «Приведи друга» выведен из ComingSoon и de-listed из D-71-09 ESLint-зоны (импорт данных через `@/data`); реализован как **пиксель-в-пиксель порт** макета `.planning/refs/v2.6-REFERENCE-ReferFriendScreen.jsx` (промокод + ссылка + copy, share Telegram/WhatsApp/native, блок «Как это работает»), с stripped device-хромом и scoped CSS (как ChatScreen v2.5). Геймификация-тир («5 друзей → месяц») hide-for-future.
-- [ ] **REFER-06**: На экране отображаются реальные данные клиента: список приглашённых друзей со статусами (присоединился + начисленный бонус / перешёл-но-не-оплатил) и сумма «Уже накоплено» (фактические реферальные начисления из ledger), через `@/data`.
+- [x] **REFER-05**: Экран «Приведи друга» выведен из ComingSoon и de-listed из D-71-09 ESLint-зоны (импорт данных через `@/data`); реализован как **пиксель-в-пиксель порт** макета `.planning/refs/v2.6-REFERENCE-ReferFriendScreen.jsx` (промокод + ссылка + copy, share Telegram/WhatsApp/native, блок «Как это работает»), с stripped device-хромом и scoped CSS (как ChatScreen v2.5). Геймификация-тир («5 друзей → месяц») hide-for-future.
+- [x] **REFER-06**: На экране отображаются реальные данные клиента: список приглашённых друзей со статусами (присоединился + начисленный бонус / перешёл-но-не-оплатил) и сумма «Уже накоплено» (фактические реферальные начисления из ledger), через `@/data`.
 
 ### API handoff (HND)
 - [ ] **HND-01**: Все endpoint'ы v2.6 зафиксированы в byte-stable `openapi.json` + `schema.d.ts`; `_v26Checks` AssertNonNever покрывает новые path×method; staff-контракт байт-в-байт цел (drift gate зелёный); полный milestone gate зелёный (pytest + mypy --strict + lint-imports + Redocly + frontend vitest).
@@ -39,7 +39,7 @@ Client-facing referral program. All client surfaces under `require_client()`, ID
 | REFER-02 | Phase 96 (backend) + Phase 98 (PWA) | Complete |
 | REFER-03 | Phase 96 | Complete |
 | REFER-04 | Phase 97 | Complete |
-| REFER-05 | Phase 98 | Pending |
-| REFER-06 | Phase 98 | Pending |
+| REFER-05 | Phase 98 | Complete |
+| REFER-06 | Phase 98 | Complete |
 | REFER-07 | Phase 96 | Complete |
 | HND-01 | Phase 99 | Pending |
