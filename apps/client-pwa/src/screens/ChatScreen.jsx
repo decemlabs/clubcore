@@ -269,6 +269,10 @@ const CSS = `
   background: var(--surface); border: 0.5px solid var(--border);
   border-radius: 24px; box-shadow: var(--sh-2); padding: 8px;
   transform: translateY(150%); transition: transform 0.34s cubic-bezier(0.32,0.72,0.2,1);
+  /* animation:none overrides the global styles.css .sheet rule (class-name collision):
+     its sheet-in animation with both-fill outranks this transform and would otherwise
+     pin the closed action sheet on-screen, blanking the whole chat. */
+  animation: none;
 }
 .chat-root .sheet.show { transform: translateY(0); }
 .chat-root .sheet-title { padding: 12px 14px 6px; }
