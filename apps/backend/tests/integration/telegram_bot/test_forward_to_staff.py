@@ -303,6 +303,151 @@ async def test_forward_to_staff_photo_streams_and_sends() -> None:
 
 
 @pytest.mark.asyncio
+async def test_forward_to_staff_text_truncated_to_telegram_limit() -> None:
+    """WR-02: a rendered text DM exceeding 4096 chars is truncated before send."""
+    from app.integrations.telegram import sender as sender_mod
+    from app.integrations.telegram.sender import SendResult
+    from app.workers.tasks.forward_to_staff import forward_to_staff
+
+    redis = fakeredis.aioredis.FakeRedis()
+
+    captured: list[str] = []
+
+    async def fake_send_text_dm(bot: Any, chat_id: int, text: str, **kw: Any) -> SendResult:
+        captured.append(text)
+        return SendResult(ok=True, message_id=1212)
+
+    ctx = _make_ctx(redis)
+
+    long_body = "я" * 4096  # rendered DM (header + body) exceeds 4096-char limit
+
+    with (
+        patch("app.workers.tasks.forward_to_staff.get_settings") as mock_settings,
+        patch.object(sender_mod, "send_text_dm", fake_send_text_dm),
+    ):
+        mock_settings.return_value = SimpleNamespace(staff_telegram_chat_id=55555)
+        result = await forward_to_staff(
+            ctx,
+            client_id="client-uuid",
+            message_id="msg-uuid",
+            thread_id="thread-uuid",
+            body=long_body,
+            client_name="Иван Иванов",
+            client_phone="+79991234567",
+        )
+
+    assert result == "sent"
+    assert len(captured) == 1
+    assert len(captured[0]) <= 4096
+    assert captured[0].endswith("…")
+
+
+@pytest.mark.asyncio
+async def test_forward_to_staff_photo_caption_truncated_with_followup_text() -> None:
+    """WR-01: photo caption is capped at 1024 chars and the full DM follows as text."""
+    from app.integrations.telegram import sender as sender_mod
+    from app.integrations.telegram.sender import SendResult
+    from app.workers.tasks.forward_to_staff import forward_to_staff
+
+    redis = fakeredis.aioredis.FakeRedis()
+    storage = _stub_storage([b"img"])
+
+    photo_calls: list[dict[str, Any]] = []
+    text_calls: list[str] = []
+
+    async def fake_send_photo(
+        bot: Any, chat_id: int, photo: bytes, caption: str | None = None
+    ) -> SendResult:
+        photo_calls.append({"caption": caption})
+        return SendResult(ok=True, message_id=1313)
+
+    async def fake_send_text_dm(bot: Any, chat_id: int, text: str, **kw: Any) -> SendResult:
+        text_calls.append(text)
+        return SendResult(ok=True, message_id=1314)
+
+    ctx = _make_ctx(redis, storage=storage)
+
+    long_body = "ё" * 2000  # rendered caption far exceeds the 1024 caption cap
+
+    with (
+        patch("app.workers.tasks.forward_to_staff.get_settings") as mock_settings,
+        patch.object(sender_mod, "send_photo", fake_send_photo),
+        patch.object(sender_mod, "send_text_dm", fake_send_text_dm),
+    ):
+        mock_settings.return_value = SimpleNamespace(staff_telegram_chat_id=55555)
+        result = await forward_to_staff(
+            ctx,
+            client_id="client-uuid",
+            message_id="msg-uuid",
+            thread_id="thread-uuid",
+            body=long_body,
+            client_name="Мария Петрова",
+            client_phone="+79997654321",
+            attachment_id="att-uuid",
+            object_key="photos/att-uuid.jpg",
+        )
+
+    assert result == "sent"
+    assert len(photo_calls) == 1
+    caption = photo_calls[0]["caption"]
+    assert caption is not None
+    assert len(caption) <= 1024
+    assert caption.endswith("…")
+    # Full rendered DM delivered as a follow-up text message.
+    assert len(text_calls) == 1
+    assert len(text_calls[0]) <= 4096
+
+    # Anchor still written under the photo message_id (not the follow-up).
+    raw = await redis.get("cc:messaging:tg_msg:1313")
+    assert raw is not None
+
+
+@pytest.mark.asyncio
+async def test_forward_to_staff_short_photo_caption_no_followup() -> None:
+    """WR-01: a short caption (≤1024) sends only the photo — no follow-up text DM."""
+    from app.integrations.telegram import sender as sender_mod
+    from app.integrations.telegram.sender import SendResult
+    from app.workers.tasks.forward_to_staff import forward_to_staff
+
+    redis = fakeredis.aioredis.FakeRedis()
+    storage = _stub_storage([b"img"])
+
+    text_calls: list[str] = []
+
+    async def fake_send_photo(
+        bot: Any, chat_id: int, photo: bytes, caption: str | None = None
+    ) -> SendResult:
+        return SendResult(ok=True, message_id=1414)
+
+    async def fake_send_text_dm(bot: Any, chat_id: int, text: str, **kw: Any) -> SendResult:
+        text_calls.append(text)
+        return SendResult(ok=True, message_id=1415)
+
+    ctx = _make_ctx(redis, storage=storage)
+
+    with (
+        patch("app.workers.tasks.forward_to_staff.get_settings") as mock_settings,
+        patch.object(sender_mod, "send_photo", fake_send_photo),
+        patch.object(sender_mod, "send_text_dm", fake_send_text_dm),
+    ):
+        mock_settings.return_value = SimpleNamespace(staff_telegram_chat_id=55555)
+        result = await forward_to_staff(
+            ctx,
+            client_id="client-uuid",
+            message_id="msg-uuid",
+            thread_id="thread-uuid",
+            body="короткое сообщение",
+            client_name="Мария Петрова",
+            client_phone="+79997654321",
+            attachment_id="att-uuid",
+            object_key="photos/att-uuid.jpg",
+        )
+
+    assert result == "sent"
+    assert text_calls == []
+
+
+@pytest.mark.asyncio
 async def test_forward_to_staff_failed_send_no_redis() -> None:
     """Failed send (SendResult.ok=False) writes no Redis key and returns 'failed'."""
     from app.integrations.telegram import sender as sender_mod

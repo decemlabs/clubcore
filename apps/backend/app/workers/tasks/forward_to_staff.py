@@ -43,6 +43,15 @@ from app.integrations.telegram import sender as telegram_sender
 
 _log: Final = structlog.get_logger("workers.tasks.forward_to_staff")
 
+# Telegram transport hard limits (WR-01 / WR-02). The messaging body cap (4000)
+# was chosen for the PWA UI, not the Telegram transport, so the rendered DM
+# (identity header + body) can exceed these. We truncate the rendered text to
+# fit; for photo captions the remainder is delivered as a follow-up text DM so
+# nothing is silently dropped.
+_TG_TEXT_LIMIT: Final = 4096  # sendMessage hard limit
+_TG_CAPTION_LIMIT: Final = 1024  # send_photo caption hard limit
+_TRUNCATION_MARK: Final = "…"
+
 # Russian DM template — concise identity header for single-gym operator.
 _DM_TEMPLATE = (
     "Новое сообщение от клиента\n"
@@ -59,6 +68,13 @@ def _render_dm(client_name: str, client_phone: str, body: str) -> str:
         client_phone=client_phone,
         body=body,
     )
+
+
+def _truncate(text: str, limit: int) -> str:
+    """Truncate ``text`` to ``limit`` chars, appending an ellipsis marker."""
+    if len(text) <= limit:
+        return text
+    return text[: limit - len(_TRUNCATION_MARK)] + _TRUNCATION_MARK
 
 
 async def forward_to_staff(
@@ -101,12 +117,25 @@ async def forward_to_staff(
         async for chunk in storage.open_stream(object_key):
             chunks.append(chunk)
         photo_bytes = b"".join(chunks)
+        # WR-01: Telegram photo captions are capped at 1024 chars. Send a
+        # truncated caption with the photo, then deliver the FULL rendered DM
+        # as a follow-up text message so the staff never miss content the
+        # client believes was delivered (the client message is already
+        # committed + acknowledged).
+        caption_for_photo = _truncate(caption, _TG_CAPTION_LIMIT)
         result = await telegram_sender.send_photo(
-            bot, staff_chat_id, photo_bytes, caption=caption
+            bot, staff_chat_id, photo_bytes, caption=caption_for_photo
         )
+        if result.ok and len(caption) > _TG_CAPTION_LIMIT:
+            await telegram_sender.send_text_dm(
+                bot, staff_chat_id, _truncate(caption, _TG_TEXT_LIMIT)
+            )
     else:
-        # Text-only message.
-        result = await telegram_sender.send_text_dm(bot, staff_chat_id, caption)
+        # Text-only message. WR-02: the rendered DM (header + up-to-4000-char
+        # body) can exceed Telegram's 4096-char sendMessage limit, so truncate.
+        result = await telegram_sender.send_text_dm(
+            bot, staff_chat_id, _truncate(caption, _TG_TEXT_LIMIT)
+        )
 
     if result.ok and result.message_id is not None:
         # Write chat_forwarding_log anchor for Plan 02's reply routing.
