@@ -437,3 +437,35 @@ async def mark_thread_read(
     )
 
     return len(updated) > 0
+
+
+async def get_client_display(
+    session: AsyncSession,
+    client_id: UUID,
+) -> dict[str, str] | None:
+    """Return first_name, last_name, phone for client_id via raw SQL (D-54-08).
+
+    Phase 93 BRDG-01: used by the messaging router to render the client identity
+    header for the staff Telegram DM. Cross-module read via raw SQL text() — ZERO
+    new ignore_imports edges (per messaging module .importlinter comment).
+
+    Returns None if the client row is missing or soft-deleted.
+    No session.commit() — caller-owns-txn.
+    """
+    row = (
+        await session.execute(
+            text(
+                "SELECT first_name, last_name, phone "
+                "FROM clients "
+                "WHERE id = :cid AND deleted_at IS NULL"
+            ),
+            {"cid": str(client_id)},
+        )
+    ).mappings().one_or_none()
+    if row is None:
+        return None
+    return {
+        "first_name": str(row["first_name"]),
+        "last_name": str(row["last_name"]),
+        "phone": str(row["phone"]),
+    }

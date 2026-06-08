@@ -39,6 +39,7 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import StreamingResponse
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.dependencies import (
     ClientPrincipal,
@@ -52,7 +53,7 @@ from app.core.pagination import PageQuery
 from app.core.redis import get_redis
 from app.core.schemas import ResponseEnvelope, envelope
 from app.integrations.storage import Storage, get_storage
-from app.modules.messaging import service
+from app.modules.messaging import repository, service
 from app.modules.messaging.schemas import (
     AttachmentUploadResponse,
     MessageListResponse,
@@ -286,6 +287,39 @@ async def client_send_message(
             client_id=client_id,
             message_id=result.id,
         )
+        # Phase 93 BRDG-01: enqueue forward_to_staff post-commit (never in-transaction).
+        # get_client_display uses raw SQL text() — no cross-module import edge needed
+        # (D-54-08 discipline; per messaging module .importlinter comment).
+        _settings = get_settings()
+        if _settings.staff_telegram_chat_id is not None:
+            _client_display = await repository.get_client_display(session, client_id)
+            _client_name = (
+                f"{_client_display['first_name']} {_client_display['last_name']}"
+                if _client_display
+                else "Клиент"
+            )
+            _client_phone = _client_display["phone"] if _client_display else ""
+            _attachment_id: str | None = None
+            _object_key: str | None = None
+            if result.attachment is not None:
+                _attachment_id = str(result.attachment.id)
+                _att_row = await repository.get_owned_attachment(
+                    session, result.attachment.id, client_id=client_id
+                )
+                _object_key = str(_att_row["object_key"]) if _att_row else None
+            await request.app.state.arq_pool.enqueue_job(
+                "forward_to_staff",
+                client_id=str(client_id),
+                message_id=str(result.id),
+                thread_id=str(result.thread_id),
+                body=result.body or "",
+                client_name=_client_name,
+                client_phone=_client_phone,
+                attachment_id=_attachment_id,
+                object_key=_object_key,
+                _max_tries=2,
+                _expires=20,
+            )
         body_bytes = json.dumps(
             envelope(result).model_dump(mode="json", by_alias=True),
             separators=(",", ":"),
