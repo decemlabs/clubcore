@@ -75,6 +75,13 @@ EXCLUDED_PATHS: frozenset[str] = frozenset(
         # daily-UNIQUE) and per-IP rate limiting are the controls. The
         # diff-to-this-set IS the audit trail (D-19).
         "/api/v1/client/check-in",
+        # Phase 96 REFER-02 — deep-link referral resolver. This route is
+        # deliberately public (no auth required): the referral code in the path
+        # is a non-secret slug; the response returns only the referrer's first
+        # name. The PWA uses this to pre-populate the onboarding form. No
+        # principal → not behind require_client(). The diff-to-this-set IS the
+        # audit trail (D-19 / T-96-REFER-02-public).
+        "/api/v1/i/{code}",
         # FastAPI built-ins:
         "/openapi.json",
         "/docs",

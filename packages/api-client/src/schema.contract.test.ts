@@ -610,6 +610,46 @@ const _v25Checks: [
   _ClientWsMessagesGet,
 ] = [true, true, true, true, true, true, true]
 
+// --- v2.6 surface (Referral — Phases 96-98) ---
+// Eight guards: six path×method combos + two JSON requestBody realisations.
+//
+// Path set (verified against the frozen openapi.json from Phase 99 Plan 01):
+//   GET   /api/v1/i/{code}                         (REFER-02 — public deep-link resolver)
+//   GET   /api/v1/client/referral/code             (REFER-01)
+//   GET   /api/v1/client/referral/summary          (REFER-06)
+//   POST  /api/v1/client/referral/capture          (REFER-03)
+//   POST  /api/v1/client/referral/capture body     (REFER-03 JSON body realised — ReferralCaptureRequest)
+//   GET   /api/v1/referral/config                  (REFER-07 owner read)
+//   PUT   /api/v1/referral/config                  (REFER-07 owner write)
+//   PUT   /api/v1/referral/config body             (REFER-07 JSON body realised — ReferralConfigUpdateRequest)
+//
+// Both POST capture and PUT config carry application/json bodies → both realise as non-never
+// (mirrors D-95-02-GUARD-7 precedent for JSON bodies; multipart skipped there, but JSON is fine).
+type _PublicResolveReferralGet = AssertNonNever<paths['/api/v1/i/{code}']['get']>
+type _ClientReferralCodeGet = AssertNonNever<paths['/api/v1/client/referral/code']['get']>
+type _ClientReferralSummaryGet = AssertNonNever<paths['/api/v1/client/referral/summary']['get']>
+type _ClientReferralCapturePost = AssertNonNever<paths['/api/v1/client/referral/capture']['post']>
+type _ClientReferralCaptureBody = AssertNonNever<
+  paths['/api/v1/client/referral/capture']['post']['requestBody']
+>
+type _OwnerReferralConfigGet = AssertNonNever<paths['/api/v1/referral/config']['get']>
+type _OwnerReferralConfigPut = AssertNonNever<paths['/api/v1/referral/config']['put']>
+type _OwnerReferralConfigPutBody = AssertNonNever<
+  paths['/api/v1/referral/config']['put']['requestBody']
+>
+
+// Static checks for v2.6 surface — each must resolve to true at compile time.
+const _v26Checks: [
+  _PublicResolveReferralGet,
+  _ClientReferralCodeGet,
+  _ClientReferralSummaryGet,
+  _ClientReferralCapturePost,
+  _ClientReferralCaptureBody,
+  _OwnerReferralConfigGet,
+  _OwnerReferralConfigPut,
+  _OwnerReferralConfigPutBody,
+] = [true, true, true, true, true, true, true, true]
+
 describe('schema.contract', () => {
   it('compiles against the regenerated v1.2 typed paths surface', () => {
     // The real assertions are above (compile-time). This block exists so
@@ -663,5 +703,9 @@ describe('schema.contract', () => {
 
   it('compiles against the regenerated v2.5 Messaging surface (Phases 90-94)', () => {
     expect(_v25Checks).toHaveLength(7)
+  })
+
+  it('compiles against the regenerated v2.6 Referral surface (Phases 96-98)', () => {
+    expect(_v26Checks).toHaveLength(8)
   })
 })
