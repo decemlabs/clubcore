@@ -6,13 +6,16 @@ Create Date: 2026-06-08
 
 DDL for three referral tables:
 
-  referral_codes   — one stable code per client; UNIQUE on code.
+  referral_codes   — one stable code per client; UNIQUE on code AND on client_id.
   referral_captures — one binding per referee; UNIQUE on referee_client_id.
   referral_config  — singleton owner-configurable bonus amounts (seeded in 0068).
 
 Indexes:
   uq_referral_codes_code               UNIQUE via op.f() on referral_codes.code
-  ix_referral_codes_client_id          plain index via op.f() on client_id
+  uq_referral_codes_client_id          UNIQUE LITERAL name (no op.f()) on client_id
+                                         — enforces one stable code per client at DB
+                                           level (CR-02 fix: prevents race-condition
+                                           duplicates from concurrent mint requests)
   uq_referral_captures_referee_client_id  UNIQUE LITERAL name (no op.f()),
                                            unconditional (not partial) — per
                                            96-PATTERNS naming discipline
@@ -89,12 +92,15 @@ def upgrade() -> None:
         ["code"],
         unique=True,
     )
-    # Plain index on client_id for GET /client/referral/code lookup performance.
+    # UNIQUE index on client_id — LITERAL name (not op.f()) per 96-PATTERNS discipline.
+    # Enforces one stable code per client at the DB level (CR-02: prevents race-condition
+    # duplicates from concurrent GET /client/referral/code requests). Also serves as
+    # the lookup index for get_code_by_client_id (no separate plain index needed).
     op.create_index(
-        op.f("ix_referral_codes_client_id"),
+        "uq_referral_codes_client_id",
         "referral_codes",
         ["client_id"],
-        unique=False,
+        unique=True,
     )
 
     # ── referral_captures ──────────────────────────────────────────────────────
@@ -157,7 +163,7 @@ def downgrade() -> None:
 
     # Drop codes second (FK dep on clients; no dep on config)
     op.drop_index(op.f("uq_referral_codes_code"), table_name="referral_codes")
-    op.drop_index(op.f("ix_referral_codes_client_id"), table_name="referral_codes")
+    op.drop_index("uq_referral_codes_client_id", table_name="referral_codes")
     op.drop_table("referral_codes")
 
     # Drop config last (no FK deps)
