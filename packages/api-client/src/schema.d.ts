@@ -1518,6 +1518,85 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/client/referral/capture": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bind a referrer to the authenticated client via a referral code (REFER-03)
+         * @description Capture a referral — binds the referrer identified by payload.code to the principal.
+         *
+         *     The referee identity comes ONLY from the require_client() principal (client.id),
+         *     never from the request body (T-96-05 IDOR mitigate). payload carries only {code}.
+         *
+         *     Idempotent: second call for the same referee is a 200 no-op (first binding wins).
+         *     Self-referral (principal is the referrer of payload.code) → 422 SelfReferralError.
+         *     Unknown code → 404 ReferralCodeNotFoundError.
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        post: operations["client_capture_referral"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/referral/code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get (or mint) the stable referral code for the authenticated client (REFER-01)
+         * @description Return the stable referral code + shareUrl for the principal.
+         *
+         *     Idempotent: calling this endpoint multiple times always returns the same
+         *     code — a new code is minted only on the first call. No duplicate audit
+         *     event is emitted on idempotent returns (INFRA-15).
+         *     D-20-IDOR: client_id from require_client() principal only.
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        get: operations["client_get_referral_code"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/referral/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Aggregate referral summary for the authenticated client (REFER-06; IDOR-safe)
+         * @description Return code, shareUrl, accruedKopecks, and invitees[] for the principal.
+         *
+         *     One round-trip for the PWA ReferralScreen. client_id is sourced from
+         *     require_client() principal only — never a path/query/body param (T-98-02 IDOR-safe).
+         *     accruedKopecks = SUM of own referral_accrual ledger rows (not total balance, T-98-04).
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        get: operations["client_get_referral_summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/client/session/logout": {
         parameters: {
             query?: never;
@@ -1791,6 +1870,34 @@ export interface paths {
          *     No try/except — AppError bubbles to _app_error_handler.
          */
         put: operations["owner_update_gym_info"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/i/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Public deep-link resolver — always 200, valid:false for unknown codes (REFER-02)
+         * @description Resolve a referral deep-link code for the PWA landing page.
+         *
+         *     No auth gate — unauthenticated callers (T-96-06 PII guard: first name only,
+         *     no client_id, no last name). Unknown code returns valid:false with 200 status
+         *     (anti-enumeration: no 404 oracle for code existence).
+         *     max_length=16 (column width) rather than 8 so 9-16 char strings resolve to
+         *     valid=False rather than 422, avoiding a detectable response-shape difference
+         *     (IN-01 fix).
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        get: operations["public_resolve_referral_code"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -2926,6 +3033,41 @@ export interface paths {
          *     (Phase 66 IDM-06 / D-66-LIFECYCLE-HELPER).
          */
         post: operations["deactivate_recurring_template"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/referral/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Owner-only: read referral bonus config (REFER-07)
+         * @description Return the singleton referral config (referrerBonusKopecks, refereeWelcomeKopecks).
+         *
+         *     Gated by require_permission(EDIT, GYM) — reception → 403.
+         *     Reuses Resource.GYM per planner decision (no new Resource to avoid breaking
+         *     CISO-01 byte-parity guard + parity test). T-96-07.
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        get: operations["owner_get_referral_config"];
+        /**
+         * Owner-only: update referral bonus config (REFER-07)
+         * @description Upsert the singleton referral config.
+         *
+         *     RBAC-04: require_permission declared BEFORE verify_csrf → reception fails at 403
+         *     before reaching the CSRF check (T-96-07 mitigate).
+         *     verify_csrf guards against cross-site forgery on the owner mutation.
+         *     ReferralConfigUpdateRequest extra='forbid' → 422 on unknown keys.
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        put: operations["owner_update_referral_config"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -6148,6 +6290,121 @@ export interface components {
             /** Validuntil */
             validUntil: string | null;
         };
+        /**
+         * ReferralCaptureRequest
+         * @description POST /client/referral/capture request body (REFER-03).
+         *
+         *     extra='forbid' (inherited from BackendSchemaBase) rejects unknown keys.
+         *     code is exactly 8 Crockford-base32 characters (WR-03 fix).
+         *
+         *     Pattern accepts both upper- and lower-case Crockford alphabet chars
+         *     (0-9 A-H J K M N P-T V-Z, excluding O/I/L/U) — the repository normalises
+         *     to upper-case via .upper() before the DB lookup.
+         */
+        ReferralCaptureRequest: {
+            /** Code */
+            code: string;
+        };
+        /**
+         * ReferralCodeResponse
+         * @description GET /client/referral/code payload (REFER-01).
+         *
+         *     Wire: { code: str, shareUrl: str }
+         *     shareUrl is server-authoritative: {pwa_base_url}/i/{code}
+         *     (pwa_base_url is a Settings field, not hardcoded).
+         */
+        ReferralCodeResponse: {
+            /** Code */
+            code: string;
+            /** Shareurl */
+            shareUrl: string;
+        };
+        /**
+         * ReferralConfigResponse
+         * @description GET /referral/config owner-only payload (REFER-07).
+         *
+         *     Wire: { referrerBonusKopecks: int, refereeWelcomeKopecks: int }
+         *     Mirrors the seeded singleton values (50000 / 30000 kopecks).
+         */
+        ReferralConfigResponse: {
+            /** Refereewelcomekopecks */
+            refereeWelcomeKopecks: number;
+            /** Referrerbonuskopecks */
+            referrerBonusKopecks: number;
+        };
+        /**
+         * ReferralConfigUpdateRequest
+         * @description PUT /referral/config owner-only request body (REFER-07).
+         *
+         *     extra='forbid' (inherited from BackendSchemaBase) rejects unknown keys.
+         *     Both fields are required (full-replace semantics, not PATCH).
+         *     ge=0 allows zeroing out either bonus (owner decision).
+         */
+        ReferralConfigUpdateRequest: {
+            /** Refereewelcomekopecks */
+            refereeWelcomeKopecks: number;
+            /** Referrerbonuskopecks */
+            referrerBonusKopecks: number;
+        };
+        /**
+         * ReferralInviteeItem
+         * @description One invited friend in the referral summary list (REFER-06).
+         *
+         *     Wire: {firstName, joinedAt, status, bonusKopecks}.
+         *     PII-minimal: first name only (T-96-06); NO last name, NO referee client_id.
+         */
+        ReferralInviteeItem: {
+            /** Bonuskopecks */
+            bonusKopecks: number;
+            /** Firstname */
+            firstName: string;
+            /**
+             * Joinedat
+             * Format: date-time
+             */
+            joinedAt: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "joined" | "pending";
+        };
+        /**
+         * ReferralResolveResponse
+         * @description GET /i/{code} public deep-link resolver payload (REFER-01).
+         *
+         *     Wire: { valid: bool, referrerFirstName: str | None, welcomeBonusKopecks: int }
+         *     Always 200 — valid=False for unknown codes (anti-enumeration: no 404).
+         *     referrerFirstName exposes only the first name of the referrer (no PII beyond that).
+         *     welcomeBonusKopecks is 0 when valid=False.
+         */
+        ReferralResolveResponse: {
+            /** Referrerfirstname */
+            referrerFirstName: string | null;
+            /** Valid */
+            valid: boolean;
+            /** Welcomebonuskopecks */
+            welcomeBonusKopecks: number;
+        };
+        /**
+         * ReferralSummaryResponse
+         * @description GET /client/referral/summary payload (REFER-06).
+         *
+         *     Wire: {code, shareUrl, accruedKopecks, invitees: [...]}
+         *     accruedKopecks is the SUM of the authenticated client's own referral_accrual
+         *     loyalty_ledger rows — NOT the total loyalty balance.
+         *     shareUrl is server-authoritative: {pwa_base_url}/i/{code}.
+         */
+        ReferralSummaryResponse: {
+            /** Accruedkopecks */
+            accruedKopecks: number;
+            /** Code */
+            code: string;
+            /** Invitees */
+            invitees: components["schemas"]["ReferralInviteeItem"][];
+            /** Shareurl */
+            shareUrl: string;
+        };
         /** ResponseEnvelope[AttachmentUploadResponse] */
         ResponseEnvelope_AttachmentUploadResponse_: {
             data: components["schemas"]["AttachmentUploadResponse"];
@@ -6376,6 +6633,22 @@ export interface components {
         /** ResponseEnvelope[RecurringSlotTemplateResponse] */
         ResponseEnvelope_RecurringSlotTemplateResponse_: {
             data: components["schemas"]["RecurringSlotTemplateResponse"];
+        };
+        /** ResponseEnvelope[ReferralCodeResponse] */
+        ResponseEnvelope_ReferralCodeResponse_: {
+            data: components["schemas"]["ReferralCodeResponse"];
+        };
+        /** ResponseEnvelope[ReferralConfigResponse] */
+        ResponseEnvelope_ReferralConfigResponse_: {
+            data: components["schemas"]["ReferralConfigResponse"];
+        };
+        /** ResponseEnvelope[ReferralResolveResponse] */
+        ResponseEnvelope_ReferralResolveResponse_: {
+            data: components["schemas"]["ReferralResolveResponse"];
+        };
+        /** ResponseEnvelope[ReferralSummaryResponse] */
+        ResponseEnvelope_ReferralSummaryResponse_: {
+            data: components["schemas"]["ReferralSummaryResponse"];
         };
         /** ResponseEnvelope[RevenueReportResponse] */
         ResponseEnvelope_RevenueReportResponse_: {
@@ -8684,6 +8957,71 @@ export interface operations {
             };
         };
     };
+    client_capture_referral: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReferralCaptureRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_NoneType_"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    client_get_referral_code: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_ReferralCodeResponse_"];
+                };
+            };
+        };
+    };
+    client_get_referral_summary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_ReferralSummaryResponse_"];
+                };
+            };
+        };
+    };
     client_session_logout: {
         parameters: {
             query?: never;
@@ -9012,6 +9350,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResponseEnvelope_GymInfoResponse_"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    public_resolve_referral_code: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_ReferralResolveResponse_"];
                 };
             };
             422: components["responses"]["422_ValidationError"];
@@ -10199,6 +10560,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResponseEnvelope_RecurringSlotTemplateResponse_"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    owner_get_referral_config: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_ReferralConfigResponse_"];
+                };
+            };
+        };
+    };
+    owner_update_referral_config: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReferralConfigUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_ReferralConfigResponse_"];
                 };
             };
             422: components["responses"]["422_ValidationError"];
