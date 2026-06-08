@@ -452,6 +452,12 @@ async def record_loyalty_redemption(
         )
         return
 
+    # flush so _sum_balance inside this same session sees the debit row;
+    # safe because we are inside the caller's transaction (no commit here).
+    # Ordering note: accrue_referral_bonus is called AFTER record_loyalty_redemption
+    # in the webhook UoW and does NOT read _sum_balance, so there is no current
+    # functional dependency on this flush — but it is architecturally load-bearing
+    # if the ordering ever changes. Keep flush here; keep accrue_referral_bonus after.
     await session.flush()
     await audit.emit(
         session,
