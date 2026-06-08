@@ -107,6 +107,10 @@ def _include_object(
             # WHERE entry_type='redemption'. Literal-named partial index (same lineage as
             # uq_loyalty_ledger_welcome above); autogenerate cannot reconcile it.
             "uq_loyalty_ledger_online_payment_id",
+            # Phase 97 REFER-04 / 0069: referral accrual partial UNIQUE index.
+            # Literal-named partial index (same lineage as uq_loyalty_ledger_welcome);
+            # autogenerate cannot reconcile literal vs. convention names.
+            "uq_loyalty_ledger_referral_accrual",
             # Phase 84 APAY-03 / 0056: autopay_charges + autopay_charge_notifications
             # plain indexes (created via op.f() in the migration but not declared in
             # __table_args__ of the ORM models). Autogenerate sees them as orphans.
