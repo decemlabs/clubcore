@@ -141,7 +141,7 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
 **Milestone Goal:** Клиент приглашает друзей персональным реф-кодом; обе стороны получают бонус на `loyalty_ledger` после первой покупки приглашённого; экран «Приведи друга» переносится пиксель-в-пиксель с готового макета. Всё под `require_client()`, IDOR-safe; бонусы server-authoritative (webhook-only); `apps/admin-web` заморожен.
 
 - [x] **Phase 96: Referral Domain Backend** — персональные реф-коды (идемпотентная генерация), захват реферала при онбординге (referrer↔referee, self-referral блок, 1-bonus-per-referee), deep-link endpoint, owner-only конфигурация сумм бонусов + seed; LOCKED audit events зарегистрированы до первого callsite (REFER-01, REFER-02 backend, REFER-03, REFER-07) (completed 2026-06-08)
-- [ ] **Phase 97: Reward Crediting** — двусторонний бонус на `payment.succeeded` ПЕРВОЙ покупки: co-transactional, idempotent по `(referral_id, online_payment_id)`, через `accrue_welcome_bonus`/`owner_grant_loyalty` примитивы; LOCKED audit events (REFER-04)
+- [x] **Phase 97: Reward Crediting** — двусторонний бонус на `payment.succeeded` ПЕРВОЙ покупки: co-transactional, idempotent по `(referral_id, online_payment_id)`, через `accrue_welcome_bonus`/`owner_grant_loyalty` примитивы; LOCKED audit events (REFER-04) (completed 2026-06-08)
 - [ ] **Phase 98: PWA ReferralScreen** — graduate из D-71-09 ESLint-зоны; пиксель-в-пиксель порт макета (промокод + ссылка + copy, share Telegram/WhatsApp/native, блок «Как это работает»); список приглашённых со статусами; «Уже накоплено» из ledger; deep-link авто-подстановка кода; тир-трекер hide-for-future (REFER-02 PWA, REFER-05, REFER-06)
 - [ ] **Phase 99: OpenAPI Handoff + Milestone Verification** — byte-stable `openapi.json` + `schema.d.ts` + `_v26Checks` AssertNonNever; staff-контракт байт-в-байт цел (drift gate зелёный); полный milestone gate зелёный (HND-01)
 
@@ -174,7 +174,7 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
 **Plans**: 3 plans
   - [x] 97-01-PLAN.md — INFRA-15 audit foundation: lock referral_bonus_accrued + typed payload + registry + unit test (before any callsite)
   - [x] 97-02-PLAN.md — Data layer: loyalty_ledger referral_capture_id FK + entry_type CHECK widen + migration 0069 partial UNIQUE + accrue_referral_bonus primitive
-  - [ ] 97-03-PLAN.md — Webhook orchestration in handle_payment_succeeded (first-purchase gate, referrer-alive void, config-sourced amounts) + 7-case integration suite
+  - [x] 97-03-PLAN.md — Webhook orchestration in handle_payment_succeeded (first-purchase gate, referrer-alive void, config-sourced amounts) + 7-case integration suite
 
 ### Phase 98: PWA ReferralScreen
 **Goal**: Экран «Приведи друга» выведен из ComingSoon и отображает реальные данные: персональный код, список приглашённых, сумму накопленных бонусов
@@ -246,6 +246,6 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 96. Referral Domain Backend | 3/3 | Complete    | 2026-06-08 |
-| 97. Reward Crediting | 2/3 | In Progress|  |
+| 97. Reward Crediting | 3/3 | Complete   | 2026-06-08 |
 | 98. PWA ReferralScreen | 0/TBD | Not started | - |
 | 99. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
