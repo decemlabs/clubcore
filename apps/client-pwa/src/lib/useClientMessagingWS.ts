@@ -11,7 +11,9 @@
  *   - Auth rides the same-origin httpOnly cc_client_access cookie on WS upgrade (no URL token).
  *   - Reconnects with capped exponential backoff (×2, max 30s) via destroyed-flag teardown
  *     that prevents reconnects after unmount (T-94-03 DoS mitigation).
- *   - WS frames carry only IDs/events, NOT payloads — REST catch-up on reconnect (DB-first).
+ *   - WS frames carry only IDs/events, NOT payloads — REST catch-up on reconnect
+ *     (DB-first) is delivered via the onReconnect callback (WR-01): the consumer
+ *     refetches the messages list on the first onopen after a disconnect gap.
  *   - ping frames: server heartbeat, no client action.
  *   - malformed JSON: swallowed silently (T-94-02 information disclosure mitigation).
  */
@@ -32,6 +34,11 @@ interface UseClientMessagingWSOptions {
   onReadReceipt: (readAt: string) => void
   /** Called when a typing frame arrives (actor: staff). Caller sets a 5s dismiss timer. */
   onTyping: () => void
+  /** WR-01: Called on the FIRST successful onopen AFTER a disconnect (not the
+   *  initial connect). WS frames carry only IDs/events, so messages that arrived
+   *  during the gap are not delivered as frames — the caller must do a REST
+   *  catch-up (refetch the messages list) to pick them up. Optional. */
+  onReconnect?: () => void
 }
 
 // ---------------------------------------------------------------------------
@@ -65,6 +72,7 @@ export function useClientMessagingWS({
   onNewMessage,
   onReadReceipt,
   onTyping,
+  onReconnect,
 }: UseClientMessagingWSOptions): void {
   const reconnectDelay = useRef(BASE_DELAY)
   const wsRef = useRef<WebSocket | null>(null)
@@ -76,14 +84,17 @@ export function useClientMessagingWS({
   // re-render (every sheet open/close, push toast, and crucially every
   // setUnreadChat from the badge feed → connect churn). The ref is updated each
   // render so the latest callbacks are always invoked, without re-running the effect.
-  const cbRef = useRef({ onNewMessage, onReadReceipt, onTyping })
-  cbRef.current = { onNewMessage, onReadReceipt, onTyping }
+  const cbRef = useRef({ onNewMessage, onReadReceipt, onTyping, onReconnect })
+  cbRef.current = { onNewMessage, onReadReceipt, onTyping, onReconnect }
 
   useEffect(() => {
     if (!enabled) return
 
     // destroyed flag: set on cleanup to prevent reconnects after unmount
     let destroyed = false
+    // WR-01: track whether we've ever opened a socket so the FIRST onopen
+    // (initial connect) does NOT fire onReconnect — only subsequent reopens do.
+    let hasConnectedOnce = false
 
     function connect() {
       if (destroyed) return
@@ -94,6 +105,11 @@ export function useClientMessagingWS({
       ws.onopen = () => {
         // Successful connect: reset backoff to base
         reconnectDelay.current = BASE_DELAY
+        // WR-01: REST catch-up after a reconnect gap (not the initial connect).
+        if (hasConnectedOnce) {
+          cbRef.current.onReconnect?.()
+        }
+        hasConnectedOnce = true
       }
 
       ws.onmessage = (event: MessageEvent) => {

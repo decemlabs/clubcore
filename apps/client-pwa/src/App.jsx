@@ -229,6 +229,13 @@ export default function App() {
     onTyping: () => {
       window.__chatTyping?.();
     },
+    onReconnect: () => {
+      // WR-01: REST catch-up after a WS reconnect gap. Frames carry only
+      // IDs/events, so messages that arrived while disconnected are not
+      // re-delivered — invalidate the messages query to refetch the current
+      // list (the badge + open thread pick up anything missed during the gap).
+      void qc.invalidateQueries({ queryKey: [...clientPortalKeys.all, 'messages'] });
+    },
   });
 
   // React to pushKind tweak — show toast when value changes from 'idle'.
