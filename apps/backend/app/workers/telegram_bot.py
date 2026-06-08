@@ -21,7 +21,8 @@ from contextlib import AsyncExitStack, suppress
 from typing import Any
 
 import structlog
-from telegram.ext import CallbackQueryHandler
+from telegram.ext import CallbackQueryHandler, MessageHandler
+from telegram.ext import filters as tg_filters
 
 from app.core.config import get_settings
 from app.core.database import db_lifespan_manager
@@ -41,6 +42,7 @@ from app.integrations.telegram.handlers import (
     book_callback_handler,
     book_handler,
     checkin_handler,
+    staff_reply_handler,
     start_handler,
 )
 from app.modules.auth import telegram_service  # D-06 relaxation
@@ -144,6 +146,28 @@ async def main() -> None:
                 pattern=r"^BK:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
             )
         )
+
+        # Phase 93 BRDG-02/BRDG-03 — staff-reply handler (MessageHandler).
+        # Registered only when staff_telegram_chat_id is configured; no-op otherwise.
+        # Mirrors the _book_callback_adapter closure pattern (D-40-02 narrative addendum).
+        staff_chat_id = settings.staff_telegram_chat_id
+        if staff_chat_id is not None:
+
+            async def _staff_reply_adapter(update: Any, context: Any) -> None:
+                await staff_reply_handler(update, context, ctx)
+
+            application.add_handler(
+                MessageHandler(
+                    tg_filters.Chat(staff_chat_id) & tg_filters.TEXT,
+                    callback=_staff_reply_adapter,
+                )
+            )
+        else:
+            log = structlog.get_logger("workers.telegram_bot")
+            log.info(
+                "staff_reply_handler_disabled",
+                reason="STAFF_TELEGRAM_CHAT_ID is not set",
+            )
 
         await application.initialize()
         try:

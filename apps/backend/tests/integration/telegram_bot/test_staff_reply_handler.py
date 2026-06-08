@@ -222,14 +222,18 @@ async def test_live_anchor_routes_and_persists(
     update = _build_reply_update(replied_to_message_id=tg_msg_id, update_id=100)
     bot_ctx = _build_bot_ctx(sender)
 
-    with patch("app.core.config.get_settings") as mock_settings:
+    with patch("app.integrations.telegram.handlers.get_settings") as mock_settings:
         mock_settings.return_value.staff_telegram_chat_id = _STAFF_CHAT_ID
         await staff_reply_handler(update, bot_ctx, ctx)
 
-    # Staff message must be persisted
+    # Staff message must be persisted for the correct client
     rows = await db_session.execute(
-        text("SELECT id FROM messages WHERE role='staff' AND thread_id=:tid"),
-        {"tid": str(anchor["thread_id"])},
+        text(
+            "SELECT m.id FROM messages m "
+            "JOIN message_threads t ON t.id = m.thread_id "
+            "WHERE m.role='staff' AND t.client_id=:cid"
+        ),
+        {"cid": str(client.id)},
     )
     assert rows.fetchone() is not None, "Staff message not persisted"
 
@@ -272,23 +276,31 @@ async def test_anti_misroute_routes_to_anchored_client(
     update = _build_reply_update(replied_to_message_id=tg_id_a, update_id=200)
     bot_ctx = _build_bot_ctx(sender)
 
-    with patch("app.core.config.get_settings") as mock_settings:
+    with patch("app.integrations.telegram.handlers.get_settings") as mock_settings:
         mock_settings.return_value.staff_telegram_chat_id = _STAFF_CHAT_ID
         await staff_reply_handler(update, bot_ctx, ctx)
 
-    # Staff message in anchor_a's thread
+    # Staff message should be in client_a's thread (resolved by client_id from anchor)
     rows_a = await db_session.execute(
-        text("SELECT id FROM messages WHERE role='staff' AND thread_id=:tid"),
-        {"tid": str(anchor_a["thread_id"])},
+        text(
+            "SELECT m.id FROM messages m "
+            "JOIN message_threads t ON t.id = m.thread_id "
+            "WHERE m.role='staff' AND t.client_id=:cid"
+        ),
+        {"cid": str(client_a.id)},
     )
-    assert rows_a.fetchone() is not None, "Staff message not in anchor A's thread"
+    assert rows_a.fetchone() is not None, "Staff message not in client_a's thread"
 
-    # No staff message in anchor_b's thread
+    # No staff message in client_b's thread (no misroute)
     rows_b = await db_session.execute(
-        text("SELECT id FROM messages WHERE role='staff' AND thread_id=:tid"),
-        {"tid": str(anchor_b["thread_id"])},
+        text(
+            "SELECT m.id FROM messages m "
+            "JOIN message_threads t ON t.id = m.thread_id "
+            "WHERE m.role='staff' AND t.client_id=:cid"
+        ),
+        {"cid": str(client_b.id)},
     )
-    assert rows_b.fetchone() is None, "Staff message leaked to anchor B's thread (misroute!)"
+    assert rows_b.fetchone() is None, "Staff message leaked to client_b's thread (misroute!)"
 
     # publish channel must be client_a, not client_b
     assert any(str(client_a.id) in ch for ch in published), "Not published to client_a"
@@ -315,7 +327,7 @@ async def test_stale_anchor_sends_hint_and_no_record(
     )
     bot_ctx = _build_bot_ctx(sender)
 
-    with patch("app.core.config.get_settings") as mock_settings:
+    with patch("app.integrations.telegram.handlers.get_settings") as mock_settings:
         mock_settings.return_value.staff_telegram_chat_id = _STAFF_CHAT_ID
         await staff_reply_handler(update, bot_ctx, ctx)
 
@@ -347,7 +359,7 @@ async def test_plain_message_sends_use_reply_hint(
     update = _build_plain_update(update_id=400, text="Plain staff message")
     bot_ctx = _build_bot_ctx(sender)
 
-    with patch("app.core.config.get_settings") as mock_settings:
+    with patch("app.integrations.telegram.handlers.get_settings") as mock_settings:
         mock_settings.return_value.staff_telegram_chat_id = _STAFF_CHAT_ID
         await staff_reply_handler(update, bot_ctx, ctx)
 
@@ -390,7 +402,7 @@ async def test_echo_guard_bot_message_ignored(
     )
     bot_ctx = _build_bot_ctx(sender)
 
-    with patch("app.core.config.get_settings") as mock_settings:
+    with patch("app.integrations.telegram.handlers.get_settings") as mock_settings:
         mock_settings.return_value.staff_telegram_chat_id = _STAFF_CHAT_ID
         await staff_reply_handler(update, bot_ctx, ctx)
 
@@ -429,7 +441,7 @@ async def test_replay_guard_dedup_update_id(
     update = _build_reply_update(replied_to_message_id=tg_msg_id, update_id=600)
     bot_ctx = _build_bot_ctx(sender)
 
-    with patch("app.core.config.get_settings") as mock_settings:
+    with patch("app.integrations.telegram.handlers.get_settings") as mock_settings:
         mock_settings.return_value.staff_telegram_chat_id = _STAFF_CHAT_ID
         # First invocation — should persist
         await staff_reply_handler(update, bot_ctx, ctx)
@@ -437,8 +449,12 @@ async def test_replay_guard_dedup_update_id(
         await staff_reply_handler(update, bot_ctx, ctx)
 
     rows = await db_session.execute(
-        text("SELECT id FROM messages WHERE role='staff' AND thread_id=:tid"),
-        {"tid": str(anchor["thread_id"])},
+        text(
+            "SELECT m.id FROM messages m "
+            "JOIN message_threads t ON t.id = m.thread_id "
+            "WHERE m.role='staff' AND t.client_id=:cid"
+        ),
+        {"cid": str(client.id)},
     )
     fetched = rows.fetchall()
     assert len(fetched) == 1, f"Expected exactly 1 staff row, got {len(fetched)}"
@@ -478,7 +494,7 @@ async def test_reply_as_read_publishes_read_receipt(
     update = _build_reply_update(replied_to_message_id=tg_msg_id, update_id=700)
     bot_ctx = _build_bot_ctx(sender)
 
-    with patch("app.core.config.get_settings") as mock_settings:
+    with patch("app.integrations.telegram.handlers.get_settings") as mock_settings:
         mock_settings.return_value.staff_telegram_chat_id = _STAFF_CHAT_ID
         await staff_reply_handler(update, bot_ctx, ctx)
 

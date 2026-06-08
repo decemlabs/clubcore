@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib
+import json
 from datetime import UTC, datetime, timedelta
 from datetime import datetime as _datetime
 from types import ModuleType
@@ -46,6 +47,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from app.core.audit import emit as audit_emit
+from app.core.config import get_settings
 from app.core.dependencies import (
     get_active_pt_package,
     resolve_client_by_telegram_user_id,
@@ -678,3 +680,148 @@ async def book_callback_handler(
             slot_start_msk=start_msk.strftime("%d.%m.%Y %H:%M"),
         )
         await query.edit_message_text(dm_text)
+
+
+# ---------------------------------------------------------------------------
+# Phase 93 BRDG-02 / BRDG-03 — staff→client reply handler.
+# ---------------------------------------------------------------------------
+
+# Russian hint strings for staff — locked per Phase 93 Claude's Discretion.
+# _DM_STAFF_STALE_ANCHOR: sent when the Redis anchor for a Reply is absent/expired.
+# _DM_STAFF_USE_REPLY   : sent when the staff sends a plain (non-Reply) message.
+_DM_STAFF_STALE_ANCHOR: Final[str] = (
+    "⚠️ Не могу определить тред клиента. "
+    "Возможно, ссылка устарела (>7 дн.). "
+    "Найдите нужное сообщение клиента и ответьте на него через Reply."
+)
+_DM_STAFF_USE_REPLY: Final[str] = (
+    "ℹ️ Чтобы ответить клиенту, используйте Reply на пересланное сообщение — "
+    "не пишите отдельное сообщение."
+)
+
+# Redis key prefix written by forward_to_staff (Plan 01).
+_TG_MSG_KEY_PREFIX: Final[str] = "cc:messaging:tg_msg:"
+
+
+async def staff_reply_handler(
+    update: Any,  # telegram.Update at runtime
+    context: Any,  # telegram.ext.CallbackContext at runtime
+    ctx: HandlerContext,
+) -> None:
+    """ptb MessageHandler for staff replies in the configured staff Telegram chat.
+
+    Phase 93 BRDG-02 / BRDG-03. Reached ONLY via
+    ``MessageHandler(tg_filters.Chat(staff_chat_id) & tg_filters.TEXT, ...)``;
+    the PTB filter is the primary gate. A defensive in-handler chat-id check
+    provides belt-and-suspenders against misconfiguration.
+
+    Security boundaries:
+      T-93-06: MessageHandler filter + in-handler chat-id guard.
+      T-93-07: client_id/thread_id sourced ONLY from the Redis anchor keyed by
+               reply_to.message_id — never from the message body. Stale/missing
+               anchor DROPS the message with a staff hint (no most-recent-thread
+               fallback — SC-2 / BRDG-03).
+      T-93-08: Triple echo guard: is_bot early-return + _dedupe_update_id SET-NX
+               + anchor-presence requirement.
+      T-93-09: publish_new_message / publish_read_receipt carry only ids/timestamps
+               (never the message body) to the channel derived from the anchored
+               client_id only.
+      T-93-10: chat_staff_reply_sent audit emitted co-transactionally (before
+               commit) — atomic with the staff message insert.
+
+    Modules-independent contract: messaging_service is reached ONLY via
+    ``ctx.messaging_service.*`` — no static ``from app.modules.messaging import ...``
+    in this file (integrations⊥modules).
+    """
+    bot = context.bot
+    effective_user = update.effective_user
+    effective_chat = update.effective_chat
+    if effective_user is None or effective_chat is None or update.message is None:
+        return
+
+    # T-93-08: echo guard — bot's own outbound messages arrive as updates
+    # when running in a group/supergroup chat; skip them immediately.
+    if effective_user.is_bot:
+        return
+
+    update_id = getattr(update, "update_id", None)
+    if update_id is None:
+        return
+    chat_id: int = effective_chat.id
+
+    # T-93-08: replay guard — reuse the existing SET-NX dedup helper.
+    if not await _dedupe_update_id(ctx.redis, update_id, chat_id):
+        return
+
+    # T-93-06: defensive in-handler chat-id check (belt-and-suspenders).
+    staff_chat_id = get_settings().staff_telegram_chat_id
+    if staff_chat_id is None or chat_id != staff_chat_id:
+        logger.debug(
+            "staff_reply_handler_wrong_chat",
+            chat_id=chat_id,
+            staff_chat_id=staff_chat_id,
+        )
+        return
+
+    reply_to = update.message.reply_to_message
+
+    # Non-Reply message: hint + drop.
+    if reply_to is None:
+        await ctx.sender.send_text_dm(bot, chat_id, _DM_STAFF_USE_REPLY)
+        return
+
+    # T-93-07: look up the routing anchor from Redis.
+    raw_anchor = await ctx.redis.get(f"{_TG_MSG_KEY_PREFIX}{reply_to.message_id}")
+    if raw_anchor is None:
+        # Stale/missing anchor → hint + drop (no fallback, no misroute).
+        await ctx.sender.send_text_dm(bot, chat_id, _DM_STAFF_STALE_ANCHOR)
+        return
+
+    anchor = json.loads(raw_anchor)
+    client_id = UUID(anchor["client_id"])
+
+    async with ctx.session_factory() as session:
+        result = await ctx.messaging_service.record_staff_message(
+            session,
+            client_id=client_id,
+            body=update.message.text or "",
+            telegram_user_id=effective_user.id,
+            telegram_username=effective_user.username,
+        )
+
+        # T-93-10: emit audit co-transactionally (before commit).
+        await audit_emit(
+            session,
+            "chat_staff_reply_sent",
+            actor_user_id=None,
+            resource_type="message",
+            resource_id=result.id,
+            client_id=str(client_id),
+        )
+
+        await session.commit()
+
+    # CR-02 / DB-first (P5): publish AFTER commit so frames are never emitted
+    # for rows that did not commit.
+    await ctx.messaging_service.publish_new_message(
+        ctx.redis,
+        client_id=client_id,
+        message_id=result.id,
+    )
+
+    # T-93-09 / RCPT-03: publish read_receipt only when prior client messages
+    # were marked read (reply_read_at is not None from record_staff_message).
+    if result.reply_read_at is not None:
+        await ctx.messaging_service.publish_read_receipt(
+            ctx.redis,
+            client_id=client_id,
+            read_at=result.reply_read_at,
+        )
+
+    logger.info(
+        "staff_reply_routed",
+        client_id=str(client_id),
+        message_id=str(result.id),
+        tg_user_id=effective_user.id,
+        chat_id=chat_id,
+    )
