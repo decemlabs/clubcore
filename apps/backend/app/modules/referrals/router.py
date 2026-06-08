@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Path
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, get_settings
@@ -57,7 +57,7 @@ public_router = APIRouter(tags=["Referral"])
     summary="Public deep-link resolver — always 200, valid:false for unknown codes (REFER-02)",
 )
 async def public_resolve_referral_code(
-    code: str,
+    code: Annotated[str, Path(min_length=1, max_length=16)],
     session: Annotated[AsyncSession, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> ResponseEnvelope[ReferralResolveResponse]:
@@ -66,6 +66,9 @@ async def public_resolve_referral_code(
     No auth gate — unauthenticated callers (T-96-06 PII guard: first name only,
     no client_id, no last name). Unknown code returns valid:false with 200 status
     (anti-enumeration: no 404 oracle for code existence).
+    max_length=16 (column width) rather than 8 so 9-16 char strings resolve to
+    valid=False rather than 422, avoiding a detectable response-shape difference
+    (IN-01 fix).
     No try/except — AppError bubbles to _app_error_handler.
     """
     result = await service.resolve_public_code(session, code, settings)

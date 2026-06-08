@@ -9,8 +9,9 @@ registered in LOCKED_AUDIT_EVENTS + AUDIT_PAYLOAD_SCHEMAS by Plan 96-01 before
 any callsite here.
 
 Idempotency:
-  get_or_create_referral_code — DB UNIQUE on client_id + flush+commit; audit emitted
-    only on real insert (RETURNING-gated via code_row.id population from flush).
+  get_or_create_referral_code — pg_insert on_conflict_do_nothing with RETURNING; audit
+    emitted only on real insert (RETURNING-gated, WR-01-iter2 fix). Lost-race path
+    re-reads the winner row by client_id and returns it without emitting audit.
   capture_referral — pg_insert on_conflict_do_nothing with RETURNING; audit emitted
     only when RETURNING returns a new id (RETURNING-gated, CR-WR-01 fix).
 
@@ -118,16 +119,18 @@ async def get_or_create_referral_code(
 ) -> ReferralCodeResponse:
     """Return the stable referral code for *client_id*, minting one on first call.
 
-    Idempotent: if a code already exists, returns it without emitting a second
-    referral_code_generated audit event (INFRA-15 gating — no duplicate audit).
+    Idempotent: if a code already exists (common path) or the concurrent-mint race
+    is lost, returns the winner row without emitting a second referral_code_generated
+    audit event (INFRA-15 gating — no duplicate audit).
 
     Caller-owns-txn: flush + commit here (D-03). Matches gym.service.update_gym_info
-    discipline. DB UNIQUE on client_id (uq_referral_codes_client_id) is the
-    authoritative idempotency guarantee; this read-first check is a fast-path guard.
+    discipline. pg_insert on_conflict_do_nothing is the authoritative idempotency
+    guarantee (WR-01-iter2 fix: eliminates TOCTOU IntegrityError 500 from concurrent
+    first-time mints for the same client_id hitting uq_referral_codes_client_id).
     """
+    # Fast-path: most calls are idempotent returns, no write needed.
     existing = await repository.get_code_by_client_id(session, client_id)
     if existing is not None:
-        # Idempotent return — no audit emit, no commit (no writes).
         share_url = f"{settings.pwa_base_url}/i/{existing.code}"
         _log.debug(
             "referral_code_existing",
@@ -136,32 +139,61 @@ async def get_or_create_referral_code(
         )
         return ReferralCodeResponse(code=existing.code, share_url=share_url)
 
-    # No existing code — generate, insert, flush, audit, commit.
+    # First mint — generate candidate code, then insert atomically.
+    # ON CONFLICT DO NOTHING handles the concurrent-mint race: if another request
+    # for the same client_id wins the insert, RETURNING is None and we re-read
+    # the winner row below (no audit emit — idempotent no-op path).
     new_code_str = await _generate_unique_code(session)
-    code_row = ReferralCode(client_id=client_id, code=new_code_str)
-    session.add(code_row)
-    await session.flush()  # get code_row.id
+    stmt = (
+        pg_insert(ReferralCode)
+        .values(client_id=client_id, code=new_code_str)
+        .on_conflict_do_nothing(index_elements=["client_id"])
+        .returning(ReferralCode.id, ReferralCode.code)
+    )
+    row = (await session.execute(stmt)).one_or_none()
 
-    share_url = f"{settings.pwa_base_url}/i/{new_code_str}"
+    if row is None:
+        # Concurrent mint won the race — re-read winner's row (no audit emit).
+        winner = await repository.get_code_by_client_id(session, client_id)
+        if winner is None:
+            raise RuntimeError("referral code conflict but no winner row found")
+        _log.info(
+            "referral_code_concurrent_no_op",
+            client_id=str(client_id),
+            msg="concurrent mint won — returning existing code",
+        )
+        return ReferralCodeResponse(
+            code=winner.code,
+            share_url=f"{settings.pwa_base_url}/i/{winner.code}",
+        )
 
+    code_row_id: UUID = row[0]
+    code_row_code: str = row[1]
+    share_url = f"{settings.pwa_base_url}/i/{code_row_code}"
+
+    # RETURNING-gated audit emit — only on real insert (INFRA-15).
+    # Payload UUID fields are str() here: JSONB serialization uses stdlib
+    # json.dumps which cannot handle UUID objects; Pydantic v2 coerces str
+    # back to UUID at model_validate time so ReferralCodeGeneratedPayload
+    # validates correctly with string inputs.
     await audit.emit(
         session,
         "referral_code_generated",
         actor_user_id=None,  # client-initiated; no staff actor
         resource_type="referral",
-        resource_id=code_row.id,
-        client_id=client_id,           # UUID, not str() — CR-03 fix
-        referral_code_id=code_row.id,  # UUID, not str() — CR-03 fix
-        code=new_code_str,
+        resource_id=code_row_id,
+        client_id=str(client_id),
+        referral_code_id=str(code_row_id),
+        code=code_row_code,
     )
-    await session.commit()  # CR-01 fix: service owns the transactional moment
+    await session.commit()
     _log.info(
         "referral_code_generated",
         client_id=str(client_id),
-        referral_code_id=str(code_row.id),
-        code=new_code_str,
+        referral_code_id=str(code_row_id),
+        code=code_row_code,
     )
-    return ReferralCodeResponse(code=new_code_str, share_url=share_url)
+    return ReferralCodeResponse(code=code_row_code, share_url=share_url)
 
 
 async def resolve_public_code(
@@ -291,16 +323,20 @@ async def capture_referral(
         return
 
     # RETURNING-gated audit emit — only on real insert (INFRA-15).
+    # Payload UUID fields are str() here: JSONB serialization uses stdlib
+    # json.dumps which cannot handle UUID objects; Pydantic v2 coerces str
+    # back to UUID at model_validate time so ReferralCapturedPayload
+    # validates correctly with string inputs.
     await audit.emit(
         session,
         "referral_captured",
         actor_user_id=None,  # client-initiated; no staff actor
         resource_type="referral",
         resource_id=capture_id,
-        referee_client_id=referee_principal_id,    # UUID, not str() — CR-03 fix
-        referrer_client_id=code_row.client_id,     # UUID, not str() — CR-03 fix
-        referral_capture_id=capture_id,            # UUID, not str() — CR-03 fix
-        referral_code_id=code_row.id,              # UUID, not str() — CR-03 fix
+        referee_client_id=str(referee_principal_id),
+        referrer_client_id=str(code_row.client_id),
+        referral_capture_id=str(capture_id),
+        referral_code_id=str(code_row.id),
     )
     await session.commit()  # CR-01 fix: service owns the transactional moment
     _log.info(
