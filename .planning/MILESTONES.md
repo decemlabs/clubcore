@@ -1,5 +1,24 @@
 # Milestones
 
+## v2.6 Referral System (Shipped: 2026-06-08)
+
+**Phases completed:** 4 phases, 11 plans, 21 tasks
+
+**Key accomplishments:**
+
+- audit.py
+- One-liner:
+- One-liner:
+- LOCKED audit event `referral_bonus_accrued` pre-registered with typed Pydantic payload and 7-assertion unit test suite, satisfying INFRA-15 before any callsite exists
+- loyalty_ledger ORM model
+- 1. [Rule 1 - Bug] Wrong column name in audit_log query
+- Aggregate referral read endpoint returning code, shareUrl, referral-only accruedKopecks SUM, and PII-minimal invitees list via raw-SQL cross-module join
+- One-liner:
+- One-liner:
+- 1. [Rule 1 - Bug] test_audit_taxonomy.py: LOCKED_AUDIT_EVENTS count 109 but Phase 96 added 3 referral audit events → got 112
+
+---
+
 ## v2.5 Chat / Messaging — Client↔Gym (Shipped: 2026-06-08)
 
 **Phases completed:** 6 phases (90-95), 14 plans, 20 tasks · all 21 v2.5 requirements complete

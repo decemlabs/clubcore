@@ -91,9 +91,12 @@ Phase 40 milestone verification (legacy note) — see v1.5 archive for detail.
 
 </details>
 
-## Current Milestone: v2.6 Referral System («Приведи друга»)
+## Last Shipped Milestone: v2.6 Referral System («Приведи друга»)
 
-**◆ In progress (opened 2026-06-08).** Доделать единственную оставшуюся client-PWA заглушку — реферальную систему (сейчас `ReferralSheet.jsx` = ComingSoon, в зоне D-71-09).
+**✅ SHIPPED 2026-06-08** (Phases 96–99, 11 plans, 21 tasks; tag `v2.6`; audit `tech_debt`, 0 blockers, 8/8 requirements satisfied, full E2E referral flow wired, milestone gate green). The last client-PWA placeholder (`ReferralSheet`) is graduated from D-71-09 and live. **Backend:** new `app/modules/referrals/` — idempotent 8-char Crockford referral codes + shareable `…/i/<code>`, IDOR-safe capture (self-referral 422, one-bonus-per-referee via DB partial-UNIQUE), public deep-link resolver (PII-minimal), owner-only bonus config + seed (50000/30000 kopecks). **Reward crediting** server-authoritative inside the `payment.succeeded` webhook: on a referee's FIRST membership purchase both sides get a `loyalty_ledger` `entry_type='referral_accrual'` row co-transactionally, idempotent on `(referral_capture_id, client_id)`, amounts only from config, referrer-soft-deleted voids the accrual; `referral_bonus_accrued` LOCKED audit event. **PWA:** pixel-perfect ReferralSheet port (scoped `.referral-root`, chrome stripped) wired via `useClientReferralSummary` `@/data` hook over `GET /client/referral/summary` (real invitees + statuses + «Уже накоплено» referral-only sum); `/i/:code` landing + post-auth idempotent capture; tier tracker hidden-for-future. **Handoff:** byte-stable `openapi.json`/`schema.d.ts`, `_v26Checks` AssertNonNever[8], staff drift gate green (CISO-01), full gate green (mypy --strict + lint-imports + pytest + vitest + Redocly), `alembic check` green. **Deferred at close (acknowledged tech_debt):** WARN-1 zeroed-referrer-bonus → permanent "pending" invitee (latent; never at seeded default); 98-HUMAN-UAT browser-only items; dev-DB clean re-migrate before live manual checks; cosmetic landing bonus-preview stub. Full audit: `.planning/milestones/v2.6-MILESTONE-AUDIT.md`.
+
+<details>
+<summary>Original v2.6 milestone scope (for reference)</summary>
 
 **Goal:** Клиент приглашает друзей персональным реф-кодом/ссылкой; обе стороны получают бонус на баланс лояльности после первой покупки приглашённого; экран «Приведи друга» выведен из ComingSoon и переносится пиксель-в-пиксель с готового макета.
 
@@ -105,7 +108,9 @@ Phase 40 milestone verification (legacy note) — see v1.5 archive for detail.
 
 **Key context:** staff-free под `require_client()`, IDOR-safe; бонусы только server-authoritative (на webhook, не на клиенте); admin-web заморожен → суммы через owner-API/seed; нумерация фаз продолжается с 96. Дизайн-референс полноэкранный (device-рамка/status-bar/Tweaks/`data-go`) — переносится внутрь PWA-shell со scoped CSS, как ChatScreen в v2.5.
 
-## Last Shipped Milestone: v2.5 Chat / Messaging — Client↔Gym
+</details>
+
+## Prior Milestone: v2.5 Chat / Messaging — Client↔Gym
 
 **✅ SHIPPED 2026-06-08** (Phases 90-95, 14 plans, 21/21 requirements; tag `v2.5`; audit `tech_debt`, 0 blockers, 20/21 cross-phase wired, 4/4 E2E flows). Delivered live 1:1 client↔gym chat from the PWA — text + photos, read receipts, typing scaffold, unread badge — over the project's first **WebSocket** layer (FastAPI WS + Redis pub/sub), with a **Telegram staff bridge** (client→staff forward + staff native-Reply routing via a Redis anchor) and a frozen byte-stable API contract. ChatScreen graduated from the D-71-09 placeholder zone as a pixel-perfect port of the finished reference design. **Deferred at close (acknowledged):** RCPT-02 typing producer → v2.6 (Telegram has no typing API; admin-web frozen); Phase 94 HUMAN-UAT (pixel-perfect parity, live WS round-trip, photo flow on a real device); carried-forward flakes. See `.planning/milestones/v2.5-MILESTONE-AUDIT.md`. Original milestone scope below for reference.
 

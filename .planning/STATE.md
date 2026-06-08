@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.6
 milestone_name: Referral System
-status: ready_to_plan
-stopped_at: Phase 99 complete (2/2) — ready to discuss Phase 999.1
-last_updated: 2026-06-08T16:45:37.880Z
-last_activity: 2026-06-08 -- Phase 98 execution started
+status: Awaiting next milestone
+stopped_at: Milestone v2.6 roadmap created (4 phases, 8/8 requirements mapped; ROADMAP.md + STATE.md + REQUIREMENTS.md updated).
+last_updated: "2026-06-08T16:51:50.980Z"
+last_activity: 2026-06-08 — Milestone v2.6 completed and archived
 progress:
   total_phases: 8
-  completed_phases: 2
-  total_plans: 9
+  completed_phases: 4
+  total_plans: 11
   completed_plans: 11
-  percent: 25
+  percent: 50
 ---
 
 # Project State
@@ -21,19 +21,14 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 999.1 — wr 06 restore pt session credit on owner force cancel (✅ done 2026 05 29 — quick task 260529 ny2)
+**Current focus:** v2.6 Referral System shipped (Phases 96–99). Planning next milestone — run `/gsd:new-milestone`. (999.x are historical DONE/SHIPPED backlog ledger entries, not work.)
 
 ## Current Position
 
-Phase: 999.1
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-06-08
-
-```
-[░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 0%
-Phase 96 ▸ 97 ▸ 98 ▸ 99
-```
+Phase: Milestone v2.6 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-08 — Milestone v2.6 completed and archived
 
 ## v2.6 Roadmap Summary
 
@@ -96,6 +91,16 @@ Phase 96 ▸ 97 ▸ 98 ▸ 99
 
 ## Deferred Items
 
+Acknowledged at v2.6 close (2026-06-08):
+
+| Category | Item | Status |
+|----------|------|--------|
+| tech-debt→next | WARN-1: ReferralSheet "joined" status derives from the referrer-side `referral_accrual` row, which the webhook skips when `referrerBonusKopecks=0` → a paid friend shows "Ждём" forever under zero-config (never at seeded default 50000). Fix: derive "joined" from referee first-purchase independent of bonus config. | deferred — see v2.6-MILESTONE-AUDIT.md |
+| human-verify | 98-HUMAN-UAT browser-only: pixel-perfect parity (light+dark), live `/i/<code>`→join→invitees/accrued round-trip (two sessions), share/copy chips on device. Auto-deferred during autonomous run. | pending — see 98-HUMAN-UAT.md, re-run `/gsd:verify-work 98` |
+| operator | Dev Postgres clean re-migrate before live manual checks (0067 amended in place + 0069 added; stale `ix_referral_codes_client_id` + possibly polluted `referral_config`). `docker compose down -v` + migrate + seed. Test gates rebuild schema, unaffected. | pending |
+| cosmetic→next | ReferralLandingScreen `formatBonusPreview` static "14 дней в подарок" (resolver exposes welcomeBonusKopecks, not days); PWA referral hooks use cast escape hatch instead of typed schema.d.ts paths (harmless). | deferred — see v2.6-MILESTONE-AUDIT.md |
+| stale-ledger | 13 prior-milestone quick-task artifacts (status `missing`) + the v2.6 stale `/gsd:plan-phase 96` todo pointer — acknowledged at audit-open close. | acknowledged stale |
+
 Carrying forward from v2.5 close (2026-06-08):
 
 | Category | Item | Status |
@@ -120,4 +125,4 @@ Resume: `/gsd:plan-phase 96` to begin Phase 96 (Referral Domain Backend).
 
 ## Operator Next Steps
 
-- Plan Phase 96: `/gsd:plan-phase 96`
+- Start the next milestone with /gsd-new-milestone
