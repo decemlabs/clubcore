@@ -18,7 +18,7 @@ Client-facing referral program. All client surfaces under `require_client()`, ID
 - [x] **REFER-06**: На экране отображаются реальные данные клиента: список приглашённых друзей со статусами (присоединился + начисленный бонус / перешёл-но-не-оплатил) и сумма «Уже накоплено» (фактические реферальные начисления из ledger), через `@/data`.
 
 ### API handoff (HND)
-- [ ] **HND-01**: Все endpoint'ы v2.6 зафиксированы в byte-stable `openapi.json` + `schema.d.ts`; `_v26Checks` AssertNonNever покрывает новые path×method; staff-контракт байт-в-байт цел (drift gate зелёный); полный milestone gate зелёный (pytest + mypy --strict + lint-imports + Redocly + frontend vitest).
+- [x] **HND-01**: Все endpoint'ы v2.6 зафиксированы в byte-stable `openapi.json` + `schema.d.ts`; `_v26Checks` AssertNonNever покрывает новые path×method; staff-контракт байт-в-байт цел (drift gate зелёный); полный milestone gate зелёный (pytest + mypy --strict + lint-imports + Redocly + frontend vitest).
 
 ## Future Requirements (deferred)
 - Геймификация реферальных вех: тир-трекер «N/5 друзей → месяц в подарок», count-up «Уже накоплено», прогресс-бар, конфетти на достижение тира (визуал есть в макете; backend тиров отложен).
@@ -42,4 +42,4 @@ Client-facing referral program. All client surfaces under `require_client()`, ID
 | REFER-05 | Phase 98 | Complete |
 | REFER-06 | Phase 98 | Complete |
 | REFER-07 | Phase 96 | Complete |
-| HND-01 | Phase 99 | Pending |
+| HND-01 | Phase 99 | Complete |
