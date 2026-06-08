@@ -344,6 +344,52 @@ async def test_stale_anchor_sends_hint_and_no_record(
 
 
 # ---------------------------------------------------------------------------
+# Test 3b: corrupt/partial anchor JSON → stale-anchor hint + no persistence (WR-03)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "raw_anchor",
+    [
+        b"not-json-at-all",  # JSONDecodeError
+        b'{"thread_id": "t"}',  # KeyError: missing client_id
+        b'{"client_id": "not-a-uuid"}',  # ValueError: bad UUID
+        b"null",  # TypeError: subscripting None
+    ],
+)
+async def test_corrupt_anchor_degrades_to_hint_and_no_record(
+    db_session: AsyncSession,
+    fake_redis: Any,
+    sender: _StubSender,
+    raw_anchor: bytes,
+) -> None:
+    """A present-but-unparseable anchor degrades to the stale hint instead of crashing."""
+    tg_msg_id = 1234
+    await fake_redis.set(f"cc:messaging:tg_msg:{tg_msg_id}", raw_anchor, ex=604800)
+
+    ctx = _build_ctx(db_session, fake_redis, sender)
+    update = _build_reply_update(replied_to_message_id=tg_msg_id, update_id=350)
+    bot_ctx = _build_bot_ctx(sender)
+
+    with patch("app.integrations.telegram.handlers.get_settings") as mock_settings:
+        mock_settings.return_value.staff_telegram_chat_id = _STAFF_CHAT_ID
+        # Must NOT raise — handler degrades gracefully.
+        await staff_reply_handler(update, bot_ctx, ctx)
+
+    # The stale-anchor hint DM must have been sent.
+    assert len(sender.text_calls) == 1, f"Expected 1 hint DM, got {sender.text_calls}"
+    _, hint_text = sender.text_calls[0]
+    assert "тред" in hint_text.lower() or "определить" in hint_text.lower(), (
+        f"Hint text does not mention thread lookup failure: {hint_text!r}"
+    )
+
+    # No staff messages persisted.
+    rows = await db_session.execute(text("SELECT id FROM messages WHERE role='staff'"))
+    assert rows.fetchone() is None, "Staff message persisted despite corrupt anchor"
+
+
+# ---------------------------------------------------------------------------
 # Test 4: plain (non-Reply) message → "use Reply" hint + no persistence
 # ---------------------------------------------------------------------------
 

@@ -780,9 +780,29 @@ async def staff_reply_handler(
         await ctx.sender.send_text_dm(bot, chat_id, _DM_STAFF_STALE_ANCHOR)
         return
 
-    anchor = json.loads(raw_anchor)
-    client_id = UUID(anchor["client_id"])
+    # WR-03: a present-but-unparseable anchor (corrupt/truncated write, schema
+    # drift, non-UUID value) must degrade to the stale-anchor hint — NOT crash
+    # into _global_error_handler, which would leave the staff with no feedback
+    # while the update_id is already consumed by the dedup SET-NX.
+    try:
+        anchor = json.loads(raw_anchor)
+        client_id = UUID(anchor["client_id"])
+    except (ValueError, KeyError, TypeError):
+        logger.warning(
+            "staff_reply_anchor_corrupt",
+            message_id=reply_to.message_id,
+            chat_id=chat_id,
+        )
+        await ctx.sender.send_text_dm(bot, chat_id, _DM_STAFF_STALE_ANCHOR)
+        return
 
+    # WR-05 — TRUST MODEL: every non-bot member of the staff chat is trusted
+    # as authoritative "staff". When staff_telegram_chat_id is a GROUP chat,
+    # ANY non-bot member can route a role='staff' reply to a client; there is
+    # no per-user allowlist. This is an accepted single-gym assumption — keep
+    # the staff group's membership tightly controlled. The sending
+    # telegram_user_id is recorded on the message AND in the audit payload
+    # below so any impersonation is forensically traceable.
     async with ctx.session_factory() as session:
         result = await ctx.messaging_service.record_staff_message(
             session,
@@ -800,6 +820,7 @@ async def staff_reply_handler(
             resource_type="message",
             resource_id=result.id,
             client_id=str(client_id),
+            telegram_user_id=effective_user.id,
         )
 
         await session.commit()
