@@ -45,6 +45,7 @@ export const clientPortalKeys = {
   trainerDetail: (id: string) => [...clientPortalKeys.all, 'trainer-detail', id] as const,
   messages: (after?: string) => [...clientPortalKeys.all, 'messages', after ?? ''] as const,
   referralSummary: () => [...clientPortalKeys.all, 'referral', 'summary'] as const,
+  referralResolve: (code: string) => [...clientPortalKeys.all, 'referral', 'resolve', code] as const,
 } as const
 
 // ---------------------------------------------------------------------------
@@ -1100,6 +1101,56 @@ export function useClientReferralSummary() {
       return (res as { data: ReferralSummaryData }).data
     },
     staleTime: 30_000,
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Phase-98 REFER-02: deep-link resolve + capture hooks
+// ---------------------------------------------------------------------------
+
+interface ReferralResolveData {
+  valid: boolean
+  referrerFirstName: string | null
+  welcomeBonusKopecks: number
+}
+
+/**
+ * GET /api/v1/i/<code> — public resolver for the deep-link landing (REFER-02).
+ * Always returns 200; valid=false for unknown/expired codes (anti-enumeration).
+ * Enabled only when code is truthy (the landing component passes useParams() value).
+ */
+export function useClientReferralResolve(code: string) {
+  return useQuery({
+    queryKey: clientPortalKeys.referralResolve(code),
+    queryFn: async () => {
+      // /i/* paths are not in schema.d.ts until Phase 99. Use the cast escape hatch.
+      const res = await (clientRequest as unknown as (
+        method: string,
+        path: string,
+        init?: unknown,
+      ) => Promise<unknown>)('get', `/api/v1/i/${encodeURIComponent(code)}`)
+      return (res as { data: ReferralResolveData }).data
+    },
+    staleTime: 30_000,
+    enabled: !!code,
+  })
+}
+
+/**
+ * POST /api/v1/client/referral/capture — bind referee=principal to the referrer (REFER-02).
+ * Best-effort, idempotent server-side (self-referral / already-bound = no-op).
+ * Must be called post-auth (inside RequireAuth so client_id comes from the principal).
+ */
+export function useCaptureReferral() {
+  return useMutation({
+    mutationFn: async ({ code }: { code: string }) => {
+      // /client/referral/* paths are not in schema.d.ts until Phase 99. Cast escape hatch.
+      await (clientRequest as unknown as (
+        method: string,
+        path: string,
+        init?: unknown,
+      ) => Promise<unknown>)('post', '/api/v1/client/referral/capture', { body: { code } })
+    },
   })
 }
 

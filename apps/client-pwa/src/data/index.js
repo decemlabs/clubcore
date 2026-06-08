@@ -70,6 +70,9 @@ export {
   useMarkMessagesRead,
   // Phase-98 REFER-06: referral summary hook
   useClientReferralSummary,
+  // Phase-98 REFER-02: deep-link resolve + capture hooks
+  useClientReferralResolve,
+  useCaptureReferral,
 } from '../lib/clientQueries'
 
 // ─── Legacy mock constants (retained for non-wired consumers) ─────────────
