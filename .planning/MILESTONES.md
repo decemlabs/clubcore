@@ -1,5 +1,26 @@
 # Milestones
 
+## v2.5 Chat / Messaging — Client↔Gym (Shipped: 2026-06-08)
+
+**Phases completed:** 6 phases (90-95), 14 plans, 20 tasks · all 21 v2.5 requirements complete
+
+**Delivered:** Real-time 1:1 client↔gym chat from the PWA — text + photos, read receipts, typing scaffold, unread badge — with a Telegram staff bridge and a frozen byte-stable API contract.
+
+**Key accomplishments:**
+
+- **Phase 90 — Messaging domain + REST + WS:** migrations 0064/0065, MessageThread/Message ORM, REST send/list/mark-read (camelCase, idempotent, IDOR-safe), WebSocket transport with per-connection Redis pub/sub fan-out — all six WS invariants locked from day one (MSG-01..04, RT-01..04).
+- **Phase 91 — Read receipts + typing:** per-message read status + ephemeral typing presence over the Phase 90 WS channel; reply-as-read semantics (RCPT-01..03).
+- **Phase 92 — Photo attachments:** S3 storage seam + magic-byte MIME validation + 5MB cap; authenticated IDOR-safe serve with anti-XSS header triad; two-step upload→send (ATT-01..03).
+- **Phase 93 — Telegram bridge:** client→staff `forward_to_staff` ARQ task (text + streamed photo) writing the `cc:messaging:tg_msg:{id}` Redis anchor; staff native-Reply routing back to the client thread via the anchor with reply-as-read; triple echo-loop guard + anti-misroute (BRDG-01..03).
+- **Phase 94 — PWA ChatScreen:** pixel-perfect port of the finished reference chat (list+thread, gestures, animations) graduated from the D-71-09 placeholder zone, wired to REST+WS via `@/data` + an app-level `useClientMessagingWS` hook; real photo picker + full-screen view; unread badge; read ticks + typing dots (PWA-01..03).
+- **Phase 95 — OpenAPI handoff:** byte-stable `openapi.json` (Messaging tag + manual WS doc) + `schema.d.ts` + `_v25Checks` AssertNonNever[7] drift guard; full milestone gate green (mypy --strict + lint-imports + CISO-01 byte-parity pytest + vitest + Redocly); staff contract zero-drift (HND-01).
+
+**Known deferred items at close: acknowledged** — RCPT-02 typing producer → v2.6 (Telegram has no typing API; admin-web frozen); Phase 94 HUMAN-UAT (pixel-perfect parity, live WS round-trip, photo flow on a real device); carried-forward flakes (test_freeze_race, promo F821, test_alembic_clean); plus 13 stale prior-milestone quick-task artifacts + Phase 92 S3-hardening (N/A until Yandex prod). See `.planning/milestones/v2.5-MILESTONE-AUDIT.md` + STATE.md `## Deferred Items`.
+
+**Notable:** recovered a mid-Task-3 interrupted Phase 93 (closed out + summarized); Phase 95 surfaced and fixed 6 latent test fixtures broken by Phase 93's HandlerContext/ARQ/audit changes.
+
+---
+
 ## v2.4 Content & Communication — Client-First (Shipped: 2026-06-06)
 
 **Phases completed:** 4 phases, 11 plans, 12 tasks

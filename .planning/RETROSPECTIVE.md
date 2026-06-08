@@ -645,3 +645,40 @@ First Group-B content/communication slice, all client-first: gym-info CMS (`gym`
 - Model mix: orchestrator Opus; subagents predominantly Sonnet (executors/checkers/reviewers/researchers), Opus for planners.
 - Execution: fully autonomous discuss→plan→execute per phase + milestone lifecycle; sequential-on-main-tree execution (no worktrees) for the dependent single-plan-per-wave chains.
 - Notable: code-review auto-fix loops ran 1-2 iterations per wired phase; the contract-freeze phase (89) was a single clean pass.
+
+---
+
+## Milestone: v2.5 — Chat / Messaging — Client↔Gym
+
+**Shipped:** 2026-06-08
+**Phases:** 6 (90-95) | **Plans:** 14 | **Requirements:** 21/21 | **Audit:** tech_debt (0 blockers)
+
+### What Was Built
+Live 1:1 client↔gym chat from the PWA: messaging domain + REST + the project's first **WebSocket** transport (FastAPI WS + per-connection Redis pub/sub fan-out, six WS invariants locked); read receipts + ephemeral typing + reply-as-read; photo attachments (S3 seam + magic-byte MIME + IDOR-safe anti-XSS serve); a **Telegram staff bridge** (client→staff `forward_to_staff` ARQ + staff native-Reply routing via the `cc:messaging:tg_msg:{id}` Redis anchor + triple echo/anti-misroute guard); a **pixel-perfect ChatScreen port** graduated from the D-71-09 zone, wired via `@/data` + an app-level `useClientMessagingWS` hook; byte-stable `openapi.json` (Messaging tag + manual WS doc) + `schema.d.ts` + `_v25Checks[7]` + a green full milestone gate.
+
+### What Worked
+- **Recovering an interrupted phase cleanly:** Phase 93 was mid-Task-3 (code written, uncommitted, tests unwritten). "Close out manually" — finish the task, verify, commit, write SUMMARY — let execute-phase's `has_summary` resume gate skip it and run only the remaining plan. No duplication, no lost work.
+- **Adversarial code-review + auto-fix on wired phases:** Phase 94 review caught two load-bearing bugs the green tests missed — WS reconnect-churn on every `App` re-render (inline-closure effect deps) and lexicographic-vs-epoch-ms read-tick comparison. Tests assert shape/wiring; review caught runtime behavior.
+- **Pixel-perfect port as an explicit contract:** treating the user's finished reference file as the locked design source (copied into the phase dir, documented in UI-SPEC, port-verbatim directive to the executor) preserved fidelity while a clean reconciliation (strip prototype chrome, one real conversation, hide-for-future) kept it shippable against a single-thread backend.
+- **The full milestone gate as the real integration test:** Phase 95's `uv run pytest` surfaced 6 latent fixtures broken by Phase 93's HandlerContext/ARQ/audit additions — invisible to phase-93's messaging-scoped runs.
+
+### What Was Inefficient
+- The mid-task interruption required manual reconstruction (read the WIP, infer the missing tests, reconcile a plan-vs-implementation deviation) before normal flow could resume.
+- The auto-extracted MILESTONES.md accomplishments were noisy (`One-liner:` placeholders / deviation lines parsed as bullets) and needed a manual rewrite.
+- Per-phase code review on the generated-artifact handoff phase (95) was low-yield — the comprehensive milestone gate already covered it; a scoped sanity-check of the one logic change (WS doc injection) sufficed.
+
+### Patterns Established
+- **Interrupted-phase recovery:** finish the in-flight task → verify → commit → write the SUMMARY, so the `has_summary` resume gate skips it; never re-run a partially-committed plan from scratch.
+- **Reference-port phase:** copy the external reference into the phase dir for durability; UI-SPEC documents it as the locked contract (not a new design); UI-checker waives max-sizes/grid rules for verbatim ports.
+- **App-level WS singleton + `window.__chat*` bridge:** mount the realtime hook at `App()` (not the screen) so the unread badge updates from any tab; stabilize callbacks via a ref so the socket doesn't churn on parent re-render.
+- **Real poll fallback ≠ `staleTime`:** a "30s poll when WS down" requires `refetchInterval`, not `staleTime` (which only suppresses refetches) — caught by the plan-checker.
+
+### Key Lessons
+- Green unit/integration tests verify wiring and shape, not runtime behavior (reconnect churn, cross-source timestamp ordering, effect-dep stability) — adversarial code review remains the gate that catches those, and it earned its cost again here.
+- A milestone-spanning change to a shared structure (HandlerContext field, new ARQ task, new LOCKED audit events) silently breaks fixtures outside the phase's scoped test runs; only the full-suite milestone gate surfaces them — run it before declaring a domain done.
+- When a user supplies a finished design mid-flight, stop and reconcile the structural mismatch (multi-conv prototype vs single-thread backend; prototype chrome vs real app shell) with explicit questions before planning — the wrong assumption is expensive on a 1400-line port.
+
+### Cost Observations
+- Model mix: orchestrator Opus; subagents Sonnet (executors/checkers/reviewers/integration), Opus for planners and the fidelity-critical Phase 94 port executor + its code-fixer.
+- Execution: fully autonomous discuss→(ui)→plan→execute→review→verify per phase + milestone lifecycle; sequential-on-main-tree (branching `none`), single-plan-per-wave dependent chains.
+- Notable: code-review auto-fix ran 2 iterations on Phase 94 (2 blockers + 8 warnings → clean, then 2 residual warnings closed); plan-checker bounced Phase 94 once (poll-fallback blocker) and Phase 95 verify once (missing pytest in the gate).

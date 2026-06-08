@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v2.5
 milestone_name: Chat / Messaging — Client↔Gym
-status: complete
-stopped_at: "Phase 95 Plan 02 complete — v2.5 milestone closed. schema.d.ts + _v25Checks + milestone gate green. All 21 v2.5 requirements done (HND-01). Commits: 1d5946b3, 0d8548db, 77a161a5."
-last_updated: "2026-06-08T09:30:00.000Z"
-last_activity: 2026-06-08
+status: Awaiting next milestone
+stopped_at: "Milestone v2.5 Chat / Messaging COMPLETE + archived (tag v2.5). 6/6 phases, 21/21 requirements, audit tech_debt (0 blockers). Deferred: RCPT-02 typing producer → v2.6; Phase 94 HUMAN-UAT (browser/device); carried flakes."
+last_updated: "2026-06-08T09:00:00.000Z"
+last_activity: 2026-06-08 — Milestone v2.5 completed and archived
 progress:
-  total_phases: 10
+  total_phases: 6
   completed_phases: 6
   total_plans: 14
   completed_plans: 14
@@ -21,16 +21,14 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 95 — openapi-handoff (Plan 01 complete, Plan 02 next)
+**Current focus:** Planning next milestone (v2.6 — admin-web chat inbox + first production API-wiring, or v3.0 production deploy). Run `/gsd:new-milestone`.
 
 ## Current Position
 
-Phase: 95 (openapi-handoff) — COMPLETE
-Plan: 2 of 2 (plan 01 ✅ openapi.json frozen; plan 02 ✅ schema.d.ts + _v25Checks + milestone gate)
-Status: Milestone v2.5 complete — all 21 requirements done
-Last activity: 2026-06-08
-
-Progress: [██████████] 100%
+Phase: Milestone v2.5 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-08 — Milestone v2.5 completed and archived
 
 ## v2.5 Roadmap Summary
 
@@ -123,6 +121,17 @@ Progress: [██████████] 100%
 
 ## Deferred Items
 
+Acknowledged + deferred at v2.5 close (2026-06-08):
+
+| Category | Item | Status |
+|----------|------|--------|
+| v2.6 | RCPT-02 typing indicator producer — PWA consumer + WS fan-out wired, but no production `publish_typing` trigger (Telegram has no typing API; admin-web frozen) | deferred → v2.6 admin-web |
+| human-verify | Phase 94 HUMAN-UAT: pixel-perfect ChatScreen parity, live WS round-trip (PWA↔Telegram), photo flow on a real device | pending → see 94-HUMAN-UAT.md (needs browser + running stack) |
+| advisory-ui | Phase 94 UI-review nits (hoist per-mount `<style>` to singleton; thread-bar online-dot has no v2.5 presence backend; day-sep array keys) | deferred — see 94-UI-REVIEW.md |
+| contract | Phase 92 WR-01 `MessageItem.body` `""` sentinel for attachment-only messages (null-vs-sentinel) — frozen as-is in v2.5 contract; revisit if PWA needs the distinction | deferred — contract owner decision |
+| tracking | 13 stale prior-milestone quick-task artifacts (260529-*/260601-*, status `missing`) | acknowledged stale — pre-v2.5, not v2.5 work |
+| smoke | Integration live-smoke recs: PTB22 Bot.send_message standalone in ARQ worker; long photo-caption truncation at scale; OTP→authed→WS-connect path | verify in a live session |
+
 Carrying forward from v2.4 close (see previous STATE.md for full list):
 
 | Category | Item | Status |
@@ -140,6 +149,10 @@ Carrying forward from v2.4 close (see previous STATE.md for full list):
 
 ## Session Continuity
 
-Last session: 2026-06-08T06:28:36.472Z
-Stopped at: Phase 95 Plan 01 complete — v2.5 Messaging tag + 5 REST paths + WS manual doc in openapi.json; byte-stable + Redocly clean. Commits: 9e45aa58, 9b28ba2f.
-Resume: Phase 95 Plan 02 — regenerate schema.d.ts + add _v25Checks AssertNonNever + milestone gate (backend pytest + mypy + lint-imports + frontend vitest)
+Last session: 2026-06-08 (autonomous run)
+Stopped at: Milestone v2.5 Chat / Messaging COMPLETE + archived (tag v2.5; audit tech_debt, 0 blockers; 21/21 requirements). ROADMAP/PROJECT/MILESTONES/RETROSPECTIVE updated; REQUIREMENTS.md archived + removed (fresh for next milestone).
+Resume: Start the next milestone — `/gsd:new-milestone` (v2.6 admin-web chat inbox + first production API-wiring, or v3.0 production deploy).
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone
