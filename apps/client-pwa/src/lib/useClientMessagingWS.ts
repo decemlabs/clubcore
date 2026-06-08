@@ -70,6 +70,15 @@ export function useClientMessagingWS({
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // CR-01: Keep the callbacks in a ref so the connect effect can depend ONLY on
+  // [enabled]. App() passes fresh inline closures every render; if they were in
+  // the dep array the singleton socket would tear down + reopen on every App
+  // re-render (every sheet open/close, push toast, and crucially every
+  // setUnreadChat from the badge feed → connect churn). The ref is updated each
+  // render so the latest callbacks are always invoked, without re-running the effect.
+  const cbRef = useRef({ onNewMessage, onReadReceipt, onTyping })
+  cbRef.current = { onNewMessage, onReadReceipt, onTyping }
+
   useEffect(() => {
     if (!enabled) return
 
@@ -97,11 +106,11 @@ export function useClientMessagingWS({
         }
 
         if (frame.type === 'new_message' && frame.messageId) {
-          onNewMessage(frame.messageId)
+          cbRef.current.onNewMessage(frame.messageId)
         } else if (frame.type === 'read_receipt' && frame.readAt) {
-          onReadReceipt(frame.readAt)
+          cbRef.current.onReadReceipt(frame.readAt)
         } else if (frame.type === 'typing') {
-          onTyping()
+          cbRef.current.onTyping()
         }
         // 'ping' frames: server heartbeat — no client action
       }
@@ -118,7 +127,18 @@ export function useClientMessagingWS({
     }
 
     function scheduleReconnect() {
+      // WR-05: clear any pending timer before scheduling a new one. If two
+      // onclose events race (onerror→close plus a server close), the earlier
+      // timer would otherwise be orphaned (untracked) and still fire connect(),
+      // opening a second socket that escapes the single-socket invariant.
+      if (reconnectTimer.current !== null) {
+        clearTimeout(reconnectTimer.current)
+        reconnectTimer.current = null
+      }
       reconnectTimer.current = setTimeout(() => {
+        // WR-05: null the ref inside the callback so the tracked timer always
+        // reflects a pending (not already-fired) timeout.
+        reconnectTimer.current = null
         // Double the delay before the next attempt, capped at MAX_DELAY
         reconnectDelay.current = Math.min(reconnectDelay.current * 2, MAX_DELAY)
         connect()
@@ -139,5 +159,5 @@ export function useClientMessagingWS({
         wsRef.current = null
       }
     }
-  }, [enabled, onNewMessage, onReadReceipt, onTyping])
+  }, [enabled])
 }
