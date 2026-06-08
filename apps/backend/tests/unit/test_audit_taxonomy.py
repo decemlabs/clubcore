@@ -240,14 +240,22 @@ def test_locked_audit_events_has_expected_count() -> None:
     ``('attachment_uploaded', 'message')``,
     ``('chat_staff_reply_sent', 'message')``.
     The frozenset total becomes 105 + 4 = 109. See 90-*-SUMMARY.md.
+
+    Phase 96 (INFRA-15 / D-96 referral lock) ADDS 3 v2.6 referral pairs
+    pre-registered BEFORE any callsite (Phase 96 implements the emitters):
+    ``('referral_code_generated', 'referral')``,
+    ``('referral_captured', 'referral')``,
+    ``('referral_bonus_accrued', 'referral')``.
+    The frozenset total becomes 109 + 3 = 112. See 96-*-SUMMARY.md.
     """
-    assert len(LOCKED_AUDIT_EVENTS) == 109, (
-        "LOCKED_AUDIT_EVENTS size drifted: expected 109 "
+    assert len(LOCKED_AUDIT_EVENTS) == 112, (
+        "LOCKED_AUDIT_EVENTS size drifted: expected 112 "
         "(18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4 + 5 v1.5 + 13 v1.6 + 14 v1.7 "
         "+ 4 v1.9/P58 + 4 v1.9/P59 + 1 pre-P68 + 6 v2.0/P68 + 1 v2.2/P80 booking_rescheduled "
         "+ 1 v2.3/P82 loyalty_accrued + 1 v2.3/P83 loyalty_redeemed "
         "+ 2 v2.3/P84: autopay_charge_initiated + autopay_charge_failed (APAY-01/APAY-03, INFRA-15) "
-        "+ 4 v2.5/P90: message_sent + message_read + attachment_uploaded + chat_staff_reply_sent), "
+        "+ 4 v2.5/P90: message_sent + message_read + attachment_uploaded + chat_staff_reply_sent "
+        "+ 3 v2.6/P96: referral_code_generated + referral_captured + referral_bonus_accrued), "
         f"got {len(LOCKED_AUDIT_EVENTS)}"
     )
     # v2.3 Phase 82 INFRA-15 / ACCR-01/ACCR-02: +1 loyalty accrual lifecycle pair
