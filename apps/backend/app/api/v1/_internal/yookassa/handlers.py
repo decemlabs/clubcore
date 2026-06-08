@@ -108,7 +108,7 @@ from app.modules.fiscal_receipts.constants import (
 )
 from app.modules.fiscal_receipts.models import FiscalReceipt
 from app.modules.fiscal_receipts.repository import insert_fiscal_receipt
-from app.modules.loyalty.service import record_loyalty_redemption
+from app.modules.loyalty.service import accrue_referral_bonus, record_loyalty_redemption
 from app.modules.notifications.service import create_notification
 from app.modules.online_payments.constants import (
     ONLINE_PAYMENT_STATUS_TRANSITIONS,
@@ -129,6 +129,7 @@ from app.modules.online_refunds.settle import _settle_online_refund
 from app.modules.payments.repository import _is_refund_of_uniqueness_conflict
 from app.modules.payments.service import AlreadyRefundedError
 from app.modules.promo_codes.service import record_promo_redemption
+from app.modules.referrals import repository as referrals_repo
 
 _log = structlog.get_logger("api.v1._internal.yookassa.handlers")
 
@@ -623,7 +624,79 @@ async def handle_payment_succeeded(
                 online_payment_id=str(row.id),
             )
 
-        # Phase 87 INBOX-03 — in-app inbox row (co-transactional, inside async with session.begin()).
+        # Phase 97 REFER-04 — referral bonus crediting on first membership payment.
+        # Server-authoritative: only the webhook triggers crediting, never a client request.
+        # Co-transactional with activation: both accrue_referral_bonus calls share the same
+        # `async with session.begin()` UoW — atomicity enforced (T-97-10).
+        # D-54-08: cross-module reads use raw SQL — no ORM import of OnlinePayment/Client here.
+        if subject_kind == SUBJECT_KIND_MEMBERSHIP:
+            _capture = await referrals_repo.get_capture_by_referee(session, row.client_id)
+            if _capture is not None:
+                # First-purchase gate: count prior succeeded membership payments for this client,
+                # excluding the current row. Only the very first membership purchase triggers
+                # referral bonus (T-97-09 / one-bonus-per-referee invariant).
+                # Raw SQL (D-54-08): no ORM import of OnlinePayment from handlers.py.
+                _prior_row = (
+                    (
+                        await session.execute(
+                            text(
+                                "SELECT COUNT(*) AS cnt FROM online_payments "
+                                "WHERE client_id = :cid "
+                                "  AND status = 'succeeded' "
+                                "  AND membership_plan_id IS NOT NULL "
+                                "  AND id != :current_id"
+                            ),
+                            {"cid": str(row.client_id), "current_id": str(row.id)},
+                        )
+                    )
+                    .mappings()
+                    .one()
+                )
+                _is_first_membership = int(_prior_row["cnt"]) == 0
+                if _is_first_membership:
+                    # Referrer-alive check: void entire accrual if referrer has been soft-deleted
+                    # (T-97-11). Raw SQL (D-54-08) — no ORM Client import.
+                    _referrer_alive = (
+                        await session.execute(
+                            text(
+                                "SELECT 1 FROM clients "
+                                "WHERE id = :cid AND deleted_at IS NULL LIMIT 1"
+                            ),
+                            {"cid": str(_capture.referrer_client_id)},
+                        )
+                    ).fetchone()
+                    if _referrer_alive is None:
+                        _log.info(
+                            "referral_bonus_voided_referrer_deleted",
+                            referrer_client_id=str(_capture.referrer_client_id),
+                            referee_client_id=str(row.client_id),
+                            online_payment_id=str(row.id),
+                        )
+                    else:
+                        # Read bonus amounts from referral_config — the ONLY source of amounts.
+                        # No integer literal bonus amount at this callsite (T-97-08 / crit 4).
+                        _ref_config = await referrals_repo.get_config(session)
+                        if _ref_config is not None:
+                            if _ref_config.referrer_bonus_kopecks > 0:
+                                await accrue_referral_bonus(
+                                    session,
+                                    client_id=_capture.referrer_client_id,
+                                    amount_kopecks=_ref_config.referrer_bonus_kopecks,
+                                    referral_capture_id=_capture.id,
+                                    online_payment_id=row.id,
+                                    role="referrer",
+                                )
+                            if _ref_config.referee_welcome_kopecks > 0:
+                                await accrue_referral_bonus(
+                                    session,
+                                    client_id=row.client_id,
+                                    amount_kopecks=_ref_config.referee_welcome_kopecks,
+                                    referral_capture_id=_capture.id,
+                                    online_payment_id=row.id,
+                                    role="referee",
+                                )
+
+        # Phase 87 INBOX-03 — in-app inbox row (co-transactional, inside async with session.begin()).  # noqa: E501
         # Placed before the audit emits so the notification INSERT is atomic with the payment
         # state change. Anti-oracle (D-52-08): hook lives ONLY in handle_payment_succeeded —
         # handle_payment_canceled MUST NOT create a row. Webhook replay is covered by the
