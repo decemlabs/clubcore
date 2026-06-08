@@ -24,12 +24,12 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 from uuid import uuid4
 
 import fakeredis.aioredis
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.integrations.telegram.handlers import HandlerContext, staff_reply_handler
@@ -37,7 +37,6 @@ from app.modules.auth import telegram_service
 from app.modules.bookings import service as bookings_service
 from app.modules.clients.models import Client
 from app.modules.messaging import service as messaging_service
-from app.modules.messaging.models import Message
 from app.modules.schedule import service as schedule_service
 from app.modules.visits import service as visits_service
 
@@ -158,7 +157,6 @@ def sender() -> _StubSender:
 async def _seed_client(db_session: AsyncSession) -> Client:
     """Seed a User + Client; return the Client row."""
     from app.core.permissions import Role
-
     from app.modules.auth.models import User
 
     user = User(
