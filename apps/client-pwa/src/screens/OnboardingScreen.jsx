@@ -16,7 +16,25 @@ import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Icon } from '@/components/Icon.jsx'
 import { StatusBar } from '@/components/StatusBar.jsx'
-import { useUpdateClientProfile, useCompleteOnboarding, useCaptureReferral } from '@/data'
+import { useUpdateClientProfile, useCompleteOnboarding, useCaptureReferral, ApiError } from '@/data'
+
+// ─── Referral capture: terminal vs transient classification (WR-01) ───────────
+// The capture call is best-effort and MUST NEVER block onboarding navigation.
+// But the pending code is the ONLY client-side copy of the referrer hint and is
+// not re-derivable. So we only DISCARD it on success or a DEFINITIVE non-retryable
+// failure; a transient/network error KEEPS it so a later onboarding/app-open can
+// retry and preserve referrer→referee attribution.
+//
+// ApiError carries no HTTP status — only the server's typed `code` (clientFetcher
+// throws ApiError(body.code, ...)). The two terminal referral codes are:
+//   - referral_code_not_found  (HTTP 404 — unknown code; will never resolve)
+//   - self_referral_not_allowed (HTTP 422 — self-referral; structurally invalid)
+// Anything else (network_error, session_expired, 5xx/unknown_error) is transient.
+const TERMINAL_REFERRAL_CODES = new Set(['referral_code_not_found', 'self_referral_not_allowed'])
+
+function isTerminalReferralError(error) {
+  return error instanceof ApiError && TERMINAL_REFERRAL_CODES.has(error.code)
+}
 
 // ─── Goal config — D-07: strict 4-code enum ──────────────────────────────────
 const GOALS = [
@@ -306,8 +324,16 @@ export function OnboardingScreen() {
       if (pendingReferral) {
         try {
           await captureReferral.mutateAsync({ code: pendingReferral })
-        } catch (_e) { /* noop — idempotent server-side; never block onboarding */ }
-        sessionStorage.removeItem('clubcore:pendingReferral')
+          // Success (or idempotent server-side no-op) — drop the code.
+          sessionStorage.removeItem('clubcore:pendingReferral')
+        } catch (e) {
+          // WR-01: only discard on a DEFINITIVE non-retryable failure (404 unknown
+          // code / 422 self-referral). On a transient/network error KEEP the code so
+          // a later session can retry — never block onboarding either way.
+          if (isTerminalReferralError(e)) {
+            sessionStorage.removeItem('clubcore:pendingReferral')
+          }
+        }
       }
       setDone(true)
     } catch (_e) {
@@ -330,8 +356,16 @@ export function OnboardingScreen() {
       if (pendingReferral) {
         try {
           await captureReferral.mutateAsync({ code: pendingReferral })
-        } catch (_e) { /* noop — idempotent server-side; never block onboarding */ }
-        sessionStorage.removeItem('clubcore:pendingReferral')
+          // Success (or idempotent server-side no-op) — drop the code.
+          sessionStorage.removeItem('clubcore:pendingReferral')
+        } catch (e) {
+          // WR-01: only discard on a DEFINITIVE non-retryable failure (404 unknown
+          // code / 422 self-referral). On a transient/network error KEEP the code so
+          // a later session can retry — never block navigation either way.
+          if (isTerminalReferralError(e)) {
+            sessionStorage.removeItem('clubcore:pendingReferral')
+          }
+        }
       }
       navigate('/home', { replace: true })
     } catch (_e) {
