@@ -1349,6 +1349,43 @@ class AutopayChargeFailedPayload(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Referral domain (Phase 96 REFER-01/REFER-03)
+# Pre-registered BEFORE any callsite per INFRA-15 discipline.
+# Callsites land in Plan 96-03 (referral service).
+# ---------------------------------------------------------------------------
+
+
+class ReferralCodeGeneratedPayload(BaseModel):
+    """Payload schema for ("referral_code_generated", "referral") — Phase 96 REFER-01.
+
+    Pre-registered BEFORE any callsite per INFRA-15 discipline.
+    Emitted when a client's personal referral code is created (idempotent —
+    only on first creation, not on subsequent reads).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    client_id: UUID
+    referral_code_id: UUID
+    code: str  # the 8-char Crockford-base32 code value
+
+
+class ReferralCapturedPayload(BaseModel):
+    """Payload schema for ("referral_captured", "referral") — Phase 96 REFER-03.
+
+    Pre-registered BEFORE any callsite per INFRA-15 discipline.
+    Emitted when a referee successfully links their account to a referrer's code.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    referee_client_id: UUID
+    referrer_client_id: UUID
+    referral_capture_id: UUID
+    referral_code_id: UUID
+
+
+# ---------------------------------------------------------------------------
 # Registry — single canonical (event, resource_type) → Pydantic schema map.
 # Mirrors LOCKED_AUDIT_EVENTS tuple-key shape (`audit.py:102-157`) so the
 # lookup in `audit.emit()` is a single `.get((event, resource_type))`.
@@ -1451,4 +1488,8 @@ AUDIT_PAYLOAD_SCHEMAS: dict[tuple[str, str], type[BaseModel]] = {
     # Pre-registered BEFORE any callsite (callsites land in Plan 84-02).
     ("autopay_charge_initiated", "autopay"): AutopayChargeInitiatedPayload,
     ("autopay_charge_failed", "autopay"): AutopayChargeFailedPayload,
+    # v2.6 (Phase 96 referral domain — REFER-01/REFER-03 / INFRA-15):
+    # Pre-registered BEFORE any callsite (callsites land in Plan 96-03).
+    ("referral_code_generated", "referral"): ReferralCodeGeneratedPayload,
+    ("referral_captured", "referral"): ReferralCapturedPayload,
 }
