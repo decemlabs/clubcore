@@ -44,11 +44,20 @@ class ReferralCaptureRequest(BackendSchemaBase):
     """POST /client/referral/capture request body (REFER-03).
 
     extra='forbid' (inherited from BackendSchemaBase) rejects unknown keys.
-    code is the 8-char Crockford-base32 referral code shared by the referrer.
-    max_length=16 mirrors the referral_codes.code VARCHAR(16) column.
+    code is exactly 8 Crockford-base32 characters (WR-03 fix).
+
+    Pattern accepts both upper- and lower-case Crockford alphabet chars
+    (0-9 A-H J K M N P-T V-Z, excluding O/I/L/U) — the repository normalises
+    to upper-case via .upper() before the DB lookup.
     """
 
-    code: str = Field(min_length=1, max_length=16)  # wire: code
+    code: str = Field(
+        min_length=8,
+        max_length=8,
+        # Crockford base32 alphabet (upper or lower), exactly 8 chars.
+        # Excluded: I (eye), L (el), O (oh), U — ambiguous under Crockford spec.
+        pattern=r"^[0-9A-HJKMNPQRSTVWXYZa-hjkmnpqrstvwxyz]{8}$",
+    )  # wire: code
 
 
 class ReferralConfigResponse(ResponseData):
