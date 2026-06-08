@@ -186,7 +186,11 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
   3. The invited-friends list shows real data: each referee with name, join date, and status badge ("Присоединился + bonus amount" or "Ждём"); an empty state renders when there are no referrals yet
   4. The "Уже накоплено" figure reflects the real sum of referral-category `loyalty_ledger` entries for the authenticated client (not a mock constant)
   5. Opening the PWA via `…/i/<code>` auto-populates the referral code in the onboarding flow (deep-link handled client-side); the gamification tier tracker is present in the DOM but hidden (hide-for-future, not deleted)
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 98-01-PLAN.md — Backend aggregate read endpoint GET /client/referral/summary (invitees + referral-only accruedKopecks) + integration tests (REFER-06)
+- [ ] 98-02-PLAN.md — PWA ReferralScreen pixel-perfect port + useClientReferralSummary @/data hook + D-71-09 ESLint graduation (REFER-05, REFER-06)
+- [ ] 98-03-PLAN.md — Deep-link /i/:code landing + post-auth referral capture wiring (REFER-02)
 **UI hint**: yes
 
 ### Phase 99: OpenAPI Handoff + Milestone Verification
