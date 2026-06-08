@@ -764,7 +764,10 @@ export function ChatScreen({ tweaks, initialConv, onClearInitial, onThreadOpen }
   // по ISO-строкам. sentAt (сервер) и readAt (WS) — два разных источника; смешанные
   // форматы офсета (`Z` vs `+03:00`) или дробные секунды ломают строковое сравнение.
   const wmMs = readWatermark != null ? Date.parse(readWatermark) : null;
-  const adaptedServer = serverItems.map((m) => {
+  // GET /messages returns items NEWEST-FIRST (paginated). The thread renders
+  // top→bottom chronologically (oldest at top, newest at bottom, как в референсе),
+  // so reverse to ASCENDING before adapting; optimistic (newest) are appended last.
+  const adaptedServer = [...serverItems].reverse().map((m) => {
     const a = adaptMessage(m);
     if (a.from === 'me' && !a.read && wmMs != null && Date.parse(a.sentAt) <= wmMs) {
       a.read = true;
