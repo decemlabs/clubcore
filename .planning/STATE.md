@@ -2,13 +2,14 @@
 gsd_state_version: 1.0
 milestone: v2.6
 milestone_name: Referral System
-status: planning
-last_updated: "2026-06-08T10:36:21.090Z"
-last_activity: 2026-06-08
+status: executing
+stopped_at: Milestone v2.6 roadmap created (4 phases, 8/8 requirements mapped; ROADMAP.md + STATE.md + REQUIREMENTS.md updated).
+last_updated: "2026-06-08T11:06:30.333Z"
+last_activity: 2026-06-08 -- Phase 96 execution started
 progress:
-  total_phases: 4
+  total_phases: 8
   completed_phases: 0
-  total_plans: 0
+  total_plans: 3
   completed_plans: 0
   percent: 0
 ---
@@ -20,14 +21,14 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** v2.6 Referral System — phases 96-99. Start with `/gsd:plan-phase 96`.
+**Current focus:** Phase 96 — referral-domain-backend
 
 ## Current Position
 
-Phase: Not started
-Plan: —
-Status: Roadmap created — ready to plan Phase 96
-Last activity: 2026-06-08 — Roadmap v2.6 written (4 phases, 8/8 requirements mapped)
+Phase: 96 (referral-domain-backend) — EXECUTING
+Plan: 1 of 3
+Status: Executing Phase 96
+Last activity: 2026-06-08 -- Phase 96 execution started
 
 ```
 [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 0%
