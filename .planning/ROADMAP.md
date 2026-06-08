@@ -202,7 +202,9 @@ Plans:
   2. `_v26Checks` `AssertNonNever` tuple covers all new v2.6 path×method combos with a runtime `toHaveLength(N)` assertion
   3. Staff contract paths are byte-identical to the Phase 95 baseline (drift gate green); `CISO-01` no-edit guard passes
   4. Full milestone gate green: `pytest` (backend) + `mypy --strict` + `lint-imports` + `vitest` (client-pwa) + Redocly lint
-**Plans**: TBD
+**Plans**: 2 plans
+- [ ] 99-01-PLAN.md — Freeze v2.6 referral surface: Referral tag + retag client_router; regen byte-stable openapi.json; staff drift gate vs 9b28ba2f; Redocly clean
+- [ ] 99-02-PLAN.md — Regen schema.d.ts from frozen spec; add _v26Checks AssertNonNever[8]; full milestone gate (mypy + lint-imports + pytest CISO-01 + vitest + Redocly); mark HND-01 complete
 
 ## Backlog
 
