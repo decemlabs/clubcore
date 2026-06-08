@@ -3,7 +3,7 @@
  *
  * Three behavioral requirements verified:
  *   1. GET /api/* → fetch(req) called, caches.open/.put NEVER called for that request.
- *   2. activate evicts every cache whose key !== VERSION ('gym-v3').
+ *   2. activate evicts every cache whose key !== VERSION ('gym-v4').
  *   3. Guard ordering: /api/* falls into the network-only branch and NOT into cache-first
  *      (confirmed by absence of caches.match call for an /api/* fetch).
  *
@@ -49,7 +49,7 @@ function loadSW() {
       return Promise.resolve(cacheStore[name])
     }),
     match: vi.fn().mockResolvedValue(undefined),
-    keys: vi.fn().mockResolvedValue(['gym-v2', 'gym-v3']),
+    keys: vi.fn().mockResolvedValue(['gym-v3', 'gym-v4']),
     delete: vi.fn().mockResolvedValue(true),
   }
 
@@ -169,11 +169,11 @@ describe('PWA-07 — service worker /api/* network-only guarantee', () => {
 
   // -------------------------------------------------------------------------
   // Requirement 2: activate evicts stale caches.
-  //   caches.keys() returns ['gym-v2', 'gym-v3'].
-  //   After awaiting waitUntil, caches.delete('gym-v2') called,
-  //   caches.delete('gym-v3') NOT called.
+  //   caches.keys() returns ['gym-v3', 'gym-v4'].
+  //   After awaiting waitUntil, caches.delete('gym-v3') called,
+  //   caches.delete('gym-v4') NOT called.
   // -------------------------------------------------------------------------
-  it('activate deletes old caches but keeps current VERSION gym-v3', async () => {
+  it('activate deletes old caches but keeps current VERSION gym-v4', async () => {
     const event = makeExtendableEvent()
 
     handlers['activate'](event)
@@ -181,10 +181,10 @@ describe('PWA-07 — service worker /api/* network-only guarantee', () => {
     expect(event._done).not.toBeNull()
     await event._done
 
-    // 'gym-v2' is stale — must be deleted.
-    expect(fakeCaches.delete).toHaveBeenCalledWith('gym-v2')
+    // 'gym-v3' is stale — must be deleted.
+    expect(fakeCaches.delete).toHaveBeenCalledWith('gym-v3')
 
-    // 'gym-v3' is current VERSION — must NOT be deleted.
-    expect(fakeCaches.delete).not.toHaveBeenCalledWith('gym-v3')
+    // 'gym-v4' is current VERSION — must NOT be deleted.
+    expect(fakeCaches.delete).not.toHaveBeenCalledWith('gym-v4')
   })
 })
