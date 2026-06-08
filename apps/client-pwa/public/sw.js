@@ -1,7 +1,7 @@
 // sw.js — Service Worker for "Мой зал" PWA
 // Cache-first for static assets, network-first for navigations, offline fallback.
 
-const VERSION = 'gym-v3';
+const VERSION = 'gym-v4';
 const SHELL = [
   '/',
   '/index.html',
