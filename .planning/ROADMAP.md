@@ -157,7 +157,10 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
   3. `GET /i/<code>` resolves a referral code to the matching client's referral info (deep-link entry point for the PWA)
   4. Owner can GET/PUT referral bonus amounts via owner-only API (`/referral/config`); reception gets 403; amounts seed-initialized with sensible defaults
   5. All new LOCKED audit events (`referral_code_generated`, `referral_captured`) are pre-registered in `LOCKED_AUDIT_EVENTS` before any callsite (INFRA-15 discipline)
-**Plans**: TBD
+**Plans**: 3 plans
+  - [ ] 96-01-PLAN.md — INFRA-15 audit foundation: lock referral_code_generated + referral_captured pairs + payload schemas + unit test
+  - [ ] 96-02-PLAN.md — Data layer: referrals module models + schemas, migrations 0067 (tables) + 0068 (seed config), pwa_base_url setting
+  - [ ] 96-03-PLAN.md — Service + triple-router (public /i/<code>, client code/capture, owner config) + mounting + integration tests
 
 ### Phase 97: Reward Crediting
 **Goal**: Обе стороны автоматически получают бонус на `loyalty_ledger` после первой покупки абонемента приглашённым другом
@@ -239,7 +242,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 96. Referral Domain Backend | 0/TBD | Not started | - |
+| 96. Referral Domain Backend | 0/3 | Planned | - |
 | 97. Reward Crediting | 0/TBD | Not started | - |
 | 98. PWA ReferralScreen | 0/TBD | Not started | - |
 | 99. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
