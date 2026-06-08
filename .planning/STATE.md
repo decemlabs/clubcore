@@ -4,8 +4,8 @@ milestone: v2.5
 milestone_name: Chat / Messaging — Client↔Gym
 status: executing
 stopped_at: Phase 92 complete — photo attachments (upload + magic-byte validation + IDOR-safe authenticated serve with anti-XSS header triad + two-step send-with-attachment flow). Verified 3/3, 106/106 messaging tests green. Code review applied (CR-01); 4 warnings deferred (see Deferred Items).
-last_updated: "2026-06-07T16:49:07.715Z"
-last_activity: 2026-06-07 -- Phase 93 planning complete
+last_updated: "2026-06-08T00:00:00.000Z"
+last_activity: 2026-06-08 -- Phase 93 plan 01 complete (forward_to_staff bridge outbound)
 progress:
   total_phases: 10
   completed_phases: 3
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 92 — photo-attachments
+**Current focus:** Phase 93 — telegram-bridge
 
 ## Current Position
 
-Phase: 92 (photo-attachments) — COMPLETE ✅ (verified 3/3, 106/106 messaging tests green)
-Plan: 3 of 3
-Status: Ready to execute
-Last activity: 2026-06-07 -- Phase 93 planning complete
+Phase: 93 (telegram-bridge) — EXECUTING
+Plan: 2 of 2 (plan 01 complete ✅ — BRDG-01 outbound forward; 118/118 messaging green)
+Status: Executing Phase 93 — plan 02 (inbound reply routing) next
+Last activity: 2026-06-08 -- Phase 93 plan 01 complete (forward_to_staff bridge outbound)
 
 Progress: [█████████░] 92%
 
