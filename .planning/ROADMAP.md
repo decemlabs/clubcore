@@ -143,7 +143,7 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
 - [x] **Phase 96: Referral Domain Backend** — персональные реф-коды (идемпотентная генерация), захват реферала при онбординге (referrer↔referee, self-referral блок, 1-bonus-per-referee), deep-link endpoint, owner-only конфигурация сумм бонусов + seed; LOCKED audit events зарегистрированы до первого callsite (REFER-01, REFER-02 backend, REFER-03, REFER-07) (completed 2026-06-08)
 - [x] **Phase 97: Reward Crediting** — двусторонний бонус на `payment.succeeded` ПЕРВОЙ покупки: co-transactional, idempotent по `(referral_id, online_payment_id)`, через `accrue_welcome_bonus`/`owner_grant_loyalty` примитивы; LOCKED audit events (REFER-04) (completed 2026-06-08)
 - [x] **Phase 98: PWA ReferralScreen** — graduate из D-71-09 ESLint-зоны; пиксель-в-пиксель порт макета (промокод + ссылка + copy, share Telegram/WhatsApp/native, блок «Как это работает»); список приглашённых со статусами; «Уже накоплено» из ledger; deep-link авто-подстановка кода; тир-трекер hide-for-future (REFER-02 PWA, REFER-05, REFER-06) (completed 2026-06-08)
-- [ ] **Phase 99: OpenAPI Handoff + Milestone Verification** — byte-stable `openapi.json` + `schema.d.ts` + `_v26Checks` AssertNonNever; staff-контракт байт-в-байт цел (drift gate зелёный); полный milestone gate зелёный (HND-01)
+- [x] **Phase 99: OpenAPI Handoff + Milestone Verification** — byte-stable `openapi.json` + `schema.d.ts` + `_v26Checks` AssertNonNever; staff-контракт байт-в-байт цел (drift gate зелёный); полный milestone gate зелёный (HND-01) (completed 2026-06-08)
 
 ## Phase Details
 
@@ -203,8 +203,8 @@ Plans:
   3. Staff contract paths are byte-identical to the Phase 95 baseline (drift gate green); `CISO-01` no-edit guard passes
   4. Full milestone gate green: `pytest` (backend) + `mypy --strict` + `lint-imports` + `vitest` (client-pwa) + Redocly lint
 **Plans**: 2 plans
-- [ ] 99-01-PLAN.md — Freeze v2.6 referral surface: Referral tag + retag client_router; regen byte-stable openapi.json; staff drift gate vs 9b28ba2f; Redocly clean
-- [ ] 99-02-PLAN.md — Regen schema.d.ts from frozen spec; add _v26Checks AssertNonNever[8]; full milestone gate (mypy + lint-imports + pytest CISO-01 + vitest + Redocly); mark HND-01 complete
+- [x] 99-01-PLAN.md — Freeze v2.6 referral surface: Referral tag + retag client_router; regen byte-stable openapi.json; staff drift gate vs 9b28ba2f; Redocly clean
+- [x] 99-02-PLAN.md — Regen schema.d.ts from frozen spec; add _v26Checks AssertNonNever[8]; full milestone gate (mypy + lint-imports + pytest CISO-01 + vitest + Redocly); mark HND-01 complete
 
 ## Backlog
 
@@ -254,4 +254,4 @@ Plans:
 | 96. Referral Domain Backend | 3/3 | Complete    | 2026-06-08 |
 | 97. Reward Crediting | 3/3 | Complete    | 2026-06-08 |
 | 98. PWA ReferralScreen | 3/3 | Complete    | 2026-06-08 |
-| 99. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
+| 99. OpenAPI Handoff + Milestone Verification | 2/2 | Complete   | 2026-06-08 |
