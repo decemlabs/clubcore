@@ -80,7 +80,7 @@ async def public_resolve_referral_code(
 # Client router — authenticated client portal
 # ---------------------------------------------------------------------------
 
-client_router = APIRouter(tags=["Client-Portal"])
+client_router = APIRouter(tags=["Referral"])
 
 
 @client_router.get(

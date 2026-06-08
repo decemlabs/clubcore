@@ -5256,6 +5256,181 @@
         "title": "RecurringSlotTemplateResponse",
         "type": "object"
       },
+      "ReferralCaptureRequest": {
+        "additionalProperties": false,
+        "description": "POST /client/referral/capture request body (REFER-03).\n\nextra='forbid' (inherited from BackendSchemaBase) rejects unknown keys.\ncode is exactly 8 Crockford-base32 characters (WR-03 fix).\n\nPattern accepts both upper- and lower-case Crockford alphabet chars\n(0-9 A-H J K M N P-T V-Z, excluding O/I/L/U) — the repository normalises\nto upper-case via .upper() before the DB lookup.",
+        "properties": {
+          "code": {
+            "maxLength": 8,
+            "minLength": 8,
+            "pattern": "^[0-9A-HJKMNPQRSTVWXYZa-hjkmnpqrstvwxyz]{8}$",
+            "title": "Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "ReferralCaptureRequest",
+        "type": "object"
+      },
+      "ReferralCodeResponse": {
+        "description": "GET /client/referral/code payload (REFER-01).\n\nWire: { code: str, shareUrl: str }\nshareUrl is server-authoritative: {pwa_base_url}/i/{code}\n(pwa_base_url is a Settings field, not hardcoded).",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "shareUrl": {
+            "title": "Shareurl",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "shareUrl"
+        ],
+        "title": "ReferralCodeResponse",
+        "type": "object"
+      },
+      "ReferralConfigResponse": {
+        "description": "GET /referral/config owner-only payload (REFER-07).\n\nWire: { referrerBonusKopecks: int, refereeWelcomeKopecks: int }\nMirrors the seeded singleton values (50000 / 30000 kopecks).",
+        "properties": {
+          "refereeWelcomeKopecks": {
+            "title": "Refereewelcomekopecks",
+            "type": "integer"
+          },
+          "referrerBonusKopecks": {
+            "title": "Referrerbonuskopecks",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "referrerBonusKopecks",
+          "refereeWelcomeKopecks"
+        ],
+        "title": "ReferralConfigResponse",
+        "type": "object"
+      },
+      "ReferralConfigUpdateRequest": {
+        "additionalProperties": false,
+        "description": "PUT /referral/config owner-only request body (REFER-07).\n\nextra='forbid' (inherited from BackendSchemaBase) rejects unknown keys.\nBoth fields are required (full-replace semantics, not PATCH).\nge=0 allows zeroing out either bonus (owner decision).",
+        "properties": {
+          "refereeWelcomeKopecks": {
+            "minimum": 0.0,
+            "title": "Refereewelcomekopecks",
+            "type": "integer"
+          },
+          "referrerBonusKopecks": {
+            "minimum": 0.0,
+            "title": "Referrerbonuskopecks",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "referrerBonusKopecks",
+          "refereeWelcomeKopecks"
+        ],
+        "title": "ReferralConfigUpdateRequest",
+        "type": "object"
+      },
+      "ReferralInviteeItem": {
+        "description": "One invited friend in the referral summary list (REFER-06).\n\nWire: {firstName, joinedAt, status, bonusKopecks}.\nPII-minimal: first name only (T-96-06); NO last name, NO referee client_id.",
+        "properties": {
+          "bonusKopecks": {
+            "title": "Bonuskopecks",
+            "type": "integer"
+          },
+          "firstName": {
+            "title": "Firstname",
+            "type": "string"
+          },
+          "joinedAt": {
+            "format": "date-time",
+            "title": "Joinedat",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "joined",
+              "pending"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "firstName",
+          "joinedAt",
+          "status",
+          "bonusKopecks"
+        ],
+        "title": "ReferralInviteeItem",
+        "type": "object"
+      },
+      "ReferralResolveResponse": {
+        "description": "GET /i/{code} public deep-link resolver payload (REFER-01).\n\nWire: { valid: bool, referrerFirstName: str | None, welcomeBonusKopecks: int }\nAlways 200 — valid=False for unknown codes (anti-enumeration: no 404).\nreferrerFirstName exposes only the first name of the referrer (no PII beyond that).\nwelcomeBonusKopecks is 0 when valid=False.",
+        "properties": {
+          "referrerFirstName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Referrerfirstname"
+          },
+          "valid": {
+            "title": "Valid",
+            "type": "boolean"
+          },
+          "welcomeBonusKopecks": {
+            "title": "Welcomebonuskopecks",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "valid",
+          "referrerFirstName",
+          "welcomeBonusKopecks"
+        ],
+        "title": "ReferralResolveResponse",
+        "type": "object"
+      },
+      "ReferralSummaryResponse": {
+        "description": "GET /client/referral/summary payload (REFER-06).\n\nWire: {code, shareUrl, accruedKopecks, invitees: [...]}\naccruedKopecks is the SUM of the authenticated client's own referral_accrual\nloyalty_ledger rows — NOT the total loyalty balance.\nshareUrl is server-authoritative: {pwa_base_url}/i/{code}.",
+        "properties": {
+          "accruedKopecks": {
+            "title": "Accruedkopecks",
+            "type": "integer"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "invitees": {
+            "items": {
+              "$ref": "#/components/schemas/ReferralInviteeItem"
+            },
+            "title": "Invitees",
+            "type": "array"
+          },
+          "shareUrl": {
+            "title": "Shareurl",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "shareUrl",
+          "accruedKopecks",
+          "invitees"
+        ],
+        "title": "ReferralSummaryResponse",
+        "type": "object"
+      },
       "ResponseEnvelope_AttachmentUploadResponse_": {
         "properties": {
           "data": {
@@ -5939,6 +6114,54 @@
           "data"
         ],
         "title": "ResponseEnvelope[RecurringSlotTemplateResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_ReferralCodeResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ReferralCodeResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[ReferralCodeResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_ReferralConfigResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ReferralConfigResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[ReferralConfigResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_ReferralResolveResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ReferralResolveResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[ReferralResolveResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_ReferralSummaryResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ReferralSummaryResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[ReferralSummaryResponse]",
         "type": "object"
       },
       "ResponseEnvelope_RevenueReportResponse_": {
@@ -9838,6 +10061,85 @@
         ]
       }
     },
+    "/api/v1/client/referral/capture": {
+      "post": {
+        "description": "Capture a referral — binds the referrer identified by payload.code to the principal.\n\nThe referee identity comes ONLY from the require_client() principal (client.id),\nnever from the request body (T-96-05 IDOR mitigate). payload carries only {code}.\n\nIdempotent: second call for the same referee is a 200 no-op (first binding wins).\nSelf-referral (principal is the referrer of payload.code) → 422 SelfReferralError.\nUnknown code → 404 ReferralCodeNotFoundError.\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "client_capture_referral",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReferralCaptureRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_NoneType_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Bind a referrer to the authenticated client via a referral code (REFER-03)",
+        "tags": [
+          "Referral"
+        ]
+      }
+    },
+    "/api/v1/client/referral/code": {
+      "get": {
+        "description": "Return the stable referral code + shareUrl for the principal.\n\nIdempotent: calling this endpoint multiple times always returns the same\ncode — a new code is minted only on the first call. No duplicate audit\nevent is emitted on idempotent returns (INFRA-15).\nD-20-IDOR: client_id from require_client() principal only.\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "client_get_referral_code",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_ReferralCodeResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get (or mint) the stable referral code for the authenticated client (REFER-01)",
+        "tags": [
+          "Referral"
+        ]
+      }
+    },
+    "/api/v1/client/referral/summary": {
+      "get": {
+        "description": "Return code, shareUrl, accruedKopecks, and invitees[] for the principal.\n\nOne round-trip for the PWA ReferralScreen. client_id is sourced from\nrequire_client() principal only — never a path/query/body param (T-98-02 IDOR-safe).\naccruedKopecks = SUM of own referral_accrual ledger rows (not total balance, T-98-04).\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "client_get_referral_summary",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_ReferralSummaryResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Aggregate referral summary for the authenticated client (REFER-06; IDOR-safe)",
+        "tags": [
+          "Referral"
+        ]
+      }
+    },
     "/api/v1/client/session/logout": {
       "post": {
         "description": "Revoke the client session family and clear all cc_client_* cookies.\n\nIdempotent: if cc_client_refresh is absent or already revoked, the cookie\nclear still runs so the browser ends in a clean state.",
@@ -10502,6 +10804,44 @@
         "summary": "Update gym facility info (owner-only; GYM-02)",
         "tags": [
           "Gym"
+        ]
+      }
+    },
+    "/api/v1/i/{code}": {
+      "get": {
+        "description": "Resolve a referral deep-link code for the PWA landing page.\n\nNo auth gate — unauthenticated callers (T-96-06 PII guard: first name only,\nno client_id, no last name). Unknown code returns valid:false with 200 status\n(anti-enumeration: no 404 oracle for code existence).\nmax_length=16 (column width) rather than 8 so 9-16 char strings resolve to\nvalid=False rather than 422, avoiding a detectable response-shape difference\n(IN-01 fix).\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "public_resolve_referral_code",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "maxLength": 16,
+              "minLength": 1,
+              "title": "Code",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_ReferralResolveResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Public deep-link resolver — always 200, valid:false for unknown codes (REFER-02)",
+        "tags": [
+          "Referral"
         ]
       }
     },
@@ -12751,6 +13091,61 @@
         ]
       }
     },
+    "/api/v1/referral/config": {
+      "get": {
+        "description": "Return the singleton referral config (referrerBonusKopecks, refereeWelcomeKopecks).\n\nGated by require_permission(EDIT, GYM) — reception → 403.\nReuses Resource.GYM per planner decision (no new Resource to avoid breaking\nCISO-01 byte-parity guard + parity test). T-96-07.\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "owner_get_referral_config",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_ReferralConfigResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Owner-only: read referral bonus config (REFER-07)",
+        "tags": [
+          "Referral"
+        ]
+      },
+      "put": {
+        "description": "Upsert the singleton referral config.\n\nRBAC-04: require_permission declared BEFORE verify_csrf → reception fails at 403\nbefore reaching the CSRF check (T-96-07 mitigate).\nverify_csrf guards against cross-site forgery on the owner mutation.\nReferralConfigUpdateRequest extra='forbid' → 422 on unknown keys.\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "owner_update_referral_config",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReferralConfigUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_ReferralConfigResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Owner-only: update referral bonus config (REFER-07)",
+        "tags": [
+          "Referral"
+        ]
+      }
+    },
     "/api/v1/reports/clients": {
       "get": {
         "description": "Clients snapshot: active memberships, expiring-within-N count, new-clients in range.\n\nAll counters exclude soft-deleted clients (CLR-04).\n`within` defaults to 7, range 1..30 (D-07); out-of-range → 422.\nActive/expiring are as-of-now (D-05); new-clients scoped to fromDate..toDate (CLR-03).\n\nOwner-only: ``(VIEW, REPORTS)`` is in ``OWNER_ONLY``; reception → 403.\nRange cap: 366 days (D-06); toDate<fromDate → 422.",
@@ -14278,6 +14673,10 @@
     {
       "description": "Real-time client↔gym 1:1 chat — REST send/list/mark-read + photo attachments; WebSocket transport documented separately under this tag (Phases 90-94 MSG-01..04 / RT-01..04 / RCPT-01..03 / ATT-01..03 / PWA-01..03).",
       "name": "Messaging"
+    },
+    {
+      "description": "«Приведи друга» referral programme — personal referral codes + shareable deep-links (`/i/<code>`), public deep-link resolver (no auth, anti-enumeration), capture/binding at onboarding (IDOR-safe), bilateral loyalty-ledger bonus on first purchase (server-authoritative, webhook-locked), owner-only bonus-config API (Phases 96-98 REFER-01..07).",
+      "name": "Referral"
     },
     {
       "description": "Gym client CRM — create, read, update, soft-delete clients.",
