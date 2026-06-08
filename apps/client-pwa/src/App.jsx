@@ -29,6 +29,11 @@ const LoginScreen = lazy(() =>
   import('@/screens/LoginScreen.jsx').then(m => ({ default: m.LoginScreen }))
 );
 
+// ── Referral deep-link landing (/i/:code public route — REFER-02) ─────────
+const ReferralLandingScreen = lazy(() =>
+  import('@/screens/ReferralLandingScreen.jsx').then(m => ({ default: m.ReferralLandingScreen }))
+);
+
 // ── Onboarding screen (D-04 — newbie first-login questionnaire) ────────────
 const OnboardingScreen = lazy(() =>
   import('@/screens/OnboardingScreen.jsx').then(m => ({ default: m.OnboardingScreen }))
@@ -265,13 +270,15 @@ export default function App() {
     }
   };
 
-  // Hide tab bar on sheets, login screen, onboarding, payment return, settings, or while loading auth
+  // Hide tab bar on sheets, login screen, onboarding, payment return, settings, referral landing, or while loading auth
   const isLoginRoute = pathname === '/login';
   const isOnboardingRoute = pathname === '/onboarding';
   const isPaymentReturnRoute = pathname === '/payment/return';
   const isSettingsRoute = pathname === '/settings';
+  const isReferralLandingRoute = pathname.startsWith('/i/');
   const hideTabBar = ui.anySheetOpen || ui.chatThreadOpen || ui.bookConfirmOpen
     || isLoginRoute || isOnboardingRoute || isPaymentReturnRoute || isSettingsRoute
+    || isReferralLandingRoute
     || status === 'unknown' || status === 'anon';
 
   return (
@@ -284,6 +291,8 @@ export default function App() {
               <Routes>
                 {/* Public routes — no auth guard */}
                 <Route path="/login" element={<LoginScreen />} />
+                {/* REFER-02: referral deep-link landing — unauthenticated visitor (invited friend) */}
+                <Route path="/i/:code" element={<ReferralLandingScreen />} />
                 <Route path="/"     element={<Navigate to="/home" replace />} />
 
                 {/* Protected tab routes */}
