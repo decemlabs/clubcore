@@ -23,9 +23,11 @@ export default tseslint.config(
       // Phase 87 (INBOX-05): the notifications sheet also graduated — removed from
       // the placeholder zone, now ignored like other real .jsx screens.
       // Phase 88 (TRNR-04): trainer detail sheet graduated — wired to GET /client/trainers/{id}.
+      // Phase 94 (PWA-01): the chat screen graduated — wired to the messaging REST + WS layer
+      // (GET/POST /client/messages, attachments, WS) via the @/data swap seam; removed from
+      // the placeholder zone, now ignored like other real .jsx screens.
       'src/**/*.jsx',
       'src/**/*.js',
-      '!src/screens/ChatScreen.jsx',
       '!src/screens/sheets/ReferralSheet.jsx',
     ],
   },
@@ -59,14 +61,15 @@ export default tseslint.config(
     },
   },
   // ─── D-71-09: Net-new screen import boundary ────────────────────────────────
-  // The five net-new placeholder screens are excluded from the global JSX ignore
-  // above (via negated patterns) so this block can apply the no-restricted-paths
-  // rule to them. These screens must NEVER import the query layer — they are
-  // "В разработке" placeholders (D-71-08) and making real API calls would violate
+  // The remaining net-new placeholder screen is excluded from the global JSX ignore
+  // above (via negated pattern) so this block can apply the no-restricted-paths
+  // rule to it. This screen must NEVER import the query layer — it is a
+  // "В разработке" placeholder (D-71-08) and making real API calls would violate
   // PWA-05 success criterion #5 (net-new screens make zero backend calls).
+  // Phase 94 (PWA-01): the chat screen graduated out of this zone — it is now a real
+  // data-backed screen importing the messaging hooks via @/data.
   {
     files: [
-      'src/screens/ChatScreen.jsx',
       'src/screens/sheets/ReferralSheet.jsx',
     ],
     plugins: { import: importPlugin },
@@ -89,7 +92,6 @@ export default tseslint.config(
           zones: [
             {
               target: [
-                './src/screens/ChatScreen.jsx',
                 './src/screens/sheets/ReferralSheet.jsx',
               ],
               from: [
