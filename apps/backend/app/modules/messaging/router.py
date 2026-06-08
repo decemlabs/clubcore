@@ -62,7 +62,7 @@ from app.modules.messaging.schemas import (
 )
 from app.modules.messaging.ws import run_connection
 
-router = APIRouter(tags=["Client-Portal"])
+router = APIRouter(tags=["Messaging"])
 
 
 @router.get(
@@ -135,7 +135,7 @@ async def client_mark_messages_read(
         "Upload a photo attachment (ATT-01/02; magic-byte validated; 5MB cap; "
         "IDOR-safe; CSRF required)"
     ),
-    tags=["Client-Portal"],
+    tags=["Messaging"],
 )
 async def client_upload_attachment(
     file: Annotated[UploadFile, File()],
@@ -188,7 +188,7 @@ async def client_upload_attachment(
         "Stream a client-owned photo attachment (ATT-03; authenticated proxy; "
         "IDOR-safe 404-collapse; anti-XSS headers)"
     ),
-    tags=["Client-Portal"],
+    tags=["Messaging"],
     # response_model is intentionally omitted — the handler returns a StreamingResponse
     # directly (raw binary bytes), which FastAPI must not wrap or serialise.
 )

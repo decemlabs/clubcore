@@ -161,6 +161,15 @@ OPENAPI_TAGS: list[dict[str, str]] = [
         ),
     },
     {
+        "name": "Messaging",
+        "description": (
+            "Real-time client↔gym 1:1 chat — REST send/list/mark-read + photo "
+            "attachments; WebSocket transport documented separately under this tag "
+            "(Phases 90-94 MSG-01..04 / RT-01..04 / RCPT-01..03 / ATT-01..03 / "
+            "PWA-01..03)."
+        ),
+    },
+    {
         "name": "Clients",
         "description": "Gym client CRM — create, read, update, soft-delete clients.",
     },
