@@ -16,7 +16,7 @@ import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Icon } from '@/components/Icon.jsx'
 import { StatusBar } from '@/components/StatusBar.jsx'
-import { useUpdateClientProfile, useCompleteOnboarding } from '@/data'
+import { useUpdateClientProfile, useCompleteOnboarding, useCaptureReferral } from '@/data'
 
 // ─── Goal config — D-07: strict 4-code enum ──────────────────────────────────
 const GOALS = [
@@ -248,6 +248,7 @@ export function OnboardingScreen() {
   const navigate = useNavigate()
   const updateProfile = useUpdateClientProfile()
   const completeOnboarding = useCompleteOnboarding()
+  const captureReferral = useCaptureReferral()
 
   const LAST = 3
 
@@ -298,6 +299,16 @@ export function OnboardingScreen() {
         weightKg: weight,
         onboardingCompleted: true,   // D-08: MUST include — omitting causes auto-redirect loop
       })
+      // REFER-02: post-auth referral capture (best-effort, idempotent server-side).
+      // Client is authenticated here (OnboardingScreen is under RequireAuth), so
+      // client_id comes from the principal (IDOR-safe; code is only the referrer hint).
+      const pendingReferral = sessionStorage.getItem('clubcore:pendingReferral')
+      if (pendingReferral) {
+        try {
+          await captureReferral.mutateAsync({ code: pendingReferral })
+        } catch (_e) { /* noop — idempotent server-side; never block onboarding */ }
+        sessionStorage.removeItem('clubcore:pendingReferral')
+      }
       setDone(true)
     } catch (_e) {
       setSubmitError('Произошла ошибка. Попробуйте снова.')
@@ -313,6 +324,15 @@ export function OnboardingScreen() {
     setSkipError(null)
     try {
       await completeOnboarding.mutateAsync()
+      // REFER-02: post-auth referral capture (best-effort, idempotent server-side).
+      // Runs after authentication is confirmed; capture failure NEVER blocks navigation.
+      const pendingReferral = sessionStorage.getItem('clubcore:pendingReferral')
+      if (pendingReferral) {
+        try {
+          await captureReferral.mutateAsync({ code: pendingReferral })
+        } catch (_e) { /* noop — idempotent server-side; never block onboarding */ }
+        sessionStorage.removeItem('clubcore:pendingReferral')
+      }
       navigate('/home', { replace: true })
     } catch (_e) {
       setSkipError('Не удалось пропустить. Попробуйте снова.')
