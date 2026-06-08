@@ -35,6 +35,11 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: false,
+        // ws:true proxies the WebSocket upgrade (/api/v1/client/ws/messages) to the
+        // backend in dev. Prod is same-origin (no proxy), so this is dev-only. Without
+        // it the messaging WS handshake times out and the PWA silently falls back to
+        // the 30s React Query poll.
+        ws: true,
       },
     },
   },

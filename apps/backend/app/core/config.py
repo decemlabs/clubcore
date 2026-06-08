@@ -135,11 +135,13 @@ class Settings(BaseSettings):
     # Phase 90 RT-02 — CSWSH guard allowlist for the WebSocket endpoint.
     # verify_ws_origin (app/core/dependencies.py) compares the WS upgrade
     # Origin header against this list. Defaults cover the admin-web dev server
-    # and the client PWA dev port (5173 + testserver). Production overrides via
+    # (5173) and the client PWA dev port (5174 — vite.config pins 5174 to avoid
+    # the admin-web 5173 clash) + testserver. Production overrides via
     # WS_ALLOWED_ORIGINS env var (comma-separated or JSON list). Empty list
     # means same-origin only (no cross-origin WS accepted).
     ws_allowed_origins: list[str] = [
         "http://localhost:5173",
+        "http://localhost:5174",
         "http://localhost:3000",
         "http://testserver",
     ]
