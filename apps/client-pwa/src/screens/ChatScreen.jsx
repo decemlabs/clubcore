@@ -26,6 +26,7 @@ import {
   useMarkMessagesRead,
 } from '@/data';
 import { useUI } from '@/context/UIContext.jsx';
+import { uuidV4 } from '@/lib/uuid';
 
 /* ---------- Стили (verbatim из референса, отскоуплены под .chat-root) ---------- */
 const CSS = `
@@ -713,6 +714,13 @@ export function ChatScreen({ tweaks, initialConv, onClearInitial, onThreadOpen }
   const cameraInputRef = useRef(null);
   const galleryInputRef = useRef(null);
 
+  // WR-02: object URLs созданные для оптимистичного превью фото. Нельзя
+  // отзывать в finally на успешном пути — серверный refetch, заменяющий
+  // оптимистичное сообщение, асинхронен, и полноэкранный оверлей может всё ещё
+  // ссылаться на этот URL. Храним и отзываем только когда URL больше нигде не
+  // отрисован (см. эффект ниже) и при размонтировании.
+  const photoObjectUrlsRef = useRef(new Set());
+
   /* ── Toast ── */
   const toast = useCallback((msg) => {
     setToastMsg(msg);
@@ -727,9 +735,13 @@ export function ChatScreen({ tweaks, initialConv, onClearInitial, onThreadOpen }
   const unreadCount = serverData?.unreadCount ?? 0;
 
   // Адаптируем серверные сообщения; применяем WS-watermark поверх REST readAt.
+  // CR-02: сравниваем мгновения по epoch-ms (Date.parse), а не лексикографически
+  // по ISO-строкам. sentAt (сервер) и readAt (WS) — два разных источника; смешанные
+  // форматы офсета (`Z` vs `+03:00`) или дробные секунды ломают строковое сравнение.
+  const wmMs = readWatermark != null ? Date.parse(readWatermark) : null;
   const adaptedServer = serverItems.map((m) => {
     const a = adaptMessage(m);
-    if (a.from === 'me' && !a.read && readWatermark && a.sentAt <= readWatermark) {
+    if (a.from === 'me' && !a.read && wmMs != null && Date.parse(a.sentAt) <= wmMs) {
       a.read = true;
     }
     return a;
@@ -764,9 +776,19 @@ export function ChatScreen({ tweaks, initialConv, onClearInitial, onThreadOpen }
   const unreadConvs = convs.filter((c) => c.unread > 0).length;
 
   /* ── Фид unread в TabBar (PWA-02) ── */
+  // WR-04: зависим только от значений, не от объекта `ui` (его useMemo-идентичность
+  // меняется на любом изменении UI-состояния → лишние ре-запуски эффекта).
+  // setUnreadChat — стабильный setter, держим его в ref.
+  const setUnreadChatRef = useRef(ui.setUnreadChat);
+  setUnreadChatRef.current = ui.setUnreadChat;
   useEffect(() => {
-    if (serverData) ui.setUnreadChat(serverData.unreadCount);
-  }, [serverData, ui]);
+    if (!serverData) return;
+    // WR-08: единый источник истины с карточкой (adminUnread), и пока тред открыт
+    // бейдж таба = 0 (иначе после openThread следующий serverData-poll вернул бы
+    // старый unreadCount и бейдж мигнул бы в ненулевое значение).
+    setUnreadChatRef.current(openIdRef.current != null ? 0 : adminUnread);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverData, adminUnread]);
 
   /* ── Список: фильтр/поиск ── */
   const visibleConvs = () => {
@@ -853,31 +875,77 @@ export function ChatScreen({ tweaks, initialConv, onClearInitial, onThreadOpen }
 
   /* ── WS-мост: read-receipt + typing (App-level singleton делегирует сюда) ── */
   useEffect(() => {
-    window.__chatReadReceipt = (readAt) => {
+    // WR-06: ownership guard. ChatScreen route-mounted (lazy) и может
+    // двойным-монтироваться (переход между табами, StrictMode dev double-invoke).
+    // Cleanup отмонтирующегося инстанса не должен затереть хендлеры, которые
+    // только что установил новый инстанс — поэтому сохраняем предыдущие хендлеры
+    // и в cleanup восстанавливаем их только если текущие всё ещё наши.
+    const prevReadReceipt = window.__chatReadReceipt;
+    const prevTyping = window.__chatTyping;
+    const readReceiptHandler = (readAt) => {
       if (!readAt) return;
       // Watermark: пометить все свои сообщения с sentAt <= readAt как ✓✓.
-      setReadWatermark((prev) => (prev == null || readAt > prev ? readAt : prev));
+      // CR-02: монотонность по epoch-ms, не по строке.
+      setReadWatermark((prev) =>
+        prev == null || Date.parse(readAt) > Date.parse(prev) ? readAt : prev,
+      );
     };
-    window.__chatTyping = () => {
+    const typingHandler = () => {
       setTypingFn(true);
       clearTimeout(typingDismissRef.current);
       typingDismissRef.current = setTimeout(() => setTypingFn(false), 5000);
     };
+    window.__chatReadReceipt = readReceiptHandler;
+    window.__chatTyping = typingHandler;
     return () => {
-      window.__chatReadReceipt = undefined;
-      window.__chatTyping = undefined;
+      // Восстанавливаем предыдущий хендлер только если наш ещё активен.
+      if (window.__chatReadReceipt === readReceiptHandler) {
+        window.__chatReadReceipt = prevReadReceipt;
+      }
+      if (window.__chatTyping === typingHandler) {
+        window.__chatTyping = prevTyping;
+      }
       clearTimeout(typingDismissRef.current);
     };
   }, [setTypingFn]);
 
-  // mark-read при входящем сообщении пока тред открыт.
+  // WR-02: эффект-сборщик object URL фото. Отзываем только те URL, на которые
+  // больше нет ссылок: ни в оптимистичных сообщениях (заменены серверными), ни в
+  // открытом полноэкранном оверлее. Иначе превью/оверлей покажет пустой blob.
   useEffect(() => {
-    if (openIdRef.current != null && unreadCount > 0) {
+    const stillUsed = new Set();
+    for (const o of optimistic) {
+      if (o.attachment?.url) stillUsed.add(o.attachment.url);
+    }
+    if (photoOverlay) stillUsed.add(photoOverlay);
+    for (const url of photoObjectUrlsRef.current) {
+      if (!stillUsed.has(url)) {
+        URL.revokeObjectURL(url);
+        photoObjectUrlsRef.current.delete(url);
+      }
+    }
+  }, [optimistic, photoOverlay]);
+
+  // WR-02: страховка при размонтировании — отзываем все оставшиеся object URL.
+  useEffect(() => {
+    const urls = photoObjectUrlsRef.current;
+    return () => {
+      for (const url of urls) URL.revokeObjectURL(url);
+      urls.clear();
+    };
+  }, []);
+
+  // mark-read при входящем сообщении пока тред открыт.
+  // WR-03: guard против PATCH-петли. onSettled инвалидирует messages → refetch;
+  // если бэкенд ещё не сошёлся (eventual consistency) и unreadCount остаётся > 0,
+  // эффект сработал бы снова. Не шлём новую мутацию, пока предыдущая в полёте.
+  useEffect(() => {
+    if (openIdRef.current != null && unreadCount > 0 && !markReadM.isPending) {
       markReadM.mutate();
       ui.setUnreadChat(0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unreadCount]);
+  }, [unreadCount, markReadM.isPending]);
 
   /* ── Отправка текста (REST + WS echo заменяет оптимистичное) ── */
   const sendTextMessage = useCallback(async (text) => {
@@ -901,7 +969,7 @@ export function ChatScreen({ tweaks, initialConv, onClearInitial, onThreadOpen }
     setInput('');
     stickRef.current = true;
     try {
-      await sendMessageM.mutateAsync({ body: t, idempotencyKey: crypto.randomUUID() });
+      await sendMessageM.mutateAsync({ body: t, idempotencyKey: uuidV4() });
       // WS new_message → App invalidate → refetch заменит оптимистичное.
       setOptimistic((prev) => prev.filter((o) => o.id !== optimisticId));
     } catch {
@@ -918,6 +986,7 @@ export function ChatScreen({ tweaks, initialConv, onClearInitial, onThreadOpen }
 
     const optimisticId = 'opt-photo-' + Date.now() + '-' + Math.random();
     const objectUrl = URL.createObjectURL(file);
+    photoObjectUrlsRef.current.add(objectUrl);
     const nowIso = new Date().toISOString();
     const optimisticMsg = {
       id: optimisticId,
@@ -935,13 +1004,17 @@ export function ChatScreen({ tweaks, initialConv, onClearInitial, onThreadOpen }
     stickRef.current = true;
     try {
       const { attachmentId } = await uploadM.mutateAsync({ file });
-      await sendMessageM.mutateAsync({ attachmentId, idempotencyKey: crypto.randomUUID() });
+      await sendMessageM.mutateAsync({ attachmentId, idempotencyKey: uuidV4() });
       setOptimistic((prev) => prev.filter((o) => o.id !== optimisticId));
+      // WR-02: НЕ отзываем objectUrl здесь — refetch, заменяющий оптимистичное
+      // сообщение реальным серверным изображением, асинхронен, и оверлей может
+      // всё ещё показывать этот URL. Отзыв делает эффект-сборщик ниже, когда URL
+      // больше нигде не используется.
     } catch {
       setOptimistic((prev) => prev.filter((o) => o.id !== optimisticId));
       toast('Не удалось отправить фото');
-    } finally {
-      URL.revokeObjectURL(objectUrl);
+      // WR-02: отзыв также откладываем эффекту-сборщику (оверлей мог уже открыться
+      // на этом URL до ошибки).
     }
   }, [uploadM, sendMessageM, toast]);
 
