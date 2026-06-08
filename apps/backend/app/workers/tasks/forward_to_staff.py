@@ -44,8 +44,7 @@ from app.integrations.telegram import sender as telegram_sender
 _log: Final = structlog.get_logger("workers.tasks.forward_to_staff")
 
 # Russian DM template — concise identity header for single-gym operator.
-# noqa: RUF001 — Cyrillic is intentional (Russian-only product per PROJECT.md).
-_DM_TEMPLATE = (  # noqa: RUF001
+_DM_TEMPLATE = (
     "Новое сообщение от клиента\n"
     "Имя: {client_name}\n"
     "Телефон: {client_phone}\n\n"

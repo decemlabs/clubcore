@@ -690,12 +690,12 @@ async def book_callback_handler(
 # _DM_STAFF_STALE_ANCHOR: sent when the Redis anchor for a Reply is absent/expired.
 # _DM_STAFF_USE_REPLY   : sent when the staff sends a plain (non-Reply) message.
 _DM_STAFF_STALE_ANCHOR: Final[str] = (
-    "⚠️ Не могу определить тред клиента. "
+    "⚠️ Не могу определить тред клиента. "  # noqa: RUF001 — Russian-only product (PROJECT.md)
     "Возможно, ссылка устарела (>7 дн.). "
     "Найдите нужное сообщение клиента и ответьте на него через Reply."
 )
 _DM_STAFF_USE_REPLY: Final[str] = (
-    "ℹ️ Чтобы ответить клиенту, используйте Reply на пересланное сообщение — "
+    "ℹ️ Чтобы ответить клиенту, используйте Reply на пересланное сообщение — "  # noqa: RUF001 — Russian-only product (PROJECT.md)
     "не пишите отдельное сообщение."
 )
 
