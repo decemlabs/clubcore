@@ -378,7 +378,7 @@ const CSS = `
 .referral-root .steps { margin-top: 24px; }
 .referral-root .steps-head { padding: 0 4px 10px; }
 .referral-root .step {
-  display: flex; gap: 14px; align-items: flex-start;
+  display: flex; flex-direction: row; gap: 14px; align-items: flex-start;
   padding: 4px 4px;
   position: relative;
 }
