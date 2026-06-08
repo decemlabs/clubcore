@@ -49,7 +49,7 @@
 
 ### OpenAPI Handoff (HND)
 
-- [ ] **HND-01**: byte-stable regen `openapi.json` + `schema.d.ts` + `AssertNonNever` forward-guards (`_v25Checks`); staff-пути байт-идентичны `contract-freeze-v1.11.0`; WS-endpoint задокументирован; полный milestone gate зелёный
+- [x] **HND-01**: byte-stable regen `openapi.json` + `schema.d.ts` + `AssertNonNever` forward-guards (`_v25Checks`); staff-пути байт-идентичны `contract-freeze-v1.11.0`; WS-endpoint задокументирован; полный milestone gate зелёный
 
 ## v2 Requirements
 
@@ -105,7 +105,7 @@
 | PWA-01 | Phase 94 | Complete |
 | PWA-02 | Phase 94 | Complete |
 | PWA-03 | Phase 94 | Complete |
-| HND-01 | Phase 95 | Pending |
+| HND-01 | Phase 95 | Complete |
 
 **Coverage:**
 - v1 requirements: 21 total
@@ -114,4 +114,4 @@
 
 ---
 *Requirements defined: 2026-06-06*
-*Last updated: 2026-06-06 — traceability filled after roadmap creation*
+*Last updated: 2026-06-08 — HND-01 marked complete (Phase 95 Plan 02); all 21 v2.5 requirements complete*
