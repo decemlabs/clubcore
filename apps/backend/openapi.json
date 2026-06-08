@@ -262,6 +262,26 @@
         "title": "ActiveSessionItem",
         "type": "object"
       },
+      "AttachmentUploadResponse": {
+        "description": "Response for POST /client/messages/attachments (Phase 92 ATT-01).\n\nReturned by service.create_attachment after the file is stored in S3 and\na message_attachments row is persisted.\n\nattachment_id (→ attachmentId on wire via alias_generator=to_camel): the\nnew message_attachments.id UUID, used by the client to attach to a message.\npreview_url (→ previewUrl on wire): relative path to the authenticated\nserve endpoint /api/v1/client/messages/attachments/{attachment_id}. The\nPWA must fetch this URL with credentials — NOT a presigned URL (D-92-ATT-03).\n\nThe Python attribute is named attachment_id (not id) so the to_camel\nalias generator produces attachmentId on the wire (per plan contract).",
+        "properties": {
+          "attachmentId": {
+            "format": "uuid",
+            "title": "Attachmentid",
+            "type": "string"
+          },
+          "previewUrl": {
+            "title": "Previewurl",
+            "type": "string"
+          }
+        },
+        "required": [
+          "attachmentId",
+          "previewUrl"
+        ],
+        "title": "AttachmentUploadResponse",
+        "type": "object"
+      },
       "AuditLogItem": {
         "description": "Single audit-log row (D-09). Owner sees full payload including JSONB.\n\nFields mirror AuditLog ORM columns (app.core.audit_models.AuditLog).\nWire keys are camelCase via alias_generator=to_camel (ResponseData -> ContractModel).\ncreated_at serializes as ISO-8601 with timezone offset.",
         "properties": {
@@ -335,6 +355,20 @@
           "payload"
         ],
         "title": "AuditLogItem",
+        "type": "object"
+      },
+      "Body_client_upload_attachment": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_client_upload_attachment",
         "type": "object"
       },
       "BookingCancelRequest": {
@@ -3207,6 +3241,191 @@
         "title": "MembershipStatus",
         "type": "string"
       },
+      "MessageAttachmentItem": {
+        "description": "Attachment sub-object returned on messages that have a photo (Phase 92 ATT-03).\n\nid: UUID of the message_attachments row.\nmime_type (→ mimeType on wire): validated MIME type (image/jpeg, image/png, or image/webp).\nsize_bytes (→ sizeBytes on wire): file size in bytes.\nurl: relative path to the authenticated serve endpoint\n     /api/v1/client/messages/attachments/{id}.\n\nAliases are camelCase via alias_generator=to_camel on the ResponseData base.\nThe url field is intentionally not camel-cased (single word, no transform needed).",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "mimeType": {
+            "title": "Mimetype",
+            "type": "string"
+          },
+          "sizeBytes": {
+            "title": "Sizebytes",
+            "type": "integer"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "mimeType",
+          "sizeBytes",
+          "url"
+        ],
+        "title": "MessageAttachmentItem",
+        "type": "object"
+      },
+      "MessageItem": {
+        "description": "Single message row returned in the thread history list (MSG-01 read path).\n\nrole: 'client' = sent by the client; 'staff' = sent by gym/staff.\nread_at: None = unread; timestamp = read.\nsent_at + id provide the composite tiebreak ordering (newest-first).\nattachment: None for text-only messages; MessageAttachmentItem when an attachment exists.",
+        "properties": {
+          "attachment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MessageAttachmentItem"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "readAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Readat"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "sentAt": {
+            "format": "date-time",
+            "title": "Sentat",
+            "type": "string"
+          },
+          "threadId": {
+            "format": "uuid",
+            "title": "Threadid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "body",
+          "sentAt",
+          "threadId"
+        ],
+        "title": "MessageItem",
+        "type": "object"
+      },
+      "MessageListResponse": {
+        "description": "Paginated message list with server-computed unread_count (MSG-01).\n\nField names mirror PaginatedData for wire consistency.\npage_size → pageSize camelCase via alias_generator=to_camel on ResponseData base.\nunread_count → unreadCount on the wire.\nunread_count is the count of unread STAFF messages (i.e. messages from staff\nthat the client has not yet read — tracked in message_threads.client_unread_count).",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MessageItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "unreadCount": {
+            "title": "Unreadcount",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize",
+          "unreadCount"
+        ],
+        "title": "MessageListResponse",
+        "type": "object"
+      },
+      "MessageResponse": {
+        "description": "Single message returned after POST /client/messages (MSG-02 send path).\n\nField layout mirrors MessageItem; returned from send_client_message service call.\nattachment: None for text-only messages; MessageAttachmentItem when an attachment was\nattached to the sent message (Phase 92 ATT-03 two-step flow).",
+        "properties": {
+          "attachment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MessageAttachmentItem"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "readAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Readat"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "sentAt": {
+            "format": "date-time",
+            "title": "Sentat",
+            "type": "string"
+          },
+          "threadId": {
+            "format": "uuid",
+            "title": "Threadid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "body",
+          "sentAt",
+          "threadId"
+        ],
+        "title": "MessageResponse",
+        "type": "object"
+      },
       "NotifPrefs": {
         "additionalProperties": false,
         "description": "Notification preference flags (Phase 75 NOTIF-01 / D-04).\n\nStrict schema: inherits BackendSchemaBase (extra='forbid') so unknown keys\nare rejected at the wire layer with a 422 ValidationError.\nAll four fields are required (no defaults here — defaults applied server-side\nwhen the clients.notif_prefs column is NULL, per D-06).\n\nWire names (single-word keys are unchanged by to_camel alias_generator):\n  promo / schedule / trainer / sound",
@@ -5037,6 +5256,18 @@
         "title": "RecurringSlotTemplateResponse",
         "type": "object"
       },
+      "ResponseEnvelope_AttachmentUploadResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/AttachmentUploadResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[AttachmentUploadResponse]",
+        "type": "object"
+      },
       "ResponseEnvelope_BookingDetailResponse_": {
         "properties": {
           "data": {
@@ -5311,6 +5542,30 @@
           "data"
         ],
         "title": "ResponseEnvelope[MembershipResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_MessageListResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/MessageListResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[MessageListResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_MessageResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/MessageResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[MessageResponse]",
         "type": "object"
       },
       "ResponseEnvelope_NoneType_": {
@@ -6102,6 +6357,38 @@
           "onlinePaymentId"
         ],
         "title": "SellResponse",
+        "type": "object"
+      },
+      "SendMessageRequest": {
+        "additionalProperties": false,
+        "description": "Request body for POST /client/messages (MSG-02 + Phase 92 ATT-03 two-step flow).\n\nextra='forbid' (inherited from BackendSchemaBase) rejects unknown fields (T-90-05).\nOwnership fields (client_id, thread_id) are intentionally absent — client_id is\nderived ONLY from the require_client() principal (D-20-IDOR / T-90-04).\n\nPhase 92 two-step flow changes (Plan 03):\n  body is now optional (str | None = None) — valid to omit when attachment_id is present.\n  attachment_id (→ attachmentId on wire): optional UUID referencing a previously uploaded\n    message_attachments row. When present without body, the empty-body 422 is relaxed.\n\nValidity matrix (enforced by model_validator):\n  body only             → valid (unchanged Phase 90 path)\n  attachment_id only    → valid (Phase 92 two-step flow)\n  both                  → valid\n  neither               → 422 (must have at least one)\n  whitespace-only body  → 422 (whitespace guard preserved even when attachment_id present)\n\nmax_length=4000 guards against oversized body input.",
+        "properties": {
+          "attachmentId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attachmentid"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          }
+        },
+        "title": "SendMessageRequest",
         "type": "object"
       },
       "SlotCancelRequest": {
@@ -8954,6 +9241,193 @@
         ]
       }
     },
+    "/api/v1/client/messages": {
+      "get": {
+        "description": "Return paginated message history newest-first with unreadCount (MSG-01).\n\nD-20-IDOR: client_id from require_client() principal only — never from URL.\nRT-04: optional ?after={messageId} cursor returns only messages newer than the cursor.\nNo CSRF dep — GET is a safe method per RBAC-04.\nNo try/except — AppError bubbles to _app_error_handler.\nNo session.commit() — read path.",
+        "operationId": "client_list_messages",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "After"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Pagesize",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_MessageListResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Paginated message thread history for the authenticated client (MSG-01; IDOR-safe; newest-first; includes unreadCount; optional ?after cursor for RT-04)",
+        "tags": [
+          "Messaging"
+        ]
+      },
+      "post": {
+        "description": "Send a client message; idempotent via Idempotency-Key header (MSG-02 + MSG-03).\n\nRBAC-04 ordering: require_client() → verify_client_csrf → verify_client_idempotency\n→ get_db / get_redis.\n\nD-20-IDOR (T-90-04): client_id from principal ONLY — SendMessageRequest carries\nonly `body`; extra='forbid' rejects any injected ownership fields (T-90-05).\n\nIdempotency (T-90-06): verify_client_idempotency + idempotent_execute wrap the DB\nwrite so duplicate key+body replays the cached response without creating a second row.\nSame key + different body → 422 idempotency_key_reuse. No bespoke dedup table.\n\nDB-first (P5 / CR-02): service.send_client_message writes the row but does NOT\npublish. The runner commits FIRST, then publishes the id-only Redis frame via\nservice.publish_new_message — so a failed commit can never emit a phantom\nnew_message frame for a row that does not exist.\n\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "client_send_message",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendMessageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_MessageResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Send a message in the authenticated client's thread (MSG-02; IDOR-safe; idempotent via Idempotency-Key; CSRF required)",
+        "tags": [
+          "Messaging"
+        ]
+      }
+    },
+    "/api/v1/client/messages/attachments": {
+      "post": {
+        "description": "Upload a client photo attachment via multipart and return {attachmentId, previewUrl}.\n\nRBAC-04 ordering: require_client() → verify_client_csrf → get_storage/get_db.\n\nD-20-IDOR (T-92-07): client_id from principal ONLY — never from form field or\nheader. The attachment row records the principal's client_id as the ownership anchor.\n\nSize guard (T-92-06 / P17): body is read with a bounded `file.read(5MB+1)` call;\nif the result exceeds 5MB a PayloadTooLargeError (413) is raised BEFORE any other\nprocessing. Never uses unbounded `await file.read()`.\n\nMagic-byte validation (T-92-05 LOCKED): service.create_attachment calls\nguess_allowed_mime on the first ≤261 bytes. The Content-Type header (file.content_type)\nis passed as claimed_content_type but is NEVER trusted for validation or S3 storage\nContentType — the validated mime from guess_allowed_mime is the ground truth.\n\nNo idempotency wrapper — attachment creation is a fresh-object create (not a\nfinancial mutation). No try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "client_upload_attachment",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_client_upload_attachment"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_AttachmentUploadResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Upload a photo attachment (ATT-01/02; magic-byte validated; 5MB cap; IDOR-safe; CSRF required)",
+        "tags": [
+          "Messaging",
+          "Messaging"
+        ]
+      }
+    },
+    "/api/v1/client/messages/attachments/{attachment_id}": {
+      "get": {
+        "description": "Stream a client-owned attachment from S3 with anti-XSS headers (ATT-03).\n\nRoute ordering: /messages/attachments/{attachment_id} is declared after\n/messages/attachments (POST) and after /messages/read (PATCH) so:\n  - The literal '/attachments/' segment distinguishes this route from\n    '/messages/read' — no overlap, ordering is safe (see route-ordering note).\n  - The UUID-validated path param prevents arbitrary path capture.\n\nSecurity model (T-92-10..13):\n  - require_client() gates the endpoint; missing/expired cc_client_access → 401.\n  - service.serve_attachment performs IDOR check via get_owned_attachment:\n    non-owned or non-existent id → NotFoundError (404-collapse, never 403).\n  - Content-Type forced from STORED validated mime (never client-derived, T-92-11).\n  - Content-Disposition: attachment (never inline, T-92-11).\n  - X-Content-Type-Options: nosniff (T-92-11).\n  - Object key from DB-owned row only — no path traversal (T-92-12).\n\nNo CSRF dep (safe GET method per RBAC-04).\nNo session.commit() — read path.\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "client_serve_attachment",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "attachment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Attachment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Stream a client-owned photo attachment (ATT-03; authenticated proxy; IDOR-safe 404-collapse; anti-XSS headers)",
+        "tags": [
+          "Messaging",
+          "Messaging"
+        ]
+      }
+    },
+    "/api/v1/client/messages/read": {
+      "patch": {
+        "description": "Mark all unread staff messages read; reset unreadCount to 0 (MSG-04).\n\nRBAC-04 ordering: require_client() → verify_client_csrf → get_db.\nT-90-04: client_id from principal only.\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "client_mark_messages_read",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Mark all unread staff messages as read for the authenticated client (MSG-04; IDOR-safe via client_id from principal; resets unreadCount to 0)",
+        "tags": [
+          "Messaging"
+        ]
+      }
+    },
     "/api/v1/client/notifications": {
       "get": {
         "description": "Return paginated inbox rows newest-first with unreadCount (INBOX-01).\n\nD-20-IDOR: client_id from require_client() principal only — never from URL.\nNo CSRF dep — GET is a safe method per RBAC-04.\nNo try/except — AppError bubbles to _app_error_handler.\nNo session.commit() — read path.",
@@ -9514,6 +9988,26 @@
         "summary": "Single trainer profile for the authenticated client (TRNR-01); 404 trainer_not_found on unknown / soft-deleted / inactive",
         "tags": [
           "Client-Portal"
+        ]
+      }
+    },
+    "/api/v1/client/ws/messages": {
+      "get": {
+        "description": "WebSocket upgrade endpoint for real-time message delivery (RT-01..04).  Auth via httpOnly cookie `cc_client_access` (require_client()); Origin guard via verify_ws_origin (CSWSH, T-90-11).  No CSRF header — WS handshake cannot carry X-CSRF-Token.  No URL token (?token=...) — cookie is the sole auth mechanism.\\n\\nServer→client frames:\\n- `{\\\"type\\\": \\\"new_message\\\", \\\"messageId\\\": \\\"<uuid>\\\"}` — id-only notification; PWA refetches via REST GET /messages?after=<cursor> (RT-04).\\n- `{\\\"type\\\": \\\"ping\\\"}` — heartbeat every ~30 s; client may respond with any text.\\n\\nChannel: `cc:messaging:client:{client_id}` (derived from principal only, never from path/query/payload — P2 / T-90-12).  Idle close 1001 after ~90 s of no messages.",
+        "operationId": "client_ws_messages",
+        "responses": {
+          "101": {
+            "description": "Switching Protocols — WebSocket connection established."
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Real-time message delivery WebSocket (RT-01..04; cookie auth only; no CSRF header on WS upgrade)",
+        "tags": [
+          "Messaging"
         ]
       }
     },
@@ -13780,6 +14274,10 @@
     {
       "description": "Client-portal — authenticated gym member self-service: phone-OTP auth, session management, profile, membership/PT-package read, bookings, QR check-in, checkout, and payment status (Phases 68-71 CAUTH-01..06 / CHOME-01..03 / CHIST-01..03 / CPLAN-01..03 / CBOOK-02..05 / CCHK-01..03 / CPAY-01..05).",
       "name": "Client-Portal"
+    },
+    {
+      "description": "Real-time client↔gym 1:1 chat — REST send/list/mark-read + photo attachments; WebSocket transport documented separately under this tag (Phases 90-94 MSG-01..04 / RT-01..04 / RCPT-01..03 / ATT-01..03 / PWA-01..03).",
+      "name": "Messaging"
     },
     {
       "description": "Gym client CRM — create, read, update, soft-delete clients.",

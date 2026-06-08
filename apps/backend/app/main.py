@@ -805,6 +805,55 @@ def create_app() -> FastAPI:
                         params: list[object] = op.setdefault("parameters", [])
                         if idem_ref not in params:
                             params.append(idem_ref)
+        # Phase 95 HND-01 / D-95-WS-DOC — manually document the WebSocket upgrade
+        # endpoint.  FastAPI does NOT emit @router.websocket routes into schema["paths"],
+        # so the WS contract is hand-written here, mirroring Phase 89 non-auto surface
+        # treatment.  Documented as a `get` operation representing the HTTP→WS upgrade
+        # handshake (established OpenAPI 3.x convention for WS endpoints).
+        #
+        # Security override: WS handshake carries no X-CSRF-Token header (the browser
+        # cannot attach arbitrary headers on WS upgrade), so the per-operation security
+        # is overridden to cookieAuth-only — matching the live endpoint which omits
+        # verify_client_csrf (see messaging/router.py:client_ws_messages).
+        #
+        # Idempotent: assigns a dict literal; re-running the generator yields identical
+        # bytes (sort_keys=True in json.dumps; Python dict literal is insertion-ordered
+        # but sort_keys normalises the JSON output).
+        schema["paths"]["/api/v1/client/ws/messages"] = {
+            "get": {
+                "description": (
+                    "WebSocket upgrade endpoint for real-time message delivery "
+                    "(RT-01..04).  Auth via httpOnly cookie `cc_client_access` "
+                    "(require_client()); Origin guard via verify_ws_origin (CSWSH, "
+                    "T-90-11).  No CSRF header — WS handshake cannot carry "
+                    "X-CSRF-Token.  No URL token (?token=...) — cookie is the sole "
+                    "auth mechanism.\\n\\n"
+                    "Server→client frames:\\n"
+                    "- `{\\\"type\\\": \\\"new_message\\\", \\\"messageId\\\": \\\"<uuid>\\\"}` — "
+                    "id-only notification; PWA refetches via REST GET /messages?after=<cursor> "
+                    "(RT-04).\\n"
+                    "- `{\\\"type\\\": \\\"ping\\\"}` — heartbeat every ~30 s; client may "
+                    "respond with any text.\\n\\n"
+                    "Channel: `cc:messaging:client:{client_id}` (derived from principal only, "
+                    "never from path/query/payload — P2 / T-90-12).  "
+                    "Idle close 1001 after ~90 s of no messages."
+                ),
+                "operationId": "client_ws_messages",
+                "responses": {
+                    "101": {
+                        "description": (
+                            "Switching Protocols — WebSocket connection established."
+                        )
+                    }
+                },
+                "security": [{"cookieAuth": []}],
+                "summary": (
+                    "Real-time message delivery WebSocket (RT-01..04; cookie auth only; "
+                    "no CSRF header on WS upgrade)"
+                ),
+                "tags": ["Messaging"],
+            }
+        }
         app.openapi_schema = schema
         return schema
 
