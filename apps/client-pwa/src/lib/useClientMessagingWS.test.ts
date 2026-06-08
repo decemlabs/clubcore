@@ -213,4 +213,108 @@ describe('useClientMessagingWS', () => {
     unmount()
     vi.useRealTimers()
   })
+
+  // ── CR-01 regression: socket must NOT tear down when callback identities change ──
+  it('does NOT reopen the socket when only the callbacks change identity (CR-01)', async () => {
+    const { useClientMessagingWS } = await import('./useClientMessagingWS')
+    // Fresh inline closures each render — mimics App() passing new callbacks.
+    const { rerender } = renderHook(() =>
+      useClientMessagingWS({
+        enabled: true,
+        onNewMessage: () => {},
+        onReadReceipt: () => {},
+        onTyping: () => {},
+      }),
+    )
+    expect(wsInstances.length).toBe(1)
+
+    // Re-render several times with brand-new closures (as App would on every
+    // setUnreadChat / sheet toggle). The effect depends only on [enabled], so
+    // NO new socket should be opened and the existing one must not be closed.
+    rerender()
+    rerender()
+    rerender()
+
+    expect(wsInstances.length).toBe(1)
+    expect(wsInstances[0]!.close).not.toHaveBeenCalled()
+  })
+
+  it('always dispatches to the LATEST callback after a re-render (ref-backed)', async () => {
+    const { useClientMessagingWS } = await import('./useClientMessagingWS')
+    const first = vi.fn()
+    const second = vi.fn()
+    const { rerender } = renderHook(
+      ({ cb }: { cb: (id: string) => void }) =>
+        useClientMessagingWS({
+          enabled: true,
+          onNewMessage: cb,
+          onReadReceipt: () => {},
+          onTyping: () => {},
+        }),
+      { initialProps: { cb: first } },
+    )
+    // Swap the callback without remounting; same socket must call the new one.
+    rerender({ cb: second })
+    lastWsInstance!._emit('new_message', { messageId: 'm-1' })
+    expect(first).not.toHaveBeenCalled()
+    expect(second).toHaveBeenCalledWith('m-1')
+  })
+
+  // ── WR-05 regression: racing onclose events must not leak a second timer/socket ──
+  it('clears the pending reconnect timer before scheduling a new one (WR-05)', async () => {
+    vi.useFakeTimers()
+    const { useClientMessagingWS } = await import('./useClientMessagingWS')
+    const props = makeProps()
+    const { unmount } = renderHook(() => useClientMessagingWS(props))
+
+    const firstWs = lastWsInstance!
+    firstWs.close = vi.fn() // don't auto-fire onclose
+
+    // Two onclose events race (e.g. onerror→close plus a server close). Each
+    // calls scheduleReconnect; the first timer must be cleared so only ONE
+    // reconnect fires.
+    firstWs.onclose?.({} as CloseEvent)
+    firstWs.onclose?.({} as CloseEvent)
+
+    vi.advanceTimersByTime(1100)
+
+    // Exactly one reconnect socket (total 2), not two orphaned reconnects (3).
+    expect(wsInstances.length).toBe(2)
+
+    unmount()
+    vi.useRealTimers()
+  })
+
+  // ── WR-01 regression: onReconnect fires only on reopen, not the initial connect ──
+  it('fires onReconnect on reopen after a disconnect but not on the first connect (WR-01)', async () => {
+    vi.useFakeTimers()
+    const { useClientMessagingWS } = await import('./useClientMessagingWS')
+    const onReconnect = vi.fn()
+    const { unmount } = renderHook(() =>
+      useClientMessagingWS({
+        enabled: true,
+        onNewMessage: () => {},
+        onReadReceipt: () => {},
+        onTyping: () => {},
+        onReconnect,
+      }),
+    )
+
+    const firstWs = lastWsInstance!
+    firstWs.close = vi.fn()
+    // Initial connect open → must NOT count as a reconnect.
+    firstWs.onopen?.({} as Event)
+    expect(onReconnect).not.toHaveBeenCalled()
+
+    // Disconnect → reconnect timer → second socket opens.
+    firstWs.onclose?.({} as CloseEvent)
+    vi.advanceTimersByTime(1100)
+    const secondWs = lastWsInstance!
+    secondWs.onopen?.({} as Event)
+
+    expect(onReconnect).toHaveBeenCalledOnce()
+
+    unmount()
+    vi.useRealTimers()
+  })
 })
