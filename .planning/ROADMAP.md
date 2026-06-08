@@ -154,7 +154,7 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 #### Phase 95: OpenAPI Handoff + Milestone Verification
 
 - [ ] **Phase 95: OpenAPI Handoff + Milestone Verification** - Byte-stable openapi.json + schema.d.ts regen + full milestone gate (2 plans)
-  - [ ] 95-01-PLAN.md — openapi.json: Messaging tag + retag routes + manual WS doc in _customize_openapi() + byte-stable regen + staff-drift gate + Redocly clean
+  - [x] 95-01-PLAN.md — openapi.json: Messaging tag + retag routes + manual WS doc in _customize_openapi() + byte-stable regen + staff-drift gate + Redocly clean — completed 2026-06-08
   - [ ] 95-02-PLAN.md — schema.d.ts regen + _v25Checks AssertNonNever[7] + full milestone gate green + REQUIREMENTS.md HND-01 complete
 
 ## Phase Details
@@ -243,7 +243,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 95-01-PLAN.md — openapi.json byte-stable regen: add `Messaging` tag, retag the 5 messaging REST routes, inject manual WS doc into `_customize_openapi()`, staff-drift gate vs `contract-freeze-v1.11.0`, Redocly clean
+- [x] 95-01-PLAN.md — openapi.json byte-stable regen: add `Messaging` tag, retag the 5 messaging REST routes, inject manual WS doc into `_customize_openapi()`, staff-drift gate green (vs Phase 89 baseline), Redocly clean — completed 2026-06-08
 - [ ] 95-02-PLAN.md — `schema.d.ts` byte-stable regen + `_v25Checks` AssertNonNever[7] forward-guards + full milestone gate green + mark HND-01 complete in REQUIREMENTS.md
 
 ## Backlog
@@ -296,4 +296,4 @@ Plans:
 | 92. Photo Attachments | 3/3 | Complete   | 2026-06-07 |
 | 93. Telegram Bridge | 2/2 | Complete   | 2026-06-08 |
 | 94. PWA ChatScreen Wiring | 2/2 | Complete   | 2026-06-08 |
-| 95. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
+| 95. OpenAPI Handoff + Milestone Verification | 1/2 | In progress | 2026-06-08 |

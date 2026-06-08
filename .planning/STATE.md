@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.5
 milestone_name: Chat / Messaging — Client↔Gym
-status: verifying
-stopped_at: Phase 93 complete — Telegram Bridge BRDG-01/02/03 shipped. 168/168 messaging+telegram tests green.
-last_updated: "2026-06-08T05:01:06.153Z"
+status: executing
+stopped_at: Phase 95 Plan 01 complete — v2.5 OpenAPI contract frozen; Messaging tag + 5 REST paths + WS doc in openapi.json; Redocly clean.
+last_updated: "2026-06-08T08:00:00.000Z"
 last_activity: 2026-06-08
 progress:
   total_phases: 10
   completed_phases: 5
-  total_plans: 12
-  completed_plans: 12
-  percent: 50
+  total_plans: 13
+  completed_plans: 13
+  percent: 53
 ---
 
 # Project State
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 94 — pwa-chatscreen-wiring
+**Current focus:** Phase 95 — openapi-handoff (Plan 01 complete, Plan 02 next)
 
 ## Current Position
 
-Phase: 94 (pwa-chatscreen-wiring) — COMPLETE ✅
-Plan: 2 of 2 (plan 01 ✅ messaging data layer hooks + WS + badge plumbing; plan 02 ✅ PWA-01/PWA-03 pixel-perfect ChatScreen port + photo flow)
-Status: Phase complete — ready for verification
+Phase: 95 (openapi-handoff) — IN PROGRESS
+Plan: 1 of 2 (plan 01 ✅ v2.5 Messaging surface frozen in openapi.json; plan 02 pending — schema.d.ts + _v25Checks + milestone gate)
+Status: Plan 01 complete — ready for Plan 02
 Last activity: 2026-06-08
 
 Progress: [██████████] 100%
@@ -58,6 +58,11 @@ Progress: [██████████] 100%
 </details>
 
 ## Accumulated Context
+
+### Key Phase 95 Decisions
+
+- **D-95-WS-DOC**: WS endpoint `/api/v1/client/ws/messages` documented as `get` (HTTP→WS upgrade handshake) in `_customize_openapi()` post-processor — cookieAuth-only security override; WS handshake cannot carry X-CSRF-Token; matches live endpoint
+- **D-95-DRIFT-REF**: Drift gate verified vs Phase 89 baseline (`fedb3e55`) not `contract-freeze-v1.11.0` (Phase 64 tag predates v2.4 GYM/notifications/trainer additions); v2.5 adds exclusively client messaging paths — drift gate green
 
 ### Key v2.5 Architecture Decisions (pre-locked by research)
 
@@ -136,5 +141,5 @@ Carrying forward from v2.4 close (see previous STATE.md for full list):
 ## Session Continuity
 
 Last session: 2026-06-08
-Stopped at: Phase 94 complete — ChatScreen graduated from D-71-09 + pixel-perfect port wired to messaging REST/WS/attachments (PWA-01/02/03). 210/210 client-pwa tests green; tsc + lint + build clean.
-Resume: Phase 95 (OpenAPI Handoff + Milestone Verification) — next milestone phase
+Stopped at: Phase 95 Plan 01 complete — v2.5 Messaging tag + 5 REST paths + WS manual doc in openapi.json; byte-stable + Redocly clean. Commits: 9e45aa58, 9b28ba2f.
+Resume: Phase 95 Plan 02 — regenerate schema.d.ts + add _v25Checks AssertNonNever + milestone gate (backend pytest + mypy + lint-imports + frontend vitest)
