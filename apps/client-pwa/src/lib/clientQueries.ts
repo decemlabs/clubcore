@@ -43,6 +43,7 @@ export const clientPortalKeys = {
   gymInfo: () => [...clientPortalKeys.all, 'gym-info'] as const,
   notifications: (page: number) => [...clientPortalKeys.all, 'notifications', page] as const,
   trainerDetail: (id: string) => [...clientPortalKeys.all, 'trainer-detail', id] as const,
+  messages: (after?: string) => [...clientPortalKeys.all, 'messages', after ?? ''] as const,
 } as const
 
 // ---------------------------------------------------------------------------
@@ -909,6 +910,158 @@ export function useMarkAllNotificationsRead() {
     },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: [...clientPortalKeys.all, 'notifications'] })
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Phase-94 PWA-01: messaging hooks + interfaces
+// ---------------------------------------------------------------------------
+
+export interface MessageAttachmentItem {
+  id: string
+  mimeType: string
+  sizeBytes: number
+  url: string
+}
+
+export interface MessageItem {
+  id: string
+  role: 'client' | 'staff'
+  body: string
+  sentAt: string
+  readAt: string | null
+  threadId: string
+  attachment: MessageAttachmentItem | null
+}
+
+interface MessageListData {
+  items: MessageItem[]
+  total: number
+  page: number
+  pageSize: number
+  unreadCount: number
+}
+
+interface AttachmentUploadResult {
+  attachmentId: string
+  previewUrl: string
+}
+
+/**
+ * GET /api/v1/client/messages — paginated message list (PWA-01).
+ *
+ * staleTime:30_000 suppresses redundant refetches within 30s.
+ * refetchInterval:30_000 is the ROADMAP criterion-2 poll fallback: keeps the
+ * badge + thread fresh every 30s while the WebSocket is disconnected. When
+ * the WS is connected, new_message invalidation triggers an immediate refetch
+ * (the extra 30s poll is harmless in that case).
+ *
+ * after — optional cursor UUID for catch-up on WS reconnect.
+ */
+export function useClientMessages(after?: string) {
+  return useQuery({
+    queryKey: clientPortalKeys.messages(after),
+    queryFn: async () => {
+      // Phase-94: messaging paths are added to schema.d.ts in Phase 95 handoff.
+      // Until then, cast through a known path that shares the same method to satisfy
+      // the generic constraint without losing runtime correctness.
+      const res = await (clientRequest as unknown as (
+        method: string, path: string, init?: unknown
+      ) => Promise<unknown>)(
+        'get',
+        '/api/v1/client/messages',
+        { ...(after ? { query: { after } } : {}) },
+      )
+      return (res as { data: MessageListData }).data
+    },
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+  })
+}
+
+/**
+ * POST /api/v1/client/messages — send a text or attachment message (PWA-01).
+ *
+ * Caller supplies a per-send idempotencyKey (UUID) forwarded as Idempotency-Key
+ * header so the backend deduplicates retries (verify_client_idempotency, Phase 90).
+ */
+export function useSendMessage() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      body,
+      attachmentId,
+      idempotencyKey,
+    }: {
+      body?: string
+      attachmentId?: string
+      idempotencyKey: string
+    }) => {
+      const bodyObj: Record<string, string> = {}
+      if (body) bodyObj.body = body
+      if (attachmentId) bodyObj.attachmentId = attachmentId
+      const res = await (clientRequest as unknown as (
+        method: string, path: string, init?: unknown
+      ) => Promise<unknown>)(
+        'post',
+        '/api/v1/client/messages',
+        { body: bodyObj, headers: { 'Idempotency-Key': idempotencyKey } },
+      )
+      return (res as { data: MessageItem }).data
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: [...clientPortalKeys.all, 'messages'] })
+    },
+  })
+}
+
+/**
+ * POST /api/v1/client/messages/attachments — upload a photo attachment (PWA-01).
+ *
+ * Sends multipart/form-data with field 'file'. Do NOT set Content-Type —
+ * clientFetcher passes FormData through untouched so the browser sets the
+ * multipart/form-data boundary automatically (clientFetcher.ts lines 179-181).
+ *
+ * Returns { attachmentId, previewUrl }. Caller chains useSendMessage to link
+ * the attachment to a message. No invalidation here — caller handles it.
+ */
+export function useUploadAttachment() {
+  return useMutation({
+    mutationFn: async ({ file }: { file: File }) => {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await (clientRequest as unknown as (
+        method: string, path: string, init?: unknown
+      ) => Promise<unknown>)(
+        'post',
+        '/api/v1/client/messages/attachments',
+        { body: fd },
+      )
+      return (res as { data: AttachmentUploadResult }).data
+    },
+  })
+}
+
+/**
+ * PATCH /api/v1/client/messages/read — mark all unread messages as read (PWA-01).
+ *
+ * Returns 204. Invalidates messages key onSettled so unreadCount + readAt fields
+ * are refreshed in the cache.
+ */
+export function useMarkMessagesRead() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async () => {
+      await (clientRequest as unknown as (
+        method: string, path: string
+      ) => Promise<unknown>)(
+        'patch',
+        '/api/v1/client/messages/read',
+      )
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: [...clientPortalKeys.all, 'messages'] })
     },
   })
 }
