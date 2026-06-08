@@ -1,10 +1,11 @@
 ---
 phase: 98
 slug: pwa-referralscreen
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-06-08
+reviewed_at: 2026-06-08
 ---
 
 # Phase 98 — UI Design Contract
