@@ -6,7 +6,7 @@ status: planning
 last_updated: "2026-06-08T10:36:21.090Z"
 last_activity: 2026-06-08
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,16 +20,33 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Planning next milestone (v2.6 — admin-web chat inbox + first production API-wiring, or v3.0 production deploy). Run `/gsd:new-milestone`.
+**Current focus:** v2.6 Referral System — phases 96-99. Start with `/gsd:plan-phase 96`.
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: Not started
 Plan: —
-Status: Defining requirements
-Last activity: 2026-06-08 — Milestone v2.6 started
+Status: Roadmap created — ready to plan Phase 96
+Last activity: 2026-06-08 — Roadmap v2.6 written (4 phases, 8/8 requirements mapped)
 
-## v2.5 Roadmap Summary
+```
+[░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 0%
+Phase 96 ▸ 97 ▸ 98 ▸ 99
+```
+
+## v2.6 Roadmap Summary
+
+| Phase | Goal | Requirements |
+|-------|------|--------------|
+| 96. Referral Domain Backend | Клиент получает персональный реф-код; друг привязывает реферера при онбординге; owner настраивает суммы | REFER-01, REFER-02 (backend), REFER-03, REFER-07 |
+| 97. Reward Crediting | Двусторонний бонус через loyalty_ledger на payment.succeeded первой покупки; idempotent; co-transactional | REFER-04 |
+| 98. PWA ReferralScreen | Graduate из D-71-09; pixel-perfect порт макета; список приглашённых; «Уже накоплено»; deep-link | REFER-02 (PWA), REFER-05, REFER-06 |
+| 99. OpenAPI Handoff + Milestone Verification | Byte-stable openapi.json + schema.d.ts + _v26Checks + milestone gate зелёный | HND-01 |
+
+**Coverage:** 8/8 v2.6 requirements mapped (zero orphans, zero duplicates). Execution order: 96 → 97 → 98 → 99.
+
+<details>
+<summary>v2.5 Roadmap Summary (shipped)</summary>
 
 | Phase | Goal | Requirements |
 |-------|------|--------------|
@@ -40,119 +57,66 @@ Last activity: 2026-06-08 — Milestone v2.6 started
 | 94. PWA ChatScreen Wiring | Graduate from D-71-09 ESLint zone; wire REST + WS + attachments; unread badge | PWA-01, PWA-02, PWA-03 |
 | 95. OpenAPI Handoff + Milestone Verification | Byte-stable openapi.json + schema.d.ts + _v25Checks + milestone gate green | HND-01 |
 
-**Coverage:** 21/21 v2.5 requirements mapped (zero orphans, zero duplicates). Execution order: 90 → 91 → 92 → 93 → 94 → 95.
-
-<details>
-<summary>v2.4 Roadmap Summary (shipped)</summary>
-
-| Phase | Goal | Requirements |
-|-------|------|--------------|
-| 86. Gym-Info / CMS | Клиент видит gym-info из БД; owner управляет через write-API; baseline засеян | GYM-01, GYM-02, GYM-03 |
-| 87. Notification Inbox | In-app лента уведомлений от системных событий; read/mark-all; push-token регистрация; PWA wired | INBOX-01, INBOX-02, INBOX-03, INBOX-04, INBOX-05 |
-| 88. Trainer Detail / Bio | Полный профиль тренера (bio/специализация/фото); owner write-API; seed; PWA TrainerDetailSheet wired | TRNR-01, TRNR-02, TRNR-03, TRNR-04 |
-| 89. OpenAPI Handoff + Milestone Verification | Byte-stable openapi.json + schema.d.ts regen + `_v24Checks` forward-guards + milestone gate зелёный | HND-01 |
-
 </details>
 
 ## Accumulated Context
 
-### Key Phase 95 Decisions
+### v2.6 Architecture Constraints (pre-locked)
 
-- **D-95-WS-DOC**: WS endpoint `/api/v1/client/ws/messages` documented as `get` (HTTP→WS upgrade handshake) in `_customize_openapi()` post-processor — cookieAuth-only security override; WS handshake cannot carry X-CSRF-Token; matches live endpoint
-- **D-95-DRIFT-REF**: Drift gate verified vs Phase 89 baseline (`fedb3e55`) not `contract-freeze-v1.11.0` (Phase 64 tag predates v2.4 GYM/notifications/trainer additions); v2.5 adds exclusively client messaging paths — drift gate green
+- **Staff-free**: всё реферальное под `require_client()`; `apps/admin-web` заморожен; owner-API только для конфига сумм
+- **IDOR-safe**: `client_id` реферера — только из `require_client()` principal, никогда из тела запроса
+- **Server-authoritative rewards**: бонус начисляется исключительно на `payment.succeeded` webhook, никогда на клиентский запрос
+- **loyalty_ledger reuse**: нет параллельного bonus-store; реферальные бонусы — `entry_type='referral_accrual'` (или аналог) в существующем `loyalty_ledger`
+- **Idempotency pattern**: UNIQUE partial index `(referral_id, online_payment_id WHERE entry_type='referral_accrual')` — тот же паттерн, что `record_loyalty_redemption` (Phase 83)
+- **INFRA-15 discipline**: все новые LOCKED audit events (`referral_code_generated`, `referral_captured`, `referral_bonus_accrued`) регистрируются в `LOCKED_AUDIT_EVENTS` frozenset до первого callsite
+- **One-bonus-per-referee**: бонус начисляется только на первую покупку абонемента рефери; повторные покупки не триггерят повторный бонус
+- **D-71-09 graduation pattern**: de-listing ReferralSheet из ESLint zone = удалить из negated ignore (строка `'!src/screens/sheets/ReferralSheet.jsx'`) + удалить dedicated `files` block — точно как ChatScreen в Phase 94
 
-### Key v2.5 Architecture Decisions (pre-locked by research)
+### Key integration points (from code reading)
 
-- **WS endpoint location**: `app/modules/messaging/router.py`, mounted at `/client` prefix in `api/v1/router.py` (same pattern as loyalty.router, gym.router, notifications.router) — NOT in client_portal/router.py (would violate modules-independent)
-- **WS auth**: httpOnly cookie `cc_client_access` (sent automatically on same-origin WS upgrade); require_client() works unchanged inside @router.websocket(); no URL token; Origin check via verify_ws_origin dependency
-- **Open decision**: WS auth — confirm cc_client_access SameSite=Lax/Strict before Phase 90 plan (if SameSite=None, ws-ticket fallback required)
-- **Open decision**: Attachment storage — local filesystem adapter (recommended) vs S3-compatible from day one; decide at Phase 92 plan
-- **DB-first, pub/sub as notification only**: every message written to Postgres before any Redis publish; WS carries event frames (type + IDs), not full payloads; REST catch-up on reconnect via ?after= cursor
-- **Redis pub/sub**: per-WS-connection subscriber (redis.pubsub() creates dedicated connection); channel cc:messaging:client:{client_id} derived from principal ONLY; cleanup with await pubsub.aclose() in finally:
-- **Session-per-operation**: WS handler injects session_factory from app.state; opens AsyncSession per message operation (NOT Depends(get_db) which holds connection for connection lifetime)
-- **Telegram bridge**: D-06/D-10 worker→modules relaxation; telegram_bot.py imports messaging.service directly; HandlerContext gains messaging_service field appended at END; no .importlinter change for bridge
-- **One .importlinter change**: add app.modules.messaging to modules-independent contract; no new ignore_imports for core REST/WS path
-- **LOCKED_AUDIT_EVENTS**: pre-register ALL messaging events in Phase 90 (INFRA-15): ("message_sent","message"), ("message_read","message"), ("attachment_uploaded","message"), ("chat_staff_reply_sent","message")
-- **Migrations**: 0064=message_threads, 0065=messages, 0066=message_attachments (sequential; FKs ordered accordingly)
-- **WS test convention override**: httpx ASGITransport CANNOT do WS upgrade → use starlette.testclient.TestClient.websocket_connect() for ALL WS tests (overrides project default for WS endpoints only)
-- **camelCase wire format**: ALL messaging schemas inherit BackendSchemaBase (alias_generator=to_camel); validated with schema unit test
-- **Chat is human-only**: role ENUM is 'client' | 'staff'; no system_message type; hard boundary with v2.4 notification inbox
-- **Reply-as-read semantics**: "read" = staff replied; when bot stores staff reply, mark prior client messages read_at=now() and publish read_receipt events (Telegram has no per-message read receipt API)
-- **Typing is ephemeral**: never stored in Postgres; published to Redis pub/sub only with 5s TTL; PWA auto-dismisses
-- **Telegram forwarding via ARQ task**: NOT synchronous in-transaction (avoids 429 rate-limit cascade)
-- **chat_forwarding_log**: Redis key cc:messaging:tg_msg:{tg_message_id} → thread_id, TTL 7 days; set when bot sends DM to staff, consumed when reply arrives
-- **Staff identity**: v2.5 = anonymous (role='staff') with telegram_user_id/username as nullable audit fields; full identity → v2.6 admin-web inbox
-- **STAFF_TELEGRAM_CHAT_ID**: new Settings field (int | None); Telegram bridge disabled if absent
+- **loyalty/service.py**: `accrue_welcome_bonus` и `owner_grant_loyalty` — переиспользуемые примитивы для Phase 97 (caller-owns-txn, flush-only)
+- **handlers.py (payment.succeeded)**: Point of insertion for referral bonus crediting — inside `async with session.begin()`, after `record_loyalty_redemption`, before audit emits; follow the exact same RETURNING-gated pattern
+- **eslint.config.js (D-71-09)**: Line 32 `'!src/screens/sheets/ReferralSheet.jsx'` + lines 71-109 dedicated block — both must be removed when graduating in Phase 98
 
-### Key v2.5 Plan 02 Decisions (REST surface)
+### v2.6 Key Decisions (to be confirmed at phase planning)
 
-- **verify_client_idempotency for POST /messages:** Staff dependency `verify_idempotency` (uses `get_current_user`) would 401 on client requests. `verify_client_idempotency` (Phase 70 D-70-02) is the correct client-scoped dependency.
-- **idempotent_execute runner commits session internally:** DB-first semantics (P5) require Redis publish after commit. The runner function calls `session.commit()`, serialises response, returns — publish fires inside service before commit, co-transactionally (fire-and-forget post-return).
-- **after-cursor composite `(sent_at, id::text)`:** Casting UUID to text for composite comparison avoids asyncpg type coercion issues with row-value syntax.
-- **PATCH /messages/read returns 204:** Consistent with notifications read-all analog.
-- **record_staff_message internal (no endpoint):** admin-web frozen until v2.6; function exercised by tests + Phase 93 bridge.
-
-### Key v2.4 Milestone Constraints (still active)
-
-- **Staff gate**: owner-only write-API + seeds; apps/admin-web frozen
-- **Client-only**: all client read-endpoints under require_client(), IDOR-safe (client_id from principal only)
-- **Staff contract**: byte-for-byte with contract-freeze-v1.11.0 — drift gate must be green
-- **Module discipline**: D-20-MODULE + D-20-IDOR
-
-### Research Flags (plan-phase guidance)
-
-| Phase | Research Needed | Reason |
-|-------|----------------|--------|
-| Phase 90 | YES — high priority | 6 simultaneous WS invariants; highest pitfall density; WS test convention change |
-| Phase 91 | No | Standard WS event extension; established patterns from Phase 90 |
-| Phase 92 | No | OWASP attachment patterns documented; checklist from PITFALLS.md |
-| Phase 93 | YES | Telegram bridge routing complexity; echo loop; HandlerContext stability |
-| Phase 94 | No | v2.4 graduation pattern proven; D-71-09 lesson documented |
-| Phase 95 | No | Standard handoff following Phase 89 pattern |
+- **Referral code format**: short alphanumeric slug (e.g. UUID prefix or name-based) — decide at Phase 96 plan
+- **Deep-link route**: `/i/<code>` — served by client-pwa router (not backend redirect); backend `GET /referral/resolve/<code>` returns referrer info
+- **Capture timing**: referral capture at onboarding step (Phase 68/73 pattern); `POST /client/referral/capture` called with referrer code; client_id from principal (IDOR-safe)
+- **Referral config migration**: seed migration (same pattern as FIT15 promo in Phase 75) — no admin UI
 
 ### Pending Todos
 
-- **Future milestones sequence (post-v2.5)** — v2.6 admin-web chat inbox (расфриз admin-web + боевое API-wiring). See `.planning/todos/pending/2026-06-02-future-milestones-sequence-post-v2-1.md`
+- **v2.6 planning**: Start with `/gsd:plan-phase 96` (Referral Domain Backend)
 
 ### Blockers/Concerns
 
-- None active. (Resolved: cc_client_access SameSite concern — Phase 90 shipped WS auth over the httpOnly cookie successfully; no ws-ticket fallback needed.)
+- None active.
 
 ## Deferred Items
 
-Acknowledged + deferred at v2.5 close (2026-06-08):
+Carrying forward from v2.5 close (2026-06-08):
 
 | Category | Item | Status |
 |----------|------|--------|
 | v2.6 | RCPT-02 typing indicator producer — PWA consumer + WS fan-out wired, but no production `publish_typing` trigger (Telegram has no typing API; admin-web frozen) | deferred → v2.6 admin-web |
-| bug→v2.6 | **Typing indicator does NOT surface in the DOM** despite a CORRECT React render. Console trace (2026-06-08) confirms: WS typing frame → `window.__chatTyping` fires → `setTyping(true)` → component re-renders with `typing=true`, `statusText="печатает…"`, and `renderThreadBody` pushes the `.typing-dots` bubble — yet the dots/«печатает…» never appear in `document.body` (MutationObserver + 30ms poll over 8s see nothing; `chat-root` count = 1). Points to a React commit/instance/timing issue (committed tree not the visible one, or true→false collapses before paint). Dormant in v2.5 — no typing PRODUCER until v2.6 (Telegram has no typing API; admin-web frozen). Needs `/gsd:debug` + React DevTools fiber inspection when the v2.6 producer lands. See 94-HUMAN-UAT.md Gaps. | deferred → v2.6 |
-| human-verify | Phase 94 HUMAN-UAT: ✅ browser-verified 2026-06-08 (pixel-perfect parity, photo flow, WS new_message/read_receipt/unread). 2 blocker bugs found + fixed (28c53de7 .sheet collision blanked the chat; 865d412d dev WS connectivity). NOT exercised: dark theme, physical-device camera, full Telegram leg (operator-pending). | mostly done — see 94-HUMAN-UAT.md |
-| advisory-ui | Phase 94 UI-review nits (hoist per-mount `<style>` to singleton; thread-bar online-dot has no v2.5 presence backend; day-sep array keys) | deferred — see 94-UI-REVIEW.md |
-| contract | Phase 92 WR-01 `MessageItem.body` `""` sentinel for attachment-only messages (null-vs-sentinel) — frozen as-is in v2.5 contract; revisit if PWA needs the distinction | deferred — contract owner decision |
-| tracking | 13 stale prior-milestone quick-task artifacts (260529-*/260601-*, status `missing`) | acknowledged stale — pre-v2.5, not v2.5 work |
-| smoke | Integration live-smoke recs: PTB22 Bot.send_message standalone in ARQ worker; long photo-caption truncation at scale; OTP→authed→WS-connect path | verify in a live session |
-
-Carrying forward from v2.4 close (see previous STATE.md for full list):
-
-| Category | Item | Status |
-|----------|------|--------|
-| human-verify | Phase 86/87/88 live docker+browser verification (GymInfoSheet, NotificationsSheet, TrainerDetailSheet) | ✅ VERIFIED in browser 2026-06-06 (see v2.4 STATE.md) |
-| advisory-ui | v2.4 UI-review nits (inline fontWeight, icon gaps, no ErrorBoundary) | deferred — see 86/87/88-UI-REVIEW.md |
+| bug→v2.6 | Typing indicator does NOT surface in the DOM despite correct React render — needs `/gsd:debug` + React DevTools fiber inspection when the v2.6 producer lands | deferred → v2.6 |
+| human-verify | Phase 94 HUMAN-UAT: pixel-perfect parity + photo flow verified 2026-06-08. NOT exercised: dark theme, physical-device camera, full Telegram leg (operator-pending) | mostly done — see 94-HUMAN-UAT.md |
+| advisory-ui | Phase 94 UI-review nits (hoist per-mount `<style>` to singleton; thread-bar online-dot; day-sep array keys) | deferred — see 94-UI-REVIEW.md |
+| contract | Phase 92 WR-01 `MessageItem.body` `""` sentinel for attachment-only messages | deferred — contract owner decision |
+| tracking | 13 stale prior-milestone quick-task artifacts (260529-*/260601-*, status `missing`) | acknowledged stale |
 | tech-debt | Pre-existing: flaky test_freeze_race; promo F821 ruff debt; test_alembic_clean | carried forward |
 | production | RUN-01 ЮKassa sandbox sale+refund walkthrough | N/A-until-production |
 | production | RUN-02 RU email deliverability probe | N/A-until-production |
 | security | Phase 70 CR-02/IN-01/IN-02 (proxy rate-limit, QR post-decode, cancel idempotency) | deferred → /gsd:secure-phase 70 |
 | compliance | Phase 81 ФЗ-376 consent wording (concrete ₽ amount vs generic) | needs legal review |
-| contract | Phase 92 WR-01: `MessageItem.body: str` uses `""` sentinel for attachment-only messages (asymmetric with request `body: str \| None`). Decide null-vs-sentinel before Phase 95 contract freeze; Phase 94 PWA consumes it | deferred — contract owner decision |
-| tech-debt | Phase 92 WR-02: `storage.put()` (S3) before DB `insert_attachment()` → orphaned S3 object on DB failure, no GC path | out of v2.5 scope |
-| production | Phase 92 WR-03/WR-04: S3 `ensure_bucket` lacks `CreateBucketConfiguration(LocationConstraint)` for non-us-east-1 (Yandex `ru-central1`) + does not handle `403 AccessDenied` from `head_bucket`. Works on local SeaweedFS; needs hardening before Yandex prod deploy | N/A-until-production |
 
 ## Session Continuity
 
 Last session: 2026-06-08 (autonomous run)
-Stopped at: Milestone v2.5 Chat / Messaging COMPLETE + archived (tag v2.5; audit tech_debt, 0 blockers; 21/21 requirements). ROADMAP/PROJECT/MILESTONES/RETROSPECTIVE updated; REQUIREMENTS.md archived + removed (fresh for next milestone).
-Resume: Start the next milestone — `/gsd:new-milestone` (v2.6 admin-web chat inbox + first production API-wiring, or v3.0 production deploy).
+Stopped at: Milestone v2.6 roadmap created (4 phases, 8/8 requirements mapped; ROADMAP.md + STATE.md + REQUIREMENTS.md updated).
+Resume: `/gsd:plan-phase 96` to begin Phase 96 (Referral Domain Backend).
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Plan Phase 96: `/gsd:plan-phase 96`

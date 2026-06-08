@@ -35,11 +35,11 @@ Client-facing referral program. All client surfaces under `require_client()`, ID
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REFER-01 | TBD | Pending |
-| REFER-02 | TBD | Pending |
-| REFER-03 | TBD | Pending |
-| REFER-04 | TBD | Pending |
-| REFER-05 | TBD | Pending |
-| REFER-06 | TBD | Pending |
-| REFER-07 | TBD | Pending |
-| HND-01 | TBD | Pending |
+| REFER-01 | Phase 96 | Pending |
+| REFER-02 | Phase 96 (backend) + Phase 98 (PWA) | Pending |
+| REFER-03 | Phase 96 | Pending |
+| REFER-04 | Phase 97 | Pending |
+| REFER-05 | Phase 98 | Pending |
+| REFER-06 | Phase 98 | Pending |
+| REFER-07 | Phase 96 | Pending |
+| HND-01 | Phase 99 | Pending |

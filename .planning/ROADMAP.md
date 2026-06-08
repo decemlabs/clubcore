@@ -20,6 +20,7 @@
 - ✅ **v2.3 Loyalty / Club Bonuses + Real Autopay** — Phases 82-85 (shipped 2026-06-06) — see [milestones/v2.3-ROADMAP.md](milestones/v2.3-ROADMAP.md)
 - ✅ **v2.4 Content & Communication — Client-First** — Phases 86-89 (shipped 2026-06-06) — see [milestones/v2.4-ROADMAP.md](milestones/v2.4-ROADMAP.md)
 - ✅ **v2.5 Chat / Messaging — Client↔Gym** — Phases 90-95 (shipped 2026-06-08) — see [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md)
+- ◆ **v2.6 Referral System** — Phases 96-99 (in progress 2026-06-08)
 
 ## Phases
 
@@ -135,6 +136,63 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
 
 </details>
 
+## v2.6 Referral System (Phases 96-99)
+
+**Milestone Goal:** Клиент приглашает друзей персональным реф-кодом; обе стороны получают бонус на `loyalty_ledger` после первой покупки приглашённого; экран «Приведи друга» переносится пиксель-в-пиксель с готового макета. Всё под `require_client()`, IDOR-safe; бонусы server-authoritative (webhook-only); `apps/admin-web` заморожен.
+
+- [ ] **Phase 96: Referral Domain Backend** — персональные реф-коды (идемпотентная генерация), захват реферала при онбординге (referrer↔referee, self-referral блок, 1-bonus-per-referee), deep-link endpoint, owner-only конфигурация сумм бонусов + seed; LOCKED audit events зарегистрированы до первого callsite (REFER-01, REFER-02 backend, REFER-03, REFER-07)
+- [ ] **Phase 97: Reward Crediting** — двусторонний бонус на `payment.succeeded` ПЕРВОЙ покупки: co-transactional, idempotent по `(referral_id, online_payment_id)`, через `accrue_welcome_bonus`/`owner_grant_loyalty` примитивы; LOCKED audit events (REFER-04)
+- [ ] **Phase 98: PWA ReferralScreen** — graduate из D-71-09 ESLint-зоны; пиксель-в-пиксель порт макета (промокод + ссылка + copy, share Telegram/WhatsApp/native, блок «Как это работает»); список приглашённых со статусами; «Уже накоплено» из ledger; deep-link авто-подстановка кода; тир-трекер hide-for-future (REFER-02 PWA, REFER-05, REFER-06)
+- [ ] **Phase 99: OpenAPI Handoff + Milestone Verification** — byte-stable `openapi.json` + `schema.d.ts` + `_v26Checks` AssertNonNever; staff-контракт байт-в-байт цел (drift gate зелёный); полный milestone gate зелёный (HND-01)
+
+## Phase Details
+
+### Phase 96: Referral Domain Backend
+**Goal**: Клиент может получить персональный реферальный код и ссылку; друг может привязать реферера при регистрации; owner может настроить суммы бонусов через API
+**Depends on**: Phase 95 (v2.5 complete baseline)
+**Requirements**: REFER-01, REFER-02 (backend: deep-link resolve endpoint), REFER-03, REFER-07
+**Success Criteria** (what must be TRUE):
+  1. `GET /client/referral/code` returns a stable, idempotent code and shareable link for the authenticated client; calling it twice returns the same code
+  2. `POST /client/referral/capture` at onboarding binds referrer↔referee atomically; a second call for the same referee is a no-op (idempotent); self-referral returns 422
+  3. `GET /i/<code>` resolves a referral code to the matching client's referral info (deep-link entry point for the PWA)
+  4. Owner can GET/PUT referral bonus amounts via owner-only API (`/referral/config`); reception gets 403; amounts seed-initialized with sensible defaults
+  5. All new LOCKED audit events (`referral_code_generated`, `referral_captured`) are pre-registered in `LOCKED_AUDIT_EVENTS` before any callsite (INFRA-15 discipline)
+**Plans**: TBD
+
+### Phase 97: Reward Crediting
+**Goal**: Обе стороны автоматически получают бонус на `loyalty_ledger` после первой покупки абонемента приглашённым другом
+**Depends on**: Phase 96
+**Requirements**: REFER-04
+**Success Criteria** (what must be TRUE):
+  1. On `payment.succeeded` for a referee's first membership purchase, a `loyalty_ledger` row is inserted for the referrer (referrer bonus amount) and for the referee (welcome-style bonus amount) within the same atomic UoW
+  2. Webhook replay (same `online_payment_id`) inserts nothing and emits no second audit event — idempotent by `(referral_id, online_payment_id)` partial UNIQUE guard
+  3. A second membership purchase by the same referee does NOT trigger another referral bonus (one-bonus-per-referee invariant)
+  4. Bonus amounts come exclusively from the owner-configurable config (Phase 96); no hardcoded amounts at the crediting callsite
+**Plans**: TBD
+
+### Phase 98: PWA ReferralScreen
+**Goal**: Экран «Приведи друга» выведен из ComingSoon и отображает реальные данные: персональный код, список приглашённых, сумму накопленных бонусов
+**Depends on**: Phase 97
+**Requirements**: REFER-02 (PWA deep-link handling), REFER-05, REFER-06
+**Success Criteria** (what must be TRUE):
+  1. `ReferralSheet.jsx` is de-listed from the D-71-09 ESLint zone (all 3 spots removed; `grep ReferralSheet eslint.config.js` returns 0) and imports referral data via `@/data`
+  2. The screen matches the pixel-perfect reference design: hero illustration, reward rows (your bonus / friend's bonus), referral code box with copy button, share chips (Telegram / WhatsApp / native), "Как это работает" steps — with stripped device chrome and scoped CSS (same pattern as ChatScreen v2.5)
+  3. The invited-friends list shows real data: each referee with name, join date, and status badge ("Присоединился + bonus amount" or "Ждём"); an empty state renders when there are no referrals yet
+  4. The "Уже накоплено" figure reflects the real sum of referral-category `loyalty_ledger` entries for the authenticated client (not a mock constant)
+  5. Opening the PWA via `…/i/<code>` auto-populates the referral code in the onboarding flow (deep-link handled client-side); the gamification tier tracker is present in the DOM but hidden (hide-for-future, not deleted)
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 99: OpenAPI Handoff + Milestone Verification
+**Goal**: Все endpoint'ы v2.6 зафиксированы в byte-stable контракте; полный milestone gate зелёный
+**Depends on**: Phase 98
+**Requirements**: HND-01
+**Success Criteria** (what must be TRUE):
+  1. `openapi.json` and `schema.d.ts` regenerate byte-stably; CI `git diff --exit-code` is clean on both artifacts
+  2. `_v26Checks` `AssertNonNever` tuple covers all new v2.6 path×method combos with a runtime `toHaveLength(N)` assertion
+  3. Staff contract paths are byte-identical to the Phase 95 baseline (drift gate green); `CISO-01` no-edit guard passes
+  4. Full milestone gate green: `pytest` (backend) + `mypy --strict` + `lint-imports` + `vitest` (client-pwa) + Redocly lint
+**Plans**: TBD
 
 ## Backlog
 
@@ -177,13 +235,11 @@ Plans:
 
 ## Progress
 
-**Execution Order:** 90 → 91 → 92 → 93 → 94 → 95
+**Execution Order:** 96 → 97 → 98 → 99
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 90. Messaging Domain + REST Foundation + WS Scaffold | 3/3 | Complete    | 2026-06-07 |
-| 91. Read Receipts + Typing Indicators | 2/2 | Complete    | 2026-06-07 |
-| 92. Photo Attachments | 3/3 | Complete   | 2026-06-07 |
-| 93. Telegram Bridge | 2/2 | Complete   | 2026-06-08 |
-| 94. PWA ChatScreen Wiring | 2/2 | Complete   | 2026-06-08 |
-| 95. OpenAPI Handoff + Milestone Verification | 2/2 | Complete   | 2026-06-08 |
+| 96. Referral Domain Backend | 0/TBD | Not started | - |
+| 97. Reward Crediting | 0/TBD | Not started | - |
+| 98. PWA ReferralScreen | 0/TBD | Not started | - |
+| 99. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
