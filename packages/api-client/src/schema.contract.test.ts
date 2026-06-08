@@ -572,6 +572,44 @@ const _v24Checks: [
   _TrainerPatchBodyRealised,
 ] = [true, true, true, true, true, true, true, true]
 
+// --- v2.5 surface (Messaging — Phases 90-94) ---
+// Seven guards: six path×method combos + POST body realisation.
+//
+// Path set (verified against the frozen openapi.json from Phase 95 Plan 01):
+//   GET   /api/v1/client/messages                              (MSG-01)
+//   PATCH /api/v1/client/messages/read                        (MSG-04)
+//   POST  /api/v1/client/messages                             (MSG-02/03)
+//   POST  /api/v1/client/messages requestBody                 (MSG-02 body realised)
+//   POST  /api/v1/client/messages/attachments                 (ATT-01/02)
+//   GET   /api/v1/client/messages/attachments/{attachment_id} (ATT-03)
+//   GET   /api/v1/client/ws/messages                          (RT-01 manual WS doc)
+//
+// NOTE: POST /messages/attachments is multipart — guard the operation, not the body,
+// to avoid a false `never` (same precedent as _v24 trainers-PATCH-body guard).
+type _ClientMessagesListGet = AssertNonNever<paths['/api/v1/client/messages']['get']>
+type _ClientMessagesMarkReadPatch = AssertNonNever<paths['/api/v1/client/messages/read']['patch']>
+type _ClientSendMessagePost = AssertNonNever<paths['/api/v1/client/messages']['post']>
+type _ClientSendMessageBody = AssertNonNever<
+  paths['/api/v1/client/messages']['post']['requestBody']
+>
+type _ClientUploadAttachmentPost = AssertNonNever<
+  paths['/api/v1/client/messages/attachments']['post']
+>
+type _ClientServeAttachmentGet = AssertNonNever<
+  paths['/api/v1/client/messages/attachments/{attachment_id}']['get']
+>
+type _ClientWsMessagesGet = AssertNonNever<paths['/api/v1/client/ws/messages']['get']>
+
+const _v25Checks: [
+  _ClientMessagesListGet,
+  _ClientMessagesMarkReadPatch,
+  _ClientSendMessagePost,
+  _ClientSendMessageBody,
+  _ClientUploadAttachmentPost,
+  _ClientServeAttachmentGet,
+  _ClientWsMessagesGet,
+] = [true, true, true, true, true, true, true]
+
 describe('schema.contract', () => {
   it('compiles against the regenerated v1.2 typed paths surface', () => {
     // The real assertions are above (compile-time). This block exists so
@@ -621,5 +659,9 @@ describe('schema.contract', () => {
 
   it('compiles against the regenerated v2.4 Content & Communication surface (Gym / Inbox / Trainer-detail — Phases 86-88)', () => {
     expect(_v24Checks).toHaveLength(8)
+  })
+
+  it('compiles against the regenerated v2.5 Messaging surface (Phases 90-94)', () => {
+    expect(_v25Checks).toHaveLength(7)
   })
 })
