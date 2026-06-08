@@ -92,7 +92,7 @@ Phase 96 ▸ 97 ▸ 98 ▸ 99
 
 ### Blockers/Concerns
 
-- None active.
+- **Dev DB needs a clean re-migrate before Phase 99 manual verification (non-blocking for tests).** Migration `0067` was amended in place during Phase 96 code-review (CR-02: a plain `ix_referral_codes_client_id` was replaced by the UNIQUE `uq_referral_codes_client_id`), and `0069` (Phase 97) widened `loyalty_ledger`. The shared docker Postgres applied the pre-amendment `0067`, so it still carries the stale plain `ix_referral_codes_client_id` and may hold a polluted `referral_config` from earlier runs. Test suites rebuild/seed schema so all 100+ referral tests pass, and `alembic check` is green (literal-named indexes excluded in env.py). But live manual testing / a fresh deploy should run a clean migrate. Phase 99 milestone gate should `docker compose down -v` + re-migrate + re-seed before manual checks.
 
 ## Deferred Items
 
