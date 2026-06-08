@@ -40,7 +40,9 @@ from app.modules.referrals.schemas import (
     ReferralCodeResponse,
     ReferralConfigResponse,
     ReferralConfigUpdateRequest,
+    ReferralInviteeItem,
     ReferralResolveResponse,
+    ReferralSummaryResponse,
 )
 
 _log = structlog.get_logger("modules.referrals.service")
@@ -270,6 +272,91 @@ async def resolve_public_code(
         valid=True,
         referrer_first_name=row["first_name"],
         welcome_bonus_kopecks=welcome_bonus,
+    )
+
+
+async def get_referral_summary(
+    session: AsyncSession,
+    client_id: UUID,
+    settings: Settings,
+) -> ReferralSummaryResponse:
+    """Return the aggregate referral summary for the authenticated client (REFER-06).
+
+    One round-trip for the PWA ReferralScreen: stable code + shareUrl, the
+    referral-only accrued bonus sum, and the invited-friends list.
+
+    Steps:
+      1. code + shareUrl — reuse get_or_create_referral_code (idempotent mint).
+      2. accruedKopecks — COALESCE/SUM fold over loyalty_ledger filtered to
+         entry_type='referral_accrual' for this client (NOT total balance).
+      3. invitees — raw LEFT JOIN: referral_captures → clients → loyalty_ledger,
+         newest first; status='joined' iff an accrual row exists for the referrer.
+
+    All cross-module reads use raw text() SQL (D-54-08: no ORM import of Client
+    or LoyaltyLedger). UUIDs bound as str(client_id). deleted_at IS NULL on clients.
+    Read-only after get_or_create_referral_code (which commits only on first mint).
+    IDOR-safe: client_id is always the caller's principal (T-98-02).
+    """
+    # Step 1: code + shareUrl (minting on first call — idempotent).
+    code_response = await get_or_create_referral_code(session, client_id, settings)
+    code = code_response.code
+    share_url = code_response.share_url
+
+    # Step 2: accruedKopecks — SUM of this client's own referral_accrual rows.
+    # Mirrors loyalty/service.py _sum_balance fold, filtered to referral entries.
+    accrual_row = (
+        await session.execute(
+            text(
+                "SELECT COALESCE(SUM(amount_kopecks), 0) AS accrued "
+                "FROM loyalty_ledger "
+                "WHERE client_id = :cid AND entry_type = 'referral_accrual'"
+            ),
+            {"cid": str(client_id)},
+        )
+    ).mappings().one()
+    accrued_kopecks = int(accrual_row["accrued"])
+
+    # Step 3: invitees — cross-module raw-SQL join (D-54-08).
+    # referral_captures WHERE referrer_client_id = me → one row per invited friend.
+    # JOIN clients (deleted_at IS NULL guard — WR-02) for first_name.
+    # LEFT JOIN loyalty_ledger to detect whether the referrer bonus has been credited.
+    # status = 'joined' when the accrual row exists (ll.id IS NOT NULL).
+    # bonusKopecks = accrual amount (0 while pending).
+    rows = (
+        await session.execute(
+            text(
+                "SELECT c.first_name AS first_name, "
+                "       rc.created_at AS joined_at, "
+                "       COALESCE(ll.amount_kopecks, 0) AS bonus_kopecks, "
+                "       (ll.id IS NOT NULL) AS joined "
+                "FROM referral_captures rc "
+                "JOIN clients c ON c.id = rc.referee_client_id AND c.deleted_at IS NULL "
+                "LEFT JOIN loyalty_ledger ll "
+                "  ON ll.referral_capture_id = rc.id "
+                "  AND ll.client_id = :cid "
+                "  AND ll.entry_type = 'referral_accrual' "
+                "WHERE rc.referrer_client_id = :cid "
+                "ORDER BY rc.created_at DESC"
+            ),
+            {"cid": str(client_id)},
+        )
+    ).mappings().all()
+
+    invitees = [
+        ReferralInviteeItem(
+            first_name=r["first_name"],
+            joined_at=r["joined_at"],
+            status="joined" if r["joined"] else "pending",
+            bonus_kopecks=int(r["bonus_kopecks"]),
+        )
+        for r in rows
+    ]
+
+    return ReferralSummaryResponse(
+        code=code,
+        share_url=share_url,
+        accrued_kopecks=accrued_kopecks,
+        invitees=invitees,
     )
 
 

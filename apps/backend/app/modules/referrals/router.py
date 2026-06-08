@@ -41,6 +41,7 @@ from app.modules.referrals.schemas import (
     ReferralConfigResponse,
     ReferralConfigUpdateRequest,
     ReferralResolveResponse,
+    ReferralSummaryResponse,
 )
 
 # ---------------------------------------------------------------------------
@@ -102,6 +103,28 @@ async def client_get_referral_code(
     No try/except — AppError bubbles to _app_error_handler.
     """
     result = await service.get_or_create_referral_code(session, client.id, settings)
+    return envelope(result)
+
+
+@client_router.get(
+    "/referral/summary",
+    response_model=ResponseEnvelope[ReferralSummaryResponse],
+    operation_id="client_get_referral_summary",
+    summary="Aggregate referral summary for the authenticated client (REFER-06; IDOR-safe)",
+)
+async def client_get_referral_summary(
+    client: Annotated[ClientPrincipal, Depends(require_client())],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> ResponseEnvelope[ReferralSummaryResponse]:
+    """Return code, shareUrl, accruedKopecks, and invitees[] for the principal.
+
+    One round-trip for the PWA ReferralScreen. client_id is sourced from
+    require_client() principal only — never a path/query/body param (T-98-02 IDOR-safe).
+    accruedKopecks = SUM of own referral_accrual ledger rows (not total balance, T-98-04).
+    No try/except — AppError bubbles to _app_error_handler.
+    """
+    result = await service.get_referral_summary(session, client.id, settings)
     return envelope(result)
 
 
