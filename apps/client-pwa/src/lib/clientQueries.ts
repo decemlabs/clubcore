@@ -44,6 +44,7 @@ export const clientPortalKeys = {
   notifications: (page: number) => [...clientPortalKeys.all, 'notifications', page] as const,
   trainerDetail: (id: string) => [...clientPortalKeys.all, 'trainer-detail', id] as const,
   messages: (after?: string) => [...clientPortalKeys.all, 'messages', after ?? ''] as const,
+  referralSummary: () => [...clientPortalKeys.all, 'referral', 'summary'] as const,
 } as const
 
 // ---------------------------------------------------------------------------
@@ -1063,6 +1064,42 @@ export function useMarkMessagesRead() {
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: [...clientPortalKeys.all, 'messages'] })
     },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Phase-98 REFER-06: referral summary hook
+// ---------------------------------------------------------------------------
+
+interface ReferralInviteeItem {
+  firstName: string
+  joinedAt: string
+  status: 'joined' | 'pending'
+  bonusKopecks: number
+}
+
+interface ReferralSummaryData {
+  code: string
+  shareUrl: string
+  accruedKopecks: number
+  invitees: ReferralInviteeItem[]
+}
+
+/** GET /api/v1/client/referral/summary — aggregate referral screen data (REFER-06) */
+export function useClientReferralSummary() {
+  return useQuery({
+    queryKey: clientPortalKeys.referralSummary(),
+    queryFn: async () => {
+      // /client/referral/* paths are not yet in schema.d.ts (Phase 99 handoff).
+      // Use the same cast escape hatch as useClientMessages.
+      const res = await (clientRequest as unknown as (
+        method: string,
+        path: string,
+        init?: unknown,
+      ) => Promise<unknown>)('get', '/api/v1/client/referral/summary')
+      return (res as { data: ReferralSummaryData }).data
+    },
+    staleTime: 30_000,
   })
 }
 
