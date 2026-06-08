@@ -64,6 +64,11 @@ export {
   useMarkAllNotificationsRead,
   // Phase-88 TRNR-04: trainer detail hook
   useClientTrainerDetail,
+  // Phase-94 PWA-01: messaging hooks
+  useClientMessages,
+  useSendMessage,
+  useUploadAttachment,
+  useMarkMessagesRead,
 } from '../lib/clientQueries'
 
 // ─── Legacy mock constants (retained for non-wired consumers) ─────────────

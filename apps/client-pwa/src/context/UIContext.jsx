@@ -26,6 +26,7 @@ export function UIProvider({ children }) {
   const [pushKind, setPushKind] = useState(null);   // 'message' | 'promo' | 'cancel' | null
   const [pendingChat, setPendingChat] = useState(null);
   const [chatThreadOpen, setChatThreadOpen] = useState(false);
+  const [unreadChat, setUnreadChat] = useState(0);  // Phase-94 PWA-02: Chat-tab unread badge count
   const [bookConfirmOpen, setBookConfirmOpen] = useState(false);
 
   // New flows
@@ -89,6 +90,8 @@ export function UIProvider({ children }) {
     pendingChat, setPendingChat,
     chatThreadOpen, setChatThreadOpen,
     bookConfirmOpen, setBookConfirmOpen,
+    // Phase-94 PWA-02: Chat-tab unread badge (set by ChatScreen from unreadCount; capped 99+ in App)
+    unreadChat, setUnreadChat,
 
     // push
     pushKind, setPushKind,
@@ -112,7 +115,7 @@ export function UIProvider({ children }) {
     visitHistOpen, trainHistOpen, pendingChat, chatThreadOpen, bookConfirmOpen,
     pushKind, cancelBookingOpen, subManageMode, paymentMethodsOpen,
     deleteAccountOpen, smsVerifyCtx, reviewCtx, trainerCancelledOpen,
-    receiptCtx, bookingConfirmedCtx, chatAttachOpen, anySheetOpen,
+    receiptCtx, bookingConfirmedCtx, chatAttachOpen, anySheetOpen, unreadChat,
   ]);
 
   return <UICtx.Provider value={value}>{children}</UICtx.Provider>;

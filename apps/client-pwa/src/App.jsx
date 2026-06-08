@@ -1,5 +1,6 @@
 import React, { Suspense, lazy, useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 
 import '@/styles.css';
 
@@ -15,6 +16,8 @@ import { useAuth } from '@/context/AuthContext.jsx';
 import { RequireAuth } from '@/context/RequireAuth.jsx';
 
 import { TweaksRoot } from '@/components/Tweaks/TweaksRoot.jsx';
+import { useClientMessagingWS } from '@/lib/useClientMessagingWS';
+import { clientPortalKeys } from '@/lib/clientQueries';
 
 // ── Payment return route (ЮKassa return_url target) ───────────────────────
 const PaymentReturnScreen = lazy(() =>
@@ -206,6 +209,27 @@ export default function App() {
   const { pathname } = useLocation();
   const tab = useTabFromRoute();
   const tabLoading = useTabLoading();
+  const qc = useQueryClient();
+
+  // Phase-94 PWA-01: App-level WS singleton — mounted here (not in ChatRoute) so the
+  // unread badge updates from any screen. Gated on status==='authed' so no WS is opened
+  // for anon users. The 30s poll fallback lives in useClientMessages (refetchInterval).
+  useClientMessagingWS({
+    enabled: status === 'authed',
+    onNewMessage: () => {
+      // Invalidate messages query → ChatScreen's useClientMessages refetches →
+      // Plan 02 Task 2 calls ui.setUnreadChat(data.unreadCount) from the fresh response.
+      void qc.invalidateQueries({ queryKey: [...clientPortalKeys.all, 'messages'] });
+    },
+    onReadReceipt: (readAt) => {
+      // Delegate to the open ChatScreen thread via window bridge (Plan 02 registers this).
+      // When the thread is closed, the optional-chaining no-ops.
+      window.__chatReadReceipt?.(readAt);
+    },
+    onTyping: () => {
+      window.__chatTyping?.();
+    },
+  });
 
   // React to pushKind tweak — show toast when value changes from 'idle'.
   useEffect(() => {
@@ -451,7 +475,7 @@ export default function App() {
           <TabBar
             active={tab}
             onChange={handleTab}
-            unreadChat={0}
+            unreadChat={ui.unreadChat > 99 ? '99+' : (ui.unreadChat || 0)}
           />
         )}
       </div>
