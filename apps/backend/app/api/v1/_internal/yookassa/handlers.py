@@ -629,6 +629,11 @@ async def handle_payment_succeeded(
         # Co-transactional with activation: both accrue_referral_bonus calls share the same
         # `async with session.begin()` UoW — atomicity enforced (T-97-10).
         # D-54-08: cross-module reads use raw SQL — no ORM import of OnlinePayment/Client here.
+        # Note: the first-purchase gate below is an application-level fast-path shortcut.
+        # The DB-level partial UNIQUE uq_loyalty_ledger_referral_accrual (on
+        # (referral_capture_id, client_id) WHERE entry_type='referral_accrual')
+        # is the authoritative guard against double accrual in concurrent-webhook
+        # scenarios (ON CONFLICT DO NOTHING). Both layers must remain in sync.
         if subject_kind == SUBJECT_KIND_MEMBERSHIP:
             _capture = await referrals_repo.get_capture_by_referee(session, row.client_id)
             if _capture is not None:
