@@ -1385,6 +1385,27 @@ class ReferralCapturedPayload(BaseModel):
     referral_code_id: UUID
 
 
+class ReferralBonusAccruedPayload(BaseModel):
+    """Payload schema for ("referral_bonus_accrued", "referral") — Phase 97 REFER-04.
+
+    Emitted per loyalty_ledger row (one for referrer, one for referee) inside
+    the payment.succeeded webhook UoW. RETURNING-gated — emitted only on real insert.
+    Pre-registered BEFORE any callsite per INFRA-15 discipline.
+
+    role: 'referrer' — the client who shared the code (positive accrual).
+          'referee'  — the new client who was invited (welcome-style accrual).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    client_id: UUID
+    entry_id: UUID
+    amount_kopecks: int  # always positive (accrual)
+    referral_capture_id: UUID  # idempotency anchor
+    online_payment_id: UUID  # forensic link to the triggering payment
+    role: Literal["referrer", "referee"]
+
+
 # ---------------------------------------------------------------------------
 # Registry — single canonical (event, resource_type) → Pydantic schema map.
 # Mirrors LOCKED_AUDIT_EVENTS tuple-key shape (`audit.py:102-157`) so the
@@ -1492,4 +1513,7 @@ AUDIT_PAYLOAD_SCHEMAS: dict[tuple[str, str], type[BaseModel]] = {
     # Pre-registered BEFORE any callsite (callsites land in Plan 96-03).
     ("referral_code_generated", "referral"): ReferralCodeGeneratedPayload,
     ("referral_captured", "referral"): ReferralCapturedPayload,
+    # v2.6 (Phase 97 referral bonus accrual — REFER-04 / INFRA-15):
+    # Pre-registered BEFORE the payment.succeeded webhook callsite.
+    ("referral_bonus_accrued", "referral"): ReferralBonusAccruedPayload,
 }
