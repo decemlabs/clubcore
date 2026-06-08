@@ -5,10 +5,14 @@ no SoftDeleteMixin. Single temporal column `created_at` (single-temporal-column
 discipline mirrors PromoRedemption / online_refunds / online_payments).
 
 DB-level invariants:
-- entry_type IN ('welcome', 'owner_grant', 'redemption')
-  (CHECK ck_loyalty_ledger_entry_type). 'redemption' is reserved for Phase 83.
+- entry_type IN ('welcome', 'owner_grant', 'redemption', 'referral_accrual')
+  (CHECK ck_loyalty_ledger_entry_type). 'redemption' is reserved for Phase 83;
+  'referral_accrual' added in Phase 97 (REFER-04).
 - Partial UNIQUE uq_loyalty_ledger_welcome: (client_id) WHERE entry_type='welcome'
   — one welcome row per client; idempotency enforced at schema level (ACCR-01).
+- Partial UNIQUE uq_loyalty_ledger_referral_accrual: (referral_capture_id, client_id)
+  WHERE entry_type='referral_accrual' — one accrual per side per capture; declared in
+  migration 0069 (not as ORM Index) — mirrors uq_loyalty_ledger_welcome pattern.
 - client_id RESTRICT FK → clients.id (promo_redemptions pattern).
 - Index ix_loyalty_ledger_client_id for balance/history fold performance.
 
@@ -50,9 +54,10 @@ class LoyaltyLedger(Base, UUIDPkMixin):
     fold (LOYL-03) — never a stored mutable column.
 
     entry_type values:
-      - 'welcome'    — automatic one-time welcome bonus (ACCR-01)
-      - 'owner_grant' — owner-only manual grant (ACCR-02)
-      - 'redemption' — debit row reserved for Phase 83 (REDM-01)
+      - 'welcome'          — automatic one-time welcome bonus (ACCR-01)
+      - 'owner_grant'      — owner-only manual grant (ACCR-02)
+      - 'redemption'       — debit row reserved for Phase 83 (REDM-01)
+      - 'referral_accrual' — referral bonus for referrer/referee (Phase 97 REFER-04)
     """
 
     __tablename__ = "loyalty_ledger"
@@ -97,6 +102,20 @@ class LoyaltyLedger(Base, UUIDPkMixin):
         ),
         nullable=True,
     )
+    # Phase 97 REFER-04: nullable FK → referral_captures.id (RESTRICT).
+    # Idempotency anchor for referral accrual rows (referral_accrual entry_type only).
+    # NULL for all other entry types. Partial UNIQUE uq_loyalty_ledger_referral_accrual
+    # on (referral_capture_id, client_id) WHERE entry_type='referral_accrual' is declared
+    # in migration 0069 (not as ORM Index) — mirrors online_payment_id pattern.
+    referral_capture_id: Mapped[UUIDType | None] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey(
+            "referral_captures.id",
+            ondelete="RESTRICT",
+            name="fk_loyalty_ledger_referral_capture_id_referral_captures",
+        ),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -105,14 +124,16 @@ class LoyaltyLedger(Base, UUIDPkMixin):
 
     __table_args__ = (
         CheckConstraint(
-            "entry_type IN ('welcome', 'owner_grant', 'redemption')",
+            "entry_type IN ('welcome', 'owner_grant', 'redemption', 'referral_accrual')",
             # NAMING_CONVENTION expands to ck_loyalty_ledger_entry_type
             # 'redemption' is reserved for Phase 83 row-writer (REDM-01).
+            # 'referral_accrual' added in Phase 97 (REFER-04 / migration 0069).
             name="entry_type",
         ),
     )
     # Partial UNIQUE index uq_loyalty_ledger_welcome, partial UNIQUE index
-    # uq_loyalty_ledger_online_payment_id (Phase 83 / migration 0055), and
-    # plain index ix_loyalty_ledger_client_id are declared in migrations
+    # uq_loyalty_ledger_online_payment_id (Phase 83 / migration 0055),
+    # partial UNIQUE index uq_loyalty_ledger_referral_accrual (Phase 97 / migration 0069),
+    # and plain index ix_loyalty_ledger_client_id are declared in migrations
     # (not as ORM Indexes) — mirrors PromoCode's uq_promo_codes_code_alive
     # partial-index pattern.
