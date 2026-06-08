@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.5
-milestone_name: Chat / Messaging — Client↔Gym
-status: Awaiting next milestone
-stopped_at: "Milestone v2.5 Chat / Messaging COMPLETE + archived (tag v2.5). 6/6 phases, 21/21 requirements, audit tech_debt (0 blockers). Deferred: RCPT-02 typing producer → v2.6; Phase 94 HUMAN-UAT (browser/device); carried flakes."
-last_updated: "2026-06-08T09:00:00.000Z"
-last_activity: 2026-06-08 — Milestone v2.5 completed and archived
+milestone: v2.6
+milestone_name: Referral System
+status: planning
+last_updated: "2026-06-08T10:36:21.090Z"
+last_activity: 2026-06-08
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 14
-  completed_plans: 14
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: Milestone v2.5 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-08 — Milestone v2.5 completed and archived
+Status: Defining requirements
+Last activity: 2026-06-08 — Milestone v2.6 started
 
 ## v2.5 Roadmap Summary
 
