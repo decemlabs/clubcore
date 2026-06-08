@@ -142,7 +142,7 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
 
 - [x] **Phase 96: Referral Domain Backend** — персональные реф-коды (идемпотентная генерация), захват реферала при онбординге (referrer↔referee, self-referral блок, 1-bonus-per-referee), deep-link endpoint, owner-only конфигурация сумм бонусов + seed; LOCKED audit events зарегистрированы до первого callsite (REFER-01, REFER-02 backend, REFER-03, REFER-07) (completed 2026-06-08)
 - [x] **Phase 97: Reward Crediting** — двусторонний бонус на `payment.succeeded` ПЕРВОЙ покупки: co-transactional, idempotent по `(referral_id, online_payment_id)`, через `accrue_welcome_bonus`/`owner_grant_loyalty` примитивы; LOCKED audit events (REFER-04) (completed 2026-06-08)
-- [ ] **Phase 98: PWA ReferralScreen** — graduate из D-71-09 ESLint-зоны; пиксель-в-пиксель порт макета (промокод + ссылка + copy, share Telegram/WhatsApp/native, блок «Как это работает»); список приглашённых со статусами; «Уже накоплено» из ledger; deep-link авто-подстановка кода; тир-трекер hide-for-future (REFER-02 PWA, REFER-05, REFER-06)
+- [x] **Phase 98: PWA ReferralScreen** — graduate из D-71-09 ESLint-зоны; пиксель-в-пиксель порт макета (промокод + ссылка + copy, share Telegram/WhatsApp/native, блок «Как это работает»); список приглашённых со статусами; «Уже накоплено» из ledger; deep-link авто-подстановка кода; тир-трекер hide-for-future (REFER-02 PWA, REFER-05, REFER-06) (completed 2026-06-08)
 - [ ] **Phase 99: OpenAPI Handoff + Milestone Verification** — byte-stable `openapi.json` + `schema.d.ts` + `_v26Checks` AssertNonNever; staff-контракт байт-в-байт цел (drift gate зелёный); полный milestone gate зелёный (HND-01)
 
 ## Phase Details
@@ -188,9 +188,9 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
   5. Opening the PWA via `…/i/<code>` auto-populates the referral code in the onboarding flow (deep-link handled client-side); the gamification tier tracker is present in the DOM but hidden (hide-for-future, not deleted)
 **Plans**: 3 plans
 Plans:
-- [ ] 98-01-PLAN.md — Backend aggregate read endpoint GET /client/referral/summary (invitees + referral-only accruedKopecks) + integration tests (REFER-06)
-- [ ] 98-02-PLAN.md — PWA ReferralScreen pixel-perfect port + useClientReferralSummary @/data hook + D-71-09 ESLint graduation (REFER-05, REFER-06)
-- [ ] 98-03-PLAN.md — Deep-link /i/:code landing + post-auth referral capture wiring (REFER-02)
+- [x] 98-01-PLAN.md — Backend aggregate read endpoint GET /client/referral/summary (invitees + referral-only accruedKopecks) + integration tests (REFER-06)
+- [x] 98-02-PLAN.md — PWA ReferralScreen pixel-perfect port + useClientReferralSummary @/data hook + D-71-09 ESLint graduation (REFER-05, REFER-06)
+- [x] 98-03-PLAN.md — Deep-link /i/:code landing + post-auth referral capture wiring (REFER-02)
 **UI hint**: yes
 
 ### Phase 99: OpenAPI Handoff + Milestone Verification
@@ -251,5 +251,5 @@ Plans:
 |-------|----------------|--------|-----------|
 | 96. Referral Domain Backend | 3/3 | Complete    | 2026-06-08 |
 | 97. Reward Crediting | 3/3 | Complete    | 2026-06-08 |
-| 98. PWA ReferralScreen | 0/TBD | Not started | - |
+| 98. PWA ReferralScreen | 3/3 | Complete   | 2026-06-08 |
 | 99. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
