@@ -692,6 +692,17 @@ export function ChatScreen({ tweaks, initialConv, onClearInitial, onThreadOpen }
 
   // ── Фото-оверлей (PWA-03 — наполняется в Task 3) ──
   const [photoOverlay, setPhotoOverlay] = useState(null);
+  // Открытие треда происходит на pointerup карточки списка; следом браузер шлёт
+  // синтетический `click` по тем же координатам — а там уже отрисован тред, и
+  // если на этой высоте оказался фото-пузырь, его onClick открыл бы overlay
+  // («экран затемняется при входе в чат»). Гасим клики по фото в первые мс после
+  // открытия треда. (В референсе фото были некликабельны — overlay добавлен в порте.)
+  const threadOpenedAtRef = useRef(0);
+  const openPhoto = useCallback((url) => {
+    if (!url) return;
+    if (Date.now() - threadOpenedAtRef.current < 400) return;
+    setPhotoOverlay(url);
+  }, []);
 
   // ── Тост ──
   const [toastMsg, setToastMsg] = useState('');
@@ -849,6 +860,8 @@ export function ChatScreen({ tweaks, initialConv, onClearInitial, onThreadOpen }
     setViewAnim('enter');
     setOpenId(id);
     onThreadOpen?.(true);
+    threadOpenedAtRef.current = Date.now();
+    setPhotoOverlay(null); // defensive: never enter a thread with a stale overlay open
     stickRef.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [markReadM, ui, onThreadOpen, threadMessages]);
@@ -1307,7 +1320,7 @@ export function ChatScreen({ tweaks, initialConv, onClearInitial, onThreadOpen }
         lastDay = m.day;
       }
       if (m.id === threadDividerId) out.push(<div className="unread-divider" key={'div-' + m.id}><span>Новые сообщения</span></div>);
-      out.push(<MessageRow key={m.id} m={m} i={i} msgs={conv.messages} animate={m.id === animateId} onPhotoTap={setPhotoOverlay} />);
+      out.push(<MessageRow key={m.id} m={m} i={i} msgs={conv.messages} animate={m.id === animateId} onPhotoTap={openPhoto} />);
     });
     if (typing) {
       out.push(
