@@ -246,6 +246,6 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 96. Referral Domain Backend | 3/3 | Complete    | 2026-06-08 |
-| 97. Reward Crediting | 3/3 | Complete   | 2026-06-08 |
+| 97. Reward Crediting | 3/3 | Complete    | 2026-06-08 |
 | 98. PWA ReferralScreen | 0/TBD | Not started | - |
 | 99. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |

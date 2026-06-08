@@ -10,7 +10,7 @@ Client-facing referral program. All client surfaces under `require_client()`, ID
 - [x] **REFER-03**: При онбординге приглашённого друга реферал захватывается и привязывается (referrer↔referee) идемпотентно; self-referral заблокирован; на одного приглашённого начисляется не более одного реферального бонуса.
 
 ### Reward crediting (REFER)
-- [ ] **REFER-04**: На `payment.succeeded` ПЕРВОЙ покупки абонемента приглашённым другом обе стороны получают бонус на баланс лояльности через существующий `loyalty_ledger` (реферер — реферальный бонус; друг — приветственный), идемпотентно по `(referral_id)`/`(online_payment_id)`, переиспользуя accrual/`owner_grant` примитивы; новые LOCKED audit-события зарегистрированы до первого callsite.
+- [x] **REFER-04**: На `payment.succeeded` ПЕРВОЙ покупки абонемента приглашённым другом обе стороны получают бонус на баланс лояльности через существующий `loyalty_ledger` (реферер — реферальный бонус; друг — приветственный), идемпотентно по `(referral_id)`/`(online_payment_id)`, переиспользуя accrual/`owner_grant` примитивы; новые LOCKED audit-события зарегистрированы до первого callsite.
 - [x] **REFER-07**: Суммы реферальных бонусов (бонус рефереру, приветственный другу) конфигурируемы через owner-only API + seed (admin-web заморожен); сервер — единственный источник сумм.
 
 ### Referral screen — client PWA (REFER)
@@ -38,7 +38,7 @@ Client-facing referral program. All client surfaces under `require_client()`, ID
 | REFER-01 | Phase 96 | Complete |
 | REFER-02 | Phase 96 (backend) + Phase 98 (PWA) | Complete |
 | REFER-03 | Phase 96 | Complete |
-| REFER-04 | Phase 97 | Pending |
+| REFER-04 | Phase 97 | Complete |
 | REFER-05 | Phase 98 | Pending |
 | REFER-06 | Phase 98 | Pending |
 | REFER-07 | Phase 96 | Complete |
