@@ -680,10 +680,16 @@ export function ReferralSheet({ onClose, userName: _userName }) {
         </div>
       );
     }
-    return invitees.map((inv, idx) => {
+    return invitees.map((inv) => {
       const isJoined = inv.status === 'joined';
+      // WR-04: stable composite key — the PII-minimal payload exposes no invitee id,
+      // so derive one from (firstName, joinedAt). joinedAt = rc.created_at is
+      // effectively unique per referrer, disambiguating duplicate first names and
+      // surviving reorder/refetch (avoids stale avatars/badges from index keys).
+      // Follow-up: add an opaque per-capture id to the wire payload.
+      const rowKey = `${inv.firstName ?? ''}|${inv.joinedAt ?? ''}`;
       return (
-        <div key={idx} className="fr-row">
+        <div key={rowKey} className="fr-row">
           <span
             className="fr-av"
             style={{
