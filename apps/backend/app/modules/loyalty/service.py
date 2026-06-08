@@ -13,6 +13,7 @@ Idempotency note (welcome accrual):
 
 from __future__ import annotations
 
+from typing import Literal
 from uuid import UUID
 
 import structlog
@@ -134,6 +135,92 @@ async def accrue_welcome_bonus(
         entry_id=str(inserted_id),
         amount_kopecks=WELCOME_BONUS_KOPECKS,
     )
+
+
+async def accrue_referral_bonus(
+    session: AsyncSession,
+    *,
+    client_id: UUID,
+    amount_kopecks: int,
+    referral_capture_id: UUID,
+    online_payment_id: UUID,
+    role: Literal["referrer", "referee"],
+) -> UUID | None:
+    """Insert a referral_accrual ledger row, idempotent on conflict (REFER-04).
+
+    Uses the compound partial UNIQUE INDEX uq_loyalty_ledger_referral_accrual
+    (referral_capture_id, client_id) WHERE entry_type='referral_accrual' as the
+    ON CONFLICT arbiter. Using index_elements + index_where because the migration
+    creates a partial UNIQUE INDEX (not a named UNIQUE CONSTRAINT) — PostgreSQL
+    ON CONFLICT ON CONSTRAINT only works for named constraints. Mirror
+    accrue_welcome_bonus pattern (ACCR-01 / D-32-10).
+
+    Returns the inserted row's UUID on real insert, or None on conflict (replay-safe).
+    audit.emit is RETURNING-gated — only emitted when a row was actually inserted.
+
+    flush only — never commit (caller-owns-txn).
+    """
+    stmt = (
+        pg_insert(LoyaltyLedger)
+        .values(
+            client_id=client_id,
+            entry_type="referral_accrual",
+            amount_kopecks=amount_kopecks,
+            referral_capture_id=referral_capture_id,
+            online_payment_id=online_payment_id,
+            category="referral",
+            reason=None,
+        )
+        .on_conflict_do_nothing(
+            index_elements=["referral_capture_id", "client_id"],
+            # Inline SQL literal (NOT a bound param) so PostgreSQL can match this
+            # predicate against the partial UNIQUE INDEX uq_loyalty_ledger_referral_accrual
+            # during ON CONFLICT arbiter inference. `literal_column(...) == "referral_accrual"`
+            # renders `entry_type = $param`, which Postgres refuses to match against
+            # the index's WHERE clause (raises InvalidColumnReferenceError).
+            # Mirror accrue_welcome_bonus / record_loyalty_redemption text() pattern.
+            index_where=text("entry_type = 'referral_accrual'"),
+        )
+        .returning(LoyaltyLedger.id)
+    )
+    result = await session.execute(stmt)
+    inserted_id: UUID | None = result.scalar_one_or_none()
+
+    if inserted_id is None:
+        # Conflict path — row already exists; idempotent replay, emit nothing.
+        _log.info(
+            "loyalty_referral_accrual_conflict",
+            client_id=str(client_id),
+            referral_capture_id=str(referral_capture_id),
+            role=role,
+            msg="referral accrual already recorded for this capture+client — no-op",
+        )
+        return None
+
+    # Real insert — emit referral_bonus_accrued co-transactionally.
+    await audit.emit(
+        session,
+        "referral_bonus_accrued",
+        actor_user_id=None,  # webhook-initiated; no staff actor
+        resource_type="referral",
+        resource_id=inserted_id,
+        client_id=str(client_id),
+        entry_id=str(inserted_id),
+        amount_kopecks=amount_kopecks,
+        referral_capture_id=str(referral_capture_id),
+        online_payment_id=str(online_payment_id),
+        role=role,
+    )
+    _log.info(
+        "loyalty_referral_bonus_accrued",
+        client_id=str(client_id),
+        referral_capture_id=str(referral_capture_id),
+        online_payment_id=str(online_payment_id),
+        entry_id=str(inserted_id),
+        amount_kopecks=amount_kopecks,
+        role=role,
+    )
+    return inserted_id
 
 
 async def owner_grant_loyalty(
