@@ -84,7 +84,11 @@ async def _credit_engine() -> AsyncIterator[Any]:
     """Real-commit engine shared by seed + webhook route calls.
 
     TRUNCATE runs in teardown so each test module run starts clean.
-    referral_config is excluded from truncation — the seed row must persist.
+    referral_config is excluded from truncation, but because this suite mutates
+    the singleton via real commits (_ensure_referral_config), teardown RESTORES it
+    to the migration-0068 seed defaults (50000 / 30000). Without this restore the
+    committed test amounts leak into the shared DB and break sibling suites that
+    assume the seed values (test_referral_config / test_referral_resolve).
     """
     settings = get_settings()
     engine = create_async_engine(str(settings.database_url), pool_pre_ping=True)
@@ -94,6 +98,15 @@ async def _credit_engine() -> AsyncIterator[Any]:
         async with engine.begin() as conn:
             await conn.execute(
                 text(f"TRUNCATE {', '.join(_TRUNCATE_TABLES)} RESTART IDENTITY CASCADE")
+            )
+            # Restore the singleton to migration-0068 seed defaults so committed
+            # test amounts do not pollute the shared DB for other suites.
+            await conn.execute(
+                text(
+                    "UPDATE referral_config SET referrer_bonus_kopecks = 50000, "
+                    "referee_welcome_kopecks = 30000 WHERE id = :id"
+                ),
+                {"id": _REFERRAL_CONFIG_ID},
             )
         await engine.dispose()
 
