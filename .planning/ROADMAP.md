@@ -140,7 +140,7 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
 
 **Milestone Goal:** Клиент приглашает друзей персональным реф-кодом; обе стороны получают бонус на `loyalty_ledger` после первой покупки приглашённого; экран «Приведи друга» переносится пиксель-в-пиксель с готового макета. Всё под `require_client()`, IDOR-safe; бонусы server-authoritative (webhook-only); `apps/admin-web` заморожен.
 
-- [ ] **Phase 96: Referral Domain Backend** — персональные реф-коды (идемпотентная генерация), захват реферала при онбординге (referrer↔referee, self-referral блок, 1-bonus-per-referee), deep-link endpoint, owner-only конфигурация сумм бонусов + seed; LOCKED audit events зарегистрированы до первого callsite (REFER-01, REFER-02 backend, REFER-03, REFER-07)
+- [x] **Phase 96: Referral Domain Backend** — персональные реф-коды (идемпотентная генерация), захват реферала при онбординге (referrer↔referee, self-referral блок, 1-bonus-per-referee), deep-link endpoint, owner-only конфигурация сумм бонусов + seed; LOCKED audit events зарегистрированы до первого callsite (REFER-01, REFER-02 backend, REFER-03, REFER-07) (completed 2026-06-08)
 - [ ] **Phase 97: Reward Crediting** — двусторонний бонус на `payment.succeeded` ПЕРВОЙ покупки: co-transactional, idempotent по `(referral_id, online_payment_id)`, через `accrue_welcome_bonus`/`owner_grant_loyalty` примитивы; LOCKED audit events (REFER-04)
 - [ ] **Phase 98: PWA ReferralScreen** — graduate из D-71-09 ESLint-зоны; пиксель-в-пиксель порт макета (промокод + ссылка + copy, share Telegram/WhatsApp/native, блок «Как это работает»); список приглашённых со статусами; «Уже накоплено» из ledger; deep-link авто-подстановка кода; тир-трекер hide-for-future (REFER-02 PWA, REFER-05, REFER-06)
 - [ ] **Phase 99: OpenAPI Handoff + Milestone Verification** — byte-stable `openapi.json` + `schema.d.ts` + `_v26Checks` AssertNonNever; staff-контракт байт-в-байт цел (drift gate зелёный); полный milestone gate зелёный (HND-01)
@@ -160,7 +160,7 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
 **Plans**: 3 plans
   - [x] 96-01-PLAN.md — INFRA-15 audit foundation: lock referral_code_generated + referral_captured pairs + payload schemas + unit test
   - [x] 96-02-PLAN.md — Data layer: referrals module models + schemas, migrations 0067 (tables) + 0068 (seed config), pwa_base_url setting
-  - [ ] 96-03-PLAN.md — Service + triple-router (public /i/<code>, client code/capture, owner config) + mounting + integration tests
+  - [x] 96-03-PLAN.md — Service + triple-router (public /i/<code>, client code/capture, owner config) + mounting + integration tests
 
 ### Phase 97: Reward Crediting
 **Goal**: Обе стороны автоматически получают бонус на `loyalty_ledger` после первой покупки абонемента приглашённым другом
@@ -242,7 +242,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 96. Referral Domain Backend | 2/3 | In Progress|  |
+| 96. Referral Domain Backend | 3/3 | Complete   | 2026-06-08 |
 | 97. Reward Crediting | 0/TBD | Not started | - |
 | 98. PWA ReferralScreen | 0/TBD | Not started | - |
 | 99. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
