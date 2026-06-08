@@ -5,13 +5,13 @@ Client-facing referral program. All client surfaces under `require_client()`, ID
 ## v2.6 Requirements
 
 ### Referral codes & links (REFER)
-- [ ] **REFER-01**: Каждый клиент имеет персональный, стабильный, бессрочный реферальный код + shareable ссылку вида `…/i/<code>` (код генерируется идемпотентно при первом обращении; не меняется между запросами).
-- [ ] **REFER-02**: Реферальная ссылка работает как deep-link — открытие `…/i/<code>` в PWA авто-подставляет код в поток онбординга/регистрации друга.
-- [ ] **REFER-03**: При онбординге приглашённого друга реферал захватывается и привязывается (referrer↔referee) идемпотентно; self-referral заблокирован; на одного приглашённого начисляется не более одного реферального бонуса.
+- [x] **REFER-01**: Каждый клиент имеет персональный, стабильный, бессрочный реферальный код + shareable ссылку вида `…/i/<code>` (код генерируется идемпотентно при первом обращении; не меняется между запросами).
+- [x] **REFER-02**: Реферальная ссылка работает как deep-link — открытие `…/i/<code>` в PWA авто-подставляет код в поток онбординга/регистрации друга.
+- [x] **REFER-03**: При онбординге приглашённого друга реферал захватывается и привязывается (referrer↔referee) идемпотентно; self-referral заблокирован; на одного приглашённого начисляется не более одного реферального бонуса.
 
 ### Reward crediting (REFER)
 - [ ] **REFER-04**: На `payment.succeeded` ПЕРВОЙ покупки абонемента приглашённым другом обе стороны получают бонус на баланс лояльности через существующий `loyalty_ledger` (реферер — реферальный бонус; друг — приветственный), идемпотентно по `(referral_id)`/`(online_payment_id)`, переиспользуя accrual/`owner_grant` примитивы; новые LOCKED audit-события зарегистрированы до первого callsite.
-- [ ] **REFER-07**: Суммы реферальных бонусов (бонус рефереру, приветственный другу) конфигурируемы через owner-only API + seed (admin-web заморожен); сервер — единственный источник сумм.
+- [x] **REFER-07**: Суммы реферальных бонусов (бонус рефереру, приветственный другу) конфигурируемы через owner-only API + seed (admin-web заморожен); сервер — единственный источник сумм.
 
 ### Referral screen — client PWA (REFER)
 - [ ] **REFER-05**: Экран «Приведи друга» выведен из ComingSoon и de-listed из D-71-09 ESLint-зоны (импорт данных через `@/data`); реализован как **пиксель-в-пиксель порт** макета `.planning/refs/v2.6-REFERENCE-ReferFriendScreen.jsx` (промокод + ссылка + copy, share Telegram/WhatsApp/native, блок «Как это работает»), с stripped device-хромом и scoped CSS (как ChatScreen v2.5). Геймификация-тир («5 друзей → месяц») hide-for-future.
@@ -35,11 +35,11 @@ Client-facing referral program. All client surfaces under `require_client()`, ID
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REFER-01 | Phase 96 | Pending |
-| REFER-02 | Phase 96 (backend) + Phase 98 (PWA) | Pending |
-| REFER-03 | Phase 96 | Pending |
+| REFER-01 | Phase 96 | Complete |
+| REFER-02 | Phase 96 (backend) + Phase 98 (PWA) | Complete |
+| REFER-03 | Phase 96 | Complete |
 | REFER-04 | Phase 97 | Pending |
 | REFER-05 | Phase 98 | Pending |
 | REFER-06 | Phase 98 | Pending |
-| REFER-07 | Phase 96 | Pending |
+| REFER-07 | Phase 96 | Complete |
 | HND-01 | Phase 99 | Pending |
