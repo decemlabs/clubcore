@@ -836,3 +836,71 @@ async def test_ref_cred_07_config_zero_amounts_no_accrual(
     assert accrual_count == 0, (
         f"Expected 0 rows (zero config amounts), got {accrual_count}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Case 7b: Config row absent — _ref_config is None branch
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_ref_cred_07b_config_absent_no_accrual(
+    _credit_session: AsyncSession,
+    _webhook_client: AsyncClient,
+) -> None:
+    """When the referral_config singleton row is absent (get_config returns None),
+    the handler skips both accrue_referral_bonus calls — graceful no-op, 0 accrual
+    rows — and the webhook still returns 200 (payment activates normally).
+
+    Teardown: re-inserts the singleton at seed defaults (50000/30000) so the fixture
+    engine's UPDATE-based restore works correctly for sibling cases. The engine
+    teardown only UPDATEs; if the row is missing at teardown time it would silently
+    leave the config absent for subsequent suites.
+    """
+    nonce_r = uuid4().hex[:8]
+    nonce_e = uuid4().hex[:8]
+    _u_r, referrer_id = await _seed_user_and_client(_credit_session, nonce=nonce_r)
+    _u_e, referee_id = await _seed_user_and_client(_credit_session, nonce=nonce_e)
+    plan_id = await _seed_membership_plan(_credit_session)
+
+    # Ensure config exists before we delete it (idempotent baseline)
+    await _ensure_referral_config(_credit_session)
+
+    code_id = await _seed_referral_code(_credit_session, client_id=referrer_id)
+    await _seed_referral_capture(
+        _credit_session,
+        referee_client_id=referee_id,
+        referrer_client_id=referrer_id,
+        referral_code_id=code_id,
+    )
+
+    yk_id, _op_id = await _seed_online_payment_membership(
+        _credit_session,
+        client_id=referee_id,
+        membership_plan_id=plan_id,
+    )
+
+    # Delete the config singleton to force the `_ref_config is None` branch
+    await _credit_session.execute(text("DELETE FROM referral_config"))
+    await _credit_session.commit()
+
+    with _mock_yookassa_succeeded(yk_id):
+        r = await _webhook_client.post(
+            "/api/v1/_internal/yookassa/webhook", json=_webhook_body(yk_id)
+        )
+    assert r.status_code == 200, r.text
+
+    await _credit_session.rollback()
+    accrual_count = await _count_referral_accrual_rows(_credit_session)
+    assert accrual_count == 0, (
+        f"Expected 0 rows (config absent), got {accrual_count}"
+    )
+
+    # Re-insert the singleton at seed defaults so the engine teardown's UPDATE can
+    # restore it, and sibling suites that assume the row exists are not broken.
+    await _ensure_referral_config(
+        _credit_session,
+        referrer_bonus_kopecks=50_000,
+        referee_welcome_kopecks=30_000,
+    )
+    await _credit_session.commit()
