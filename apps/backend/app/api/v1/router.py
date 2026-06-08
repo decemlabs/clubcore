@@ -122,6 +122,18 @@ from app.modules.gym.router import owner_router as gym_owner_router  # noqa: E40
 v1.include_router(gym_client_router, prefix="/client")
 v1.include_router(gym_owner_router, prefix="/gym")
 
+# Phase 96 REFER-01/REFER-02/REFER-03/REFER-07 — referral domain.
+# Public resolver mounted at /api/v1 (no prefix — path is /i/{code}).
+# Client endpoints mounted at /api/v1/client (same prefix as loyalty — D-20-MODULE).
+# Owner config mounted at /api/v1/referral (require_permission + verify_csrf).
+from app.modules.referrals.router import client_router as referral_client_router  # noqa: E402
+from app.modules.referrals.router import owner_router as referral_owner_router  # noqa: E402
+from app.modules.referrals.router import public_router as referral_public_router  # noqa: E402
+
+v1.include_router(referral_public_router)  # /api/v1/i/{code}
+v1.include_router(referral_client_router, prefix="/client")  # /api/v1/client/referral/*
+v1.include_router(referral_owner_router, prefix="/referral")  # /api/v1/referral/config
+
 # Phase 87 INBOX-01/INBOX-02 — notification inbox + push-token registration.
 # Mounted at /api/v1/client (same prefix as client_portal_router) to expose
 # /api/v1/client/notifications and /api/v1/client/push-tokens.
