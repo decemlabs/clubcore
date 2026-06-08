@@ -78,6 +78,9 @@ class HandlerContext(NamedTuple):
     schedule_service  : the app.modules.schedule.service module
                         (workers->modules.schedule, Phase 40 D-40-06 —
                         list_slots for /book keyboard render).
+    messaging_service : the app.modules.messaging.service module
+                        (workers->modules.messaging, Phase 93 D-06 relaxation —
+                        record_staff_message + publish helpers for reply routing).
 
     Field order is part of the stable contract — positional construction in
     workers/telegram_bot.py:main() depends on it. New fields are APPENDED at
@@ -91,6 +94,7 @@ class HandlerContext(NamedTuple):
     redis: Redis
     bookings_service: ModuleType  # Phase 40 D-40-04 — create_booking_via_bot dispatch
     schedule_service: ModuleType  # Phase 40 D-40-06 — list_slots for keyboard render
+    messaging_service: ModuleType  # Phase 93 D-06 relaxation — reply routing
 
 
 async def _dedupe_update_id(redis: Redis, update_id: int, chat_id: int) -> bool:

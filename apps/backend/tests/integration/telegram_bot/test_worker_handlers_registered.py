@@ -19,6 +19,7 @@ from app.integrations.telegram.handlers import (
 )
 from app.modules.auth import telegram_service
 from app.modules.bookings import service as bookings_service
+from app.modules.messaging import service as messaging_service
 from app.modules.schedule import service as schedule_service
 from app.modules.visits import service as visits_service
 
@@ -44,6 +45,7 @@ async def test_worker_registers_start_and_checkin(
         redis=fake_redis,
         bookings_service=bookings_service,
         schedule_service=schedule_service,
+        messaging_service=messaging_service,  # Phase 93 D-06 relaxation
     )
     app = build_application(
         token="dummy:token",  # noqa: S106 — ptb does no network on construction

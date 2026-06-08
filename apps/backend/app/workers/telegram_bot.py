@@ -47,6 +47,7 @@ from app.modules.auth import telegram_service  # D-06 relaxation
 from app.modules.bookings import service as bookings_service  # Phase 40 D-40-04
 from app.modules.clients import service as clients_service  # REG-29-03 fix
 from app.modules.memberships import service as memberships_service  # REG-29-03 fix
+from app.modules.messaging import service as messaging_service  # Phase 93 D-06 relaxation
 from app.modules.pt_packages import service as pt_packages_service  # Phase 37 DEBT-06
 from app.modules.schedule import service as schedule_service  # Phase 37 INFRA-33
 from app.modules.trainers import service as trainers_service  # Phase 31 D-31-14
@@ -112,6 +113,9 @@ async def main() -> None:
             # schedule_service appended at END).
             bookings_service=bookings_service,
             schedule_service=schedule_service,
+            # Phase 93 D-06 relaxation: messaging_service appended at END
+            # (field-order contract — never insert in the middle).
+            messaging_service=messaging_service,
         )
         application = build_application(
             token=settings.telegram_bot_token.get_secret_value(),

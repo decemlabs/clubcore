@@ -76,6 +76,8 @@ def _build_ctx(db_session: AsyncSession, redis_client: Any) -> HandlerContext:
     async def _factory() -> AsyncIterator[AsyncSession]:
         yield db_session
 
+    from app.modules.messaging import service as messaging_service
+
     return HandlerContext(
         session_factory=_factory,  # type: ignore[arg-type]
         telegram_service=telegram_service,
@@ -84,6 +86,7 @@ def _build_ctx(db_session: AsyncSession, redis_client: Any) -> HandlerContext:
         redis=redis_client,
         bookings_service=bookings_service,
         schedule_service=schedule_service,
+        messaging_service=messaging_service,  # Phase 93 D-06 relaxation
     )
 
 
