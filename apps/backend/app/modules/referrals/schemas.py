@@ -1,4 +1,5 @@
-"""Referral module Pydantic schemas (Phase 96 REFER-01 / REFER-03 / REFER-07).
+"""Referral module Pydantic schemas (Phase 96 REFER-01 / REFER-03 / REFER-07;
+Phase 98 REFER-06 adds ReferralInviteeItem + ReferralSummaryResponse).
 
 Response schemas use ResponseData (camelCase wire via alias_generator=to_camel).
 Request schemas use BackendSchemaBase (extra='forbid', camelCase inbound).
@@ -8,6 +9,9 @@ snake_case. Each field carries a trailing comment with its wire name.
 """
 
 from __future__ import annotations
+
+from datetime import datetime
+from typing import Literal
 
 from pydantic import Field
 
@@ -81,3 +85,31 @@ class ReferralConfigUpdateRequest(BackendSchemaBase):
 
     referrer_bonus_kopecks: int = Field(ge=0)  # wire: referrerBonusKopecks
     referee_welcome_kopecks: int = Field(ge=0)  # wire: refereeWelcomeKopecks
+
+
+class ReferralInviteeItem(ResponseData):
+    """One invited friend in the referral summary list (REFER-06).
+
+    Wire: {firstName, joinedAt, status, bonusKopecks}.
+    PII-minimal: first name only (T-96-06); NO last name, NO referee client_id.
+    """
+
+    first_name: str  # wire: firstName
+    joined_at: datetime  # wire: joinedAt (referral_captures.created_at, ISO-8601 TZ)
+    status: Literal["joined", "pending"]  # wire: status
+    bonus_kopecks: int  # wire: bonusKopecks (referrer bonus for this invitee; 0 while pending)
+
+
+class ReferralSummaryResponse(ResponseData):
+    """GET /client/referral/summary payload (REFER-06).
+
+    Wire: {code, shareUrl, accruedKopecks, invitees: [...]}
+    accruedKopecks is the SUM of the authenticated client's own referral_accrual
+    loyalty_ledger rows — NOT the total loyalty balance.
+    shareUrl is server-authoritative: {pwa_base_url}/i/{code}.
+    """
+
+    code: str  # wire: code
+    share_url: str  # wire: shareUrl
+    accrued_kopecks: int  # wire: accruedKopecks (SUM of own referral_accrual rows)
+    invitees: list[ReferralInviteeItem]  # wire: invitees
