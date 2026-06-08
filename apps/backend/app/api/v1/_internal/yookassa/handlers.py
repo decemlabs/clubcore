@@ -110,7 +110,6 @@ from app.modules.fiscal_receipts.models import FiscalReceipt
 from app.modules.fiscal_receipts.repository import insert_fiscal_receipt
 from app.modules.loyalty.service import accrue_referral_bonus, record_loyalty_redemption
 from app.modules.notifications.service import create_notification
-from app.modules.referrals import repository as referrals_repo
 from app.modules.online_payments.constants import (
     ONLINE_PAYMENT_STATUS_TRANSITIONS,
     STATUS_CANCELED,
@@ -130,6 +129,7 @@ from app.modules.online_refunds.settle import _settle_online_refund
 from app.modules.payments.repository import _is_refund_of_uniqueness_conflict
 from app.modules.payments.service import AlreadyRefundedError
 from app.modules.promo_codes.service import record_promo_redemption
+from app.modules.referrals import repository as referrals_repo
 
 _log = structlog.get_logger("api.v1._internal.yookassa.handlers")
 
@@ -696,7 +696,7 @@ async def handle_payment_succeeded(
                                     role="referee",
                                 )
 
-        # Phase 87 INBOX-03 — in-app inbox row (co-transactional, inside async with session.begin()).
+        # Phase 87 INBOX-03 — in-app inbox row (co-transactional, inside async with session.begin()).  # noqa: E501
         # Placed before the audit emits so the notification INSERT is atomic with the payment
         # state change. Anti-oracle (D-52-08): hook lives ONLY in handle_payment_succeeded —
         # handle_payment_canceled MUST NOT create a row. Webhook replay is covered by the
