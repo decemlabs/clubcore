@@ -170,6 +170,17 @@ OPENAPI_TAGS: list[dict[str, str]] = [
         ),
     },
     {
+        "name": "Referral",
+        "description": (
+            "«Приведи друга» referral programme — personal referral codes + "
+            "shareable deep-links (`/i/<code>`), public deep-link resolver "
+            "(no auth, anti-enumeration), capture/binding at onboarding "
+            "(IDOR-safe), bilateral loyalty-ledger bonus on first purchase "
+            "(server-authoritative, webhook-locked), owner-only bonus-config API "
+            "(Phases 96-98 REFER-01..07)."
+        ),
+    },
+    {
         "name": "Clients",
         "description": "Gym client CRM — create, read, update, soft-delete clients.",
     },
