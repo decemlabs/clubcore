@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.5
 milestone_name: Chat / Messaging — Client↔Gym
-status: complete
-stopped_at: Phase 93 complete — Telegram Bridge BRDG-01/02/03 shipped. Outbound forward (plan 01) + inbound reply routing (plan 02). 168/168 messaging+telegram tests green.
-last_updated: "2026-06-08T03:30:00.000Z"
-last_activity: 2026-06-08 -- Phase 93 plan 02 complete (BRDG-02/BRDG-03 inbound reply routing)
+status: verifying
+stopped_at: Phase 93 complete — Telegram Bridge BRDG-01/02/03 shipped. 168/168 messaging+telegram tests green.
+last_updated: "2026-06-08T04:50:36.107Z"
+last_activity: 2026-06-08
 progress:
   total_phases: 10
   completed_phases: 4
-  total_plans: 10
-  completed_plans: 10
+  total_plans: 12
+  completed_plans: 11
   percent: 40
 ---
 
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md
 
 Phase: 93 (telegram-bridge) — COMPLETE ✅
 Plan: 2 of 2 (plan 01 ✅ BRDG-01 outbound forward; plan 02 ✅ BRDG-02/BRDG-03 inbound reply routing)
-Status: Phase 93 complete — all BRDG requirements satisfied; 168/168 tests green
-Last activity: 2026-06-08 -- Phase 93 plan 02 complete (BRDG-02/BRDG-03 inbound reply routing)
+Status: Phase complete — ready for verification
+Last activity: 2026-06-08
 
-Progress: [██████████] 100%
+Progress: [█████████░] 92%
 
 ## v2.5 Roadmap Summary
 
@@ -135,6 +135,6 @@ Carrying forward from v2.4 close (see previous STATE.md for full list):
 
 ## Session Continuity
 
-Last session: 2026-06-08 (autonomous run)
+Last session: 2026-06-08T04:50:36.103Z
 Stopped at: Phase 93 complete — Telegram Bridge BRDG-01/02/03 shipped. 168/168 messaging+telegram tests green.
 Resume: Phase 94 (PWA ChatScreen Wiring) — next milestone phase
