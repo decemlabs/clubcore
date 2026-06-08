@@ -111,6 +111,21 @@ def _include_object(
             # Literal-named partial index (same lineage as uq_loyalty_ledger_welcome);
             # autogenerate cannot reconcile literal vs. convention names.
             "uq_loyalty_ledger_referral_accrual",
+            # Phase 96 REFER-01/03 / 0067: referral_codes + referral_captures indexes
+            # declared with literal names in the migration (not as ORM Index objects),
+            # same lineage as uq_loyalty_ledger_welcome — autogenerate cannot reconcile
+            # literal vs. convention names and would otherwise propose dropping the
+            # code-uniqueness + one-referrer-per-referee guards.
+            "uq_referral_codes_code",
+            "uq_referral_codes_client_id",
+            "ix_referral_codes_client_id",
+            "uq_referral_captures_referee_client_id",
+            # Phase 90 / 0064-0065 messaging: ix_messages_thread_sent is a
+            # (thread_id, sent_at DESC) index; the migration DDL carries the DESC
+            # expression on the second column, which SQLAlchemy's ORM Index cannot
+            # surface — autogenerate sees a column-vs-expression mismatch. Same
+            # D-25-05 / D-42-18 lineage as ix_email_send_log_to_addr_recorded above.
+            "ix_messages_thread_sent",
             # Phase 84 APAY-03 / 0056: autopay_charges + autopay_charge_notifications
             # plain indexes (created via op.f() in the migration but not declared in
             # __table_args__ of the ORM models). Autogenerate sees them as orphans.
