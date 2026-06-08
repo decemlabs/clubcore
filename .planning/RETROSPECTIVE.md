@@ -682,3 +682,36 @@ Live 1:1 client↔gym chat from the PWA: messaging domain + REST + the project's
 - Model mix: orchestrator Opus; subagents Sonnet (executors/checkers/reviewers/integration), Opus for planners and the fidelity-critical Phase 94 port executor + its code-fixer.
 - Execution: fully autonomous discuss→(ui)→plan→execute→review→verify per phase + milestone lifecycle; sequential-on-main-tree (branching `none`), single-plan-per-wave dependent chains.
 - Notable: code-review auto-fix ran 2 iterations on Phase 94 (2 blockers + 8 warnings → clean, then 2 residual warnings closed); plan-checker bounced Phase 94 once (poll-fallback blocker) and Phase 95 verify once (missing pytest in the gate).
+
+## Milestone: v2.6 — Referral System
+
+**Shipped:** 2026-06-08
+**Phases:** 4 (96–99) | **Plans:** 11 | **Tasks:** 21
+
+### What Was Built
+Full-stack referral ("Приведи друга"): a new `app/modules/referrals/` backend (idempotent 8-char Crockford codes, IDOR-safe capture, public deep-link resolver, owner-only configurable bonus amounts + seed); server-authoritative dual reward crediting wired into the `payment.succeeded` webhook (loyalty_ledger `referral_accrual`, co-transactional, idempotent on `(referral_capture_id, client_id)`, one-bonus-per-referee + first-purchase gate + referrer-alive void); the pixel-perfect ReferralSheet PWA port (graduated from D-71-09, real invitees + «Уже накоплено» via a new `useClientReferralSummary` `@/data` hook over `GET /client/referral/summary`); the `/i/:code` deep-link landing + post-auth idempotent capture; and the byte-stable OpenAPI/`schema.d.ts` handoff with `_v26Checks` AssertNonNever[8] + full milestone gate.
+
+### What Worked
+- Worktree-isolated parallel execution per wave with explicit merge-back + post-merge gate caught every cross-file integration issue before the next wave built on it.
+- The code-review → auto-fix → re-review loop earned its keep repeatedly: it caught a **test-masked critical persistence bug** in Phase 96 (`get_db` never commits → mints/captures silently rolled back; the transactional test fixture hid it) and the follow-on UUID-vs-JSONB serialization interaction; it caught a **test-isolation regression** in Phase 98 (the crediting suite polluting the shared `referral_config` singleton via real commits).
+- Mirroring the Phase 95→89 handoff precedent made Phase 99 fast and the planner caught real nuances (mixed tag state, 6 endpoints not 5, widened 3-prefix drift exclusion).
+- Pixel-perfect-port framing (UI-SPEC gating on reference fidelity, not abstract scale purity) let the UI pipeline score 24/24 without false positives.
+
+### What Was Inefficient
+- A worktree merge for the final wave (99-02) was attempted with a dirty working tree (uncommitted tracking edits) → `ort` strategy aborted and I'd already deleted the branch ref; recovered cleanly from the object store, but a `reset --hard` + re-merge round-trip was wasted. Lesson: ensure a clean tree (commit/clear tracking) before `git merge` in the per-wave loop.
+- The `alembic check` drift surfaced a whole CLASS of pre-existing literal-named-index omissions (Phase 95 messaging + Phase 96 referral indexes) only when I ran it during Phase 97 review — the per-phase reviews hadn't run it. Worth adding `alembic check` to the per-phase gate, not just the milestone gate.
+
+### Patterns Established
+- **Caller-owns-txn for reads too:** a read endpoint that mints (GET /referral/code, GET /referral/summary) intentionally commits — document it, don't fight the convention.
+- **Real-commit integration suites must restore shared singletons in teardown** (referral_config) or they pollute sibling suites.
+- **Migration amended-in-place leaves the shared dev DB stale** — carry a "clean re-migrate before live verification" operator note to the handoff phase.
+- **`AssertNonNever[N]` arity = path×method ops + realized JSON request bodies** (POST/PUT) — the body-realization entries are easy to undercount.
+
+### Key Lessons
+- The transactional test fixture is a double-edged sword: it gives isolation but masks "does it actually persist" bugs. Pair it with at least one real-commit persistence test per write path.
+- Autonomous human_needed routing: browser-only visual/round-trip items are correctly auto-deferred (persisted to HUMAN-UAT + carried to the audit), not paused on — keeps the run moving while preserving the verification debt honestly.
+
+### Cost Observations
+- Model mix: orchestrator Opus; planners Opus; executors/checkers/reviewers/fixers/integration/UI Sonnet.
+- Execution: fully autonomous discuss→(ui)→plan→execute→review(+auto-fix loop)→verify per phase + milestone audit→complete→cleanup; worktree-isolated parallel waves, merge-back + post-merge gate each wave; branching `none`.
+- Notable: code-review auto-fix loops ran to convergence on 96 (3 iters + 1 manual), 97 (2 iters), 98 (2 iters); the loops found 2 genuinely critical issues the green test suites had masked.
