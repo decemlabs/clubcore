@@ -480,6 +480,9 @@ LOCKED_AUDIT_EVENTS: frozenset[tuple[str, str]] = frozenset(
         # any callsite per INFRA-15 discipline.)
         ("referral_code_generated", "referral"),
         ("referral_captured", "referral"),
+        # v2.6 (Phase 97 lock — INFRA-15; referral bonus accrual. Pre-registered BEFORE
+        # the payment.succeeded webhook callsite per INFRA-15 discipline.)
+        ("referral_bonus_accrued", "referral"),
     }
 )
 
