@@ -139,32 +139,50 @@ async def get_or_create_referral_code(
         )
         return ReferralCodeResponse(code=existing.code, share_url=share_url)
 
-    # First mint — generate candidate code, then insert atomically.
-    # ON CONFLICT DO NOTHING handles the concurrent-mint race: if another request
-    # for the same client_id wins the insert, RETURNING is None and we re-read
-    # the winner row below (no audit emit — idempotent no-op path).
-    new_code_str = await _generate_unique_code(session)
-    stmt = (
-        pg_insert(ReferralCode)
-        .values(client_id=client_id, code=new_code_str)
-        .on_conflict_do_nothing(index_elements=["client_id"])
-        .returning(ReferralCode.id, ReferralCode.code)
-    )
-    row = (await session.execute(stmt)).one_or_none()
-
-    if row is None:
-        # Concurrent mint won the race — re-read winner's row (no audit emit).
-        winner = await repository.get_code_by_client_id(session, client_id)
-        if winner is None:
-            raise RuntimeError("referral code conflict but no winner row found")
-        _log.info(
-            "referral_code_concurrent_no_op",
-            client_id=str(client_id),
-            msg="concurrent mint won — returning existing code",
+    # First mint — generate candidate code, insert atomically with bounded retry.
+    # Bare ON CONFLICT DO NOTHING (no index target) covers BOTH unique constraints:
+    #   - uq_referral_codes_client_id: concurrent same-client mint race
+    #   - uq_referral_codes_code: code-string collision with a *different* client
+    #     (vanishingly rare — two clients drawing the same 8-char code in the window
+    #     between _generate_unique_code's SELECT dedup and this INSERT).
+    # RETURNING is None on either conflict; we then re-read by client_id to
+    # distinguish the two cases (WR-01-iter3 fix).
+    mint_max_attempts = 5
+    row = None
+    for _attempt in range(mint_max_attempts):
+        new_code_str = await _generate_unique_code(session)
+        stmt = (
+            pg_insert(ReferralCode)
+            .values(client_id=client_id, code=new_code_str)
+            .on_conflict_do_nothing()
+            .returning(ReferralCode.id, ReferralCode.code)
         )
-        return ReferralCodeResponse(
-            code=winner.code,
-            share_url=f"{settings.pwa_base_url}/i/{winner.code}",
+        row = (await session.execute(stmt)).one_or_none()
+        if row is not None:
+            break  # real insert — proceed to audit emit
+        # Conflict fired (DO NOTHING — transaction stays valid, no IntegrityError).
+        winner = await repository.get_code_by_client_id(session, client_id)
+        if winner is not None:
+            # Concurrent same-client mint won the race — return winner (no audit emit).
+            _log.info(
+                "referral_code_concurrent_no_op",
+                client_id=str(client_id),
+                msg="concurrent mint won — returning existing code",
+            )
+            return ReferralCodeResponse(
+                code=winner.code,
+                share_url=f"{settings.pwa_base_url}/i/{winner.code}",
+            )
+        # No winner for this client_id → code-string collided with another client.
+        # Regenerate and retry (no audit emit, transaction still valid).
+        _log.warning(
+            "referral_code_string_collision_retry",
+            client_id=str(client_id),
+            attempt=_attempt + 1,
+        )
+    if row is None:
+        raise RuntimeError(
+            "referral code minting exhausted retries on code-string collisions"
         )
 
     code_row_id: UUID = row[0]
