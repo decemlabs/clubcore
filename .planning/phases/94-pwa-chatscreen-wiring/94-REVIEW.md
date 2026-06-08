@@ -1,304 +1,99 @@
 ---
 phase: 94-pwa-chatscreen-wiring
-reviewed: 2026-06-08T00:00:00Z
+reviewed: 2026-06-08T08:21:00Z
 depth: standard
-files_reviewed: 10
+files_reviewed: 7
 files_reviewed_list:
   - apps/client-pwa/src/lib/clientQueries.ts
   - apps/client-pwa/src/lib/useClientMessagingWS.ts
+  - apps/client-pwa/src/lib/uuid.ts
   - apps/client-pwa/src/data/index.js
   - apps/client-pwa/src/context/UIContext.jsx
   - apps/client-pwa/src/App.jsx
   - apps/client-pwa/src/screens/ChatScreen.jsx
-  - apps/client-pwa/eslint.config.js
-  - apps/client-pwa/src/lib/clientQueries.messaging.test.ts
-  - apps/client-pwa/src/lib/useClientMessagingWS.test.ts
-  - apps/client-pwa/src/screens/ChatScreen.delist.test.ts
 findings:
-  critical: 2
-  warning: 8
-  info: 4
-  total: 14
-status: issues_found
+  critical: 0
+  warning: 2
+  info: 3
+  total: 5
+status: clean
 ---
 
-# Phase 94: Code Review Report
+# Phase 94: Code Review Report (Iteration 2)
 
-**Reviewed:** 2026-06-08
+**Reviewed:** 2026-06-08T08:21:00Z
 **Depth:** standard
-**Files Reviewed:** 10
-**Status:** issues_found
+**Files Reviewed:** 7
+**Status:** clean (no blockers; 2 minor WARNINGs + 3 INFO)
 
 ## Summary
 
-Reviewed the Phase 94 chat-screen port: the `useClientMessagingWS` hook, the messaging
-query/mutation hooks, the optimistic send + two-step photo upload, the read-tick watermark,
-the unread-badge feed, the `window.__chat*` bridge, and the scoped CSS.
+Iteration-2 re-review of the PWA ChatScreen wiring after the prior pass found 2 BLOCKER + 8 WARNING, fixed across c90a21fa / dd6256b2 / a613956b / b152777a.
 
-The tests pass and surface-level structure is sound, but the review found two correctness
-defects that defeat the real-time design goals of the phase:
+**Verdict: all previously-found blockers and the re-checked warnings are genuinely resolved, and the fixes introduced NO new blocker.** The 19 regression/unit tests for the WS hook and the read-tick comparison pass, and the changed TS files typecheck clean. Two minor residual WARNINGs and three INFO items remain — none block shipping.
 
-1. The App-level WebSocket is torn down and re-opened on **every App re-render** because the
-   four callbacks passed to `useClientMessagingWS` are inline closures that change identity
-   each render and are in the effect dependency array (CR-01). This causes a connect/close
-   churn (and a reconnect-storm interaction) instead of one stable singleton socket.
-2. The read-tick watermark and the duplicate-suppression both rely on **lexicographic string
-   comparison of ISO timestamps from two different sources** (server `sentAt`, WS `readAt`).
-   Mixed offset formats (`Z` vs `+03:00`) make `<=`/`>` give wrong results, so own-message
-   ticks can be marked read incorrectly or never (CR-02).
+### Confirmation of prior issues
 
-Additional issues: the documented `?after=` reconnect catch-up is wired into the hook but
-never used by the consumer (dead path / unmet ROADMAP behavior); the photo `objectUrl` is
-revoked while it may still be rendered (broken image / flicker, and a revoked URL can be
-handed to the full-screen overlay); a mark-read effect can self-trigger a mutation loop; and
-the WS reconnect path leaks the pending timer reference. Details below.
-
-## Critical Issues
-
-### CR-01: App-level WebSocket reconnects on every App re-render (inline callback deps)
-
-**File:** `apps/client-pwa/src/App.jsx:217-232`, `apps/client-pwa/src/lib/useClientMessagingWS.ts:142`
-**Issue:**
-`App()` passes four freshly-allocated closures (`onNewMessage`, `onReadReceipt`, `onTyping`
-and the options object) to `useClientMessagingWS` on every render. The hook's effect depends
-on all three callbacks:
-
-```js
-}, [enabled, onNewMessage, onReadReceipt, onTyping])
-```
-
-Because the callbacks are new function objects each render, the effect's cleanup runs and
-`connect()` re-runs on every App re-render. `App()` re-renders whenever `useUI()` value
-changes — i.e. every sheet open/close, push toast, and crucially every `setUnreadChat(...)`
-from the badge feed. The result is a continuous teardown/reopen of the "mounted once"
-singleton socket the design explicitly intended (`useClientMessagingWS.ts:9` "Mounted ONCE
-at app root"). Each teardown calls `ws.close()`; the in-flight `onclose` is suppressed by the
-new `destroyed` flag, but a fresh socket is opened immediately, producing connect churn,
-dropped frames during the gap, and extra server upgrade load (the very DoS surface T-94-03
-tried to bound). It also interacts badly with the badge effect: a `new_message` → invalidate
-→ refetch → `setUnreadChat` → App re-render → socket reconnect cascade.
-
-**Fix:** Stabilize the callbacks with `useCallback` (deps: `qc`), or store them in refs inside
-the hook so the effect can depend only on `[enabled]`. Ref approach (hook-side, also fixes any
-future consumer):
-
-```ts
-export function useClientMessagingWS({ enabled = true, onNewMessage, onReadReceipt, onTyping }) {
-  const cbRef = useRef({ onNewMessage, onReadReceipt, onTyping })
-  cbRef.current = { onNewMessage, onReadReceipt, onTyping }
-  useEffect(() => {
-    if (!enabled) return
-    // ...inside onmessage, call cbRef.current.onNewMessage(...), etc.
-  }, [enabled]) // callbacks no longer in deps
-}
-```
-
-### CR-02: Read-tick watermark + dedup use lexicographic ISO-string comparison across two sources
-
-**File:** `apps/client-pwa/src/screens/ChatScreen.jsx:732`, `859`
-**Issue:**
-The watermark logic compares ISO timestamp strings directly:
-
-```js
-if (a.from === 'me' && !a.read && readWatermark && a.sentAt <= readWatermark) { a.read = true }   // 732
-setReadWatermark((prev) => (prev == null || readAt > prev ? readAt : prev))                       // 859
-```
-
-`a.sentAt` is the server message's `sentAt` (whatever format the messaging API emits), and
-`readWatermark`/`readAt` is the WS `read_receipt` payload (a separate producer). Lexicographic
-`<=`/`>` on ISO strings is only correct when both strings use the identical, zero-padded,
-same-offset format. If one side emits `2024-01-01T12:00:00Z` and the other
-`2024-01-01T15:00:00+03:00` (same instant), or one carries fractional seconds and the other
-does not, the string comparison disagrees with the real instant ordering. Consequences:
-own messages get marked ✓✓ that the staff has not read (false read receipt), or never get
-the ✓✓ they earned (watermark boundary off). This is the core PWA-02 semantic and it is not
-robust. The hook doc at `useClientMessagingWS.ts:29-31` describes the intended `sentAt <= readAt`
-semantics but the implementation does not normalize the operands.
-
-**Fix:** Compare epoch milliseconds, not strings:
-
-```js
-const wmMs = readWatermark ? Date.parse(readWatermark) : null
-// ...
-if (a.from === 'me' && !a.read && wmMs != null && Date.parse(a.sentAt) <= wmMs) a.read = true
-// watermark update:
-setReadWatermark((prev) =>
-  prev == null || Date.parse(readAt) > Date.parse(prev) ? readAt : prev,
-)
-```
+- **CR-01 (WS reconnect churn / stale closures) — RESOLVED.** `useClientMessagingWS.ts:90,178` the connect effect depends only on `[enabled]`. Callbacks live in `cbRef` (`:87-88`), reassigned every render and read at dispatch time (`:110,125,127,129`), so the latest callback is always invoked without re-running the effect. Two dedicated regression tests confirm both halves: no socket reopen on callback-identity change (`useClientMessagingWS.test.ts:218-240`) and latest-callback dispatch after re-render (`:242-261`).
+- **CR-02 (read-tick epoch-ms compare) — RESOLVED.** Every sentAt/readAt comparison uses `Date.parse`: the watermark base (`ChatScreen.jsx:741`), the per-message mark (`:744` `Date.parse(a.sentAt) <= wmMs`), and the monotonic watermark update (`:889-891` `Date.parse(readAt) > Date.parse(prev)`). No lexicographic ISO compare remains at any read-tick site. `ChatScreen.readtick.test.ts` pins the mixed-offset (`Z` vs `+03:00`) cases.
+- **WR-01 (reconnect REST catch-up) — RESOLVED.** `onReconnect` fires only after `hasConnectedOnce` on a reopen, not the initial connect (`useClientMessagingWS.ts:95-112`); `App.jsx:232-238` invalidates the messages query in response. No double-fetch: the initial connect does not fire it, and the 30s `refetchInterval` poll (`clientQueries.ts:979`) is an independent fallback. Regression test `useClientMessagingWS.test.ts:289-319`.
+- **WR-02 (objectURL revoke timing) — RESOLVED.** The success/error send paths deliberately do NOT revoke (`ChatScreen.jsx:1009-1018`). A dedicated collector effect revokes only URLs no longer referenced by either a pending optimistic message or the open overlay (`:915-927`), plus an unmount sweep (`:930-936`). No revoked-URL can be referenced by preview or full-screen overlay.
+- **WR-05 (single reconnect timer) — RESOLVED.** `scheduleReconnect` clears any pending timer and nulls the ref before scheduling, and nulls the ref inside the fired callback (`useClientMessagingWS.ts:145-162`). Racing-close regression test confirms exactly one reconnect socket (`useClientMessagingWS.test.ts:264-286`).
+- **Bridge-ownership / ref-dispatch regression sweep — CLEAN.** The `window.__chatReadReceipt` / `window.__chatTyping` bridge (`ChatScreen.jsx:877-910`) saves the previous handler and restores it on cleanup only when the current handler is still its own — correct guard against double-mount (StrictMode / tab churn) clobbering a newer instance's handler. Effect dep is `[setTypingFn]`, and `setTypingFn` is a stable `useCallback([])` (`:869-874`), so the bridge registers once. App-level WS singleton is gated on `status === 'authed'` (`App.jsx:217`). No dep-array or ownership regression found.
 
 ## Warnings
 
-### WR-01: Documented `?after=` reconnect catch-up is never invoked (dead path / unmet behavior)
+### WR-01: mark-read effect can repeat-PATCH under backend eventual-consistency lag
 
-**File:** `apps/client-pwa/src/lib/clientQueries.ts:962`, `apps/client-pwa/src/screens/ChatScreen.jsx:634`, `apps/client-pwa/src/lib/useClientMessagingWS.ts:14`
-**Issue:** `useClientMessages(after?)` exposes the cursor and the hook header advertises
-"REST catch-up on reconnect (DB-first)" with "`?after=` catch-up", but ChatScreen calls
-`useClientMessages()` with no argument and the WS `onclose`/reconnect path does no catch-up at
-all — it only resets/doubles backoff. The reconnect simply relies on the 30s `refetchInterval`
-poll and on `new_message` invalidation. The advertised after-cursor catch-up is therefore a
-dead code path; any messages that arrived during a disconnect are only picked up on the next
-poll/new_message, not via the cursor. Either wire the catch-up (refetch with `after=lastSeenId`
-on reconnect) or remove the `after` plumbing and the comments so the contract matches reality.
-**Fix:** On WS `onopen` after a reconnect (delay > BASE_DELAY), invalidate/refetch messages; or
-delete the unused `after` parameter and its doc claims.
-
-### WR-02: Photo objectUrl revoked while still referenced (broken image / flicker + overlay)
-
-**File:** `apps/client-pwa/src/screens/ChatScreen.jsx:920`, `937-945`, `1202`/`1399-1401`
-**Issue:** `sendPhoto` creates `objectUrl` for the optimistic bubble, then in `finally`
-unconditionally calls `URL.revokeObjectURL(objectUrl)`. On the success path the optimistic
-message is removed (`setOptimistic(...filter)`) before `finally`, but the server refetch that
-replaces it is async and may not have landed — for the window between optimistic-removal and
-refetch-arrival there is no photo, then it pops in (flicker). Worse, the optimistic `<img>`
-`src` is the object URL; if the user taps it (`onPhotoTap` → `setPhotoOverlay(objectUrl)`,
-lines 545/1202/1399) before/around revoke, the full-screen overlay shows a revoked (blank)
-blob. On the error path the bubble is also removed and revoked, which is fine, but the
-success-path early-revoke is the defect.
-**Fix:** Revoke the object URL only after the server message has actually replaced the
-optimistic one (e.g. track the URL and revoke in the refetch/cleanup once `serverIds` contains
-the confirmed id), or keep the optimistic bubble until the refetch lands and revoke in an
-effect cleanup. At minimum do not revoke in `finally` on the success path.
-
-### WR-03: Mark-read effect can self-trigger a mutation loop
-
-**File:** `apps/client-pwa/src/screens/ChatScreen.jsx:874-880`
-**Issue:**
+**File:** `apps/client-pwa/src/screens/ChatScreen.jsx:942-948`
+**Issue:** The WR-03 fix correctly guards against *concurrent* PATCH with `!markReadM.isPending`, but it does not bound *repeated* PATCH. Flow: effect fires → `mutate()` → `isPending=true` (effect blocked) → `onSettled` invalidates `messages` → refetch. If the backend has not yet converged (read-receipt write lag / eventual consistency) the refetched `unreadCount` is still `> 0`; once `isPending` flips back to `false` the effect re-evaluates `[unreadCount, markReadM.isPending]` and fires another PATCH. This is a self-sustaining PATCH→invalidate→refetch→PATCH cycle that only terminates when the server finally returns `unreadCount === 0`. Concurrent storms are prevented, but a serial storm against a lagging backend is not.
+**Fix:** Latch a mark-read per open-thread session so the PATCH fires at most once per open until a genuinely new unread arrives:
 ```js
+const markedForOpenRef = useRef(false);
+// reset in openThread(): markedForOpenRef.current = false;
 useEffect(() => {
-  if (openIdRef.current != null && unreadCount > 0) { markReadM.mutate(); ui.setUnreadChat(0); }
-}, [unreadCount])
+  if (openIdRef.current != null && unreadCount > 0 && !markReadM.isPending && !markedForOpenRef.current) {
+    markedForOpenRef.current = true;
+    markReadM.mutate();
+    ui.setUnreadChat(0);
+  }
+}, [unreadCount, markReadM.isPending]);
 ```
-`markReadM` `onSettled` invalidates the messages key → refetch. If the backend has not yet
-flipped `readAt`/`unreadCount` to 0 for that fetch (eventual consistency, or a message arriving
-between mutate and refetch), the refetched `unreadCount` is still > 0, the effect fires again,
-and another `markReadM.mutate()` is issued — a PATCH storm bounded only by how fast the server
-converges. There is no in-flight guard.
-**Fix:** Guard on `markReadM.isPending` and/or only fire when `unreadCount` transitions from 0,
-e.g. track the last marked count or check `!markReadM.isPending` before mutating.
+This keeps the optimistic badge-clear while making the PATCH idempotent per open.
 
-### WR-04: `setUnreadChat` badge effect depends on `ui`, runs on every UI state change
+### WR-02: setState after await in send paths can run after unmount
 
-**File:** `apps/client-pwa/src/screens/ChatScreen.jsx:767-769`
-**Issue:**
+**File:** `apps/client-pwa/src/screens/ChatScreen.jsx:967-978` (text) and `:1002-1018` (photo)
+**Issue:** `sendTextMessage` / `sendPhoto` call `setOptimistic(...)` (and `toast(...)`) after `await ...mutateAsync(...)`. ChatScreen is `lazy`-routed and unmounts on tab switch; if the user navigates away while a send is in flight, the resolution/`catch` runs `setState` on an unmounted component. In React 18 this is a benign no-op (no crash), so this is a WARNING, not a blocker — but it produces console noise and the optimistic cleanup is silently lost. The objectURL is still safely reclaimed by the unmount sweep (`:930-936`), so there is no leak.
+**Fix:** Guard with a mounted ref:
 ```js
-useEffect(() => { if (serverData) ui.setUnreadChat(serverData.unreadCount) }, [serverData, ui])
+const mountedRef = useRef(true);
+useEffect(() => () => { mountedRef.current = false; }, []);
+// then: if (mountedRef.current) setOptimistic(...);
 ```
-The `useUI()` value is rebuilt by `useMemo` whenever any of its ~30 dependencies change
-(`UIContext.jsx:112-119`), so `ui` changes identity on every sheet open/close, push, etc. This
-effect therefore re-runs on unrelated UI changes and re-pushes `setUnreadChat`. Combined with
-CR-01 this is part of the reconnect cascade. While `setUnreadChat` to the same value won't
-re-render, the effect churn is unnecessary and couples chat-badge updates to global UI state.
-**Fix:** Depend only on the value: `useEffect(() => { if (serverData) ui.setUnreadChat(serverData.unreadCount) }, [serverData?.unreadCount])` (capture `ui.setUnreadChat` once, or pull the setter out of the memoized object). Setters from `useState` are stable and safe to omit.
-
-### WR-05: WS reconnect path leaks the pending timer reference / no clear before reschedule
-
-**File:** `apps/client-pwa/src/lib/useClientMessagingWS.ts:120-126`, `109-112`
-**Issue:** `scheduleReconnect` assigns `reconnectTimer.current = setTimeout(...)` but never
-clears a previously pending timer first, and the timer callback that runs `connect()` does not
-null out `reconnectTimer.current`. If two `onclose` events race (e.g. an `onerror`→`close`
-plus a server close), two timers can be scheduled and only the last is tracked in the ref;
-the earlier one is orphaned and will still fire `connect()`, potentially opening a second
-socket that escapes the single-socket invariant. Cleanup only clears the last ref.
-**Fix:** Clear any existing timer at the top of `scheduleReconnect`, and reset
-`reconnectTimer.current = null` inside the timeout callback before calling `connect()`:
-```ts
-function scheduleReconnect() {
-  if (reconnectTimer.current !== null) clearTimeout(reconnectTimer.current)
-  reconnectTimer.current = setTimeout(() => {
-    reconnectTimer.current = null
-    reconnectDelay.current = Math.min(reconnectDelay.current * 2, MAX_DELAY)
-    connect()
-  }, reconnectDelay.current)
-}
-```
-
-### WR-06: `window.__chat*` bridge has no ownership guard — last-mounted-wins / stale clear
-
-**File:** `apps/client-pwa/src/screens/ChatScreen.jsx:855-871`, `apps/client-pwa/src/App.jsx:224-231`
-**Issue:** ChatScreen registers `window.__chatReadReceipt` / `window.__chatTyping` on mount and
-sets them to `undefined` on cleanup. Because ChatScreen is route-mounted (lazy) and can be
-unmounted/remounted on tab changes, and the App-level WS calls `window.__chatReadReceipt?.(...)`,
-the contract depends on exactly one ChatScreen being mounted. If a transition double-mounts (or
-React 18 StrictMode dev double-invoke), the cleanup of the unmounting instance can `undefined`
-the handler the newly-mounted instance just installed, silently dropping read-receipt/typing
-frames. The bridge also has no identity check (any code can overwrite it).
-**Fix:** Capture-and-restore the previous handler in cleanup (only clear if still ours), or move
-the read-receipt/typing state to a shared store/context the App WS writes to directly instead of
-a global function bridge.
-
-### WR-07: `crypto.randomUUID()` assumed available without guard (non-secure-context failure)
-
-**File:** `apps/client-pwa/src/screens/ChatScreen.jsx:904`, `938`
-**Issue:** Idempotency keys are generated with `crypto.randomUUID()`. `crypto.randomUUID` is
-only defined in secure contexts (HTTPS/localhost). A PWA served over plain HTTP on a LAN IP for
-device testing, or an older WebView, will throw `TypeError: crypto.randomUUID is not a function`
-inside `sendTextMessage`/`sendPhoto`; the `catch` then shows "Не удалось отправить" and the user
-can never send — a silent hard failure that looks like a backend error. Other PWA code paths
-(e.g. checkout idempotency) should be checked for the same assumption.
-**Fix:** Use a guarded UUID helper (`crypto.randomUUID?.() ?? fallbackUuidV4()`) shared across
-the PWA, or document/enforce the secure-context requirement.
-
-### WR-08: `serverData?.unreadCount ?? 0` badge ignores `locallyUnread`/mute, and `adminUnread` can desync
-
-**File:** `apps/client-pwa/src/screens/ChatScreen.jsx:727`, `753`, `766-769`
-**Issue:** The card badge uses `adminUnread = locallyUnread ? 1 : unreadCount`, but the TabBar
-badge feed (`ui.setUnreadChat(serverData.unreadCount)`, line 768) always pushes the raw server
-`unreadCount`, ignoring the local "Не прочитано" toggle and ignoring the optimistic `setUnreadChat(0)`
-done in `openThread`. So immediately after opening the thread (which sets the tab badge to 0),
-the next `serverData` reference (e.g. from the 30s poll, or any refetch where the server has not
-yet flipped `readAt`) re-pushes the old `unreadCount`, making the tab badge flicker back to a
-non-zero value while the thread is open. The card-level and tab-level unread counts are derived
-from two different rules and can disagree.
-**Fix:** Drive the tab badge from the same source of truth as the card (`adminUnread`) and skip
-re-pushing when the thread is open: e.g. `ui.setUnreadChat(openIdRef.current != null ? 0 : adminUnread)`.
 
 ## Info
 
-### IN-01: `closeThread` does not clear `optimistic` / `readWatermark` (stale carry-over)
+### IN-01: hard-coded mock conversation id `'c2'` used as deep-link trigger
 
-**File:** `apps/client-pwa/src/screens/ChatScreen.jsx:816-825`
-**Issue:** Closing and reopening the thread keeps any leftover `optimistic` entries and the
-`readWatermark`. Pending-failed-then-reopened states could show stale optimistic bubbles until
-the next refetch reconciles them. Low impact given dedup by `serverIds`, but worth resetting on
-close for predictability.
-**Fix:** Reset `setOptimistic([])` (or only the resolved ones) on thread close if appropriate.
+**File:** `apps/client-pwa/src/App.jsx:257,342`
+**Issue:** `setTimeout(() => ui.setPendingChat('c2'), 360)` passes the legacy mock conv id `'c2'`. ChatScreen's deep-link effect only checks `initialConv` truthiness and always opens `ADMIN_CONV.id` (`ChatScreen.jsx:850-856`), so `'c2'` works only incidentally as a truthy flag. The literal is now meaningless (single real `admin` conversation) and is a latent trap if the deep-link effect ever starts honoring the passed id.
+**Fix:** Pass a self-documenting truthy value (e.g. `ui.setPendingChat(true)` or `ADMIN_CONV.id`) and drop the stale `'c2'`.
 
-### IN-02: Unread-divider relies on staff `read` flag whose semantics are ambiguous
+### IN-02: `optimistic`/server dedup relies solely on post-resolve filter, not id match
 
-**File:** `apps/client-pwa/src/screens/ChatScreen.jsx:800`, `625`
-**Issue:** `openThread` computes the "Новые сообщения" divider from
-`threadMessages.filter(m => m.from === 'them' && !m.read)`, where `read = m.readAt != null`
-(line 625). For incoming (staff) messages, `readAt` semantics ("who read it") are not clearly
-defined by the wire shape; if `readAt` on staff messages means the staff-read time rather than
-the client-read time, the divider can be placed incorrectly. Confirm the backend contract for
-`readAt` on `role: 'staff'` messages.
-**Fix:** Document/verify the `readAt` meaning per role and adjust the divider predicate if needed.
+**File:** `apps/client-pwa/src/screens/ChatScreen.jsx:752-754`
+**Issue:** `serverIds.has(o.id)` can never be true — optimistic ids are `'opt-...'` / `'opt-photo-...'` while server ids are real UUIDs — so the `Set` filter at `:753` is effectively dead; dedup depends entirely on the explicit `setOptimistic(prev => prev.filter(...))` after `mutateAsync` resolves (`:974,1008`). This works, but leaves a brief window where the refetched server copy and the not-yet-removed optimistic copy can both render. Not a regression (pre-existing design) and not user-visible in practice, but the `serverIds` guard reads as defensive code that does nothing.
+**Fix:** Remove the dead `serverIds` filter, or dedup on the idempotency key echoed back by the server so the server copy deterministically replaces the optimistic one.
 
-### IN-03: `dangerouslySetInnerHTML` for icons — safe today, fragile pattern
+### IN-03: `MessageRow` photo-body sentinel check is brittle
 
-**File:** `apps/client-pwa/src/screens/ChatScreen.jsx:454`
-**Issue:** `Ico` injects `ICON[name]` via `dangerouslySetInnerHTML`. All `name` values come from
-the in-file constant `ICON` map (no user data), so there is no XSS today. Flagged only as a
-fragility note: if a future change ever lets `name`/icon content derive from server or user
-input, this becomes an injection sink. Message bodies and attachment URLs are rendered through
-JSX text/`src` (not innerHTML), which is correct.
-**Fix:** Keep `ICON` strictly static, or render fixed SVG components instead of HTML strings.
-
-### IN-04: `data-go`/document pointer handlers attached at `document` level
-
-**File:** `apps/client-pwa/src/screens/ChatScreen.jsx:1014-1021`
-**Issue:** The card-gesture handlers are added on `document` (`pointermove`/`up`/`cancel`). They
-are correctly removed in cleanup, but because the effect deps include `toggleMute, openThread,
-openSheet` (and `openThread` depends on `threadMessages`), the listeners are detached/reattached
-frequently as messages change. Functionally fine, but a churn worth noting; consider stabilizing
-`openThread` (it currently lists `threadMessages` in deps via the divider calc) so the
-document-level listeners are installed once.
-**Fix:** Compute the divider lazily inside `openThread` from a ref instead of depending on
-`threadMessages`, so the gesture effect deps stay stable.
+**File:** `apps/client-pwa/src/screens/ChatScreen.jsx:549`
+**Issue:** `m.body && !m.body.startsWith('photo:')` carries forward a prototype `photo:` sentinel convention that no wired code path produces (real photo messages set `body: ''` at `:994`). Harmless near-dead guard, but it obscures intent.
+**Fix:** Drop the `startsWith('photo:')` check; render `m.body` when present.
 
 ---
 
-_Reviewed: 2026-06-08_
+_Reviewed: 2026-06-08T08:21:00Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
