@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.6
 milestone_name: Referral System
 status: ready_to_plan
-stopped_at: Phase 98 complete (3/3) — ready to discuss Phase 99
-last_updated: 2026-06-08T15:41:26.117Z
+stopped_at: Phase 99 complete (2/2) — ready to discuss Phase 999.1
+last_updated: 2026-06-08T16:45:37.880Z
 last_activity: 2026-06-08 -- Phase 98 execution started
 progress:
   total_phases: 8
   completed_phases: 2
   total_plans: 9
-  completed_plans: 9
+  completed_plans: 11
   percent: 25
 ---
 
@@ -21,11 +21,11 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 99 — openapi handoff + milestone verification
+**Current focus:** Phase 999.1 — wr 06 restore pt session credit on owner force cancel (✅ done 2026 05 29 — quick task 260529 ny2)
 
 ## Current Position
 
-Phase: 99
+Phase: 999.1
 Plan: Not started
 Status: Ready to plan
 Last activity: 2026-06-08
