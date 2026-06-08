@@ -222,7 +222,12 @@ Plans:
   1. ChatScreen renders the thread history (bubbles: client right / staff left, timestamps in Europe/Moscow HH:MM), and is fully de-listed from the D-71-09 ESLint placeholder zone (3 spots removed, `grep` returns 0, import via `@/data`)
   2. The unread badge on the Chat tab reflects the real `unreadCount` in real time via the WS connection, falling back to a 30-second React Query poll when the WS is disconnected
   3. Client can select a photo from the device (or camera), see a preview thumbnail in the thread, and send it; previously sent photos are viewable full-screen on tap
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 94-01-PLAN.md — Data layer: messaging React Query hooks + useClientMessagingWS + @/data barrel + UIContext unreadChat + App-level WS mount & TabBar badge (PWA-01, PWA-02)
+- [ ] 94-02-PLAN.md — Pixel-perfect ChatScreen port: de-list from D-71-09 + scoped CSS list+thread + read ticks/typing/unread + photo picker & full-screen overlay (PWA-01, PWA-03)
+
 **UI hint**: yes
 
 ### Phase 95: OpenAPI Handoff + Milestone Verification
@@ -284,5 +289,5 @@ Plans:
 | 91. Read Receipts + Typing Indicators | 2/2 | Complete    | 2026-06-07 |
 | 92. Photo Attachments | 3/3 | Complete   | 2026-06-07 |
 | 93. Telegram Bridge | 2/2 | Complete   | 2026-06-08 |
-| 94. PWA ChatScreen Wiring | 0/TBD | Not started | - |
+| 94. PWA ChatScreen Wiring | 0/2 | Not started | - |
 | 95. OpenAPI Handoff + Milestone Verification | 0/TBD | Not started | - |
