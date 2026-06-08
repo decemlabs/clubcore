@@ -1400,7 +1400,7 @@ class ReferralBonusAccruedPayload(BaseModel):
 
     client_id: UUID
     entry_id: UUID
-    amount_kopecks: int  # always positive (accrual)
+    amount_kopecks: int = Field(gt=0)  # always positive — referral accrual (enforced)
     referral_capture_id: UUID  # idempotency anchor
     online_payment_id: UUID  # forensic link to the triggering payment
     role: Literal["referrer", "referee"]
