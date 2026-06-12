@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Production Admin — Backend Wiring
 status: planning
-last_updated: "2026-06-12T20:59:38.542Z"
-last_activity: 2026-06-12
+last_updated: "2026-06-13T00:00:00.000Z"
+last_activity: 2026-06-13
 progress:
-  total_phases: 0
+  total_phases: 7
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,97 +20,61 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** v2.6 Referral System shipped (Phases 96–99). Planning next milestone — run `/gsd:new-milestone`. (999.x are historical DONE/SHIPPED backlog ledger entries, not work.)
+**Current focus:** v3.0 Production Admin — Backend Wiring. Roadmap created (7 phases, 30/30 requirements mapped). Start with `/gsd:plan-phase 100`.
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 100 of 106 (Foundation + Authentication)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-06-12 — Milestone v3.0 started
+Status: Ready to plan
+Last activity: 2026-06-13 — v3.0 roadmap created (Phases 100-106, 30 requirements mapped)
 
-## v2.6 Roadmap Summary
+Progress: [░░░░░░░░░░] 0%
 
-| Phase | Goal | Requirements |
-|-------|------|--------------|
-| 96. Referral Domain Backend | Клиент получает персональный реф-код; друг привязывает реферера при онбординге; owner настраивает суммы | REFER-01, REFER-02 (backend), REFER-03, REFER-07 |
-| 97. Reward Crediting | Двусторонний бонус через loyalty_ledger на payment.succeeded первой покупки; idempotent; co-transactional | REFER-04 |
-| 98. PWA ReferralScreen | Graduate из D-71-09; pixel-perfect порт макета; список приглашённых; «Уже накоплено»; deep-link | REFER-02 (PWA), REFER-05, REFER-06 |
-| 99. OpenAPI Handoff + Milestone Verification | Byte-stable openapi.json + schema.d.ts + _v26Checks + milestone gate зелёный | HND-01 |
-
-**Coverage:** 8/8 v2.6 requirements mapped (zero orphans, zero duplicates). Execution order: 96 → 97 → 98 → 99.
-
-<details>
-<summary>v2.5 Roadmap Summary (shipped)</summary>
+## v3.0 Roadmap Summary
 
 | Phase | Goal | Requirements |
 |-------|------|--------------|
-| 90. Messaging Domain + REST Foundation + WS Scaffold | DB schema + REST + WS + Redis pub/sub fan-out; all six WS invariants locked | MSG-01, MSG-02, MSG-03, MSG-04, RT-01, RT-02, RT-03, RT-04 |
-| 91. Read Receipts + Typing Indicators | Per-message read status + typing presence over WS; reply-as-read semantics | RCPT-01, RCPT-02, RCPT-03 |
-| 92. Photo Attachments | Authenticated upload + IDOR-safe serve; magic-byte validation; stored-XSS guards | ATT-01, ATT-02, ATT-03 |
-| 93. Telegram Bridge | Client→staff DM via ARQ + reply routing via chat_forwarding_log + echo-loop prevention | BRDG-01, BRDG-02, BRDG-03 |
-| 94. PWA ChatScreen Wiring | Graduate from D-71-09 ESLint zone; wire REST + WS + attachments; unread badge | PWA-01, PWA-02, PWA-03 |
-| 95. OpenAPI Handoff + Milestone Verification | Byte-stable openapi.json + schema.d.ts + _v25Checks + milestone gate green | HND-01 |
+| 100. Foundation + Auth | Workspace absorption, API client + CSRF + 401-redirect, zod seam, hide-for-future, staff login/session/role-gate | FND-01, FND-02, FND-03, FND-04, AUTH-01, AUTH-02, AUTH-03 |
+| 101. Clients + Memberships | Full client-membership lifecycle on real data (list/detail/CRUD + plans + sell/freeze/renew/cancel) | CLI-01, CLI-02, CLI-03, MEM-01, MEM-02, MEM-03 |
+| 102. Schedule + Trainers | Trainer slots/templates/time-off + bookings/PT-sessions + trainer catalog + payroll | SCH-01, SCH-02, TRN-01, TRN-02 |
+| 103. Attendance + Finance | Check-in + visits load + cashbox + revenue/online-payments reports | ATT-01, ATT-02, FIN-01, FIN-02 |
+| 104. Dashboard + Reports + Settings | Live KPI dashboard + all 4 reports + audit log + profile/sessions + user admin | RPT-01, RPT-02, RPT-03, SET-01, SET-02 |
+| 105. admin-web Retirement + RBAC Re-home | Delete admin-web; re-home three-way RBAC parity; CI/workspace/drift-gate clean | ADMW-01, ADMW-02, ADMW-03 |
+| 106. OpenAPI Handoff + Milestone Gate | Byte-stable contract; full milestone gate green (mypy+lint+pytest+admin-app+Redocly) | HND-01 |
 
-</details>
+**Coverage:** 30/30 v3.0 requirements mapped. Execution order: 100 → 101 → 102 → 103 → 104 → 105 → 106.
 
 ## Accumulated Context
 
-### v2.6 Architecture Constraints (pre-locked)
+### v3.0 Architecture Constraints (pre-locked)
 
-- **Staff-free**: всё реферальное под `require_client()`; `apps/admin-web` заморожен; owner-API только для конфига сумм
-- **IDOR-safe**: `client_id` реферера — только из `require_client()` principal, никогда из тела запроса
-- **Server-authoritative rewards**: бонус начисляется исключительно на `payment.succeeded` webhook, никогда на клиентский запрос
-- **loyalty_ledger reuse**: нет параллельного bonus-store; реферальные бонусы — `entry_type='referral_accrual'` (или аналог) в существующем `loyalty_ledger`
-- **Idempotency pattern**: UNIQUE partial index `(referral_id, online_payment_id WHERE entry_type='referral_accrual')` — тот же паттерн, что `record_loyalty_redemption` (Phase 83)
-- **INFRA-15 discipline**: все новые LOCKED audit events (`referral_code_generated`, `referral_captured`, `referral_bonus_accrued`) регистрируются в `LOCKED_AUDIT_EVENTS` frozenset до первого callsite
-- **One-bonus-per-referee**: бонус начисляется только на первую покупку абонемента рефери; повторные покупки не триггерят повторный бонус
-- **D-71-09 graduation pattern**: de-listing ReferralSheet из ESLint zone = удалить из negated ignore (строка `'!src/screens/sheets/ReferralSheet.jsx'`) + удалить dedicated `files` block — точно как ChatScreen в Phase 94
-
-### Key integration points (from code reading)
-
-- **loyalty/service.py**: `accrue_welcome_bonus` и `owner_grant_loyalty` — переиспользуемые примитивы для Phase 97 (caller-owns-txn, flush-only)
-- **handlers.py (payment.succeeded)**: Point of insertion for referral bonus crediting — inside `async with session.begin()`, after `record_loyalty_redemption`, before audit emits; follow the exact same RETURNING-gated pattern
-- **eslint.config.js (D-71-09)**: Line 32 `'!src/screens/sheets/ReferralSheet.jsx'` + lines 71-109 dedicated block — both must be removed when graduating in Phase 98
-
-### v2.6 Key Decisions (to be confirmed at phase planning)
-
-- **Referral code format**: short alphanumeric slug (e.g. UUID prefix or name-based) — decide at Phase 96 plan
-- **Deep-link route**: `/i/<code>` — served by client-pwa router (not backend redirect); backend `GET /referral/resolve/<code>` returns referrer info
-- **Capture timing**: referral capture at onboarding step (Phase 68/73 pattern); `POST /client/referral/capture` called with referrer code; client_id from principal (IDOR-safe)
-- **Referral config migration**: seed migration (same pattern as FIT15 promo in Phase 75) — no admin UI
+- **D-V30-SCOPE-WIRE**: wire-only — no new backend domains/endpoints; every screen maps to an already-shipped endpoint
+- **D-V30-BRANCH**: single-club; Branches/Branch-Settings/System-Settings are hidden-for-future (FND-04), not built
+- **D-V30-ADMINWEB-DELETE**: admin-web deleted; RBAC re-home mechanic decided at Phase 100 plan (read real coupling first)
+- **D-V30-VERSION**: v3.0 is the wiring milestone; production deploy/launch → v3.1+
+- **Zod contract seam**: spike 010 Option A — per-domain zod layer adopted lazily as each screen is wired; mock `queryFn` removed when domain goes live
+- **Staff principal**: `sz_*` cookies, `X-CSRF-Token` on mutating requests — not `cc_client_*`
+- **RBAC decision deferred**: whether parity lives in admin-app `can.ts` vs backend-only authority is decided at Phase 100 plan after reading real coupling in `permissions.py`/`can.ts`/`registry.ts`
 
 ### Pending Todos
 
-- **v2.6 planning**: Start with `/gsd:plan-phase 96` (Referral Domain Backend)
+- Start Phase 100 plan: `/gsd:plan-phase 100`
 
 ### Blockers/Concerns
 
-- **Dev DB needs a clean re-migrate before Phase 99 manual verification (non-blocking for tests).** Migration `0067` was amended in place during Phase 96 code-review (CR-02: a plain `ix_referral_codes_client_id` was replaced by the UNIQUE `uq_referral_codes_client_id`), and `0069` (Phase 97) widened `loyalty_ledger`. The shared docker Postgres applied the pre-amendment `0067`, so it still carries the stale plain `ix_referral_codes_client_id` and may hold a polluted `referral_config` from earlier runs. Test suites rebuild/seed schema so all 100+ referral tests pass, and `alembic check` is green (literal-named indexes excluded in env.py). But live manual testing / a fresh deploy should run a clean migrate. Phase 99 milestone gate should `docker compose down -v` + re-migrate + re-seed before manual checks.
+- Dev DB carry-over: stale `ix_referral_codes_client_id` (migration 0067 amended in place) + possibly polluted `referral_config`. Run `docker compose down -v` + migrate + seed before Phase 106 manual verification. (Non-blocking for test suites — they rebuild schema.)
 
 ## Deferred Items
 
-Acknowledged at v2.6 close (2026-06-08):
+Carrying forward from v2.6 close (2026-06-08):
 
 | Category | Item | Status |
 |----------|------|--------|
-| tech-debt→next | WARN-1: ReferralSheet "joined" status derives from the referrer-side `referral_accrual` row, which the webhook skips when `referrerBonusKopecks=0` → a paid friend shows "Ждём" forever under zero-config (never at seeded default 50000). Fix: derive "joined" from referee first-purchase independent of bonus config. | deferred — see v2.6-MILESTONE-AUDIT.md |
-| human-verify | 98-HUMAN-UAT browser-only: pixel-perfect parity (light+dark), live `/i/<code>`→join→invitees/accrued round-trip (two sessions), share/copy chips on device. Auto-deferred during autonomous run. | pending — see 98-HUMAN-UAT.md, re-run `/gsd:verify-work 98` |
-| operator | Dev Postgres clean re-migrate before live manual checks (0067 amended in place + 0069 added; stale `ix_referral_codes_client_id` + possibly polluted `referral_config`). `docker compose down -v` + migrate + seed. Test gates rebuild schema, unaffected. | pending |
-| cosmetic→next | ReferralLandingScreen `formatBonusPreview` static "14 дней в подарок" (resolver exposes welcomeBonusKopecks, not days); PWA referral hooks use cast escape hatch instead of typed schema.d.ts paths (harmless). | deferred — see v2.6-MILESTONE-AUDIT.md |
-| stale-ledger | 13 prior-milestone quick-task artifacts (status `missing`) + the v2.6 stale `/gsd:plan-phase 96` todo pointer — acknowledged at audit-open close. | acknowledged stale |
-
-Carrying forward from v2.5 close (2026-06-08):
-
-| Category | Item | Status |
-|----------|------|--------|
-| v2.6 | RCPT-02 typing indicator producer — PWA consumer + WS fan-out wired, but no production `publish_typing` trigger (Telegram has no typing API; admin-web frozen) | deferred → v2.6 admin-web |
-| bug→v2.6 | Typing indicator does NOT surface in the DOM despite correct React render — needs `/gsd:debug` + React DevTools fiber inspection when the v2.6 producer lands | deferred → v2.6 |
-| human-verify | Phase 94 HUMAN-UAT: pixel-perfect parity + photo flow verified 2026-06-08. NOT exercised: dark theme, physical-device camera, full Telegram leg (operator-pending) | mostly done — see 94-HUMAN-UAT.md |
-| advisory-ui | Phase 94 UI-review nits (hoist per-mount `<style>` to singleton; thread-bar online-dot; day-sep array keys) | deferred — see 94-UI-REVIEW.md |
-| contract | Phase 92 WR-01 `MessageItem.body` `""` sentinel for attachment-only messages | deferred — contract owner decision |
-| tracking | 13 stale prior-milestone quick-task artifacts (260529-*/260601-*, status `missing`) | acknowledged stale |
-| tech-debt | Pre-existing: flaky test_freeze_race; promo F821 ruff debt; test_alembic_clean | carried forward |
+| tech-debt | WARN-1 zeroed-referrer-bonus → permanent "pending" invitee under zero-config | deferred → post-v3.0 |
+| human-verify | 98-HUMAN-UAT browser-only items (pixel parity, live deep-link round-trip, share chips) | pending — see 98-HUMAN-UAT.md |
+| tech-debt | RCPT-02 typing indicator producer (WS consumer wired; no Telegram typing API) | deferred → future |
+| human-verify | Phase 94 HUMAN-UAT residual (dark theme + physical-device camera) | pending |
 | production | RUN-01 ЮKassa sandbox sale+refund walkthrough | N/A-until-production |
 | production | RUN-02 RU email deliverability probe | N/A-until-production |
 | security | Phase 70 CR-02/IN-01/IN-02 (proxy rate-limit, QR post-decode, cancel idempotency) | deferred → /gsd:secure-phase 70 |
@@ -118,10 +82,6 @@ Carrying forward from v2.5 close (2026-06-08):
 
 ## Session Continuity
 
-Last session: 2026-06-08 (autonomous run)
-Stopped at: Milestone v2.6 roadmap created (4 phases, 8/8 requirements mapped; ROADMAP.md + STATE.md + REQUIREMENTS.md updated).
-Resume: `/gsd:plan-phase 96` to begin Phase 96 (Referral Domain Backend).
-
-## Operator Next Steps
-
-- Start the next milestone with /gsd-new-milestone
+Last session: 2026-06-13 (roadmap creation)
+Stopped at: v3.0 roadmap created. ROADMAP.md + STATE.md + REQUIREMENTS.md written.
+Resume: `/gsd:plan-phase 100` to begin Phase 100 (Foundation + Authentication).

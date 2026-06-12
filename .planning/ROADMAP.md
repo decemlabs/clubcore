@@ -21,6 +21,7 @@
 - ✅ **v2.4 Content & Communication — Client-First** — Phases 86-89 (shipped 2026-06-06) — see [milestones/v2.4-ROADMAP.md](milestones/v2.4-ROADMAP.md)
 - ✅ **v2.5 Chat / Messaging — Client↔Gym** — Phases 90-95 (shipped 2026-06-08) — see [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md)
 - ✅ **v2.6 Referral System** — Phases 96-99 (shipped 2026-06-08) — see [milestones/v2.6-ROADMAP.md](milestones/v2.6-ROADMAP.md)
+- 🚧 **v3.0 Production Admin — Backend Wiring** — Phases 100-106 (in progress)
 
 ## Phases
 
@@ -56,46 +57,40 @@ All shipped milestones detailed in per-milestone ROADMAP archives above.
 - [x] **Phase 72: OpenAPI Handoff + CI + E2E Verification** — `Client-Portal` tag additive regen + `_v20Checks` guards + parallel client-pwa CI + staff drift gate green + live read-path E2E + v2.0 runbook (HND-01..03 + VER-01..04) — completed 2026-05-31
 - [x] **Phase 73: Home restyle (Home.html)** — active-subscription Home restyled to the approved mockup (decision-driven, no formal REQ-IDs) — completed 2026-06-01
 - [x] **Phase 74: Profile + Settings restyle (Profile.html / Settings.html)** — pass-style profile hero (API-backed fields only) + standalone protected `/settings` + local notif toggles + feature-flagged decor — completed 2026-06-02
-- [x] **Phase 999.3: Newbie (no-subscription) Home** — server-derived `membershipState: active|newbie|lapsed` enum + data-driven onboarding strip — completed 2026-05-31
-- [x] **Phase 999.4: Checkout restyle + real promo codes** — payment.html restyle + `app/modules/promo_codes/` (percentage/fixed, usage limits, migrations 0046/0047, server-authoritative discount, race-safe redemption; admin CRUD deferred) — completed 2026-05-31
-- [x] **Phase 999.5: Onboarding questionnaire + post-payment receipt-email** — 4-step questionnaire persisting profile + email up-front; email-OR-phone 54-ФЗ receipt path — completed 2026-06-01
-
-**Quick tasks (shipped separately):** 999.1 (WR-06 PT-session credit restore on owner force-cancel) + 999.2 (online-payment email-template dispatcher wiring) — both ✅ DONE 2026-05-29.
-
-**Deferred at close (acknowledged):** WARNING-1 (cancel-booking not E2E-wired in PWA — CBOOK-05 frontend gap); WARNING-2 (receipt-destination chip removed vs 999.5-UI-SPEC D-09); 3 Phase-70 security items → `/gsd:secure-phase 70`; promo-code admin CRUD UI; live ЮKassa leg RUN-01 (OPERATOR-PENDING by design). See `.planning/milestones/v2.0-MILESTONE-AUDIT.md` + STATE.md `## Deferred Items`.
+- [x] **Phase 999.3: client-pwa Home — newbie (no-subscription) state** — server-derived `membershipState: active|newbie|lapsed` + data-driven newbie Home + onboarding strip — completed 2026-05-31
+- [x] **Phase 999.4: client-pwa Checkout — visual restyle + real promo codes** — payment.html restyle + `app/modules/promo_codes/` (percentage/fixed, usage limits, migrations 0046/0047, server-authoritative discount, race-safe redemption; admin CRUD deferred) — completed 2026-05-31
+- [x] **Phase 999.5: client-pwa Onboarding + receipt-email** — 4-step onboarding questionnaire (name/goal/height/weight/email) + post-payment receipt-email screen + missing checkout `session.commit()` hotfix — completed 2026-06-02
 
 </details>
 
 <details>
 <summary>✅ v2.1 Client PWA — Fill the Gaps (Phases 75-78) — SHIPPED 2026-06-02</summary>
 
-**Milestone Goal:** Turn on already-built-but-hidden client PWA functionality via small backend field additions + pure-frontend wiring, fold in the two deferred v2.0 warnings, and surface the backend-complete fields in the UI. Audit `tech_debt` (0 blockers, 10/10 requirements delivered; live human-verify checks + pre-existing debt deferred). Full phase details in [milestones/v2.1-ROADMAP.md](milestones/v2.1-ROADMAP.md).
+Full phase details in [milestones/v2.1-ROADMAP.md](milestones/v2.1-ROADMAP.md).
 
-- [x] **Phase 75: Backend Field Additions** — priceKopecks/autoRenew on membership; notif_prefs JSONB on /client/me (migration 0050); FIT15 seed (migration 0051) (PMEM-01, NOTIF-01, PROMO-01) — completed 2026-06-02
-- [x] **Phase 76: PWA Wiring + Cleanup** — newbie-Home live trainers + plan chip; PersonalDataSheet read/save; mock chat badge removed (NHOME-01/02, PDATA-01/02, CLEAN-01) — completed 2026-06-02
-- [x] **Phase 77: v2.0 Debt Closures** — cancel-booking E2E wired (FIX-01, real booking threaded); receipt-destination reconciled via UI-SPEC amendment (FIX-02) — completed 2026-06-02
-- [x] **Phase 78: PMEM/NOTIF/PROMO Frontend Surfacing** — Profile price/auto-renew; Settings notif toggles server-backed; FIT15 checkout chip surfaced — closes the audit frontend-surfacing debt — completed 2026-06-02
-
-**Deferred at close (acknowledged):** Phase 76 PDATA-02 live persistence check; Phase 78 live checks (FIT15 chip in sub+PT checkout, notif toggle survives reload); pre-existing `router.py` ruff I001; WR-75-02 receipt-lookup heuristic. See `.planning/STATE.md` `## Deferred Items`.
+- [x] **Phase 75: Newbie home + active home gap-close** — completed 2026-06-02
+- [x] **Phase 76: Profile membership hero + money format** — completed 2026-06-02
+- [x] **Phase 77: Settings notif toggles server-backed** — completed 2026-06-02
+- [x] **Phase 78: FIT15 promo chip + checkout flag** — completed 2026-06-02
 
 </details>
 
 <details>
 <summary>✅ v2.2 Membership self-service depth (Phases 79-81 + 81.1) — SHIPPED 2026-06-03</summary>
 
-**Milestone Goal:** Углубить client-PWA self-service — клиент сам управляет привязанной картой и автоплатежом (UI-only: токен + preference + ФЗ-376 consent, без реальных списаний), переносит брони и видит недельную активность. Audit `passed` (11/11 requirements; PAYM-01 PWA-capture gap closed by Phase 81.1; live-infra checks OPERATOR-PENDING). Full phase details in [milestones/v2.2-ROADMAP.md](milestones/v2.2-ROADMAP.md).
+Full phase details in [milestones/v2.2-ROADMAP.md](milestones/v2.2-ROADMAP.md).
 
-- [x] **Phase 79: Payment Methods Foundation + Card-on-File** — migration 0052 `client_payment_methods`, `payment_methods/` module, webhook step-8.5 token save, GET/DELETE/PATCH endpoints, ФЗ-376 consent (PAYM-01..04) — completed 2026-06-03
-- [x] **Phase 80: Booking Reschedule** — atomic cancel+create `reschedule_booking_for_client`, migration 0053, `booking_rescheduled` audit, reschedule DM, BookingManageSheet wiring, PT-credit preserved (RESCH-01..03) — completed 2026-06-03
-- [x] **Phase 81: Weekly Activity + PWA Flag Flips + OpenAPI Handoff** — `GET /client/activity/weekly` (gym_date STORED, golden TZ test), flip `linkedCard`/`weeklyActivity` ON, CardSheet wiring, byte-stable openapi.json + schema.d.ts regen (WACT-01/02, PAYM-05, HND-01) — completed 2026-06-03
-- [x] **Phase 81.1: Checkout Save-Card Capture (audit gap closure)** — PWA save-card opt-in threads `savePaymentMethod` through both checkout hooks; closes the PAYM-01 PWA-capture gap (PAYM-01) — completed 2026-06-03
+- [x] **Phase 79: Card-on-file (save-payment-method)** — completed 2026-06-02
+- [x] **Phase 80: Client booking reschedule** — completed 2026-06-02
+- [x] **Phase 81: Weekly activity + flag flips + card sheet** — completed 2026-06-03
+- [x] **Phase 81.1: Checkout save-card gap closure** — completed 2026-06-03
 
 </details>
 
 <details>
 <summary>✅ v2.3 Loyalty / Club Bonuses + Real Autopay (Phases 82-85) — SHIPPED 2026-06-06</summary>
 
-**Milestone Goal:** Дать клиенту бонусный баланс (event-based начисление + server-authoritative списание скидкой в чекауте) и закрыть реальный off-session autopay-leg, отложенный из v2.2. Всё под `require_client()`; frozen `apps/admin-web` staff-контракт байт-в-байт цел (drift gate зелёный). Audit `passed` (14/14 requirements, integration 5/5 green; live-ЮKassa legs OPERATOR-PENDING by design). Full phase details in [milestones/v2.3-ROADMAP.md](milestones/v2.3-ROADMAP.md).
+**Milestone Goal:** Loyalty balance + append-only ledger, server-authoritative checkout redemption, real off-session `charge_expiring_autopay` leg, byte-stable OpenAPI freeze — all staff-free under `require_client()`, staff contract byte-identical. Full phase details in [milestones/v2.3-ROADMAP.md](milestones/v2.3-ROADMAP.md).
 
 - [x] **Phase 82: Loyalty Foundation — Ledger + Balance + Accrual** — append-only `loyalty_ledger` (migration 0054), balance/history IDOR-safe reads, welcome auto-credit (idempotent), owner-only grant API, `loyalty_accrued` LOCKED audit event, PWA LoyaltyBalanceCard/BonusHistorySheet behind clubBonuses flag (LOYL-01..03, ACCR-01..03) — completed 2026-06-05
 - [x] **Phase 83: Bonus Redemption at Checkout** — server-authoritative `discount_kopecks` recompute, idempotent overdraft-clamped webhook debit keyed on `online_payment_id`, promo-attribution fix, `loyalty_redeemed` LOCKED event (migration 0055), CheckoutSheet wired to real balance + `loyaltyRedeemKopecks` (REDM-01..03) — completed 2026-06-05
@@ -150,6 +145,97 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
 
 </details>
 
+### 🚧 v3.0 Production Admin — Backend Wiring (Phases 100-106)
+
+**Milestone Goal:** Превратить `apps/admin-app` из mock-прототипа в боевую staff-админку на реальном backend (одно-клубный срез по уже существующим доменам) и удалить `apps/admin-web`, перенеся его роль RBAC-reference.
+
+**Wire-only — no new backend domains.** Every screen maps to an already-shipped endpoint. Multi-branch screens stay hidden-for-future (D-V30-BRANCH). admin-web deleted after admin-app auth+RBAC is proven (D-V30-ADMINWEB-DELETE).
+
+## Phase Details
+
+### Phase 100: Foundation + Authentication
+**Goal**: admin-app is in the clubcore repo, talks to the real backend over staff cookies + CSRF, the deferred screens are gated, and a staff member can log in / log out / see their role reflected in the UI.
+**Depends on**: Nothing (first phase of v3.0)
+**Requirements**: FND-01, FND-02, FND-03, FND-04, AUTH-01, AUTH-02, AUTH-03
+**Success Criteria** (what must be TRUE):
+  1. `apps/admin-app` builds, tests, and runs inside the clubcore pnpm workspace (or chosen alternative); a dedicated CI job passes `check`/`test`/`build`.
+  2. The staff login form submits to `/api/v1/auth`, persists the `sz_*` session cookie, captures the CSRF token, and a browser refresh keeps the session alive.
+  3. All mutating requests carry `X-CSRF-Token`; a `401` response navigates to `/login` without a crash.
+  4. Deferred screens (Branches, Branch-Settings, System-Settings, ImportExport, Duplicates, Archive, Trash, Messages, Roles, Notifications-mgmt) render a "coming soon" placeholder — not broken, not wired.
+  5. Owner vs reception role is visible in the UI; each domain's per-domain zod contract seam is in place (mock `queryFn` removal path ready for Phase 101+).
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 101: Clients + Memberships
+**Goal**: Staff can manage the full client-membership lifecycle on real data — list, view, create, edit, delete clients; manage plans; sell, freeze, renew, and cancel memberships.
+**Depends on**: Phase 100
+**Requirements**: CLI-01, CLI-02, CLI-03, MEM-01, MEM-02, MEM-03
+**Success Criteria** (what must be TRUE):
+  1. Clients list renders real `GET /api/v1/clients` with server-side search and `{items,total,page,pageSize}` pagination; loading, error, and empty states are visible.
+  2. Client detail shows the client's profile, active memberships, visits, and payments from the real backend; mock `queryFn`s are removed.
+  3. Create and edit client forms validate via Zod, submit to `POST`/`PATCH /api/v1/clients`, and soft-delete via `DELETE`; owner-only actions are gated for reception.
+  4. Plans screen lists real membership plans and PT-package plans; create/edit are owner-only gated with a `403` surfaced as a friendly state.
+  5. Staff can sell a membership or PT-package (cash, with `Idempotency-Key`); and manage a membership lifecycle — freeze, unfreeze, renew, cancel + refund — with rules surfaced.
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 102: Schedule + Trainers
+**Goal**: Staff can manage trainer availability and PT bookings, and owner can configure trainer payroll — all on real backend data.
+**Depends on**: Phase 101
+**Requirements**: SCH-01, SCH-02, TRN-01, TRN-02
+**Success Criteria** (what must be TRUE):
+  1. Schedule screen renders real trainer slots, recurring templates, and time-off blocks; create/edit are owner-only; mock `queryFn`s removed.
+  2. Staff can book / cancel / complete a PT booking against a slot; race-safe conflict (slot taken) surfaces as a clear state, not a crash.
+  3. Trainers list and detail render real catalog data (name, bio, specialization) from `/trainers`.
+  4. Owner can view trainer payroll — comp-config, accrual preview, run, and pending→paid — on the trainer detail or finance surface; reception is gated with a `403`.
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 103: Attendance + Finance
+**Goal**: Reception can check in visits on real data; owner can see the cashbox, revenue, and online payments — all without mocks.
+**Depends on**: Phase 102
+**Requirements**: ATT-01, ATT-02, FIN-01, FIN-02
+**Success Criteria** (what must be TRUE):
+  1. Attendance screen renders real visits list (`/visits`) with loading/error/empty states; reception can check in a client via `/visits/check-in`.
+  2. Load screen renders the real hourly/daily visits aggregate from `/reports/visits`; no NaN on empty buckets.
+  3. Cashbox screen renders the real cash ledger (`/payments`) with sell + refund records and daily totals; the refund flow is wired; mock removed.
+  4. Finance screen renders real revenue report (`/reports/revenue`, net-of-refund, by method/subject) and online payments read; mock removed.
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 104: Dashboard, Reports + Settings
+**Goal**: The landing dashboard shows live KPI data; all four reports render with CSV export; owner can manage users and profile/sessions — all on real data.
+**Depends on**: Phase 103
+**Requirements**: RPT-01, RPT-02, RPT-03, SET-01, SET-02
+**Success Criteria** (what must be TRUE):
+  1. Dashboard `/` renders real KPI aggregates from `/reports/*` (revenue/clients/visits) and charts; empty-data guards prevent NaN/null crashes.
+  2. Reports screen renders all four aggregate reports (revenue / clients / visits / trainers) with working CSV export (UTF-8 BOM, Cyrillic-safe).
+  3. Audit screen renders the real owner-only audit log with filters, stable pagination, and CSV export; reception sees a gated/disabled state.
+  4. Settings (profile) reads/edits the current staff profile + theme and lists active sessions from `/auth/sessions`; sessions can be revoked.
+  5. Users screen (owner-only) wires invite / list / deactivate / soft-delete against `/api/v1/users`; reception sees a gated state.
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 105: admin-web Retirement + RBAC Re-home
+**Goal**: `apps/admin-web` is deleted and the three-way RBAC-parity reference is re-homed so the chosen guard stays green — CI, workspace, and drift-gate stay valid after removal.
+**Depends on**: Phase 100 (admin-app auth+RBAC proven)
+**Requirements**: ADMW-01, ADMW-02, ADMW-03
+**Success Criteria** (what must be TRUE):
+  1. `apps/admin-web` directory is removed from the repo; workspace entry, CI job, ESLint/import-linter zones, and dangling references are cleaned with no build errors.
+  2. The three-way RBAC-parity guard (`permissions.py` ↔ chosen admin-app anchor ↔ `registry.ts` or equivalent) is re-homed and green — the mechanic decided at Phase 100 plan is implemented.
+  3. The OpenAPI staff drift-gate and `@clubcore/api-client` codegen pipeline pass after removal; no consumer is left dangling.
+**Plans**: TBD
+
+### Phase 106: OpenAPI Handoff + Milestone Gate
+**Goal**: The staff OpenAPI contract is byte-stable, the full milestone gate passes, and v3.0 is verified complete.
+**Depends on**: Phase 105
+**Requirements**: HND-01
+**Success Criteria** (what must be TRUE):
+  1. `openapi.json` + `schema.d.ts` regenerate byte-stably; no new backend domains means the staff contract is unchanged vs `contract-freeze-v1.11.0`.
+  2. Staff drift-gate is green; full milestone gate passes: mypy --strict + lint-imports + pytest + admin-app `check`/`test` + Redocly.
+  3. All 30 v3.0 requirements are verified satisfied (no open blockers).
+**Plans**: TBD
+
 ## Backlog
 
 ### Phase 999.1: WR-06 restore PT session credit on owner force-cancel (✅ DONE 2026-05-29 — quick task 260529-ny2)
@@ -162,40 +248,18 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
 
 ### Phase 999.3: client-pwa Home — newbie (no-subscription) state (✅ SHIPPED in v2.0 — 2026-05-31)
 
-**Goal:** `apps/client-pwa` `HomeScreen.jsx` renders a dedicated onboarding state for an authenticated client with **no active subscription**, matching the approved mockup: hero card with "Выбрать абонемент" CTA, onboarding strip (4 steps with progress), "Первый визит — бесплатно" nudge, **locked QR placeholder** ("активируется после оплаты"), and quick tiles (Тренеры / Чат). The existing active-subscription Home state is preserved and selected by subscription status.
-
-**Depends on:** Phase 72 (v2.0 shipped — client read endpoints + wired PWA are the baseline)
-**Scope:** Frontend + a small backend addition. `/api/v1/client/home` gains a `membershipState: 'active' | 'newbie' | 'lapsed'` enum (per 999.3-CONTEXT.md D-01) so the PWA can distinguish a true newbie from a lapsed/expired member — `membership === null` alone cannot. The newbie Home renders only when `membershipState === 'newbie'`; `lapsed` keeps the existing expired/danger screen; `active` keeps the existing variant dispatch. Onboarding-strip step states are live (profile from `/client/me`, first-visit from existing bookings reads), not hardcoded. No dev-panel preview toggle — purely data-driven.
-**Design input:** `.planning/design-inputs/client-pwa-newbie-and-payment/home-newbie.html`
-**UI design contract:** `.planning/phases/999.3-client-pwa-home-newbie-state/999.3-UI-SPEC.md` (visuals locked; CONTEXT D-05/D-06 override its static onboarding step/progress values with live data)
-**UI hint:** yes
-
-**Plans:** 2/2 plans complete
-
-Plans:
-
-- [x] 999.3-01-PLAN.md — Backend: add server-derived `membershipState` enum to `/client/home` (newbie/lapsed/active) + integration tests
-- [x] 999.3-02-PLAN.md — Frontend: newbie Home render gate + 5 components + live onboarding-step derivation + tests
-
 ### Phase 999.4: client-pwa Checkout — visual restyle + real promo codes (✅ SHIPPED in v2.0 — 2026-05-31)
-
-**Goal:** Restyle the existing client checkout surface (`CheckoutSheet.jsx` + paying / success / error / return state screens) to match the approved payment mockup's visual language (amount header, order summary card, method affordances, state screens).
-
-**Depends on:** Phase 71, Phase 72
-**Scope:** Restyle the existing redirect/return/state screens under the mockup's visual language. The ЮKassa hosted-redirect flow is unchanged (D-71-04): the PWA **must not** build an in-app card-entry form and **must not** collect PAN/CVC/expiry — payment data stays on the ЮKassa hosted page. Webhook-only activation and server-authoritative pricing are untouched. The mockup's card-form, СБП bank-selection, and 3-D Secure panels are non-binding visual reference, not a contract to collect card data client-side.
-**Scope expansion (discuss-phase 2026-05-31):** This phase is **no longer a pure visual restyle / frontend-only.** It also adds **real promo codes** (frontend + backend) — mirrors the 999.3 precedent of folding a backend addition into a "visual" phase. New: `promo_codes` model + `promo_redemptions` (per-client / global usage limits, `valid_from`/`valid_until`/`is_active`, percentage + fixed-amount discount types), seeded via migration (no admin UI this phase), a client validate endpoint, and server-authoritative discount recompute passed to ЮKassa. **Admin CRUD UI for promo codes is deferred to the backlog** (admin frontend not ready). See `999.4-CONTEXT.md` (D-01..D-13) for the full decision set.
-**Design input:** `.planning/design-inputs/client-pwa-newbie-and-payment/payment.html`
-**UI hint:** yes
-
-**Plans:** 6/6 plans complete
 
 ## Progress
 
-**Execution Order:** 96 → 97 → 98 → 99
+**Execution Order:** 100 → 101 → 102 → 103 → 104 → 105 → 106
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 96. Referral Domain Backend | 3/3 | Complete    | 2026-06-08 |
-| 97. Reward Crediting | 3/3 | Complete    | 2026-06-08 |
-| 98. PWA ReferralScreen | 3/3 | Complete    | 2026-06-08 |
-| 99. OpenAPI Handoff + Milestone Verification | 2/2 | Complete    | 2026-06-08 |
+| 100. Foundation + Authentication | 0/TBD | Not started | - |
+| 101. Clients + Memberships | 0/TBD | Not started | - |
+| 102. Schedule + Trainers | 0/TBD | Not started | - |
+| 103. Attendance + Finance | 0/TBD | Not started | - |
+| 104. Dashboard, Reports + Settings | 0/TBD | Not started | - |
+| 105. admin-web Retirement + RBAC Re-home | 0/TBD | Not started | - |
+| 106. OpenAPI Handoff + Milestone Gate | 0/TBD | Not started | - |

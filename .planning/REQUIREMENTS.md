@@ -115,46 +115,46 @@ Explicitly excluded for v3.0. Documented to prevent scope creep.
 
 ## Traceability
 
-Which phases cover which requirements. Populated during roadmap creation (Phase numbering continues from 99 → starts at **Phase 100**).
+Which phases cover which requirements.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FND-01 | TBD | Pending |
-| FND-02 | TBD | Pending |
-| FND-03 | TBD | Pending |
-| FND-04 | TBD | Pending |
-| AUTH-01 | TBD | Pending |
-| AUTH-02 | TBD | Pending |
-| AUTH-03 | TBD | Pending |
-| CLI-01 | TBD | Pending |
-| CLI-02 | TBD | Pending |
-| CLI-03 | TBD | Pending |
-| MEM-01 | TBD | Pending |
-| MEM-02 | TBD | Pending |
-| MEM-03 | TBD | Pending |
-| SCH-01 | TBD | Pending |
-| SCH-02 | TBD | Pending |
-| TRN-01 | TBD | Pending |
-| TRN-02 | TBD | Pending |
-| ATT-01 | TBD | Pending |
-| ATT-02 | TBD | Pending |
-| FIN-01 | TBD | Pending |
-| FIN-02 | TBD | Pending |
-| RPT-01 | TBD | Pending |
-| RPT-02 | TBD | Pending |
-| RPT-03 | TBD | Pending |
-| SET-01 | TBD | Pending |
-| SET-02 | TBD | Pending |
-| ADMW-01 | TBD | Pending |
-| ADMW-02 | TBD | Pending |
-| ADMW-03 | TBD | Pending |
-| HND-01 | TBD | Pending |
+| FND-01 | Phase 100 | Pending |
+| FND-02 | Phase 100 | Pending |
+| FND-03 | Phase 100 | Pending |
+| FND-04 | Phase 100 | Pending |
+| AUTH-01 | Phase 100 | Pending |
+| AUTH-02 | Phase 100 | Pending |
+| AUTH-03 | Phase 100 | Pending |
+| CLI-01 | Phase 101 | Pending |
+| CLI-02 | Phase 101 | Pending |
+| CLI-03 | Phase 101 | Pending |
+| MEM-01 | Phase 101 | Pending |
+| MEM-02 | Phase 101 | Pending |
+| MEM-03 | Phase 101 | Pending |
+| SCH-01 | Phase 102 | Pending |
+| SCH-02 | Phase 102 | Pending |
+| TRN-01 | Phase 102 | Pending |
+| TRN-02 | Phase 102 | Pending |
+| ATT-01 | Phase 103 | Pending |
+| ATT-02 | Phase 103 | Pending |
+| FIN-01 | Phase 103 | Pending |
+| FIN-02 | Phase 103 | Pending |
+| RPT-01 | Phase 104 | Pending |
+| RPT-02 | Phase 104 | Pending |
+| RPT-03 | Phase 104 | Pending |
+| SET-01 | Phase 104 | Pending |
+| SET-02 | Phase 104 | Pending |
+| ADMW-01 | Phase 105 | Pending |
+| ADMW-02 | Phase 105 | Pending |
+| ADMW-03 | Phase 105 | Pending |
+| HND-01 | Phase 106 | Pending |
 
 **Coverage:**
 - v3.0 requirements: 30 total
-- Mapped to phases: 0 (roadmap pending)
-- Unmapped: 30 ⚠️ (resolved at roadmap creation)
+- Mapped to phases: 30 (roadmap complete)
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-06-13*
-*Last updated: 2026-06-13 — initial v3.0 definition*
+*Last updated: 2026-06-13 — roadmap created; all 30 requirements mapped to Phases 100-106*
