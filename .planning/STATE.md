@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.6
-milestone_name: Referral System
-status: Awaiting next milestone
-stopped_at: Milestone v2.6 roadmap created (4 phases, 8/8 requirements mapped; ROADMAP.md + STATE.md + REQUIREMENTS.md updated).
-last_updated: "2026-06-08T16:51:50.980Z"
-last_activity: 2026-06-08 — Milestone v2.6 completed and archived
+milestone: v3.0
+milestone_name: Production Admin — Backend Wiring
+status: planning
+last_updated: "2026-06-12T20:59:38.542Z"
+last_activity: 2026-06-12
 progress:
-  total_phases: 8
-  completed_phases: 4
-  total_plans: 11
-  completed_plans: 11
-  percent: 50
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: Milestone v2.6 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-08 — Milestone v2.6 completed and archived
+Status: Defining requirements
+Last activity: 2026-06-12 — Milestone v3.0 started
 
 ## v2.6 Roadmap Summary
 
