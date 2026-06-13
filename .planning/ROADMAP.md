@@ -197,7 +197,11 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
   2. Staff can book / cancel / complete a PT booking against a slot; race-safe conflict (slot taken) surfaces as a clear state, not a crash.
   3. Trainers list and detail render real catalog data (name, bio, specialization) from `/trainers`.
   4. Owner can view trainer payroll — comp-config, accrual preview, run, and pending→paid — on the trainer detail or finance surface; reception is gated with a `403`.
-**Plans**: TBD
+**Plans**: 4 plans, 2 waves
+- [ ] 102-01-PLAN.md — Schedule write layer: features/schedule http (slots/templates/time-off zod + keys + Idempotency-Key hooks) + owner-only ScheduleManagementModal (slot/template/time-off tabs, time_off_booked_conflict force-override) [SCH-01] · wave 1
+- [ ] 102-02-PLAN.md — Trainers catalog + CRUD: features/trainers http (queries + PATCH/POST/DELETE), TrainersPage reduction (hide Load/Requests/Earnings/KPIs), owner edit/create/delete affordances, TrainerHero/Overview real data, TrainerFormModal wired [TRN-01] · wave 1
+- [ ] 102-03-PLAN.md — Bookings lifecycle + calendar merge: features/bookings http (create/cancel/complete-via-pt-sessions), BookingModal (race-safe 409), BookingDetailModal (24h cancel + complete), SchedulePage slot+booking merge + owner FAB, OverviewTab today-schedule [SCH-02] · wave 2
+- [ ] 102-04-PLAN.md — Payroll: features/payroll http (comp-config INSERT-only + preview→run + accruals + mark-paid, owner-only enabled-gated), PayoutsTab wired (reception Lock state, kopecks↔rubles/bps↔pct, 409 already_run/already_paid) [TRN-02] · wave 2
 **UI hint**: yes
 
 ### Phase 103: Attendance + Finance
