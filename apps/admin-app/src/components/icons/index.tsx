@@ -119,4 +119,6 @@ export {
   // Расписание (Phase 102-01)
   CalendarPlus,
   CalendarX,
+  // Тренеры CRUD (Phase 102-02)
+  Pencil,
 } from 'lucide-react';

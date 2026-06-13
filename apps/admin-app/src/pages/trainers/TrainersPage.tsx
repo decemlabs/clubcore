@@ -1,190 +1,236 @@
-import { useMemo, useRef, useState, type RefObject } from 'react';
-import type { DataTableSort } from '@/components/data/DataTable';
-import { useTrainers } from '@/features/trainers/api';
-import { PageLoading, PageError } from '@/components/feedback/PageState';
-import type { Trainer, TrainerCategory, TrainerTab } from '@/features/trainers/types';
-import { SectionHead } from '@/components/layout/SectionHead';
-import { Card } from '@/components/layout/Card';
-import { Segmented, type SegmentedOption } from '@/components/ui/Segmented';
-import { DataTable } from '@/components/data/DataTable';
-import { TrainersPageHead, type RosterView } from './components/TrainersPageHead';
-import { TrainersKpis } from './components/TrainersKpis';
-import { TrainerFilterTabs } from './components/TrainerFilterTabs';
-import { RosterCard, HireCard } from './components/RosterCard';
-import { trainerColumns } from './components/columns';
-import { LoadHeatmap } from './components/LoadHeatmap';
-import { EarningsCard } from './components/EarningsCard';
-import { RequestsCard } from './components/RequestsCard';
-import { CATEGORY_LABEL } from './components/status';
+/**
+ * TrainersPage — Phase 102-02 TRN-01.
+ *
+ * Wired to real GET /api/v1/trainers (active=true).
+ * Roster section only — Load, Requests, Earnings sections removed (no backend / deferred).
+ * TrainerFilterTabs hidden (single-tab is noise after reduction).
+ * Owner gets create + edit + delete affordances (can()-gated).
+ * Reception sees read-only roster.
+ */
+import { useState } from 'react'
+import { useTrainers, useDeleteTrainer, ApiError } from '@/features/trainers/api'
+import { useSession } from '@/features/auth/api'
+import { can } from '@/shared/session/can'
+import type { TrainerData } from '@/features/trainers/schemas'
+import { PageLoading, PageError } from '@/components/feedback/PageState'
+import { EmptyState } from '@/components/feedback/EmptyState'
+import { SectionHead } from '@/components/layout/SectionHead'
+import { Card } from '@/components/layout/Card'
+import { Segmented, type SegmentedOption } from '@/components/ui/Segmented'
+import { DataTable } from '@/components/data/DataTable'
+import type { DataTableSort } from '@/components/data/DataTable'
+import { Users, UserPlus } from '@/components/icons'
+import { TrainersPageHead, type RosterView } from './components/TrainersPageHead'
+import { RosterCard } from './components/RosterCard'
+import { trainerColumns } from './components/columns'
+import { TrainerFormModal } from '@/components/modals/TrainerFormModal'
+import { ConfirmModal } from '@/components/modals/ConfirmModal'
+import { toast } from 'sonner'
 
-type SpecFilter = 'all' | TrainerCategory;
-type SortKey = 'name' | 'rating' | 'trainings' | 'revenue' | 'load';
-type WeekNav = 'prev' | 'this' | 'next';
-type TrainerSort = { key: SortKey; dir: DataTableSort['dir'] };
+type SortKey = 'name'
+type TrainerSort = { key: SortKey; dir: DataTableSort['dir'] }
 
 const DEFAULT_DIR: Record<SortKey, DataTableSort['dir']> = {
   name: 'asc',
-  rating: 'desc',
-  trainings: 'desc',
-  revenue: 'desc',
-  load: 'desc',
-};
+}
 
-function compare(a: Trainer, b: Trainer, sort: TrainerSort): number {
-  const m = sort.dir === 'asc' ? 1 : -1;
+function compare(a: TrainerData, b: TrainerData, sort: TrainerSort): number {
+  const m = sort.dir === 'asc' ? 1 : -1
   switch (sort.key) {
     case 'name':
-      return a.name.localeCompare(b.name, 'ru') * m;
-    case 'rating':
-      return (a.rating - b.rating) * m;
-    case 'trainings':
-      return (a.trainings - b.trainings) * m;
-    case 'revenue':
-      return (a.revenue - b.revenue) * m;
-    case 'load':
-      return (a.loadPct - b.loadPct) * m;
+      return a.fullName.localeCompare(b.fullName, 'ru') * m
   }
 }
 
-const WEEK_OPTIONS: SegmentedOption<WeekNav>[] = [
-  { value: 'prev', label: 'Прошлая' },
-  { value: 'this', label: 'Эта неделя' },
-  { value: 'next', label: 'Следующая' },
-];
-
 export function TrainersPage() {
-  const { data, isPending, isError, refetch } = useTrainers();
+  const sessionQuery = useSession()
+  const role = sessionQuery.data?.role ?? 'reception'
 
-  const [tab, setTab] = useState<TrainerTab>('roster');
-  const [view, setView] = useState<RosterView>('cards');
-  const [spec, setSpec] = useState<SpecFilter>('all');
-  const [week, setWeek] = useState<WeekNav>('this');
-  const [sort, setSort] = useState<TrainerSort>({ key: 'revenue', dir: 'desc' });
+  const { data, isPending, isError, refetch } = useTrainers({ active: true })
+  const deleteTrainer = useDeleteTrainer()
 
-  const rosterRef = useRef<HTMLElement>(null);
-  const loadRef = useRef<HTMLElement>(null);
-  const earnRef = useRef<HTMLElement>(null);
+  const [view, setView] = useState<RosterView>('cards')
+  const [sort, setSort] = useState<TrainerSort>({ key: 'name', dir: 'asc' })
 
-  const trainers = data?.trainers;
+  // Modal state
+  const [formOpen, setFormOpen] = useState(false)
+  const [formTrainer, setFormTrainer] = useState<TrainerData | undefined>(undefined)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<TrainerData | undefined>(undefined)
 
-  const specOptions = useMemo<SegmentedOption<SpecFilter>[]>(() => {
-    const counts: Record<TrainerCategory, number> = { strength: 0, cardio: 0, 'mind-body': 0 };
-    (trainers ?? []).forEach((t) => {
-      counts[t.category] += 1;
-    });
-    return [
-      { value: 'all', label: `Все · ${trainers?.length ?? 0}` },
-      { value: 'strength', label: `${CATEGORY_LABEL.strength} · ${counts.strength}` },
-      { value: 'cardio', label: `${CATEGORY_LABEL.cardio} · ${counts.cardio}` },
-      { value: 'mind-body', label: `${CATEGORY_LABEL['mind-body']} · ${counts['mind-body']}` },
-    ];
-  }, [trainers]);
+  const VIEW_OPTIONS: SegmentedOption<RosterView>[] = [
+    { value: 'cards', label: 'Карточки' },
+    { value: 'table', label: 'Таблица' },
+  ]
 
-  const visible = useMemo(
-    () => (spec === 'all' ? (trainers ?? []) : (trainers ?? []).filter((t) => t.category === spec)),
-    [trainers, spec],
-  );
-  const tableRows = useMemo(
-    () => [...visible].sort((a, b) => compare(a, b, sort)),
-    [visible, sort],
-  );
+  if (isPending) return <PageLoading />
+  if (isError || !data) return <PageError onRetry={() => void refetch()} />
 
-  if (isPending) return <PageLoading />;
-  if (isError || !data) return <PageError onRetry={() => void refetch()} />;
+  const items = data.items
+  const total = data.total
 
-  const sectionRef: Partial<Record<TrainerTab, RefObject<HTMLElement>>> = {
-    roster: rosterRef,
-    load: loadRef,
-    payouts: earnRef,
-    requests: earnRef,
-  };
-  const handleTab = (next: TrainerTab) => {
-    setTab(next);
-    sectionRef[next]?.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
+  // Sort
+  const sortedItems = [...items].sort((a, b) => compare(a, b, sort))
+
+  const openCreate = () => {
+    if (!can(role, 'create', 'trainers')) return
+    setFormTrainer(undefined)
+    setFormOpen(true)
+  }
+
+  const openEdit = (trainer: TrainerData) => {
+    if (!can(role, 'edit', 'trainers')) return
+    setFormTrainer(trainer)
+    setFormOpen(true)
+  }
+
+  const openDelete = (trainer: TrainerData) => {
+    if (!can(role, 'delete', 'trainers')) return
+    setDeleteTarget(trainer)
+    setConfirmOpen(true)
+  }
+
   const handleSort = (key: string) =>
     setSort((prev) =>
       prev.key === key
         ? { key: prev.key, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
-        : { key: key as SortKey, dir: DEFAULT_DIR[key as SortKey] },
-    );
+        : { key: key as SortKey, dir: DEFAULT_DIR[key as SortKey] ?? 'asc' },
+    )
 
   return (
     <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-4 px-4 pb-10 pt-5 sm:px-6 sm:pb-12 sm:pt-6 lg:px-7">
-      <TrainersPageHead summary={data.summary} view={view} onViewChange={setView} />
+      <TrainersPageHead
+        total={total}
+        view={view}
+        onViewChange={setView}
+        canCreate={can(role, 'create', 'trainers')}
+        onCreateClick={openCreate}
+      />
 
-      <TrainersKpis kpis={data.kpis} />
-
-      <TrainerFilterTabs tabs={data.tabs} value={tab} onChange={handleTab} />
-
-      {/* Команда */}
-      <section ref={rosterRef} className="flex scroll-mt-24 flex-col gap-3.5">
+      {/* Команда — Roster only; Load/Requests/Earnings sections removed (no backend / deferred Phase 104) */}
+      <section className="flex scroll-mt-24 flex-col gap-3.5">
         <SectionHead
-          title={data.rosterTitle}
-          subtitle={data.rosterSubtitle}
+          title="Команда"
+          subtitle={`Тренеров: ${total}`}
           action={
             <Segmented
               variant="mini"
-              options={specOptions}
-              value={spec}
-              onChange={setSpec}
-              ariaLabel="Специализация"
+              options={VIEW_OPTIONS}
+              value={view}
+              onChange={setView}
+              ariaLabel="Вид списка"
             />
           }
         />
 
-        {view === 'cards' ? (
+        {items.length === 0 ? (
+          <EmptyState
+            icon={Users}
+            title="Тренеров нет"
+            message="Добавьте первого тренера в команду."
+            action={
+              can(role, 'create', 'trainers') ? (
+                <button
+                  type="button"
+                  onClick={openCreate}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-full border-[0.5px] border-border bg-surface px-3.5 text-[13px] font-semibold transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <UserPlus className="size-[14px]" />
+                  Добавить тренера
+                </button>
+              ) : undefined
+            }
+          />
+        ) : view === 'cards' ? (
           <div className="@container">
             <div className="grid grid-cols-1 gap-3.5 @min-[640px]:grid-cols-2 @min-[1000px]:grid-cols-3">
-              {visible.map((t) => (
-                <RosterCard key={t.id} trainer={t} />
+              {sortedItems.map((t) => (
+                <RosterCard
+                  key={t.id}
+                  trainer={t}
+                  canEdit={can(role, 'edit', 'trainers')}
+                  canDelete={can(role, 'delete', 'trainers')}
+                  onEdit={openEdit}
+                  onDelete={openDelete}
+                />
               ))}
-              <HireCard />
             </div>
           </div>
         ) : (
           <Card as="section" className="@container">
             <div className="hidden overflow-x-auto @min-[640px]:block">
               <DataTable
-                data={tableRows}
-                columns={trainerColumns}
+                data={sortedItems}
+                columns={trainerColumns({
+                  canEdit: can(role, 'edit', 'trainers'),
+                  canDelete: can(role, 'delete', 'trainers'),
+                  onEdit: openEdit,
+                  onDelete: openDelete,
+                })}
                 getRowId={(t) => t.id}
                 sort={sort}
                 onSort={handleSort}
               />
             </div>
             <div className="grid gap-3.5 p-4 @min-[640px]:hidden">
-              {visible.map((t) => (
-                <RosterCard key={t.id} trainer={t} />
+              {sortedItems.map((t) => (
+                <RosterCard
+                  key={t.id}
+                  trainer={t}
+                  canEdit={can(role, 'edit', 'trainers')}
+                  canDelete={can(role, 'delete', 'trainers')}
+                  onEdit={openEdit}
+                  onDelete={openDelete}
+                />
               ))}
             </div>
           </Card>
         )}
       </section>
 
-      {/* Загрузка */}
-      <section ref={loadRef} className="flex scroll-mt-24 flex-col gap-3.5">
-        <SectionHead
-          title={`Загрузка · неделя ${data.heatmap.weekLabel}`}
-          subtitle={data.loadSubtitle}
-          action={
-            <Segmented
-              variant="mini"
-              options={WEEK_OPTIONS}
-              value={week}
-              onChange={setWeek}
-              ariaLabel="Неделя"
-            />
-          }
-        />
-        <LoadHeatmap data={data.heatmap} />
-      </section>
+      {/* TrainerFormModal — edit or create */}
+      <TrainerFormModal
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        trainer={formTrainer}
+        onSuccess={() => void refetch()}
+      />
 
-      {/* Выручка + Заявки */}
-      <section ref={earnRef} className="grid scroll-mt-24 gap-4 lg:grid-cols-[1.6fr_1fr]">
-        <EarningsCard data={data.earnings} />
-        <RequestsCard data={data.requests} />
-      </section>
+      {/* Confirm delete */}
+      <ConfirmModal
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        payload={
+          deleteTarget
+            ? {
+                title: 'Удалить тренера?',
+                message: (
+                  <>
+                    «{deleteTarget.fullName}» будет удалён из системы. Это действие нельзя отменить.
+                  </>
+                ),
+                tone: 'danger',
+                confirmLabel: 'Удалить',
+                cancelLabel: 'Отмена',
+                onConfirm: async () => {
+                  try {
+                    await deleteTrainer.mutateAsync(deleteTarget.id)
+                    toast.success('Тренер удалён')
+                    void refetch()
+                  } catch (err) {
+                    if (err instanceof ApiError && err.code === 'trainer_in_use') {
+                      toast.error('Нельзя удалить', {
+                        description: 'У тренера есть активные слоты или брони.',
+                      })
+                    }
+                    // Rethrow to keep modal open on error (ConfirmModal pattern)
+                    throw err
+                  }
+                },
+              }
+            : undefined
+        }
+      />
     </div>
-  );
+  )
 }

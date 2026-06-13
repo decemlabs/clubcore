@@ -1,22 +1,12 @@
-import { FilterTabs } from '@/components/data/FilterTabs';
-import type { TrainerFilterTab, TrainerTab } from '@/features/trainers/types';
-
-/** Вкладки-разделы тренеров поверх общего FilterTabs. */
-export function TrainerFilterTabs({
-  tabs,
-  value,
-  onChange,
-}: {
-  tabs: TrainerFilterTab[];
-  value: TrainerTab;
-  onChange: (value: TrainerTab) => void;
-}) {
-  return (
-    <FilterTabs<TrainerTab>
-      ariaLabel="Разделы тренеров"
-      tabs={tabs.map((t) => ({ value: t.tab, label: t.label, count: t.count, tone: t.tone }))}
-      value={value}
-      onChange={onChange}
-    />
-  );
+/**
+ * TrainerFilterTabs — Phase 102-02 TRN-01.
+ *
+ * Previously scrolled to Load/Earnings/Requests sections which are now removed.
+ * Only «Команда» (roster) tab remains. A single-option segmented is noise → hidden.
+ * Returns null.
+ */
+export function TrainerFilterTabs() {
+  // Load, Requests, Earnings sections removed (no backend / deferred Phase 104).
+  // Single «Команда» tab is redundant → hidden per UI-SPEC §6.1.
+  return null
 }

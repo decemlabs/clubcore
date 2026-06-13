@@ -65,7 +65,7 @@ export function ModalsProvider({ children }: { children: ReactNode }) {
       <TrainerFormModal
         open={active === 'trainer-form'}
         onOpenChange={onClose}
-        payload={state?.options?.trainerForm}
+        trainer={undefined}
       />
       <SubscriptionModal
         open={active === 'subscription'}

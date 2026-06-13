@@ -1,13 +1,28 @@
-import { useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
-import { cn } from '@/lib/cn';
-import { Initials } from '@/components/ui/initials';
-import { Segmented } from '@/components/ui/Segmented';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
-import { Archive, Camera, Check, Plus, TriangleAlert, UserPlus } from '@/components/icons';
-import { useModals } from './modals-context';
-import { AdaptiveModal } from './AdaptiveModal';
+/**
+ * TrainerFormModal — Phase 102-02 TRN-01.
+ *
+ * Wired to real PATCH /api/v1/trainers/{id} (edit) and POST /api/v1/trainers (create).
+ * Form fields mapped per UI-SPEC §6.3 — only backend-supported fields kept:
+ *   - fullName (first + last name joined → string)
+ *   - phone (optional)
+ *   - specialization (comma-joined spec chips)
+ *   - isActive (status toggle: Активна → true)
+ *   - bio (note field)
+ *   - photoUrl (URL input)
+ *
+ * Fields WITHOUT backend support are HIDDEN: employment, ratePersonal, rateGroup,
+ * commission, branch, email — they belong to the payroll domain (Phase 104).
+ *
+ * 409 phone_exists → inline Callout (hook suppresses toast; caller renders Callout).
+ * PATCH sends only changed fields (omit = no change per PATCH semantics).
+ */
+import { useEffect, useMemo, useState } from 'react'
+import { cn } from '@/lib/cn'
+import { Initials } from '@/components/ui/initials'
+import { Check, Loader2, TriangleAlert, UserPlus } from '@/components/icons'
+import { AdaptiveModal } from './AdaptiveModal'
 import {
+  Callout,
   Field,
   FieldRow,
   ModalButton,
@@ -15,76 +30,57 @@ import {
   ModalSelect,
   ModalTextarea,
   Section,
-} from './fields';
+} from './fields'
+import { useCreateTrainer, useUpdateTrainer, ApiError } from '@/features/trainers/api'
+import type { TrainerData } from '@/features/trainers/schemas'
+import { getInitials } from '@/lib/format'
+
+const SPEC_OPTIONS = ['Йога', 'Стретчинг', 'Пилатес', 'Силовые', 'Кардио', 'Бокс', 'Детские группы']
 
 interface FormState {
-  firstName: string;
-  lastName: string;
-  phone: string;
-  email: string;
-  specs: string[];
-  employment: 'staff' | 'self';
-  ratePersonal: string;
-  rateGroup: string;
-  commission: string;
-  branch: string;
-  status: string;
-  note: string;
+  firstName: string
+  lastName: string
+  phone: string
+  specs: string[]
+  status: 'active' | 'inactive'
+  bio: string
+  photoUrl: string
 }
-
-const SPEC_OPTIONS = [
-  'Йога',
-  'Стретчинг',
-  'Пилатес',
-  'Силовые',
-  'Кардио',
-  'Бокс',
-  'Детские группы',
-];
-const BRANCHES = ['Тверская', 'Сокольники', 'Новокосино'];
-const STATUSES = ['Активна', 'На рассмотрении', 'В отпуске', 'В архиве'];
-
-const EMPLOYMENT: { value: FormState['employment']; label: string }[] = [
-  { value: 'staff', label: 'В штате' },
-  { value: 'self', label: 'Самозанятый' },
-];
 
 const CREATE_INITIAL: FormState = {
   firstName: '',
   lastName: '',
   phone: '',
-  email: '',
   specs: [],
-  employment: 'staff',
-  ratePersonal: '',
-  rateGroup: '',
-  commission: '',
-  branch: 'Тверская',
-  status: 'Активна',
-  note: '',
-};
+  status: 'active',
+  bio: '',
+  photoUrl: '',
+}
 
-const EDIT_INITIAL: FormState = {
-  firstName: 'Ольга',
-  lastName: 'Власова',
-  phone: '+7 916 503-77-12',
-  email: 'o.vlasova@moizal.ru',
-  specs: ['Йога', 'Стретчинг', 'Пилатес'],
-  employment: 'self',
-  ratePersonal: '1 800',
-  rateGroup: '1 200',
-  commission: '30',
-  branch: 'Тверская',
-  status: 'Активна',
-  note: 'Ведёт женские группы по утрам. Сертификат Yoga Alliance RYT-200.',
-};
+function trainerToFormState(t: TrainerData): FormState {
+  const parts = t.fullName.trim().split(/\s+/)
+  return {
+    firstName: parts[0] ?? '',
+    lastName: parts.slice(1).join(' '),
+    phone: t.phone ?? '',
+    specs: t.specialization
+      ? t.specialization
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : [],
+    status: t.isActive ? 'active' : 'inactive',
+    bio: t.bio ?? '',
+    photoUrl: t.photoUrl ?? '',
+  }
+}
 
 /** Мультивыбор специализаций (чипы с галочкой). */
 function SpecChips({ value, onToggle }: { value: string[]; onToggle: (v: string) => void }) {
   return (
     <div className="flex flex-wrap gap-2">
       {SPEC_OPTIONS.map((o) => {
-        const on = value.includes(o);
+        const on = value.includes(o)
         return (
           <button
             key={o}
@@ -101,80 +97,103 @@ function SpecChips({ value, onToggle }: { value: string[]; onToggle: (v: string)
             {on ? <Check className="size-3" strokeWidth={3} /> : null}
             {o}
           </button>
-        );
+        )
       })}
     </div>
-  );
+  )
 }
 
 export function TrainerFormModal({
   open,
   onOpenChange,
-  payload,
+  trainer,
+  onSuccess,
 }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  payload?: { trainerId?: string };
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  trainer?: TrainerData
+  onSuccess?: () => void
 }) {
-  const { open: openModal } = useModals();
-  const mode = payload?.trainerId ? 'edit' : 'create';
-  const initial = useMemo(() => (mode === 'edit' ? EDIT_INITIAL : CREATE_INITIAL), [mode]);
+  const mode = trainer ? 'edit' : 'create'
+  const initial = useMemo(
+    () => (trainer ? trainerToFormState(trainer) : CREATE_INITIAL),
+    [trainer],
+  )
 
-  const [state, setState] = useState<FormState>(initial);
-  const [guard, setGuard] = useState(false);
+  const [state, setState] = useState<FormState>(initial)
+  const [phoneExistsError, setPhoneExistsError] = useState(false)
+
+  const updateTrainer = useUpdateTrainer()
+  const createTrainer = useCreateTrainer()
+
+  const isPending = updateTrainer.isPending || createTrainer.isPending
 
   useEffect(() => {
     if (open) {
-      setState(initial);
-      setGuard(false);
+      setState(initial)
+      setPhoneExistsError(false)
     }
-  }, [open, initial]);
-
-  const dirty = useMemo(() => JSON.stringify(state) !== JSON.stringify(initial), [state, initial]);
+  }, [open, initial])
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) =>
-    setState((s) => ({ ...s, [k]: v }));
+    setState((s) => ({ ...s, [k]: v }))
 
-  const requestClose = (next: boolean) => {
-    if (next) return;
-    if (dirty) setGuard(true);
-    else onOpenChange(false);
-  };
+  const dirty = useMemo(() => JSON.stringify(state) !== JSON.stringify(initial), [state, initial])
 
-  const save = () => {
-    toast.success(mode === 'create' ? 'Тренер добавлен в команду' : 'Изменения сохранены');
-    onOpenChange(false);
-  };
+  const buildFullName = () => {
+    const parts = [state.firstName.trim(), state.lastName.trim()].filter(Boolean)
+    return parts.join(' ')
+  }
 
-  const discard = () => {
-    setGuard(false);
-    onOpenChange(false);
-  };
+  const save = async () => {
+    setPhoneExistsError(false)
+    const fullName = buildFullName()
+    if (!fullName) return
 
-  const archive = () => {
-    onOpenChange(false);
-    openModal('confirm', {
-      confirm: {
-        title: 'Архивировать тренера?',
-        message: (
-          <>
-            «{EDIT_INITIAL.firstName} {EDIT_INITIAL.lastName}» переместится в архив и исчезнет из
-            активного состава.
-          </>
-        ),
-        tone: 'danger',
-        confirmLabel: 'Архивировать',
-        onConfirm: () => {
-          toast.success('Тренер архивирован');
-        },
-      },
-    });
-  };
+    const specialization = state.specs.join(', ') || null
+    const phone = state.phone.trim() || null
+    const bio = state.bio.trim() || null
+    const photoUrl = state.photoUrl.trim() || null
+    const isActive = state.status === 'active'
+
+    try {
+      if (mode === 'edit' && trainer) {
+        // PATCH — only include changed fields
+        const body: Record<string, unknown> = {}
+        const orig = initial
+
+        if (fullName !== buildFullNameFrom(orig)) body['fullName'] = fullName
+        if (phone !== (orig.phone || null)) body['phone'] = phone
+        if (specialization !== (orig.specs.join(', ') || null)) body['specialization'] = specialization
+        if (bio !== (orig.bio || null)) body['bio'] = bio
+        if (photoUrl !== (orig.photoUrl || null)) body['photoUrl'] = photoUrl
+        if (isActive !== (orig.status === 'active')) body['isActive'] = isActive
+
+        await updateTrainer.mutateAsync({
+          id: trainer.id,
+          body,
+        })
+      } else {
+        // POST — create new trainer
+        await createTrainer.mutateAsync({
+          fullName,
+          phone: phone ?? undefined,
+        })
+      }
+      onOpenChange(false)
+      onSuccess?.()
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'phone_exists') {
+        setPhoneExistsError(true)
+      }
+      // Other errors are toasted by the mutation hook
+    }
+  }
 
   const icon =
     mode === 'edit' ? (
       <Initials
-        initials="ОВ"
+        initials={getInitials(trainer?.fullName ?? '')}
         color="linear-gradient(135deg,#8b5cf6,#ec4899)"
         className="size-11 text-[15px]"
       />
@@ -182,251 +201,139 @@ export function TrainerFormModal({
       <span className="grid size-11 place-items-center rounded-[13px] bg-primary-soft text-primary-deep dark:text-primary">
         <UserPlus className="size-5" strokeWidth={2} />
       </span>
-    );
+    )
 
   const footerInfo = (
     <div className="flex items-center gap-3">
-      {mode === 'edit' ? (
-        <button
-          type="button"
-          onClick={archive}
-          aria-label="Архивировать тренера"
-          className="grid size-9 shrink-0 place-items-center rounded-full border-[0.5px] border-border bg-surface text-fg-muted transition-colors hover:border-danger hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <Archive className="size-[15px]" />
-        </button>
-      ) : null}
       {dirty ? (
         <span className="flex items-center gap-1.5 font-medium text-warning-deep">
           <span className="size-[7px] rounded-full bg-current" />
           Несохранённые изменения
         </span>
       ) : (
-        <span>{mode === 'edit' ? 'Сохранено только что' : 'Все поля можно изменить позже'}</span>
+        <span className="text-[13px] text-fg-muted">
+          {mode === 'edit' ? 'Сохранено' : 'Все поля можно изменить позже'}
+        </span>
       )}
     </div>
-  );
+  )
 
   return (
-    <>
-      <AdaptiveModal
-        open={open}
-        onOpenChange={requestClose}
-        size="wide"
-        icon={icon}
-        title={mode === 'create' ? 'Новый тренер' : 'Редактирование тренера'}
-        description={
-          mode === 'create'
-            ? 'Заполните карточку — тренер появится в команде'
-            : 'Ольга Власова · #TR-007'
-        }
-        footerInfo={footerInfo}
-        footerActions={
-          <>
-            <ModalButton variant="ghost" onClick={() => requestClose(false)}>
-              Отмена
-            </ModalButton>
-            <ModalButton disabled={mode === 'edit' && !dirty} onClick={save}>
-              {mode === 'create' ? (
-                <>
-                  <Plus className="size-3.5" strokeWidth={2.6} />
-                  Добавить тренера
-                </>
-              ) : (
-                'Сохранить'
-              )}
-            </ModalButton>
-          </>
-        }
-      >
-        <Section>Профиль</Section>
-        <div className="flex items-center gap-3.5">
-          <span className="relative shrink-0">
-            {mode === 'edit' ? (
-              <>
-                <Initials
-                  initials="ОВ"
-                  color="linear-gradient(135deg,#8b5cf6,#ec4899)"
-                  className="size-[60px] text-xl"
-                />
-                <span className="absolute -bottom-0.5 -right-0.5 grid size-[22px] place-items-center rounded-full border-[0.5px] border-border bg-surface text-fg-muted">
-                  <Camera className="size-3" />
-                </span>
-              </>
-            ) : (
-              <span className="grid size-[60px] place-items-center rounded-full border-[1.5px] border-dashed border-border-strong bg-surface-3 text-fg-subtle">
-                <Camera className="size-5" strokeWidth={1.8} />
-              </span>
-            )}
-          </span>
-          <ModalButton
-            variant="ghost"
-            className="h-9 px-3.5 text-[12.5px]"
-            onClick={() => toast('Загрузка фото — демо')}
-          >
-            Загрузить фото
+    <AdaptiveModal
+      open={open}
+      onOpenChange={isPending ? () => {} : onOpenChange}
+      size="wide"
+      icon={icon}
+      title={mode === 'create' ? 'Новый тренер' : 'Редактирование тренера'}
+      description={
+        mode === 'create'
+          ? 'Заполните карточку — тренер появится в команде'
+          : trainer?.fullName ?? 'Редактирование тренера'
+      }
+      footerInfo={footerInfo}
+      footerActions={
+        <>
+          <ModalButton variant="ghost" disabled={isPending} onClick={() => onOpenChange(false)}>
+            Отмена
           </ModalButton>
-        </div>
+          <ModalButton
+            disabled={(mode === 'edit' && !dirty) || isPending || !buildFullName()}
+            onClick={() => void save()}
+          >
+            {isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : mode === 'create' ? (
+              'Добавить тренера'
+            ) : (
+              'Сохранить'
+            )}
+          </ModalButton>
+        </>
+      }
+    >
+      <Section>Профиль</Section>
 
-        <div className="mt-3.5">
-          <FieldRow>
-            <Field label="Имя">
-              <ModalInput
-                placeholder="Имя"
-                value={state.firstName}
-                onChange={(e) => set('firstName', e.target.value)}
-                autoComplete="given-name"
-              />
-            </Field>
-            <Field label="Фамилия">
-              <ModalInput
-                placeholder="Фамилия"
-                value={state.lastName}
-                onChange={(e) => set('lastName', e.target.value)}
-                autoComplete="family-name"
-              />
-            </Field>
-          </FieldRow>
-        </div>
-        <FieldRow>
-          <Field label="Телефон">
-            <ModalInput
-              type="tel"
-              placeholder="+7 ___ ___-__-__"
-              value={state.phone}
-              onChange={(e) => set('phone', e.target.value)}
-              autoComplete="tel"
-            />
-          </Field>
-          <Field label="Эл. почта">
-            <ModalInput
-              type="email"
-              placeholder="trainer@mail.ru"
-              value={state.email}
-              onChange={(e) => set('email', e.target.value)}
-              autoComplete="email"
-            />
-          </Field>
-        </FieldRow>
+      <FieldRow>
+        <Field label="Имя" required>
+          <ModalInput
+            placeholder="Имя"
+            value={state.firstName}
+            onChange={(e) => set('firstName', e.target.value)}
+            autoComplete="given-name"
+          />
+        </Field>
+        <Field label="Фамилия">
+          <ModalInput
+            placeholder="Фамилия"
+            value={state.lastName}
+            onChange={(e) => set('lastName', e.target.value)}
+            autoComplete="family-name"
+          />
+        </Field>
+      </FieldRow>
 
-        <Section>Специализация</Section>
-        <SpecChips
-          value={state.specs}
-          onToggle={(v) =>
-            set(
-              'specs',
-              state.specs.includes(v) ? state.specs.filter((s) => s !== v) : [...state.specs, v],
-            )
-          }
+      <Field label="Телефон">
+        <ModalInput
+          type="tel"
+          placeholder="+7 ___ ___-__-__"
+          value={state.phone}
+          onChange={(e) => {
+            set('phone', e.target.value)
+            setPhoneExistsError(false)
+          }}
+          autoComplete="tel"
         />
+      </Field>
 
-        <Section>Условия работы</Section>
-        <Field label="Тип занятости">
-          <Segmented
-            options={EMPLOYMENT}
-            value={state.employment}
-            onChange={(v) => set('employment', v)}
-            ariaLabel="Тип занятости"
-          />
-        </Field>
-        <FieldRow>
-          <Field label="Персональная, ₽">
-            <ModalInput
-              inputMode="numeric"
-              suffix="₽"
-              placeholder="0"
-              value={state.ratePersonal}
-              onChange={(e) => set('ratePersonal', e.target.value)}
-            />
-          </Field>
-          <Field label="Групповая, ₽">
-            <ModalInput
-              inputMode="numeric"
-              suffix="₽"
-              placeholder="0"
-              value={state.rateGroup}
-              onChange={(e) => set('rateGroup', e.target.value)}
-            />
-          </Field>
-        </FieldRow>
-        <FieldRow>
-          <Field label="Комиссия зала">
-            <ModalInput
-              inputMode="numeric"
-              suffix="%"
-              placeholder="30"
-              value={state.commission}
-              onChange={(e) => set('commission', e.target.value)}
-            />
-          </Field>
-          <Field label="Филиал">
-            <ModalSelect value={state.branch} onChange={(e) => set('branch', e.target.value)}>
-              {BRANCHES.map((b) => (
-                <option key={b}>{b}</option>
-              ))}
-            </ModalSelect>
-          </Field>
-        </FieldRow>
+      {phoneExistsError && (
+        <Callout tone="danger" icon={TriangleAlert}>
+          Этот номер уже используется другим тренером
+        </Callout>
+      )}
 
-        <Section>Доступ и статус</Section>
-        <Field label="Статус">
-          <ModalSelect value={state.status} onChange={(e) => set('status', e.target.value)}>
-            {STATUSES.map((s) => (
-              <option key={s}>{s}</option>
-            ))}
-          </ModalSelect>
-        </Field>
-        <Field label="Заметка">
-          <ModalTextarea
-            placeholder="Опыт, сертификаты, особенности…"
-            value={state.note}
-            onChange={(e) => set('note', e.target.value)}
-          />
-        </Field>
-      </AdaptiveModal>
+      <Field label="Фото URL" optional>
+        <ModalInput
+          type="url"
+          placeholder="https://example.com/photo.jpg"
+          value={state.photoUrl}
+          onChange={(e) => set('photoUrl', e.target.value)}
+        />
+      </Field>
 
-      <Dialog open={guard} onOpenChange={setGuard}>
-        <DialogContent
-          showCloseButton={false}
-          className="gap-0 overflow-hidden rounded-[18px] border-border bg-surface p-0 sm:max-w-[400px]"
-        >
-          <div className="flex gap-3.5 p-[22px]">
-            <span className="grid size-[42px] shrink-0 place-items-center rounded-xl bg-warning-soft text-warning-deep">
-              <TriangleAlert className="size-5" />
-            </span>
-            <div>
-              <DialogTitle className="text-base font-bold tracking-[-0.3px]">
-                Закрыть без сохранения?
-              </DialogTitle>
-              <DialogDescription className="mt-1.5 text-[13px] leading-relaxed text-fg-muted">
-                Внесённые данные не сохранятся. Точно закрыть?
-              </DialogDescription>
-            </div>
-          </div>
-          <div className="flex items-center justify-between gap-2 border-t-[0.5px] border-border bg-surface-2 px-[22px] py-3.5">
-            <ModalButton
-              variant="text"
-              className="text-danger hover:bg-danger-soft hover:text-danger"
-              onClick={discard}
-            >
-              Не сохранять
-            </ModalButton>
-            <div className="flex gap-2">
-              <ModalButton variant="ghost" onClick={() => setGuard(false)}>
-                Остаться
-              </ModalButton>
-              <ModalButton
-                onClick={() => {
-                  setGuard(false);
-                  save();
-                }}
-              >
-                Сохранить
-              </ModalButton>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
+      <Section>Специализация</Section>
+      <SpecChips
+        value={state.specs}
+        onToggle={(v) =>
+          set(
+            'specs',
+            state.specs.includes(v) ? state.specs.filter((s) => s !== v) : [...state.specs, v],
+          )
+        }
+      />
+
+      <Section>Статус и биография</Section>
+      <Field label="Статус">
+        <ModalSelect value={state.status} onChange={(e) => set('status', e.target.value as 'active' | 'inactive')}>
+          <option value="active">Активна</option>
+          <option value="inactive">Неактивна</option>
+        </ModalSelect>
+      </Field>
+      <Field label="Заметка / биография" optional>
+        <ModalTextarea
+          placeholder="Опыт, сертификаты, особенности…"
+          value={state.bio}
+          onChange={(e) => set('bio', e.target.value)}
+        />
+      </Field>
+    </AdaptiveModal>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function buildFullNameFrom(state: FormState): string {
+  const parts = [state.firstName.trim(), state.lastName.trim()].filter(Boolean)
+  return parts.join(' ')
 }

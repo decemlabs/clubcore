@@ -1,124 +1,130 @@
-import { cn } from '@/lib/cn';
-import { Initials } from '@/components/ui/initials';
-import { Star } from '@/components/icons';
-import { formatRub } from '@/lib/format';
-import type { ColumnDef } from '@/components/data/DataTable';
-import type { Trainer } from '@/features/trainers/types';
-import { StatusPill, TrainerActions } from './parts';
-import { LOAD_FILL } from './status';
+/**
+ * columns.tsx — Phase 102-02 TRN-01.
+ *
+ * DataTable columns wired to real TrainerData fields.
+ * Edit/delete affordances gated via props from TrainersPage.
+ */
+import { cn } from '@/lib/cn'
+import { Initials } from '@/components/ui/initials'
+import { Pencil, Trash2 } from '@/components/icons'
+import type { ColumnDef } from '@/components/data/DataTable'
+import type { TrainerData } from '@/features/trainers/schemas'
+import { getInitials } from '@/lib/format'
 
-/** Классы скрытия колонок по ширине контейнера таблицы (container queries). */
 const HIDE = {
-  rating: '@max-[1080px]:hidden',
-  experience: '@max-[920px]:hidden',
-  rate: '@max-[860px]:hidden',
-  trainings: '@max-[760px]:hidden',
-  clients: '@max-[680px]:hidden',
-  load: '@max-[1180px]:hidden',
-} as const;
+  specialization: '@max-[760px]:hidden',
+  status: '@max-[600px]:hidden',
+  actions: '',
+} as const
 
-/** Колонки таблицы тренеров (режим «Таблица») для общего DataTable. */
-export const trainerColumns: ColumnDef<Trainer>[] = [
-  {
-    id: 'name',
-    header: 'Тренер',
-    sortKey: 'name',
-    cell: (t) => (
-      <div className="flex min-w-0 items-center gap-3">
-        <Initials
-          initials={t.initials}
-          color={t.avatarGradient}
-          className="size-9 rounded-xl text-[12px]"
-        />
-        <div className="min-w-0">
-          <div className="truncate text-[13px] font-semibold tracking-[-0.1px] text-fg">
-            {t.name}
+interface ColumnsConfig {
+  canEdit: boolean
+  canDelete: boolean
+  onEdit: (trainer: TrainerData) => void
+  onDelete: (trainer: TrainerData) => void
+}
+
+/** Колонки таблицы тренеров (режим «Таблица») — фабрика с owner-only affordances. */
+export function trainerColumns({
+  canEdit,
+  canDelete,
+  onEdit,
+  onDelete,
+}: ColumnsConfig): ColumnDef<TrainerData>[] {
+  const cols: ColumnDef<TrainerData>[] = [
+    {
+      id: 'name',
+      header: 'Тренер',
+      sortKey: 'name',
+      cell: (t) => (
+        <div className="flex min-w-0 items-center gap-3">
+          {t.photoUrl ? (
+            <img
+              src={t.photoUrl}
+              alt={t.fullName}
+              className="size-9 rounded-xl object-cover"
+            />
+          ) : (
+            <Initials
+              initials={getInitials(t.fullName)}
+              color="linear-gradient(135deg,#8b5cf6,#ec4899)"
+              className="size-9 rounded-xl text-[12px]"
+            />
+          )}
+          <div className="min-w-0">
+            <div className="truncate text-[13px] font-semibold tracking-[-0.1px] text-fg">
+              {t.fullName}
+            </div>
+            <div className="truncate text-[11.5px] text-fg-subtle">{t.specialization ?? '—'}</div>
           </div>
-          <div className="truncate text-[11.5px] text-fg-subtle">{t.specialization}</div>
         </div>
-      </div>
-    ),
-  },
-  {
-    id: 'rating',
-    header: 'Рейтинг',
-    sortKey: 'rating',
-    headClassName: HIDE.rating,
-    cellClassName: cn(HIDE.rating, 'whitespace-nowrap'),
-    cell: (t) => (
-      <span className="inline-flex items-center gap-1 text-[13px] font-semibold tabular-nums">
-        <Star className="size-3 fill-warning text-warning" />
-        {t.rating.toFixed(1)}
-        <span className="font-normal text-fg-subtle">· {t.reviews}</span>
-      </span>
-    ),
-  },
-  {
-    id: 'experience',
-    header: 'Стаж',
-    headClassName: HIDE.experience,
-    cellClassName: cn(HIDE.experience, 'whitespace-nowrap text-[12.5px]'),
-    cell: (t) => t.experience,
-  },
-  {
-    id: 'rate',
-    header: 'Ставка',
-    headClassName: HIDE.rate,
-    cellClassName: cn(HIDE.rate, 'whitespace-nowrap text-[12.5px] tabular-nums'),
-    cell: (t) => t.rateLabel,
-  },
-  {
-    id: 'status',
-    header: 'Статус',
-    cell: (t) => <StatusPill status={t.status} label={t.statusLabel} />,
-  },
-  {
-    id: 'trainings',
-    header: 'Тренировок',
-    sortKey: 'trainings',
-    headClassName: HIDE.trainings,
-    cellClassName: cn(HIDE.trainings, 'tabular-nums'),
-    cell: (t) => <b className="font-semibold tabular-nums text-fg">{t.trainings}</b>,
-  },
-  {
-    id: 'clients',
-    header: 'Клиенты',
-    headClassName: HIDE.clients,
-    cellClassName: cn(HIDE.clients, 'tabular-nums'),
-    cell: (t) => <span className="tabular-nums">{t.clients}</span>,
-  },
-  {
-    id: 'revenue',
-    header: 'Выручка',
-    sortKey: 'revenue',
-    cellClassName: 'whitespace-nowrap',
-    cell: (t) => <b className="font-semibold tabular-nums text-fg">{formatRub(t.revenue)}</b>,
-  },
-  {
-    id: 'load',
-    header: 'Загрузка',
-    sortKey: 'load',
-    headClassName: HIDE.load,
-    cellClassName: cn(HIDE.load, 'min-w-[124px]'),
-    cell: (t) => (
-      <div className="flex items-center gap-2">
-        <div className="h-1.5 w-16 shrink-0 overflow-hidden rounded-full bg-surface-3">
-          <div
-            className={cn('h-full rounded-full', LOAD_FILL[t.loadTone])}
-            style={{ width: `${t.loadPct}%` }}
-          />
-        </div>
-        <span className="whitespace-nowrap text-[11.5px] tabular-nums text-fg-subtle">
-          {t.loadNote ?? `${t.loadUsed}/${t.loadTotal}`}
+      ),
+    },
+    {
+      id: 'specialization',
+      header: 'Специализация',
+      headClassName: HIDE.specialization,
+      cellClassName: cn(HIDE.specialization, 'text-[12.5px] text-fg-muted'),
+      cell: (t) => t.specialization ?? '—',
+    },
+    {
+      id: 'status',
+      header: 'Статус',
+      headClassName: HIDE.status,
+      cellClassName: HIDE.status,
+      cell: (t) => (
+        <span
+          className={cn(
+            'rounded-full px-[9px] py-[3px] text-[10.5px] font-bold uppercase tracking-[0.3px]',
+            t.isActive
+              ? 'bg-primary-soft text-primary-deep dark:text-primary'
+              : 'bg-surface-3 text-fg-muted',
+          )}
+        >
+          {t.isActive ? 'Активна' : 'Неактивна'}
         </span>
-      </div>
-    ),
-  },
-  {
-    id: 'actions',
-    header: '',
-    headClassName: 'w-[50px]',
-    cellClassName: 'w-[50px] text-right',
-    cell: (t) => <TrainerActions trainerId={t.id} className="ml-auto" />,
-  },
-];
+      ),
+    },
+  ]
+
+  if (canEdit || canDelete) {
+    cols.push({
+      id: 'actions',
+      header: '',
+      headClassName: 'w-[80px]',
+      cellClassName: 'w-[80px] text-right',
+      cell: (t) => (
+        <div className="flex items-center justify-end gap-1">
+          {canEdit && (
+            <button
+              type="button"
+              aria-label="Редактировать тренера"
+              onClick={(e) => {
+                e.stopPropagation()
+                onEdit(t)
+              }}
+              className="grid size-[30px] place-items-center rounded-lg text-fg-subtle transition-colors hover:bg-surface-3 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Pencil className="size-[15px]" />
+            </button>
+          )}
+          {canDelete && (
+            <button
+              type="button"
+              aria-label="Удалить тренера"
+              onClick={(e) => {
+                e.stopPropagation()
+                onDelete(t)
+              }}
+              className="grid size-[30px] place-items-center rounded-lg text-fg-subtle transition-colors hover:bg-danger-soft hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Trash2 className="size-[15px]" />
+            </button>
+          )}
+        </div>
+      ),
+    })
+  }
+
+  return cols
+}
