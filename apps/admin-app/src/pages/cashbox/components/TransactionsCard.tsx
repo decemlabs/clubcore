@@ -156,7 +156,7 @@ export function TransactionsCard({
         subtitle={`${items.length} операций в периоде`}
       />
       <div>
-        {rows.map((row, i) => {
+        {rows.map((row) => {
           if (row.type === 'total') {
             return <DailyTotalRow key={`total-${row.total.date}`} total={row.total} />;
           }
@@ -164,7 +164,7 @@ export function TransactionsCard({
             <PaymentRow
               key={row.payment.id}
               payment={row.payment}
-              first={i === 0}
+              first={row.firstOfDate}
             />
           );
         })}
