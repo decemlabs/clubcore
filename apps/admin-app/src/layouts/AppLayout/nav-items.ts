@@ -55,7 +55,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { label: 'Расписание', to: ROUTES.schedule, icon: Calendar },
       { label: 'Абонементы', to: ROUTES.plans, icon: CreditCard },
       { label: 'Тренеры', to: ROUTES.trainers, icon: UserCog, badge: 12 },
-      { label: 'Касса', to: ROUTES.cashbox, icon: Wallet },
+      { label: 'Касса', to: ROUTES.cashbox, icon: Wallet, ownerOnly: true, ownerResource: 'payments' },
     ],
   },
   {
@@ -77,7 +77,7 @@ export const NAV_SECTIONS: NavSection[] = [
         ownerResource: 'finance',
       },
       { label: 'Посещаемость', to: ROUTES.attendance, icon: Activity },
-      { label: 'Загруженность', to: ROUTES.load, icon: Clock },
+      { label: 'Загруженность', to: ROUTES.load, icon: Clock, ownerOnly: true, ownerResource: 'reports' },
     ],
   },
   {

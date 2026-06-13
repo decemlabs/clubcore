@@ -1,21 +1,41 @@
-import { useQuery } from '@tanstack/react-query';
-import { mockResponse } from '@/api/client';
-import { loadData } from '@/mocks/load';
-import type { LoadData } from './types';
+/**
+ * Load feature API hooks (Phase 103-03 — wire from mock to real).
+ *
+ * Wraps useVisitsReport and applies client-side zero-fill so the
+ * IntensityHeatmap / AreaTrendChart always receive complete arrays (no NaN).
+ *
+ * Zero-fill:
+ *   - hourly: always 24 points (hours 0–23)
+ *   - daily: every calendar day in [fromDate, toDate]
+ *
+ * OWNER_ONLY: enabled gate inherited from useVisitsReport
+ * (can(role,'view','reports') inside reports/api.ts).
+ *
+ * No default-mock branch — removed entirely (Phase 103-03).
+ */
+import { useVisitsReport } from '@/features/reports/api';
+import { fillHourlyBuckets, fillDailyBuckets } from '@/features/reports/utils';
+import type { VisitsReportQuery } from '@/features/reports/schemas';
 
-/** Ключи запросов загруженности. */
-export const loadKeys = {
-  all: ['load'] as const,
-  occupancy: ['load', 'occupancy'] as const,
-};
+export { reportsQueryKeys as loadKeys } from '@/features/reports/keys';
 
 /**
- * Данные дашборда «Загруженность». Пока резолвит мок; при появлении backend
- * меняется только queryFn — страница не трогается.
+ * Load page data hook (OWNER_ONLY, zero-filled).
+ *
+ * Transforms the sparse server response into complete arrays:
+ * - hourly: 24 points (hours 0–23), missing → count:0
+ * - daily: every day in [fromDate, toDate], missing → count:0
+ * averagePerDay is passed through unchanged.
  */
-export function useLoad() {
-  return useQuery({
-    queryKey: loadKeys.occupancy,
-    queryFn: () => mockResponse<LoadData>(loadData),
-  });
+export function useLoad(query: VisitsReportQuery) {
+  const result = useVisitsReport(query);
+  // Transform sparse → complete only when data is present
+  const data = result.data
+    ? {
+        ...result.data,
+        hourly: fillHourlyBuckets(result.data.hourly),
+        daily: fillDailyBuckets(result.data.daily, result.data.fromDate, result.data.toDate),
+      }
+    : undefined;
+  return { ...result, data };
 }
