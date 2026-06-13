@@ -10,9 +10,9 @@
  * ApiError re-exported (D-100-03-APIERROR-REEXPORT) so page/tab layers can
  * `instanceof ApiError` without importing @/api/client directly (ESLint boundary).
  */
-import { useQuery } from '@tanstack/react-query'
-import { staffRequest, ApiError } from '@/api/client'
-import { VisitsListResponseSchema } from './schemas'
+import { useQuery } from '@tanstack/react-query';
+import { staffRequest, ApiError } from '@/api/client';
+import { VisitsListResponseSchema } from './schemas';
 
 // ---------------------------------------------------------------------------
 // Key factory
@@ -21,7 +21,7 @@ import { VisitsListResponseSchema } from './schemas'
 export const visitsKeys = {
   all: ['visits'] as const,
   byClient: (clientId: string) => [...visitsKeys.all, 'byClient', clientId] as const,
-}
+};
 
 // ---------------------------------------------------------------------------
 // Queries
@@ -37,16 +37,16 @@ export function useClientVisits(clientId: string) {
     queryFn: async () => {
       const raw = await staffRequest('get', '/api/v1/visits', {
         query: { clientId },
-      })
-      return VisitsListResponseSchema.parse(raw).data
+      });
+      return VisitsListResponseSchema.parse(raw).data;
     },
     enabled: !!clientId,
     staleTime: 30_000,
-  })
+  });
 }
 
 // ---------------------------------------------------------------------------
 // Re-export for page/tab layers (ESLint import-boundary)
 // ---------------------------------------------------------------------------
 
-export { ApiError }
+export { ApiError };

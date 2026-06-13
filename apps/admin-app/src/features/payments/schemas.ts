@@ -12,7 +12,7 @@
  * is intentional — the global /payments route 403s for non-privileged staff
  * by design (T-101-12-IDOR).
  */
-import { z } from 'zod'
+import { z } from 'zod';
 
 // ---------------------------------------------------------------------------
 // Payment wire shape
@@ -28,8 +28,8 @@ export const PaymentSchema = z.object({
   receivedByUserId: z.string(),
   refundOf: z.string().nullable().optional(),
   auditLogId: z.string().nullable().optional(),
-})
-export type PaymentData = z.infer<typeof PaymentSchema>
+});
+export type PaymentData = z.infer<typeof PaymentSchema>;
 
 // ---------------------------------------------------------------------------
 // List response (data-wrapped paginated list)
@@ -42,5 +42,5 @@ export const PaymentsListResponseSchema = z.object({
     page: z.number(),
     pageSize: z.number(),
   }),
-})
-export type PaymentsListResponse = z.infer<typeof PaymentsListResponseSchema>
+});
+export type PaymentsListResponse = z.infer<typeof PaymentsListResponseSchema>;

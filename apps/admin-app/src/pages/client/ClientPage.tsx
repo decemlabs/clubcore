@@ -12,26 +12,26 @@
  * Per-tab error isolation (UI-SPEC §Surface 1): each tab owns its own loading/empty/error
  * state — a single-tab query error does NOT bubble to the full-page error state.
  */
-import { useState } from 'react'
-import { useParams } from 'react-router-dom'
-import { useClient } from '@/features/clients/api'
-import { useMembershipsByClient } from '@/features/memberships/api'
-import { PageLoading, PageError } from '@/components/feedback/PageState'
-import { EmptyState } from '@/components/feedback/EmptyState'
-import { Skeleton } from '@/components/ui/skeleton'
-import { ProfileHeroReal } from './components/ProfileHeroReal'
-import { ProfileTabs, type ProfileTabKey } from './components/ProfileTabs'
-import { ActivityTab } from './components/ActivityTab'
-import { TrainingsTab } from './components/TrainingsTab'
-import { PaymentsTab } from './components/PaymentsTab'
-import { ChatTab } from './components/ChatTab'
-import { NotesTab } from './components/NotesTab'
-import { Card } from './components/shared'
-import { formatDateRu, formatRub } from '@/lib/format'
-import { cn } from '@/lib/cn'
+import { useState } from 'react';
+import { useParams } from 'react-router-dom';
+import { useClient } from '@/features/clients/api';
+import { useMembershipsByClient } from '@/features/memberships/api';
+import { PageLoading, PageError } from '@/components/feedback/PageState';
+import { EmptyState } from '@/components/feedback/EmptyState';
+import { Skeleton } from '@/components/ui/skeleton';
+import { ProfileHeroReal } from './components/ProfileHeroReal';
+import { ProfileTabs, type ProfileTabKey } from './components/ProfileTabs';
+import { ActivityTab } from './components/ActivityTab';
+import { TrainingsTab } from './components/TrainingsTab';
+import { PaymentsTab } from './components/PaymentsTab';
+import { ChatTab } from './components/ChatTab';
+import { NotesTab } from './components/NotesTab';
+import { Card } from './components/shared';
+import { formatDateRu, formatRub } from '@/lib/format';
+import { cn } from '@/lib/cn';
 
 // Mock data for chat/notes — wired to real backend in a future plan
-import { clientDetail } from '@/mocks/client-detail'
+import { clientDetail } from '@/mocks/client-detail';
 
 // ---------------------------------------------------------------------------
 // Memberships sub-section (inside the page, shown above tabs or inline)
@@ -42,17 +42,17 @@ const MEMBERSHIP_STATUS_LABEL: Record<string, string> = {
   frozen: 'Заморожен',
   expired: 'Истёк',
   cancelled: 'Отменён',
-}
+};
 
 const MEMBERSHIP_STATUS_TONE: Record<string, string> = {
   active: 'bg-primary-soft text-primary-deep dark:text-primary',
   frozen: 'bg-info-soft text-info',
   expired: 'bg-surface-3 text-fg-muted',
   cancelled: 'bg-danger-soft text-danger',
-}
+};
 
 function MembershipsSection({ clientId }: { clientId: string }) {
-  const { data, isPending, isError, refetch } = useMembershipsByClient(clientId)
+  const { data, isPending, isError, refetch } = useMembershipsByClient(clientId);
 
   if (isPending) {
     return (
@@ -60,7 +60,7 @@ function MembershipsSection({ clientId }: { clientId: string }) {
         <Skeleton className="mb-2 h-10 w-full" />
         <Skeleton className="h-10 w-full" />
       </Card>
-    )
+    );
   }
 
   if (isError) {
@@ -68,11 +68,11 @@ function MembershipsSection({ clientId }: { clientId: string }) {
       <Card>
         <PageError onRetry={() => void refetch()} />
       </Card>
-    )
+    );
   }
 
-  const items = data?.items ?? []
-  const active = items.filter((m) => m.status === 'active' || m.status === 'frozen')
+  const items = data?.items ?? [];
+  const active = items.filter((m) => m.status === 'active' || m.status === 'frozen');
 
   if (active.length === 0) {
     return (
@@ -83,14 +83,14 @@ function MembershipsSection({ clientId }: { clientId: string }) {
           message="Активные абонементы клиента появятся здесь."
         />
       </Card>
-    )
+    );
   }
 
   return (
     <Card>
       {active.map((m) => {
-        const tone = MEMBERSHIP_STATUS_TONE[m.status] ?? 'bg-surface-3 text-fg-muted'
-        const statusLabel = MEMBERSHIP_STATUS_LABEL[m.status] ?? m.status
+        const tone = MEMBERSHIP_STATUS_TONE[m.status] ?? 'bg-surface-3 text-fg-muted';
+        const statusLabel = MEMBERSHIP_STATUS_LABEL[m.status] ?? m.status;
         return (
           <div
             key={m.id}
@@ -101,7 +101,12 @@ function MembershipsSection({ clientId }: { clientId: string }) {
                 <div className="truncate text-[13.5px] font-semibold tracking-[-0.1px]">
                   {m.planSnapshot.name}
                 </div>
-                <span className={cn('shrink-0 rounded-full px-[7px] py-px text-[11px] font-semibold', tone)}>
+                <span
+                  className={cn(
+                    'shrink-0 rounded-full px-[7px] py-px text-[11px] font-semibold',
+                    tone,
+                  )}
+                >
                   {statusLabel}
                 </span>
               </div>
@@ -112,10 +117,10 @@ function MembershipsSection({ clientId }: { clientId: string }) {
               </div>
             </div>
           </div>
-        )
+        );
       })}
     </Card>
-  )
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -123,12 +128,12 @@ function MembershipsSection({ clientId }: { clientId: string }) {
 // ---------------------------------------------------------------------------
 
 export function ClientPage() {
-  const { clientId = '' } = useParams<{ clientId: string }>()
-  const { data: client, isPending, isError, refetch } = useClient(clientId)
-  const [tab, setTab] = useState<ProfileTabKey>('activity')
+  const { clientId = '' } = useParams<{ clientId: string }>();
+  const { data: client, isPending, isError, refetch } = useClient(clientId);
+  const [tab, setTab] = useState<ProfileTabKey>('activity');
 
-  if (isPending) return <PageLoading />
-  if (isError || !client) return <PageError onRetry={() => void refetch()} />
+  if (isPending) return <PageLoading />;
+  if (isError || !client) return <PageError onRetry={() => void refetch()} />;
 
   return (
     <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-4 px-4 pb-10 pt-5 sm:px-6 sm:pb-12 sm:pt-6 lg:px-7">
@@ -157,5 +162,5 @@ export function ClientPage() {
         {tab === 'notes' && <NotesTab notes={clientDetail.notes} />}
       </section>
     </div>
-  )
+  );
 }

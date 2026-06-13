@@ -7,7 +7,7 @@
  * Backend: GET /api/v1/visits?clientId=… → {data:{items,total,page,pageSize}}
  * Permissions: reception+owner (VIEW, VISITS)
  */
-import { z } from 'zod'
+import { z } from 'zod';
 
 // ---------------------------------------------------------------------------
 // Visit wire shape
@@ -22,8 +22,8 @@ export const VisitSchema = z.object({
   channel: z.string(),
   checkedInBy: z.string().nullable().optional(),
   createdAt: z.string(),
-})
-export type VisitData = z.infer<typeof VisitSchema>
+});
+export type VisitData = z.infer<typeof VisitSchema>;
 
 // ---------------------------------------------------------------------------
 // List response (data-wrapped paginated list)
@@ -36,5 +36,5 @@ export const VisitsListResponseSchema = z.object({
     page: z.number(),
     pageSize: z.number(),
   }),
-})
-export type VisitsListResponse = z.infer<typeof VisitsListResponseSchema>
+});
+export type VisitsListResponse = z.infer<typeof VisitsListResponseSchema>;

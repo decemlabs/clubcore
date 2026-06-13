@@ -14,14 +14,14 @@
  * Error state (all dialogs): inline Callout tone="danger" below fields; dialog stays open.
  * Success (all dialogs): close + toast (per UI-SPEC Copywriting Contract).
  */
-import { useEffect, useState, type ReactNode } from 'react'
-import type { LucideIcon } from 'lucide-react'
-import { toast } from 'sonner'
-import { cn } from '@/lib/cn'
-import { formatRub, formatDateRu } from '@/lib/format'
-import { useSession } from '@/features/auth/api'
-import { can } from '@/shared/session/can'
-import { usePlans } from '@/features/plans/api'
+import { useEffect, useState, type ReactNode } from 'react';
+import type { LucideIcon } from 'lucide-react';
+import { toast } from 'sonner';
+import { cn } from '@/lib/cn';
+import { formatRub, formatDateRu } from '@/lib/format';
+import { useSession } from '@/features/auth/api';
+import { can } from '@/shared/session/can';
+import { usePlans } from '@/features/plans/api';
 import {
   useSellMembership,
   useFreezeMembership,
@@ -30,7 +30,7 @@ import {
   useCancelMembership,
   useRefundMembership,
   ApiError,
-} from '@/features/memberships/api'
+} from '@/features/memberships/api';
 import {
   Check,
   CircleX,
@@ -43,65 +43,58 @@ import {
   Sun,
   TriangleAlert,
   Wallet,
-} from '@/components/icons'
-import type { SubscriptionScreen } from './modals-context'
-import { AdaptiveModal } from './AdaptiveModal'
-import {
-  Callout,
-  Field,
-  IconChip,
-  ModalButton,
-  ModalTextarea,
-  StatRow,
-} from './fields'
+} from '@/components/icons';
+import type { SubscriptionScreen } from './modals-context';
+import { AdaptiveModal } from './AdaptiveModal';
+import { Callout, Field, IconChip, ModalButton, ModalTextarea, StatRow } from './fields';
 
 // ---------------------------------------------------------------------------
 // Shared types
 // ---------------------------------------------------------------------------
 
 type MembershipPayload = {
-  id: string
-  clientId: string
-  paidAmountKopecks: number
-  paidAt?: string | null
-  planSnapshot: { name: string }
-  endDate: string
-  freezeDaysRemaining?: number | null
+  id: string;
+  clientId: string;
+  paidAmountKopecks: number;
+  paidAt?: string | null;
+  planSnapshot: { name: string };
+  endDate: string;
+  freezeDaysRemaining?: number | null;
   currentFreezePeriod?: {
-    id: string
-    startedAt: string
-    startedBy: string
-    endedAt: string | null
-    endedBy: string | null
-  } | null
-}
+    id: string;
+    startedAt: string;
+    startedBy: string;
+    endedAt: string | null;
+    endedBy: string | null;
+  } | null;
+};
 
 type ScreenProps = {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  clientName?: string
-  membershipId?: string
-  clientId?: string
-  membership?: MembershipPayload
-}
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  clientName?: string;
+  membershipId?: string;
+  clientId?: string;
+  membership?: MembershipPayload;
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 function ErrorCallout({ error }: { error: Error | null }) {
-  if (!error) return null
+  if (!error) return null;
   const msg =
     error instanceof ApiError
       ? error.message
-      : 'Не удалось выполнить действие. Проверьте соединение и попробуйте ещё раз.'
+      : 'Не удалось выполнить действие. Проверьте соединение и попробуйте ещё раз.';
   return (
     <div className="mt-3.5">
       <Callout tone="danger" icon={TriangleAlert}>
         {msg}
       </Callout>
     </div>
-  )
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -109,33 +102,33 @@ function ErrorCallout({ error }: { error: Error | null }) {
 // ---------------------------------------------------------------------------
 
 function CreateScreen({ open, onOpenChange, clientId, clientName }: ScreenProps) {
-  const [selectedPlanId, setSelectedPlanId] = useState<string>('')
-  const [notes, setNotes] = useState('')
-  const plansQuery = usePlans({ active: true })
-  const sellMutation = useSellMembership()
+  const [selectedPlanId, setSelectedPlanId] = useState<string>('');
+  const [notes, setNotes] = useState('');
+  const plansQuery = usePlans({ active: true });
+  const sellMutation = useSellMembership();
 
   useEffect(() => {
     if (open) {
-      setSelectedPlanId('')
-      setNotes('')
-      sellMutation.reset()
+      setSelectedPlanId('');
+      setNotes('');
+      sellMutation.reset();
     }
-  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const plans = plansQuery.data?.items ?? []
-  const selectedPlan = plans.find((p) => p.id === selectedPlanId)
-  const isPending = sellMutation.isPending
+  const plans = plansQuery.data?.items ?? [];
+  const selectedPlan = plans.find((p) => p.id === selectedPlanId);
+  const isPending = sellMutation.isPending;
 
   function handleSubmit() {
-    if (!clientId || !selectedPlanId) return
+    if (!clientId || !selectedPlanId) return;
     sellMutation.mutate(
       { clientId, planId: selectedPlanId, notes: notes.trim() || undefined },
       {
         onSuccess: () => {
-          onOpenChange(false)
+          onOpenChange(false);
         },
       },
-    )
+    );
   }
 
   return (
@@ -145,16 +138,17 @@ function CreateScreen({ open, onOpenChange, clientId, clientName }: ScreenProps)
       size="wide"
       icon={<IconChip icon={CreditCard} />}
       title="Оформить абонемент"
-      description={clientName ? `${clientName} · выберите тариф и примите оплату` : 'Выберите тариф и примите оплату'}
+      description={
+        clientName
+          ? `${clientName} · выберите тариф и примите оплату`
+          : 'Выберите тариф и примите оплату'
+      }
       footerActions={
         <>
           <ModalButton variant="ghost" disabled={isPending} onClick={() => onOpenChange(false)}>
             Отмена
           </ModalButton>
-          <ModalButton
-            disabled={isPending || !selectedPlanId || !clientId}
-            onClick={handleSubmit}
-          >
+          <ModalButton disabled={isPending || !selectedPlanId || !clientId} onClick={handleSubmit}>
             {isPending ? (
               <>
                 <Loader2 className="size-[18px] animate-spin" />
@@ -187,11 +181,7 @@ function CreateScreen({ open, onOpenChange, clientId, clientName }: ScreenProps)
         )}
       </Field>
       {selectedPlan ? (
-        <StatRow
-          label="К оплате"
-          value={formatRub(selectedPlan.priceKopecks)}
-          accent
-        />
+        <StatRow label="К оплате" value={formatRub(selectedPlan.priceKopecks)} accent />
       ) : null}
       <Field label="Заметка" optional>
         <ModalTextarea
@@ -204,32 +194,39 @@ function CreateScreen({ open, onOpenChange, clientId, clientName }: ScreenProps)
       </Field>
       <ErrorCallout error={sellMutation.error} />
     </AdaptiveModal>
-  )
+  );
 }
 
 // ---------------------------------------------------------------------------
 // RenewScreen
 // ---------------------------------------------------------------------------
 
-function RenewScreen({ open, onOpenChange, clientName, membershipId, clientId, membership }: ScreenProps) {
-  const renewMutation = useRenewMembership()
+function RenewScreen({
+  open,
+  onOpenChange,
+  clientName,
+  membershipId,
+  clientId,
+  membership,
+}: ScreenProps) {
+  const renewMutation = useRenewMembership();
 
   useEffect(() => {
-    if (open) renewMutation.reset()
-  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (open) renewMutation.reset();
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const isPending = renewMutation.isPending
+  const isPending = renewMutation.isPending;
 
   function handleSubmit() {
-    if (!membershipId || !clientId) return
+    if (!membershipId || !clientId) return;
     renewMutation.mutate(
       { membershipId, clientId },
       {
         onSuccess: () => {
-          onOpenChange(false)
+          onOpenChange(false);
         },
       },
-    )
+    );
   }
 
   return (
@@ -241,7 +238,7 @@ function RenewScreen({ open, onOpenChange, clientName, membershipId, clientId, m
       description={
         membership
           ? `${clientName ?? ''} · «${membership.planSnapshot.name}»`
-          : clientName ?? undefined
+          : (clientName ?? undefined)
       }
       footerActions={
         <>
@@ -262,7 +259,11 @@ function RenewScreen({ open, onOpenChange, clientName, membershipId, clientId, m
       }
     >
       {membership ? (
-        <StatRow label="Текущая дата окончания" value={formatDateRu(membership.endDate, 'd MMMM yyyy')} accent />
+        <StatRow
+          label="Текущая дата окончания"
+          value={formatDateRu(membership.endDate, 'd MMMM yyyy')}
+          accent
+        />
       ) : null}
       <div className="mt-3.5">
         <Callout icon={TriangleAlert} tone="warn">
@@ -271,32 +272,39 @@ function RenewScreen({ open, onOpenChange, clientName, membershipId, clientId, m
       </div>
       <ErrorCallout error={renewMutation.error} />
     </AdaptiveModal>
-  )
+  );
 }
 
 // ---------------------------------------------------------------------------
 // FreezeScreen
 // ---------------------------------------------------------------------------
 
-function FreezeScreen({ open, onOpenChange, clientName, membershipId, clientId, membership }: ScreenProps) {
-  const freezeMutation = useFreezeMembership()
+function FreezeScreen({
+  open,
+  onOpenChange,
+  clientName,
+  membershipId,
+  clientId,
+  membership,
+}: ScreenProps) {
+  const freezeMutation = useFreezeMembership();
 
   useEffect(() => {
-    if (open) freezeMutation.reset()
-  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (open) freezeMutation.reset();
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const isPending = freezeMutation.isPending
+  const isPending = freezeMutation.isPending;
 
   function handleSubmit() {
-    if (!membershipId || !clientId) return
+    if (!membershipId || !clientId) return;
     freezeMutation.mutate(
       { membershipId, clientId },
       {
         onSuccess: () => {
-          onOpenChange(false)
+          onOpenChange(false);
         },
       },
-    )
+    );
   }
 
   return (
@@ -342,33 +350,40 @@ function FreezeScreen({ open, onOpenChange, clientName, membershipId, clientId, 
       </div>
       <ErrorCallout error={freezeMutation.error} />
     </AdaptiveModal>
-  )
+  );
 }
 
 // ---------------------------------------------------------------------------
 // UnfreezeScreen
 // ---------------------------------------------------------------------------
 
-function UnfreezeScreen({ open, onOpenChange, clientName, membershipId, clientId, membership }: ScreenProps) {
-  const unfreezeMutation = useUnfreezeMembership()
+function UnfreezeScreen({
+  open,
+  onOpenChange,
+  clientName,
+  membershipId,
+  clientId,
+  membership,
+}: ScreenProps) {
+  const unfreezeMutation = useUnfreezeMembership();
 
   useEffect(() => {
-    if (open) unfreezeMutation.reset()
-  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (open) unfreezeMutation.reset();
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const isPending = unfreezeMutation.isPending
-  const fp = membership?.currentFreezePeriod
+  const isPending = unfreezeMutation.isPending;
+  const fp = membership?.currentFreezePeriod;
 
   function handleSubmit() {
-    if (!membershipId || !clientId) return
+    if (!membershipId || !clientId) return;
     unfreezeMutation.mutate(
       { membershipId, clientId },
       {
         onSuccess: () => {
-          onOpenChange(false)
+          onOpenChange(false);
         },
       },
-    )
+    );
   }
 
   return (
@@ -380,7 +395,7 @@ function UnfreezeScreen({ open, onOpenChange, clientName, membershipId, clientId
       description={
         membership
           ? `${clientName ?? ''} · «${membership.planSnapshot.name}»`
-          : clientName ?? undefined
+          : (clientName ?? undefined)
       }
       footerActions={
         <>
@@ -418,42 +433,47 @@ function UnfreezeScreen({ open, onOpenChange, clientName, membershipId, clientId
         </div>
       ) : null}
       <div className="mt-3.5">
-        <Callout icon={TriangleAlert}>
-          Абонемент станет активным сегодня.
-        </Callout>
+        <Callout icon={TriangleAlert}>Абонемент станет активным сегодня.</Callout>
       </div>
       <ErrorCallout error={unfreezeMutation.error} />
     </AdaptiveModal>
-  )
+  );
 }
 
 // ---------------------------------------------------------------------------
 // CancelScreen (OWNER_ONLY — hidden for reception)
 // ---------------------------------------------------------------------------
 
-function CancelScreen({ open, onOpenChange, clientName, membershipId, clientId, membership }: ScreenProps) {
-  const [reason, setReason] = useState('')
-  const cancelMutation = useCancelMembership()
+function CancelScreen({
+  open,
+  onOpenChange,
+  clientName,
+  membershipId,
+  clientId,
+  membership,
+}: ScreenProps) {
+  const [reason, setReason] = useState('');
+  const cancelMutation = useCancelMembership();
 
   useEffect(() => {
     if (open) {
-      setReason('')
-      cancelMutation.reset()
+      setReason('');
+      cancelMutation.reset();
     }
-  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const isPending = cancelMutation.isPending
+  const isPending = cancelMutation.isPending;
 
   function handleSubmit() {
-    if (!membershipId || !clientId) return
+    if (!membershipId || !clientId) return;
     cancelMutation.mutate(
       { membershipId, body: reason.trim() ? { reason: reason.trim() } : {} },
       {
         onSuccess: () => {
-          onOpenChange(false)
+          onOpenChange(false);
         },
       },
-    )
+    );
   }
 
   return (
@@ -465,7 +485,7 @@ function CancelScreen({ open, onOpenChange, clientName, membershipId, clientId, 
       description={
         membership
           ? `${clientName ?? ''} · «${membership.planSnapshot.name}»`
-          : clientName ?? undefined
+          : (clientName ?? undefined)
       }
       footerActions={
         <>
@@ -505,7 +525,7 @@ function CancelScreen({ open, onOpenChange, clientName, membershipId, clientId, 
       </Callout>
       <ErrorCallout error={cancelMutation.error} />
     </AdaptiveModal>
-  )
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -513,32 +533,32 @@ function CancelScreen({ open, onOpenChange, clientName, membershipId, clientId, 
 // ---------------------------------------------------------------------------
 
 function RefundScreen({ open, onOpenChange, clientName, membershipId, membership }: ScreenProps) {
-  const [reason, setReason] = useState('')
-  const [touched, setTouched] = useState(false)
-  const refundMutation = useRefundMembership()
+  const [reason, setReason] = useState('');
+  const [touched, setTouched] = useState(false);
+  const refundMutation = useRefundMembership();
 
   useEffect(() => {
     if (open) {
-      setReason('')
-      setTouched(false)
-      refundMutation.reset()
+      setReason('');
+      setTouched(false);
+      refundMutation.reset();
     }
-  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const isPending = refundMutation.isPending
-  const reasonTrimmed = reason.trim()
+  const isPending = refundMutation.isPending;
+  const reasonTrimmed = reason.trim();
 
   function handleSubmit() {
-    setTouched(true)
-    if (!reasonTrimmed || !membershipId) return
+    setTouched(true);
+    if (!reasonTrimmed || !membershipId) return;
     refundMutation.mutate(
       { membershipId, body: { reason: reasonTrimmed } },
       {
         onSuccess: () => {
-          onOpenChange(false)
+          onOpenChange(false);
         },
       },
-    )
+    );
   }
 
   return (
@@ -550,7 +570,7 @@ function RefundScreen({ open, onOpenChange, clientName, membershipId, membership
       description={
         membership
           ? `${clientName ?? ''} · «${membership.planSnapshot.name}»`
-          : clientName ?? undefined
+          : (clientName ?? undefined)
       }
       footerActions={
         <>
@@ -582,10 +602,7 @@ function RefundScreen({ open, onOpenChange, clientName, membershipId, membership
         <>
           <StatRow label="Оплачено" value={formatRub(membership.paidAmountKopecks)} accent />
           {membership.paidAt ? (
-            <StatRow
-              label="Дата покупки"
-              value={formatDateRu(membership.paidAt, 'd MMMM yyyy')}
-            />
+            <StatRow label="Дата покупки" value={formatDateRu(membership.paidAt, 'd MMMM yyyy')} />
           ) : null}
         </>
       ) : null}
@@ -617,7 +634,7 @@ function RefundScreen({ open, onOpenChange, clientName, membershipId, membership
       </div>
       <ErrorCallout error={refundMutation.error} />
     </AdaptiveModal>
-  )
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -625,12 +642,12 @@ function RefundScreen({ open, onOpenChange, clientName, membershipId, membership
 // ---------------------------------------------------------------------------
 
 const HISTORY: {
-  id: string
-  icon: LucideIcon
-  tone: 'accent' | 'warn' | 'indigo'
-  title: ReactNode
-  meta: string
-  amount?: string
+  id: string;
+  icon: LucideIcon;
+  tone: 'accent' | 'warn' | 'indigo';
+  title: ReactNode;
+  meta: string;
+  amount?: string;
 }[] = [
   {
     id: '1',
@@ -674,13 +691,13 @@ const HISTORY: {
     meta: '14 фев 2025 · карта •• 4417',
     amount: '24 000 ₽',
   },
-]
+];
 
 const TL_DOT: Record<'accent' | 'warn' | 'indigo', string> = {
   accent: 'border-transparent bg-primary-soft text-primary-deep dark:text-primary',
   warn: 'border-transparent bg-warning-soft text-warning-deep',
   indigo: 'border-transparent bg-indigo-500/15 text-indigo-600 dark:text-indigo-300',
-}
+};
 
 function HistoryScreen({ open, onOpenChange, clientName }: ScreenProps) {
   return (
@@ -701,7 +718,7 @@ function HistoryScreen({ open, onOpenChange, clientName }: ScreenProps) {
     >
       <div className="relative mt-2 pl-[30px] before:absolute before:bottom-1 before:left-[9px] before:top-1 before:w-[1.5px] before:bg-border before:content-['']">
         {HISTORY.map((it) => {
-          const Icon = it.icon
+          const Icon = it.icon;
           return (
             <div key={it.id} className="relative pb-[18px] last:pb-0.5">
               <span
@@ -720,11 +737,11 @@ function HistoryScreen({ open, onOpenChange, clientName }: ScreenProps) {
               </div>
               <div className="mt-0.5 text-[11.5px] tabular-nums text-fg-subtle">{it.meta}</div>
             </div>
-          )
+          );
         })}
       </div>
     </AdaptiveModal>
-  )
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -736,19 +753,19 @@ export function SubscriptionModal({
   onOpenChange,
   payload,
 }: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   payload?: {
-    screen?: SubscriptionScreen
-    clientName?: string
-    membershipId?: string
-    clientId?: string
-    membership?: MembershipPayload
-  }
+    screen?: SubscriptionScreen;
+    clientName?: string;
+    membershipId?: string;
+    clientId?: string;
+    membership?: MembershipPayload;
+  };
 }) {
-  const session = useSession()
-  const role = session.data?.role ?? 'reception'
-  const screen = payload?.screen ?? 'edit'
+  const session = useSession();
+  const role = session.data?.role ?? 'reception';
+  const screen = payload?.screen ?? 'edit';
   const props: ScreenProps = {
     open,
     onOpenChange,
@@ -756,17 +773,17 @@ export function SubscriptionModal({
     membershipId: payload?.membershipId,
     clientId: payload?.clientId,
     membership: payload?.membership,
-  }
+  };
 
   switch (screen) {
     case 'create':
-      return <CreateScreen {...props} />
+      return <CreateScreen {...props} />;
     case 'renew':
-      return <RenewScreen {...props} />
+      return <RenewScreen {...props} />;
     case 'freeze':
-      return <FreezeScreen {...props} />
+      return <FreezeScreen {...props} />;
     case 'unfreeze':
-      return <UnfreezeScreen {...props} />
+      return <UnfreezeScreen {...props} />;
     case 'cancel':
       // OWNER_ONLY: hide for reception (can() gating per T-101-09-CANCELPRIV)
       if (!can(role, 'cancel', 'memberships')) {
@@ -774,13 +791,13 @@ export function SubscriptionModal({
           <AdaptiveModal open={false} onOpenChange={onOpenChange} title="" footerActions={null}>
             <></>
           </AdaptiveModal>
-        )
+        );
       }
-      return <CancelScreen {...props} />
+      return <CancelScreen {...props} />;
     case 'refund':
-      return <RefundScreen {...props} />
+      return <RefundScreen {...props} />;
     case 'history':
-      return <HistoryScreen {...props} />
+      return <HistoryScreen {...props} />;
     case 'edit':
     default:
       // edit screen: show placeholder (no backend edit endpoint in scope for Phase 101)
@@ -791,14 +808,12 @@ export function SubscriptionModal({
           icon={<IconChip icon={CreditCard} />}
           title="Абонемент"
           description={payload?.clientName ?? undefined}
-          footerActions={
-            <ModalButton onClick={() => onOpenChange(false)}>Закрыть</ModalButton>
-          }
+          footerActions={<ModalButton onClick={() => onOpenChange(false)}>Закрыть</ModalButton>}
         >
           <div className="py-4 text-center text-[13px] text-fg-muted">
             Редактирование абонемента доступно в следующей версии.
           </div>
         </AdaptiveModal>
-      )
+      );
   }
 }

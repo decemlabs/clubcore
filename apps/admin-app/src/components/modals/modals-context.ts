@@ -69,26 +69,26 @@ export interface OpenOptions {
    * membership — полный объект для RefundScreen (paidAmountKopecks, paidAt, planSnapshot).
    */
   subscription?: {
-    screen?: SubscriptionScreen
-    clientName?: string
-    membershipId?: string
-    clientId?: string
+    screen?: SubscriptionScreen;
+    clientName?: string;
+    membershipId?: string;
+    clientId?: string;
     membership?: {
-      id: string
-      clientId: string
-      paidAmountKopecks: number
-      paidAt?: string | null
-      planSnapshot: { name: string }
-      endDate: string
-      freezeDaysRemaining?: number | null
+      id: string;
+      clientId: string;
+      paidAmountKopecks: number;
+      paidAt?: string | null;
+      planSnapshot: { name: string };
+      endDate: string;
+      freezeDaysRemaining?: number | null;
       currentFreezePeriod?: {
-        id: string
-        startedAt: string
-        startedBy: string
-        endedAt: string | null
-        endedBy: string | null
-      } | null
-    }
+        id: string;
+        startedAt: string;
+        startedBy: string;
+        endedAt: string | null;
+        endedBy: string | null;
+      } | null;
+    };
   };
   /** Экран семейства тренировки/сессии. */
   session?: { screen?: SessionScreen };

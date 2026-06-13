@@ -13,7 +13,7 @@
  * Tags: ≤16 items, each ≤32 chars, lowercase/digits/cyrillic/hyphen/underscore.
  * Notes: ≤4096 chars.
  */
-import { z } from 'zod'
+import { z } from 'zod';
 
 // ---------------------------------------------------------------------------
 // Client wire shape (used in list items + detail response)
@@ -32,8 +32,8 @@ export const ClientSchema = z.object({
   notes: z.string().nullable().optional(),
   telegramUserId: z.string().nullable().optional(),
   createdAt: z.string(),
-})
-export type ClientData = z.infer<typeof ClientSchema>
+});
+export type ClientData = z.infer<typeof ClientSchema>;
 
 // ---------------------------------------------------------------------------
 // List response envelope
@@ -46,7 +46,7 @@ export const ClientsListResponseSchema = z.object({
     page: z.number(),
     pageSize: z.number(),
   }),
-})
+});
 
 // ---------------------------------------------------------------------------
 // Create input (client-side Zod for form + submit validation)
@@ -56,14 +56,8 @@ export const ClientCreateSchema = z.object({
   lastName: z.string().min(1, 'Фамилия обязательна'),
   firstName: z.string().min(1, 'Имя обязательно'),
   middleName: z.string().optional(),
-  phone: z
-    .string()
-    .regex(/^\+[1-9]\d{1,14}$/, 'Введите телефон в формате +7XXXXXXXXXX'),
-  email: z
-    .string()
-    .email('Введите корректный адрес почты')
-    .optional()
-    .or(z.literal('')),
+  phone: z.string().regex(/^\+[1-9]\d{1,14}$/, 'Введите телефон в формате +7XXXXXXXXXX'),
+  email: z.string().email('Введите корректный адрес почты').optional().or(z.literal('')),
   birthday: z.string().optional(),
   gender: z.enum(['male', 'female']).optional(),
   tags: z
@@ -77,9 +71,9 @@ export const ClientCreateSchema = z.object({
     .optional(),
   notes: z.string().max(4096, 'Заметка не может превышать 4096 символов').optional(),
   telegramUserId: z.string().optional(),
-})
-export type ClientCreateInput = z.infer<typeof ClientCreateSchema>
+});
+export type ClientCreateInput = z.infer<typeof ClientCreateSchema>;
 
 // PATCH — same schema but every field is optional
-export const ClientUpdateSchema = ClientCreateSchema.partial()
-export type ClientUpdateInput = z.infer<typeof ClientUpdateSchema>
+export const ClientUpdateSchema = ClientCreateSchema.partial();
+export type ClientUpdateInput = z.infer<typeof ClientUpdateSchema>;

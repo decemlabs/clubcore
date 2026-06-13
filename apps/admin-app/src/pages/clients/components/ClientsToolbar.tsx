@@ -7,52 +7,52 @@
  * Added (backend-supported): gender, hasTelegram, tag filters.
  * Sort: recent:desc (default) and name:asc only.
  */
-import { ArrowUpDown, LayoutGrid, List, MessageSquare, Tag, User } from '@/components/icons'
+import { ArrowUpDown, LayoutGrid, List, MessageSquare, Tag, User } from '@/components/icons';
 import {
   Toolbar,
   SearchInput,
   FilterSelect,
   ViewToggle,
   type FilterOption,
-} from '@/components/data/Toolbar'
+} from '@/components/data/Toolbar';
 
-export type ViewMode = 'table' | 'cards'
+export type ViewMode = 'table' | 'cards';
 
-export type GenderFilter = 'all' | 'male' | 'female'
-export type TelegramFilter = 'all' | 'yes' | 'no'
-export type SortPreset = 'recent:desc' | 'name:asc'
+export type GenderFilter = 'all' | 'male' | 'female';
+export type TelegramFilter = 'all' | 'yes' | 'no';
+export type SortPreset = 'recent:desc' | 'name:asc';
 
 const GENDER_OPTIONS: FilterOption[] = [
   { value: 'all', label: 'Все' },
   { value: 'male', label: 'Мужской' },
   { value: 'female', label: 'Женский' },
-]
+];
 
 const TELEGRAM_OPTIONS: FilterOption[] = [
   { value: 'all', label: 'Все' },
   { value: 'yes', label: 'Есть Telegram' },
   { value: 'no', label: 'Нет Telegram' },
-]
+];
 
 const SORT_OPTIONS: FilterOption[] = [
   { value: 'recent:desc', label: 'Недавние' },
   { value: 'name:asc', label: 'По имени (А–Я)' },
-]
+];
 
 export interface ClientsToolbarProps {
-  search: string
-  onSearchChange: (value: string) => void
-  gender: GenderFilter
-  onGenderChange: (value: GenderFilter) => void
-  telegram: TelegramFilter
-  onTelegramChange: (value: TelegramFilter) => void
-  tag: string
-  onTagChange: (value: string) => void
-  tagOptions: FilterOption[]
-  sort: SortPreset
-  onSortChange: (sort: SortPreset) => void
-  view: ViewMode
-  onViewChange: (view: ViewMode) => void
+  search: string;
+  onSearchChange: (value: string) => void;
+  gender: GenderFilter;
+  onGenderChange: (value: GenderFilter) => void;
+  telegram: TelegramFilter;
+  onTelegramChange: (value: TelegramFilter) => void;
+  tag: string;
+  onTagChange: (value: string) => void;
+  tagOptions: FilterOption[];
+  sort: SortPreset;
+  onSortChange: (sort: SortPreset) => void;
+  view: ViewMode;
+  onViewChange: (view: ViewMode) => void;
 }
 
 export function ClientsToolbar({
@@ -120,5 +120,5 @@ export function ClientsToolbar({
         ]}
       />
     </Toolbar>
-  )
+  );
 }

@@ -13,7 +13,7 @@
  * The sell/cancel/refund/instance-list hooks land in Phase 101 Plan 03 (101-03).
  * All schemas are defined here so 101-03 can import them without circular deps.
  */
-import { z } from 'zod'
+import { z } from 'zod';
 
 // ---------------------------------------------------------------------------
 // PT-Package Plan (catalog entry)
@@ -27,8 +27,8 @@ export const PtPackagePlanSchema = z.object({
   validityDays: z.number().nullable().optional(),
   active: z.boolean(),
   createdAt: z.string(),
-})
-export type PtPackagePlanData = z.infer<typeof PtPackagePlanSchema>
+});
+export type PtPackagePlanData = z.infer<typeof PtPackagePlanSchema>;
 
 export const PtPackagePlansListResponseSchema = z.object({
   data: z.object({
@@ -37,7 +37,7 @@ export const PtPackagePlansListResponseSchema = z.object({
     page: z.number(),
     pageSize: z.number(),
   }),
-})
+});
 
 // ---------------------------------------------------------------------------
 // PT-Package Plan Create / Update
@@ -53,14 +53,14 @@ export const PtPackagePlanCreateSchema = z.object({
     .min(1, 'Срок действия: от 1 до 3650 дней')
     .max(3650, 'Срок действия: от 1 до 3650 дней')
     .optional(),
-})
-export type PtPackagePlanCreateInput = z.infer<typeof PtPackagePlanCreateSchema>
+});
+export type PtPackagePlanCreateInput = z.infer<typeof PtPackagePlanCreateSchema>;
 
 // PATCH: only name is mutable (sessionCount/priceKopecks/validityDays immutable)
 export const PtPackagePlanUpdateSchema = z.object({
   name: z.string().min(1, 'Укажите название'),
-})
-export type PtPackagePlanUpdateInput = z.infer<typeof PtPackagePlanUpdateSchema>
+});
+export type PtPackagePlanUpdateInput = z.infer<typeof PtPackagePlanUpdateSchema>;
 
 // ---------------------------------------------------------------------------
 // PT-Package Instance (purchased package for a client)
@@ -76,8 +76,8 @@ export const PtPackageSchema = z.object({
   sessionsRemaining: z.number(),
   amountKopecks: z.number(),
   createdAt: z.string(),
-})
-export type PtPackageData = z.infer<typeof PtPackageSchema>
+});
+export type PtPackageData = z.infer<typeof PtPackageSchema>;
 
 export const PtPackagesListResponseSchema = z.object({
   data: z.object({
@@ -86,7 +86,7 @@ export const PtPackagesListResponseSchema = z.object({
     page: z.number(),
     pageSize: z.number(),
   }),
-})
+});
 
 // ---------------------------------------------------------------------------
 // Sell — amountKopecks required (backend validates amount_mismatch 422)
@@ -96,8 +96,8 @@ export const PtPackageSellSchema = z.object({
   clientId: z.string().min(1, 'Клиент обязателен'),
   planId: z.string().min(1, 'Пакет обязателен'),
   amountKopecks: z.number().int().min(1, 'Сумма должна быть больше нуля'),
-})
-export type PtPackageSellInput = z.infer<typeof PtPackageSellSchema>
+});
+export type PtPackageSellInput = z.infer<typeof PtPackageSellSchema>;
 
 // ---------------------------------------------------------------------------
 // Cancel — reason REQUIRED (1–200 chars; unlike memberships cancel where reason is optional)
@@ -105,17 +105,14 @@ export type PtPackageSellInput = z.infer<typeof PtPackageSellSchema>
 
 export const PtPackageCancelSchema = z.object({
   reason: z.string().min(1, 'Причина обязательна').max(200, 'Не более 200 символов'),
-})
-export type PtPackageCancelInput = z.infer<typeof PtPackageCancelSchema>
+});
+export type PtPackageCancelInput = z.infer<typeof PtPackageCancelSchema>;
 
 // ---------------------------------------------------------------------------
 // Refund — reason required 1–200
 // ---------------------------------------------------------------------------
 
 export const PtPackageRefundSchema = z.object({
-  reason: z
-    .string()
-    .min(1, 'Причина обязательна для возврата')
-    .max(200, 'Не более 200 символов'),
-})
-export type PtPackageRefundInput = z.infer<typeof PtPackageRefundSchema>
+  reason: z.string().min(1, 'Причина обязательна для возврата').max(200, 'Не более 200 символов'),
+});
+export type PtPackageRefundInput = z.infer<typeof PtPackageRefundSchema>;

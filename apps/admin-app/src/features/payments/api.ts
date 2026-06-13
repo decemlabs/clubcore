@@ -14,9 +14,9 @@
  * ApiError re-exported (D-100-03-APIERROR-REEXPORT) so page/tab layers can
  * `instanceof ApiError` without importing @/api/client directly (ESLint boundary).
  */
-import { useQuery } from '@tanstack/react-query'
-import { staffRequest, ApiError } from '@/api/client'
-import { PaymentsListResponseSchema } from './schemas'
+import { useQuery } from '@tanstack/react-query';
+import { staffRequest, ApiError } from '@/api/client';
+import { PaymentsListResponseSchema } from './schemas';
 
 // ---------------------------------------------------------------------------
 // Key factory
@@ -25,7 +25,7 @@ import { PaymentsListResponseSchema } from './schemas'
 export const paymentsKeys = {
   all: ['payments'] as const,
   byClient: (clientId: string) => [...paymentsKeys.all, 'byClient', clientId] as const,
-}
+};
 
 // ---------------------------------------------------------------------------
 // Queries
@@ -43,20 +43,18 @@ export function usePaymentsByClient(clientId: string) {
   return useQuery({
     queryKey: paymentsKeys.byClient(clientId),
     queryFn: async () => {
-      const raw = await staffRequest(
-        'get',
-        '/api/v1/payments/by-client/{client_id}',
-        { params: { client_id: clientId } },
-      )
-      return PaymentsListResponseSchema.parse(raw).data
+      const raw = await staffRequest('get', '/api/v1/payments/by-client/{client_id}', {
+        params: { client_id: clientId },
+      });
+      return PaymentsListResponseSchema.parse(raw).data;
     },
     enabled: !!clientId,
     staleTime: 30_000,
-  })
+  });
 }
 
 // ---------------------------------------------------------------------------
 // Re-export for page/tab layers (ESLint import-boundary)
 // ---------------------------------------------------------------------------
 
-export { ApiError }
+export { ApiError };

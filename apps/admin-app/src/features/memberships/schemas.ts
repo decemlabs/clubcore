@@ -10,8 +10,8 @@
  *   - Cancel: owner-only, reason OPTIONAL ≤500 chars.
  *   - Refund: reception+owner (B-07), reason REQUIRED 1-200 chars, full-only.
  */
-import { z } from 'zod'
-import { MembershipPlanSchema } from '../plans/schemas'
+import { z } from 'zod';
+import { MembershipPlanSchema } from '../plans/schemas';
 
 // ---------------------------------------------------------------------------
 // Freeze period (embedded in Membership when frozen)
@@ -23,8 +23,8 @@ export const FreezePeriodSchema = z.object({
   startedBy: z.string(),
   endedAt: z.string().nullable(),
   endedBy: z.string().nullable(),
-})
-export type FreezePeriodData = z.infer<typeof FreezePeriodSchema>
+});
+export type FreezePeriodData = z.infer<typeof FreezePeriodSchema>;
 
 // ---------------------------------------------------------------------------
 // Membership instance (wire shape)
@@ -45,8 +45,8 @@ export const MembershipSchema = z.object({
   previousMembershipId: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
   createdAt: z.string(),
-})
-export type MembershipData = z.infer<typeof MembershipSchema>
+});
+export type MembershipData = z.infer<typeof MembershipSchema>;
 
 // ---------------------------------------------------------------------------
 // List response
@@ -59,7 +59,7 @@ export const MembershipsListResponseSchema = z.object({
     page: z.number(),
     pageSize: z.number(),
   }),
-})
+});
 
 // ---------------------------------------------------------------------------
 // Sell — clientId + planId required; paidAt and notes optional
@@ -70,8 +70,8 @@ export const MembershipSellSchema = z.object({
   planId: z.string().min(1, 'Тариф обязателен'),
   paidAt: z.string().optional(),
   notes: z.string().optional(),
-})
-export type MembershipSellInput = z.infer<typeof MembershipSellSchema>
+});
+export type MembershipSellInput = z.infer<typeof MembershipSellSchema>;
 
 // ---------------------------------------------------------------------------
 // Cancel — OWNER_ONLY, reason optional ≤500 chars
@@ -79,17 +79,14 @@ export type MembershipSellInput = z.infer<typeof MembershipSellSchema>
 
 export const MembershipCancelSchema = z.object({
   reason: z.string().max(500, 'Не более 500 символов').optional(),
-})
-export type MembershipCancelInput = z.infer<typeof MembershipCancelSchema>
+});
+export type MembershipCancelInput = z.infer<typeof MembershipCancelSchema>;
 
 // ---------------------------------------------------------------------------
 // Refund — required reason 1-200 chars; full-only (no amount field)
 // ---------------------------------------------------------------------------
 
 export const MembershipRefundSchema = z.object({
-  reason: z
-    .string()
-    .min(1, 'Причина обязательна для возврата')
-    .max(200, 'Не более 200 символов'),
-})
-export type MembershipRefundInput = z.infer<typeof MembershipRefundSchema>
+  reason: z.string().min(1, 'Причина обязательна для возврата').max(200, 'Не более 200 символов'),
+});
+export type MembershipRefundInput = z.infer<typeof MembershipRefundSchema>;

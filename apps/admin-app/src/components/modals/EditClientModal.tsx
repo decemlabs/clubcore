@@ -10,67 +10,60 @@
  * Submit state: disables buttons + shows spinner.
  * Delete button: HIDDEN for reception via can(role, 'delete', 'clients') (T-101-02-OWNERDEL).
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { toast } from 'sonner'
-import { Initials } from '@/components/ui/initials'
-import { Segmented } from '@/components/ui/Segmented'
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
-import { Camera, Loader2, Mail, Phone, Trash2, TriangleAlert } from '@/components/icons'
-import { useSession } from '@/features/auth/api'
-import { can } from '@/shared/session/can'
-import { useClient, useUpdateClient, useDeleteClient, ApiError } from '@/features/clients/api'
-import { ClientUpdateSchema } from '@/features/clients/schemas'
-import { useModals } from './modals-context'
-import { AdaptiveModal } from './AdaptiveModal'
-import {
-  Field,
-  FieldRow,
-  ModalButton,
-  ModalInput,
-  ModalTextarea,
-  Section,
-} from './fields'
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
+import { Initials } from '@/components/ui/initials';
+import { Segmented } from '@/components/ui/Segmented';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { Camera, Loader2, Mail, Phone, Trash2, TriangleAlert } from '@/components/icons';
+import { useSession } from '@/features/auth/api';
+import { can } from '@/shared/session/can';
+import { useClient, useUpdateClient, useDeleteClient, ApiError } from '@/features/clients/api';
+import { ClientUpdateSchema } from '@/features/clients/schemas';
+import { useModals } from './modals-context';
+import { AdaptiveModal } from './AdaptiveModal';
+import { Field, FieldRow, ModalButton, ModalInput, ModalTextarea, Section } from './fields';
 
 interface FormState {
-  lastName: string
-  firstName: string
-  middleName: string
-  phone: string
-  email: string
-  birthday: string
-  gender: '' | 'male' | 'female'
-  notes: string
+  lastName: string;
+  firstName: string;
+  middleName: string;
+  phone: string;
+  email: string;
+  birthday: string;
+  gender: '' | 'male' | 'female';
+  notes: string;
 }
 
-type FieldErrors = Partial<Record<keyof FormState, string>>
+type FieldErrors = Partial<Record<keyof FormState, string>>;
 
 const GENDER_OPTIONS: { value: 'male' | 'female'; label: string }[] = [
   { value: 'female', label: 'Женский' },
   { value: 'male', label: 'Мужской' },
-]
+];
 
 interface EditClientModalProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  clientId?: string
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  clientId?: string;
 }
 
 function EditClientForm({
   clientId,
   onOpenChange,
 }: {
-  clientId: string
-  onOpenChange: (open: boolean) => void
+  clientId: string;
+  onOpenChange: (open: boolean) => void;
 }) {
-  const { open: openModal } = useModals()
-  const session = useSession()
-  const role = session.data?.role ?? 'reception'
+  const { open: openModal } = useModals();
+  const session = useSession();
+  const role = session.data?.role ?? 'reception';
 
-  const { data: client } = useClient(clientId)
-  const { mutate: updateClient, isPending: isUpdating } = useUpdateClient()
-  const { mutate: deleteClient, isPending: isDeleting } = useDeleteClient()
+  const { data: client } = useClient(clientId);
+  const { mutate: updateClient, isPending: isUpdating } = useUpdateClient();
+  const { mutate: deleteClient, isPending: isDeleting } = useDeleteClient();
 
-  const isPending = isUpdating || isDeleting
+  const isPending = isUpdating || isDeleting;
 
   const [form, setForm] = useState<FormState>({
     lastName: '',
@@ -81,16 +74,16 @@ function EditClientForm({
     birthday: '',
     gender: '',
     notes: '',
-  })
-  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
-  const [guard, setGuard] = useState(false)
+  });
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [guard, setGuard] = useState(false);
 
   // One-shot init: populate form on first client load only.
   // Subsequent background refetches must NOT overwrite in-progress edits.
-  const initialised = useRef(false)
+  const initialised = useRef(false);
   useEffect(() => {
     if (client && !initialised.current) {
-      initialised.current = true
+      initialised.current = true;
       setForm({
         lastName: client.lastName,
         firstName: client.firstName,
@@ -100,12 +93,12 @@ function EditClientForm({
         birthday: client.birthday ?? '',
         gender: (client.gender as FormState['gender']) ?? '',
         notes: client.notes ?? '',
-      })
+      });
     }
-  }, [client])
+  }, [client]);
 
   const initial = useMemo<FormState | null>(() => {
-    if (!client) return null
+    if (!client) return null;
     return {
       lastName: client.lastName,
       firstName: client.firstName,
@@ -115,22 +108,22 @@ function EditClientForm({
       birthday: client.birthday ?? '',
       gender: (client.gender as FormState['gender']) ?? '',
       notes: client.notes ?? '',
-    }
-  }, [client])
+    };
+  }, [client]);
 
   const dirty = useMemo(
     () => initial !== null && JSON.stringify(form) !== JSON.stringify(initial),
     [form, initial],
-  )
+  );
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) =>
-    setForm((s) => ({ ...s, [k]: v }))
+    setForm((s) => ({ ...s, [k]: v }));
 
   const requestClose = (next: boolean) => {
-    if (next) return
-    if (dirty) setGuard(true)
-    else onOpenChange(false)
-  }
+    if (next) return;
+    if (dirty) setGuard(true);
+    else onOpenChange(false);
+  };
 
   const handleSubmit = () => {
     const parsed = ClientUpdateSchema.safeParse({
@@ -142,54 +135,56 @@ function EditClientForm({
       birthday: form.birthday || undefined,
       gender: form.gender || undefined,
       notes: form.notes || undefined,
-    })
+    });
 
     if (!parsed.success) {
-      const flat = parsed.error.flatten().fieldErrors
-      const errs: FieldErrors = {}
+      const flat = parsed.error.flatten().fieldErrors;
+      const errs: FieldErrors = {};
       for (const [k, msgs] of Object.entries(flat)) {
-        if (msgs && msgs.length > 0) errs[k as keyof FormState] = msgs[0]
+        if (msgs && msgs.length > 0) errs[k as keyof FormState] = msgs[0];
       }
-      setFieldErrors(errs)
-      return
+      setFieldErrors(errs);
+      return;
     }
 
-    setFieldErrors({})
+    setFieldErrors({});
     updateClient(
       { id: clientId, body: parsed.data },
       {
         onSuccess: () => {
-          toast.success('Изменения сохранены')
-          onOpenChange(false)
+          toast.success('Изменения сохранены');
+          onOpenChange(false);
         },
         onError: (err) => {
           if (err instanceof ApiError) {
             if (err.code === 'forbidden') {
               toast.error('Недостаточно прав', {
                 description: 'Редактирование доступно только сотрудникам.',
-              })
-              return
+              });
+              return;
             }
             if (err.fields) {
-              const errs: FieldErrors = {}
+              const errs: FieldErrors = {};
               for (const [field, message] of Object.entries(err.fields)) {
-                errs[field as keyof FormState] = String(message)
+                errs[field as keyof FormState] = String(message);
               }
-              setFieldErrors(errs)
-              return
+              setFieldErrors(errs);
+              return;
             }
-            toast.error(err.message || 'Не удалось сохранить изменения. Попробуйте ещё раз.')
+            toast.error(err.message || 'Не удалось сохранить изменения. Попробуйте ещё раз.');
           } else {
-            toast.error('Не удалось сохранить изменения. Проверьте соединение и попробуйте ещё раз.')
+            toast.error(
+              'Не удалось сохранить изменения. Проверьте соединение и попробуйте ещё раз.',
+            );
           }
         },
       },
-    )
-  }
+    );
+  };
 
   const handleDelete = () => {
-    const fullName = [client?.lastName, client?.firstName].filter(Boolean).join(' ')
-    onOpenChange(false)
+    const fullName = [client?.lastName, client?.firstName].filter(Boolean).join(' ');
+    onOpenChange(false);
     openModal('confirm', {
       confirm: {
         title: 'Удалить клиента?',
@@ -200,26 +195,24 @@ function EditClientForm({
         onConfirm: () => {
           deleteClient(clientId, {
             onSuccess: () => {
-              toast.success('Клиент удалён')
+              toast.success('Клиент удалён');
             },
             onError: (err) => {
               if (err instanceof ApiError && err.code === 'forbidden') {
                 toast.error('Недостаточно прав', {
                   description: 'Удаление клиента доступно только владельцу.',
-                })
+                });
               } else {
-                toast.error('Не удалось удалить клиента. Попробуйте ещё раз.')
+                toast.error('Не удалось удалить клиента. Попробуйте ещё раз.');
               }
             },
-          })
+          });
         },
       },
-    })
-  }
+    });
+  };
 
-  const fullName = client
-    ? [client.lastName, client.firstName].filter(Boolean).join(' ')
-    : '…'
+  const fullName = client ? [client.lastName, client.firstName].filter(Boolean).join(' ') : '…';
 
   const initials = client
     ? [client.lastName, client.firstName]
@@ -227,9 +220,9 @@ function EditClientForm({
         .map((s) => s[0]?.toUpperCase() ?? '')
         .join('')
         .slice(0, 2)
-    : ''
+    : '';
 
-  const canDelete = can(role, 'delete', 'clients')
+  const canDelete = can(role, 'delete', 'clients');
 
   return (
     <>
@@ -402,8 +395,8 @@ function EditClientForm({
               variant="text"
               className="text-danger hover:bg-danger-soft hover:text-danger"
               onClick={() => {
-                setGuard(false)
-                onOpenChange(false)
+                setGuard(false);
+                onOpenChange(false);
               }}
             >
               Не сохранять
@@ -414,8 +407,8 @@ function EditClientForm({
               </ModalButton>
               <ModalButton
                 onClick={() => {
-                  setGuard(false)
-                  handleSubmit()
+                  setGuard(false);
+                  handleSubmit();
                 }}
               >
                 Сохранить
@@ -425,7 +418,7 @@ function EditClientForm({
         </DialogContent>
       </Dialog>
     </>
-  )
+  );
 }
 
 export function EditClientModal({ open, onOpenChange, clientId }: EditClientModalProps) {
@@ -440,8 +433,8 @@ export function EditClientModal({ open, onOpenChange, clientId }: EditClientModa
       >
         <></>
       </AdaptiveModal>
-    )
+    );
   }
 
-  return <EditClientForm clientId={clientId} onOpenChange={onOpenChange} />
+  return <EditClientForm clientId={clientId} onOpenChange={onOpenChange} />;
 }

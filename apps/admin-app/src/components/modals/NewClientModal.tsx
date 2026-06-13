@@ -8,29 +8,23 @@
  * On 5xx/network: generic toast, form stays open.
  * Submit state: disables buttons + shows spinner.
  */
-import { useEffect, useState } from 'react'
-import { toast } from 'sonner'
-import { Loader2, Phone } from '@/components/icons'
-import { useCreateClient, ApiError } from '@/features/clients/api'
-import { ClientCreateSchema } from '@/features/clients/schemas'
-import { AdaptiveModal } from './AdaptiveModal'
-import {
-  Field,
-  FieldRow,
-  ModalButton,
-  ModalInput,
-  Section,
-} from './fields'
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import { Loader2, Phone } from '@/components/icons';
+import { useCreateClient, ApiError } from '@/features/clients/api';
+import { ClientCreateSchema } from '@/features/clients/schemas';
+import { AdaptiveModal } from './AdaptiveModal';
+import { Field, FieldRow, ModalButton, ModalInput, Section } from './fields';
 
 interface FormState {
-  lastName: string
-  firstName: string
-  middleName: string
-  phone: string
-  email: string
-  birthday: string
-  gender: '' | 'male' | 'female'
-  notes: string
+  lastName: string;
+  firstName: string;
+  middleName: string;
+  phone: string;
+  email: string;
+  birthday: string;
+  gender: '' | 'male' | 'female';
+  notes: string;
 }
 
 const EMPTY: FormState = {
@@ -42,32 +36,32 @@ const EMPTY: FormState = {
   birthday: '',
   gender: '',
   notes: '',
-}
+};
 
-type FieldErrors = Partial<Record<keyof FormState, string>>
+type FieldErrors = Partial<Record<keyof FormState, string>>;
 
 export function NewClientModal({
   open,
   onOpenChange,
 }: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
-  const [form, setForm] = useState<FormState>(EMPTY)
-  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
+  const [form, setForm] = useState<FormState>(EMPTY);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
-  const { mutate: createClient, isPending } = useCreateClient()
+  const { mutate: createClient, isPending } = useCreateClient();
 
   // Reset form when modal opens
   useEffect(() => {
     if (open) {
-      setForm(EMPTY)
-      setFieldErrors({})
+      setForm(EMPTY);
+      setFieldErrors({});
     }
-  }, [open])
+  }, [open]);
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) =>
-    setForm((s) => ({ ...s, [k]: v }))
+    setForm((s) => ({ ...s, [k]: v }));
 
   const handleSubmit = () => {
     // Client-side Zod validation
@@ -80,48 +74,48 @@ export function NewClientModal({
       birthday: form.birthday || undefined,
       gender: form.gender || undefined,
       notes: form.notes || undefined,
-    })
+    });
 
     if (!parsed.success) {
-      const flat = parsed.error.flatten().fieldErrors
-      const errs: FieldErrors = {}
+      const flat = parsed.error.flatten().fieldErrors;
+      const errs: FieldErrors = {};
       for (const [k, msgs] of Object.entries(flat)) {
-        if (msgs && msgs.length > 0) errs[k as keyof FormState] = msgs[0]
+        if (msgs && msgs.length > 0) errs[k as keyof FormState] = msgs[0];
       }
-      setFieldErrors(errs)
-      return
+      setFieldErrors(errs);
+      return;
     }
 
-    setFieldErrors({})
+    setFieldErrors({});
     createClient(parsed.data, {
       onSuccess: () => {
-        toast.success('Клиент добавлен')
-        onOpenChange(false)
+        toast.success('Клиент добавлен');
+        onOpenChange(false);
       },
       onError: (err) => {
         if (err instanceof ApiError) {
           if (err.code === 'forbidden') {
             toast.error('Недостаточно прав', {
               description: 'Создание клиентов доступно только сотрудникам.',
-            })
-            return
+            });
+            return;
           }
           if (err.fields) {
             // 422: backend field errors → inline
-            const errs: FieldErrors = {}
+            const errs: FieldErrors = {};
             for (const [field, message] of Object.entries(err.fields)) {
-              errs[field as keyof FormState] = String(message)
+              errs[field as keyof FormState] = String(message);
             }
-            setFieldErrors(errs)
-            return
+            setFieldErrors(errs);
+            return;
           }
-          toast.error(err.message || 'Не удалось создать клиента. Попробуйте ещё раз.')
+          toast.error(err.message || 'Не удалось создать клиента. Попробуйте ещё раз.');
         } else {
-          toast.error('Не удалось создать клиента. Проверьте соединение и попробуйте ещё раз.')
+          toast.error('Не удалось создать клиента. Проверьте соединение и попробуйте ещё раз.');
         }
       },
-    })
-  }
+    });
+  };
 
   return (
     <AdaptiveModal
@@ -236,5 +230,5 @@ export function NewClientModal({
         />
       </Field>
     </AdaptiveModal>
-  )
+  );
 }

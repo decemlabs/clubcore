@@ -10,14 +10,14 @@
  */
 
 export type MembershipsListQuery = {
-  clientId?: string
-  status?: string
-  sort?: string
-  expiring?: boolean
-  within?: number
-  page?: number
-  pageSize?: number
-}
+  clientId?: string;
+  status?: string;
+  sort?: string;
+  expiring?: boolean;
+  within?: number;
+  page?: number;
+  pageSize?: number;
+};
 
 export const membershipsKeys = {
   all: ['memberships'] as const,
@@ -26,4 +26,4 @@ export const membershipsKeys = {
   details: () => [...membershipsKeys.all, 'detail'] as const,
   detail: (id: string) => [...membershipsKeys.details(), id] as const,
   byClient: (clientId: string) => [...membershipsKeys.all, 'byClient', clientId] as const,
-} as const
+} as const;

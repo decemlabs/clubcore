@@ -1,9 +1,9 @@
-import { Link } from 'react-router-dom'
-import { cn } from '@/lib/cn'
-import { ROUTES } from '@/app/routes'
-import { Initials } from '@/components/ui/initials'
-import { formatDateRu } from '@/lib/format'
-import type { ClientData } from '@/features/clients/schemas'
+import { Link } from 'react-router-dom';
+import { cn } from '@/lib/cn';
+import { ROUTES } from '@/app/routes';
+import { Initials } from '@/components/ui/initials';
+import { formatDateRu } from '@/lib/format';
+import type { ClientData } from '@/features/clients/schemas';
 
 /** Строка клиента в списке (для реального ClientData из backend). */
 export function ClientRow({ client: c }: { client: ClientData }) {
@@ -11,12 +11,12 @@ export function ClientRow({ client: c }: { client: ClientData }) {
     .filter(Boolean)
     .map((s) => s[0]?.toUpperCase() ?? '')
     .join('')
-    .slice(0, 2)
+    .slice(0, 2);
 
-  const fullName = [c.lastName, c.firstName, c.middleName].filter(Boolean).join(' ')
+  const fullName = [c.lastName, c.firstName, c.middleName].filter(Boolean).join(' ');
 
   // Default avatar color: emerald gradient (brand primary) when no per-entity color
-  const avatarColor = 'linear-gradient(135deg,#2dd4a4,#059669)'
+  const avatarColor = 'linear-gradient(135deg,#2dd4a4,#059669)';
 
   return (
     <Link
@@ -56,5 +56,5 @@ export function ClientRow({ client: c }: { client: ClientData }) {
         {formatDateRu(c.createdAt)}
       </div>
     </Link>
-  )
+  );
 }

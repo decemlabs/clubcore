@@ -20,11 +20,11 @@
  * ApiError re-exported (D-100-03-APIERROR-REEXPORT) so page/modal layers
  * can `instanceof ApiError` without importing @/api/client directly (ESLint boundary).
  */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'sonner'
-import { staffRequest, ApiError } from '@/api/client'
-import { formatRub, formatDateRu } from '@/lib/format'
-import { membershipsKeys } from './keys'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { staffRequest, ApiError } from '@/api/client';
+import { formatRub, formatDateRu } from '@/lib/format';
+import { membershipsKeys } from './keys';
 import {
   MembershipsListResponseSchema,
   MembershipSchema,
@@ -32,7 +32,7 @@ import {
   type MembershipSellInput,
   type MembershipCancelInput,
   type MembershipRefundInput,
-} from './schemas'
+} from './schemas';
 
 // ---------------------------------------------------------------------------
 // Queries
@@ -45,12 +45,12 @@ export function useMembershipsByClient(clientId: string) {
     queryFn: async () => {
       const raw = await staffRequest('get', '/api/v1/memberships', {
         query: { clientId },
-      })
-      return MembershipsListResponseSchema.parse(raw).data
+      });
+      return MembershipsListResponseSchema.parse(raw).data;
     },
     enabled: !!clientId,
     staleTime: 30_000,
-  })
+  });
 }
 
 /** Fetch a single membership by id (GET /api/v1/memberships/{membership_id}). */
@@ -60,12 +60,12 @@ export function useMembership(id: string) {
     queryFn: async () => {
       const raw = await staffRequest('get', '/api/v1/memberships/{membership_id}', {
         params: { membership_id: id },
-      })
-      return MembershipSchema.parse((raw as { data: unknown }).data)
+      });
+      return MembershipSchema.parse((raw as { data: unknown }).data);
     },
     enabled: !!id,
     staleTime: 30_000,
-  })
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -77,40 +77,40 @@ export function useMembership(id: string) {
  * Idempotency-Key generated per attempt inside mutationFn (T-101-08-DOUBLECHARGE).
  */
 export function useSellMembership() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async (body: MembershipSellInput) => {
       // crypto.randomUUID() called at submit time — fresh key per attempt
       const raw = await staffRequest('post', '/api/v1/memberships', {
         body,
         headers: { 'Idempotency-Key': crypto.randomUUID() },
-      })
-      return MembershipSchema.parse((raw as { data: unknown }).data)
+      });
+      return MembershipSchema.parse((raw as { data: unknown }).data);
     },
     onSuccess: (data) => {
-      const desc = `Оплата ${formatRub(data.paidAmountKopecks)} принята.`
-      toast.success('Абонемент оформлен', { description: desc })
-      void qc.invalidateQueries({ queryKey: membershipsKeys.lists() })
-      void qc.invalidateQueries({ queryKey: membershipsKeys.byClient(data.clientId) })
+      const desc = `Оплата ${formatRub(data.paidAmountKopecks)} принята.`;
+      toast.success('Абонемент оформлен', { description: desc });
+      void qc.invalidateQueries({ queryKey: membershipsKeys.lists() });
+      void qc.invalidateQueries({ queryKey: membershipsKeys.byClient(data.clientId) });
     },
     onError: (err) => {
-      const msg = err instanceof ApiError ? err.message : undefined
+      const msg = err instanceof ApiError ? err.message : undefined;
       toast.error(
         msg ?? 'Не удалось выполнить действие. Проверьте соединение и попробуйте ещё раз.',
-      )
+      );
     },
-  })
+  });
 }
 
 // ---------------------------------------------------------------------------
 // Mutation — Freeze (OPTIMISTIC)
 // ---------------------------------------------------------------------------
 
-type FreezeVars = { membershipId: string; clientId: string }
+type FreezeVars = { membershipId: string; clientId: string };
 type OptimisticCtx = {
-  listSnapshots: [readonly unknown[], { items: MembershipData[] } | undefined][]
-  detailSnapshot: MembershipData | undefined
-}
+  listSnapshots: [readonly unknown[], { items: MembershipData[] } | undefined][];
+  detailSnapshot: MembershipData | undefined;
+};
 
 /**
  * Freeze a membership (POST /api/v1/memberships/{membership_id}/freeze).
@@ -118,7 +118,7 @@ type OptimisticCtx = {
  * Rolls back to snapshot on error; invalidates on settle.
  */
 export function useFreezeMembership() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation<unknown, Error, FreezeVars, OptimisticCtx>({
     mutationFn: async ({ membershipId }: FreezeVars) =>
       staffRequest('post', '/api/v1/memberships/{membership_id}/freeze', {
@@ -127,13 +127,13 @@ export function useFreezeMembership() {
         headers: { 'Idempotency-Key': crypto.randomUUID() },
       }),
     onMutate: async ({ membershipId }: FreezeVars) => {
-      await qc.cancelQueries({ queryKey: membershipsKeys.lists() })
-      await qc.cancelQueries({ queryKey: membershipsKeys.detail(membershipId) })
+      await qc.cancelQueries({ queryKey: membershipsKeys.lists() });
+      await qc.cancelQueries({ queryKey: membershipsKeys.detail(membershipId) });
 
       const listSnapshots = qc.getQueriesData<{ items: MembershipData[] }>({
         queryKey: membershipsKeys.lists(),
-      })
-      const detailSnapshot = qc.getQueryData<MembershipData>(membershipsKeys.detail(membershipId))
+      });
+      const detailSnapshot = qc.getQueryData<MembershipData>(membershipsKeys.detail(membershipId));
 
       const optimisticFreezePeriod = {
         id: 'optimistic',
@@ -141,11 +141,11 @@ export function useFreezeMembership() {
         startedBy: '',
         endedAt: null,
         endedBy: null,
-      }
+      };
 
       // Optimistic: flip status → 'frozen', inject placeholder currentFreezePeriod
       for (const [key, data] of listSnapshots) {
-        if (!data) continue
+        if (!data) continue;
         qc.setQueryData(key, {
           ...data,
           items: data.items.map((m) =>
@@ -153,44 +153,44 @@ export function useFreezeMembership() {
               ? { ...m, status: 'frozen', currentFreezePeriod: optimisticFreezePeriod }
               : m,
           ),
-        })
+        });
       }
       if (detailSnapshot) {
         qc.setQueryData(membershipsKeys.detail(membershipId), {
           ...detailSnapshot,
           status: 'frozen',
           currentFreezePeriod: optimisticFreezePeriod,
-        })
+        });
       }
 
-      return { listSnapshots, detailSnapshot }
+      return { listSnapshots, detailSnapshot };
     },
     onSuccess: () => {
-      toast.success('Абонемент заморожен')
+      toast.success('Абонемент заморожен');
     },
     onError: (_err, vars, ctx) => {
-      if (!ctx) return
+      if (!ctx) return;
       for (const [key, data] of ctx.listSnapshots) {
-        qc.setQueryData(key as readonly unknown[], data)
+        qc.setQueryData(key as readonly unknown[], data);
       }
       if (ctx.detailSnapshot) {
-        qc.setQueryData(membershipsKeys.detail(vars.membershipId), ctx.detailSnapshot)
+        qc.setQueryData(membershipsKeys.detail(vars.membershipId), ctx.detailSnapshot);
       }
-      toast.error('Не удалось выполнить действие. Проверьте соединение и попробуйте ещё раз.')
+      toast.error('Не удалось выполнить действие. Проверьте соединение и попробуйте ещё раз.');
     },
     onSettled: (_data, _err, vars) => {
-      void qc.invalidateQueries({ queryKey: membershipsKeys.lists() })
-      void qc.invalidateQueries({ queryKey: membershipsKeys.detail(vars.membershipId) })
-      void qc.invalidateQueries({ queryKey: membershipsKeys.byClient(vars.clientId) })
+      void qc.invalidateQueries({ queryKey: membershipsKeys.lists() });
+      void qc.invalidateQueries({ queryKey: membershipsKeys.detail(vars.membershipId) });
+      void qc.invalidateQueries({ queryKey: membershipsKeys.byClient(vars.clientId) });
     },
-  })
+  });
 }
 
 // ---------------------------------------------------------------------------
 // Mutation — Unfreeze (OPTIMISTIC)
 // ---------------------------------------------------------------------------
 
-type UnfreezeVars = { membershipId: string; clientId: string }
+type UnfreezeVars = { membershipId: string; clientId: string };
 
 /**
  * Unfreeze a membership (POST /api/v1/memberships/{membership_id}/unfreeze).
@@ -198,7 +198,7 @@ type UnfreezeVars = { membershipId: string; clientId: string }
  * Rolls back to snapshot on error; invalidates on settle.
  */
 export function useUnfreezeMembership() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation<unknown, Error, UnfreezeVars, OptimisticCtx>({
     mutationFn: async ({ membershipId }: UnfreezeVars) =>
       staffRequest('post', '/api/v1/memberships/{membership_id}/unfreeze', {
@@ -207,55 +207,53 @@ export function useUnfreezeMembership() {
         headers: { 'Idempotency-Key': crypto.randomUUID() },
       }),
     onMutate: async ({ membershipId }: UnfreezeVars) => {
-      await qc.cancelQueries({ queryKey: membershipsKeys.lists() })
-      await qc.cancelQueries({ queryKey: membershipsKeys.detail(membershipId) })
+      await qc.cancelQueries({ queryKey: membershipsKeys.lists() });
+      await qc.cancelQueries({ queryKey: membershipsKeys.detail(membershipId) });
 
       const listSnapshots = qc.getQueriesData<{ items: MembershipData[] }>({
         queryKey: membershipsKeys.lists(),
-      })
-      const detailSnapshot = qc.getQueryData<MembershipData>(membershipsKeys.detail(membershipId))
+      });
+      const detailSnapshot = qc.getQueryData<MembershipData>(membershipsKeys.detail(membershipId));
 
       // Optimistic: flip status → 'active', clear currentFreezePeriod
       for (const [key, data] of listSnapshots) {
-        if (!data) continue
+        if (!data) continue;
         qc.setQueryData(key, {
           ...data,
           items: data.items.map((m) =>
-            m.id === membershipId
-              ? { ...m, status: 'active', currentFreezePeriod: null }
-              : m,
+            m.id === membershipId ? { ...m, status: 'active', currentFreezePeriod: null } : m,
           ),
-        })
+        });
       }
       if (detailSnapshot) {
         qc.setQueryData(membershipsKeys.detail(membershipId), {
           ...detailSnapshot,
           status: 'active',
           currentFreezePeriod: null,
-        })
+        });
       }
 
-      return { listSnapshots, detailSnapshot }
+      return { listSnapshots, detailSnapshot };
     },
     onSuccess: () => {
-      toast.success('Абонемент разморожен')
+      toast.success('Абонемент разморожен');
     },
     onError: (_err, vars, ctx) => {
-      if (!ctx) return
+      if (!ctx) return;
       for (const [key, data] of ctx.listSnapshots) {
-        qc.setQueryData(key as readonly unknown[], data)
+        qc.setQueryData(key as readonly unknown[], data);
       }
       if (ctx.detailSnapshot) {
-        qc.setQueryData(membershipsKeys.detail(vars.membershipId), ctx.detailSnapshot)
+        qc.setQueryData(membershipsKeys.detail(vars.membershipId), ctx.detailSnapshot);
       }
-      toast.error('Не удалось выполнить действие. Проверьте соединение и попробуйте ещё раз.')
+      toast.error('Не удалось выполнить действие. Проверьте соединение и попробуйте ещё раз.');
     },
     onSettled: (_data, _err, vars) => {
-      void qc.invalidateQueries({ queryKey: membershipsKeys.lists() })
-      void qc.invalidateQueries({ queryKey: membershipsKeys.detail(vars.membershipId) })
-      void qc.invalidateQueries({ queryKey: membershipsKeys.byClient(vars.clientId) })
+      void qc.invalidateQueries({ queryKey: membershipsKeys.lists() });
+      void qc.invalidateQueries({ queryKey: membershipsKeys.detail(vars.membershipId) });
+      void qc.invalidateQueries({ queryKey: membershipsKeys.byClient(vars.clientId) });
     },
-  })
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -267,35 +265,30 @@ export function useUnfreezeMembership() {
  * Backend extends by one plan duration — no period parameter needed.
  */
 export function useRenewMembership() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({
-      membershipId,
-    }: {
-      membershipId: string
-      clientId: string
-    }) => {
+    mutationFn: async ({ membershipId }: { membershipId: string; clientId: string }) => {
       const raw = await staffRequest('post', '/api/v1/memberships/{membership_id}/renew', {
         params: { membership_id: membershipId },
         body: {},
         headers: { 'Idempotency-Key': crypto.randomUUID() },
-      })
-      return MembershipSchema.parse((raw as { data: unknown }).data)
+      });
+      return MembershipSchema.parse((raw as { data: unknown }).data);
     },
     onSuccess: (data) => {
-      const desc = `Действует до ${formatDateRu(data.endDate, 'd MMMM yyyy')}.`
-      toast.success('Абонемент продлён', { description: desc })
-      void qc.invalidateQueries({ queryKey: membershipsKeys.lists() })
-      void qc.invalidateQueries({ queryKey: membershipsKeys.detail(data.id) })
-      void qc.invalidateQueries({ queryKey: membershipsKeys.byClient(data.clientId) })
+      const desc = `Действует до ${formatDateRu(data.endDate, 'd MMMM yyyy')}.`;
+      toast.success('Абонемент продлён', { description: desc });
+      void qc.invalidateQueries({ queryKey: membershipsKeys.lists() });
+      void qc.invalidateQueries({ queryKey: membershipsKeys.detail(data.id) });
+      void qc.invalidateQueries({ queryKey: membershipsKeys.byClient(data.clientId) });
     },
     onError: (err) => {
-      const msg = err instanceof ApiError ? err.message : undefined
+      const msg = err instanceof ApiError ? err.message : undefined;
       toast.error(
         msg ?? 'Не удалось выполнить действие. Проверьте соединение и попробуйте ещё раз.',
-      )
+      );
     },
-  })
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -308,41 +301,41 @@ export function useRenewMembership() {
  * A 403 that still reaches the client surfaces as a non-blocking toast.
  */
 export function useCancelMembership() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({
       membershipId,
       body,
     }: {
-      membershipId: string
-      body: MembershipCancelInput
+      membershipId: string;
+      body: MembershipCancelInput;
     }) => {
       const raw = await staffRequest('post', '/api/v1/memberships/{membership_id}/cancel', {
         params: { membership_id: membershipId },
         body,
         headers: { 'Idempotency-Key': crypto.randomUUID() },
-      })
-      return MembershipSchema.parse((raw as { data: unknown }).data)
+      });
+      return MembershipSchema.parse((raw as { data: unknown }).data);
     },
     onSuccess: (data) => {
-      toast.success('Абонемент отменён')
-      void qc.invalidateQueries({ queryKey: membershipsKeys.lists() })
-      void qc.invalidateQueries({ queryKey: membershipsKeys.detail(data.id) })
-      void qc.invalidateQueries({ queryKey: membershipsKeys.byClient(data.clientId) })
+      toast.success('Абонемент отменён');
+      void qc.invalidateQueries({ queryKey: membershipsKeys.lists() });
+      void qc.invalidateQueries({ queryKey: membershipsKeys.detail(data.id) });
+      void qc.invalidateQueries({ queryKey: membershipsKeys.byClient(data.clientId) });
     },
     onError: (err) => {
       if (err instanceof ApiError && err.code === 'forbidden') {
         toast.error('Недостаточно прав', {
           description: 'Отмена абонемента доступна только владельцу.',
-        })
+        });
       } else {
-        const msg = err instanceof ApiError ? err.message : undefined
+        const msg = err instanceof ApiError ? err.message : undefined;
         toast.error(
           msg ?? 'Не удалось выполнить действие. Проверьте соединение и попробуйте ещё раз.',
-        )
+        );
       }
     },
-  })
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -356,39 +349,39 @@ export function useCancelMembership() {
  * NO Idempotency-Key (refund is idempotent by nature; backend does not specify one).
  */
 export function useRefundMembership() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({
       membershipId,
       body,
     }: {
-      membershipId: string
-      body: MembershipRefundInput
+      membershipId: string;
+      body: MembershipRefundInput;
     }) => {
       const raw = await staffRequest('post', '/api/v1/memberships/{membership_id}/refund', {
         params: { membership_id: membershipId },
         body,
         // Deliberately NO Idempotency-Key header (UI-SPEC §3.2)
-      })
-      return MembershipSchema.parse((raw as { data: unknown }).data)
+      });
+      return MembershipSchema.parse((raw as { data: unknown }).data);
     },
     onSuccess: (data) => {
-      toast.success('Возврат оформлен', { description: 'Средства будут возвращены клиенту.' })
-      void qc.invalidateQueries({ queryKey: membershipsKeys.detail(data.id) })
-      void qc.invalidateQueries({ queryKey: membershipsKeys.lists() })
-      void qc.invalidateQueries({ queryKey: membershipsKeys.byClient(data.clientId) })
+      toast.success('Возврат оформлен', { description: 'Средства будут возвращены клиенту.' });
+      void qc.invalidateQueries({ queryKey: membershipsKeys.detail(data.id) });
+      void qc.invalidateQueries({ queryKey: membershipsKeys.lists() });
+      void qc.invalidateQueries({ queryKey: membershipsKeys.byClient(data.clientId) });
     },
     onError: (err) => {
-      const msg = err instanceof ApiError ? err.message : undefined
+      const msg = err instanceof ApiError ? err.message : undefined;
       toast.error(
         msg ?? 'Не удалось выполнить действие. Проверьте соединение и попробуйте ещё раз.',
-      )
+      );
     },
-  })
+  });
 }
 
 // ---------------------------------------------------------------------------
 // Re-export for page/modal layers (ESLint import-boundary)
 // ---------------------------------------------------------------------------
 
-export { ApiError }
+export { ApiError };

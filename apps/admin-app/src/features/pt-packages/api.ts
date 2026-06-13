@@ -22,9 +22,9 @@
  * ApiError re-exported (D-100-03-APIERROR-REEXPORT) so page/modal layers can
  * `instanceof ApiError` without importing @/api/client directly (ESLint boundary).
  */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'sonner'
-import { staffRequest, ApiError } from '@/api/client'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { staffRequest, ApiError } from '@/api/client';
 import {
   PtPackagePlansListResponseSchema,
   PtPackagePlanSchema,
@@ -36,7 +36,7 @@ import {
   type PtPackageSellInput,
   type PtPackageCancelInput,
   type PtPackageRefundInput,
-} from './schemas'
+} from './schemas';
 
 // ---------------------------------------------------------------------------
 // Key factory
@@ -53,7 +53,7 @@ export const ptPackagesKeys = {
   instanceList: (filter?: { clientId?: string }) =>
     [...ptPackagesKeys.instances(), filter] as const,
   instanceDetail: (id: string) => [...ptPackagesKeys.instances(), 'detail', id] as const,
-}
+};
 
 // ---------------------------------------------------------------------------
 // Queries — PT-Package Plans (catalog)
@@ -66,11 +66,11 @@ export function usePtPackagePlans(opts?: { includeArchived?: boolean }) {
     queryFn: async () => {
       const raw = await staffRequest('get', '/api/v1/pt-package-plans', {
         query: opts ?? {},
-      })
-      return PtPackagePlansListResponseSchema.parse(raw).data
+      });
+      return PtPackagePlansListResponseSchema.parse(raw).data;
     },
     staleTime: 30_000,
-  })
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -78,53 +78,53 @@ export function usePtPackagePlans(opts?: { includeArchived?: boolean }) {
 // ---------------------------------------------------------------------------
 
 export function useCreatePtPackagePlan() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async (body: PtPackagePlanCreateInput): Promise<PtPackagePlanData> => {
-      const raw = await staffRequest('post', '/api/v1/pt-package-plans', { body })
-      return PtPackagePlanSchema.parse((raw as { data: unknown }).data)
+      const raw = await staffRequest('post', '/api/v1/pt-package-plans', { body });
+      return PtPackagePlanSchema.parse((raw as { data: unknown }).data);
     },
     onSettled: () => {
-      void qc.invalidateQueries({ queryKey: ptPackagesKeys.plans() })
+      void qc.invalidateQueries({ queryKey: ptPackagesKeys.plans() });
     },
-  })
+  });
 }
 
 export function useUpdatePtPackagePlan() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     // Only {name} is sent — other fields are immutable (extra='forbid' on backend)
     mutationFn: async ({
       id,
       body,
     }: {
-      id: string
-      body: PtPackagePlanUpdateInput
+      id: string;
+      body: PtPackagePlanUpdateInput;
     }): Promise<PtPackagePlanData> => {
       const raw = await staffRequest('patch', '/api/v1/pt-package-plans/{plan_id}', {
         params: { plan_id: id },
         body,
-      })
-      return PtPackagePlanSchema.parse((raw as { data: unknown }).data)
+      });
+      return PtPackagePlanSchema.parse((raw as { data: unknown }).data);
     },
     onSettled: (_data, _err, vars) => {
-      void qc.invalidateQueries({ queryKey: ptPackagesKeys.plans() })
-      void qc.invalidateQueries({ queryKey: ptPackagesKeys.planDetail(vars.id) })
+      void qc.invalidateQueries({ queryKey: ptPackagesKeys.plans() });
+      void qc.invalidateQueries({ queryKey: ptPackagesKeys.planDetail(vars.id) });
     },
-  })
+  });
 }
 
 export function useDeletePtPackagePlan() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     // DELETE /pt-package-plans/{plan_id} → 204 No Content (no body to parse)
     mutationFn: (id: string) =>
       staffRequest('delete', '/api/v1/pt-package-plans/{plan_id}', { params: { plan_id: id } }),
     onSettled: (_data, _err, id) => {
-      void qc.invalidateQueries({ queryKey: ptPackagesKeys.plans() })
-      void qc.invalidateQueries({ queryKey: ptPackagesKeys.planDetail(id) })
+      void qc.invalidateQueries({ queryKey: ptPackagesKeys.plans() });
+      void qc.invalidateQueries({ queryKey: ptPackagesKeys.planDetail(id) });
     },
-  })
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -142,12 +142,12 @@ export function usePtPackagesByClient(clientId: string) {
     queryFn: async () => {
       const raw = await staffRequest('get', '/api/v1/pt-packages', {
         query: { clientId },
-      })
-      return PtPackagesListResponseSchema.parse(raw).data
+      });
+      return PtPackagesListResponseSchema.parse(raw).data;
     },
     enabled: !!clientId,
     staleTime: 30_000,
-  })
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -161,25 +161,29 @@ export function usePtPackagesByClient(clientId: string) {
  * Idempotency-Key generated per attempt (T-101-08-DOUBLECHARGE).
  */
 export function useSellPtPackage() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async (body: PtPackageSellInput) => {
       const raw = await staffRequest('post', '/api/v1/pt-packages', {
         body,
         headers: { 'Idempotency-Key': crypto.randomUUID() },
-      })
-      return PtPackageSchema.parse((raw as { data: unknown }).data)
+      });
+      return PtPackageSchema.parse((raw as { data: unknown }).data);
     },
     onSuccess: (data) => {
-      toast.success('Пакет тренировок оформлен', { description: 'Оплата принята.' })
-      void qc.invalidateQueries({ queryKey: ptPackagesKeys.instances() })
-      void qc.invalidateQueries({ queryKey: ptPackagesKeys.instanceList({ clientId: data.clientId }) })
+      toast.success('Пакет тренировок оформлен', { description: 'Оплата принята.' });
+      void qc.invalidateQueries({ queryKey: ptPackagesKeys.instances() });
+      void qc.invalidateQueries({
+        queryKey: ptPackagesKeys.instanceList({ clientId: data.clientId }),
+      });
     },
     onError: (err) => {
-      const msg = err instanceof ApiError ? err.message : undefined
-      toast.error(msg ?? 'Не удалось выполнить действие. Проверьте соединение и попробуйте ещё раз.')
+      const msg = err instanceof ApiError ? err.message : undefined;
+      toast.error(
+        msg ?? 'Не удалось выполнить действие. Проверьте соединение и попробуйте ещё раз.',
+      );
     },
-  })
+  });
 }
 
 /**
@@ -188,30 +192,36 @@ export function useSellPtPackage() {
  * Reason is REQUIRED (1-200 chars), unlike memberships cancel.
  */
 export function useCancelPtPackage() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ packageId, body }: { packageId: string; body: PtPackageCancelInput }) => {
       const raw = await staffRequest('post', '/api/v1/pt-packages/{pt_package_id}/cancel', {
         params: { pt_package_id: packageId },
         body,
         headers: { 'Idempotency-Key': crypto.randomUUID() },
-      })
-      return PtPackageSchema.parse((raw as { data: unknown }).data)
+      });
+      return PtPackageSchema.parse((raw as { data: unknown }).data);
     },
     onSuccess: (data) => {
-      toast.success('Пакет тренировок отменён')
-      void qc.invalidateQueries({ queryKey: ptPackagesKeys.instances() })
-      void qc.invalidateQueries({ queryKey: ptPackagesKeys.instanceList({ clientId: data.clientId }) })
+      toast.success('Пакет тренировок отменён');
+      void qc.invalidateQueries({ queryKey: ptPackagesKeys.instances() });
+      void qc.invalidateQueries({
+        queryKey: ptPackagesKeys.instanceList({ clientId: data.clientId }),
+      });
     },
     onError: (err) => {
       if (err instanceof ApiError && err.code === 'forbidden') {
-        toast.error('Недостаточно прав', { description: 'Отмена пакета доступна только владельцу.' })
+        toast.error('Недостаточно прав', {
+          description: 'Отмена пакета доступна только владельцу.',
+        });
       } else {
-        const msg = err instanceof ApiError ? err.message : undefined
-        toast.error(msg ?? 'Не удалось выполнить действие. Проверьте соединение и попробуйте ещё раз.')
+        const msg = err instanceof ApiError ? err.message : undefined;
+        toast.error(
+          msg ?? 'Не удалось выполнить действие. Проверьте соединение и попробуйте ещё раз.',
+        );
       }
     },
-  })
+  });
 }
 
 /**
@@ -220,30 +230,34 @@ export function useCancelPtPackage() {
  * Carries Idempotency-Key (unlike memberships refund).
  */
 export function useRefundPtPackage() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ packageId, body }: { packageId: string; body: PtPackageRefundInput }) => {
       const raw = await staffRequest('post', '/api/v1/pt-packages/{pt_package_id}/refund', {
         params: { pt_package_id: packageId },
         body,
         headers: { 'Idempotency-Key': crypto.randomUUID() },
-      })
-      return PtPackageSchema.parse((raw as { data: unknown }).data)
+      });
+      return PtPackageSchema.parse((raw as { data: unknown }).data);
     },
     onSuccess: (data) => {
-      toast.success('Возврат оформлен', { description: 'Средства будут возвращены клиенту.' })
-      void qc.invalidateQueries({ queryKey: ptPackagesKeys.instances() })
-      void qc.invalidateQueries({ queryKey: ptPackagesKeys.instanceList({ clientId: data.clientId }) })
+      toast.success('Возврат оформлен', { description: 'Средства будут возвращены клиенту.' });
+      void qc.invalidateQueries({ queryKey: ptPackagesKeys.instances() });
+      void qc.invalidateQueries({
+        queryKey: ptPackagesKeys.instanceList({ clientId: data.clientId }),
+      });
     },
     onError: (err) => {
-      const msg = err instanceof ApiError ? err.message : undefined
-      toast.error(msg ?? 'Не удалось выполнить действие. Проверьте соединение и попробуйте ещё раз.')
+      const msg = err instanceof ApiError ? err.message : undefined;
+      toast.error(
+        msg ?? 'Не удалось выполнить действие. Проверьте соединение и попробуйте ещё раз.',
+      );
     },
-  })
+  });
 }
 
 // ---------------------------------------------------------------------------
 // Re-export for page/modal layers (ESLint import-boundary — D-100-03-APIERROR-REEXPORT)
 // ---------------------------------------------------------------------------
 
-export { ApiError }
+export { ApiError };

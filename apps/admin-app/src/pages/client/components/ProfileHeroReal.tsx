@@ -6,20 +6,20 @@
  * memberSinceLabel, tenure) — those stay deferred to Plan 04 when membership
  * data is wired to the client detail page.
  */
-import { Link, useNavigate } from 'react-router-dom'
-import { toast } from 'sonner'
-import { ROUTES } from '@/app/routes'
-import { Initials } from '@/components/ui/initials'
-import { Button } from '@/components/ui/button'
+import { Link, useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import { ROUTES } from '@/app/routes';
+import { Initials } from '@/components/ui/initials';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { useModals } from '@/components/modals/modals-context'
-import { formatDateRu } from '@/lib/format'
+} from '@/components/ui/dropdown-menu';
+import { useModals } from '@/components/modals/modals-context';
+import { formatDateRu } from '@/lib/format';
 import {
   Calendar,
   ChevronLeft,
@@ -29,9 +29,9 @@ import {
   Phone,
   Send,
   Tag,
-} from '@/components/icons'
-import type { LucideIcon } from 'lucide-react'
-import type { ClientData } from '@/features/clients/schemas'
+} from '@/components/icons';
+import type { LucideIcon } from 'lucide-react';
+import type { ClientData } from '@/features/clients/schemas';
 
 function Meta({ icon: Icon, children }: { icon: LucideIcon; children: React.ReactNode }) {
   return (
@@ -39,29 +39,27 @@ function Meta({ icon: Icon, children }: { icon: LucideIcon; children: React.Reac
       <Icon className="size-[13px] shrink-0 text-fg-subtle" />
       {children}
     </span>
-  )
+  );
 }
 
 const GENDER_LABEL: Record<string, string> = {
   male: 'Мужской',
   female: 'Женский',
-}
+};
 
-const HERO_BTN = 'h-[38px] gap-[7px] rounded-full px-[18px] text-[13.5px] font-semibold'
+const HERO_BTN = 'h-[38px] gap-[7px] rounded-full px-[18px] text-[13.5px] font-semibold';
 
 export function ProfileHeroReal({ client }: { client: ClientData }) {
-  const { open } = useModals()
-  const navigate = useNavigate()
+  const { open } = useModals();
+  const navigate = useNavigate();
 
   const initials = [client.lastName, client.firstName]
     .filter(Boolean)
     .map((s) => s[0]?.toUpperCase() ?? '')
     .join('')
-    .slice(0, 2)
+    .slice(0, 2);
 
-  const fullName = [client.lastName, client.firstName, client.middleName]
-    .filter(Boolean)
-    .join(' ')
+  const fullName = [client.lastName, client.firstName, client.middleName].filter(Boolean).join(' ');
 
   return (
     <div>
@@ -74,7 +72,11 @@ export function ProfileHeroReal({ client }: { client: ClientData }) {
       </Link>
 
       <div className="flex flex-wrap items-start gap-5 rounded-lg border-[0.5px] border-border bg-surface p-5 shadow-1 sm:p-[22px]">
-        <Initials initials={initials} color="linear-gradient(135deg,#2dd4a4,#059669)" className="size-14 text-xl sm:size-[72px] sm:text-[26px]" />
+        <Initials
+          initials={initials}
+          color="linear-gradient(135deg,#2dd4a4,#059669)"
+          className="size-14 text-xl sm:size-[72px] sm:text-[26px]"
+        />
 
         <div className="min-w-[240px] flex-1">
           <div className="flex flex-wrap items-center gap-3">
@@ -86,18 +88,14 @@ export function ProfileHeroReal({ client }: { client: ClientData }) {
             <Meta icon={Phone}>{client.phone}</Meta>
             {client.email && <Meta icon={Mail}>{client.email}</Meta>}
             {client.birthday && (
-              <Meta icon={Calendar}>
-                {formatDateRu(client.birthday, 'd MMMM yyyy')}
-              </Meta>
+              <Meta icon={Calendar}>{formatDateRu(client.birthday, 'd MMMM yyyy')}</Meta>
             )}
             {client.gender && (
               <span className="text-[12.5px] text-fg-muted">
                 {GENDER_LABEL[client.gender] ?? client.gender}
               </span>
             )}
-            {client.telegramUserId && (
-              <Meta icon={Send}>Telegram</Meta>
-            )}
+            {client.telegramUserId && <Meta icon={Send}>Telegram</Meta>}
             <Meta icon={Calendar}>
               с{' '}
               <b className="font-semibold text-fg">
@@ -150,19 +148,22 @@ export function ProfileHeroReal({ client }: { client: ClientData }) {
                 Экспорт карточки
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-danger focus:text-danger" onSelect={() => {
-                open('confirm', {
-                  confirm: {
-                    title: 'Удалить клиента?',
-                    message: `«${fullName}» будет помечен как удалённый. Активные абонементы будут аннулированы.`,
-                    tone: 'danger',
-                    confirmLabel: 'Удалить',
-                    onConfirm: () => {
-                      toast.info('Удаление доступно из карточки редактирования')
+              <DropdownMenuItem
+                className="text-danger focus:text-danger"
+                onSelect={() => {
+                  open('confirm', {
+                    confirm: {
+                      title: 'Удалить клиента?',
+                      message: `«${fullName}» будет помечен как удалённый. Активные абонементы будут аннулированы.`,
+                      tone: 'danger',
+                      confirmLabel: 'Удалить',
+                      onConfirm: () => {
+                        toast.info('Удаление доступно из карточки редактирования');
+                      },
                     },
-                  },
-                })
-              }}>
+                  });
+                }}
+              >
                 Удалить клиента
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -170,5 +171,5 @@ export function ProfileHeroReal({ client }: { client: ClientData }) {
         </div>
       </div>
     </div>
-  )
+  );
 }

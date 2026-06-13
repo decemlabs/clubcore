@@ -11,20 +11,30 @@
  * no cross-client render possible.
  * T-101-14-PII-ERR: error rendered via PageError curated copy, no raw internals.
  */
-import { useClientVisits } from '@/features/visits/api'
-import { formatDateRu, formatTime } from '@/lib/format'
-import { PageError } from '@/components/feedback/PageState'
-import { EmptyState } from '@/components/feedback/EmptyState'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Card } from './shared'
+import { useClientVisits } from '@/features/visits/api';
+import { formatDateRu, formatTime } from '@/lib/format';
+import { PageError } from '@/components/feedback/PageState';
+import { EmptyState } from '@/components/feedback/EmptyState';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Card } from './shared';
 
-function VisitRow({ item }: { item: { id: string; checkedInAt: string; gymDate: string; channel: string; checkedInBy?: string | null } }) {
+function VisitRow({
+  item,
+}: {
+  item: {
+    id: string;
+    checkedInAt: string;
+    gymDate: string;
+    channel: string;
+    checkedInBy?: string | null;
+  };
+}) {
   const channelLabel = (ch: string) => {
-    if (ch === 'qr') return 'QR-код'
-    if (ch === 'manual') return 'Вручную'
-    if (ch === 'app') return 'Приложение'
-    return ch
-  }
+    if (ch === 'qr') return 'QR-код';
+    if (ch === 'manual') return 'Вручную';
+    if (ch === 'app') return 'Приложение';
+    return ch;
+  };
   return (
     <div className="grid grid-cols-[50px_1fr_auto] items-center gap-3 border-t-[0.5px] border-border px-4 py-3 first:border-t-0 sm:px-5">
       <div className="text-xs font-semibold tabular-nums tracking-[-0.1px] text-fg-muted">
@@ -39,15 +49,13 @@ function VisitRow({ item }: { item: { id: string; checkedInAt: string; gymDate: 
           {item.checkedInBy ? ` · ${item.checkedInBy}` : null}
         </div>
       </div>
-      <div className="text-[11.5px] text-fg-subtle">
-        {formatDateRu(item.checkedInAt, 'd MMM')}
-      </div>
+      <div className="text-[11.5px] text-fg-subtle">{formatDateRu(item.checkedInAt, 'd MMM')}</div>
     </div>
-  )
+  );
 }
 
 export function ActivityTab({ clientId }: { clientId: string }) {
-  const { data, isPending, isError, refetch } = useClientVisits(clientId)
+  const { data, isPending, isError, refetch } = useClientVisits(clientId);
 
   if (isPending) {
     return (
@@ -56,7 +64,7 @@ export function ActivityTab({ clientId }: { clientId: string }) {
         <Skeleton className="mb-2 h-10 w-full" />
         <Skeleton className="h-10 w-full" />
       </Card>
-    )
+    );
   }
 
   if (isError) {
@@ -64,10 +72,10 @@ export function ActivityTab({ clientId }: { clientId: string }) {
       <Card>
         <PageError onRetry={() => void refetch()} />
       </Card>
-    )
+    );
   }
 
-  const items = data?.items ?? []
+  const items = data?.items ?? [];
 
   if (items.length === 0) {
     return (
@@ -78,7 +86,7 @@ export function ActivityTab({ clientId }: { clientId: string }) {
           message="Визиты клиента появятся здесь."
         />
       </Card>
-    )
+    );
   }
 
   return (
@@ -87,5 +95,5 @@ export function ActivityTab({ clientId }: { clientId: string }) {
         <VisitRow key={item.id} item={item} />
       ))}
     </Card>
-  )
+  );
 }

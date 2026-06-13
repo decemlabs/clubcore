@@ -10,31 +10,43 @@
  * Read-only display of PT-package data. No lifecycle actions here —
  * those live in SubscriptionModal (101-03 scope).
  */
-import { usePtPackagesByClient } from '@/features/pt-packages/api'
-import { formatRub, formatDateRu } from '@/lib/format'
-import { PageError } from '@/components/feedback/PageState'
-import { EmptyState } from '@/components/feedback/EmptyState'
-import { Skeleton } from '@/components/ui/skeleton'
-import { cn } from '@/lib/cn'
-import { Card, CardHead } from './shared'
+import { usePtPackagesByClient } from '@/features/pt-packages/api';
+import { formatRub, formatDateRu } from '@/lib/format';
+import { PageError } from '@/components/feedback/PageState';
+import { EmptyState } from '@/components/feedback/EmptyState';
+import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/cn';
+import { Card, CardHead } from './shared';
 
 const STATUS_LABEL: Record<string, string> = {
   active: 'Активный',
   exhausted: 'Исчерпан',
   expired: 'Истёк',
   cancelled: 'Отменён',
-}
+};
 
 const STATUS_TONE: Record<string, string> = {
   active: 'bg-primary-soft text-primary-deep dark:text-primary',
   exhausted: 'bg-surface-3 text-fg-muted',
   expired: 'bg-surface-3 text-fg-muted',
   cancelled: 'bg-danger-soft text-danger',
-}
+};
 
-function PtPackageRow({ item }: { item: { id: string; planSnapshot: { name: string; priceKopecks: number }; sessionsRemaining: number; sessionsTotal: number; amountKopecks: number; status: string; createdAt: string } }) {
-  const tone = STATUS_TONE[item.status] ?? 'bg-surface-3 text-fg-muted'
-  const statusLabel = STATUS_LABEL[item.status] ?? item.status
+function PtPackageRow({
+  item,
+}: {
+  item: {
+    id: string;
+    planSnapshot: { name: string; priceKopecks: number };
+    sessionsRemaining: number;
+    sessionsTotal: number;
+    amountKopecks: number;
+    status: string;
+    createdAt: string;
+  };
+}) {
+  const tone = STATUS_TONE[item.status] ?? 'bg-surface-3 text-fg-muted';
+  const statusLabel = STATUS_LABEL[item.status] ?? item.status;
 
   return (
     <div className="grid grid-cols-[1fr_auto] items-center gap-3 border-t-[0.5px] border-border px-4 py-3 first:border-t-0 sm:px-5">
@@ -43,7 +55,9 @@ function PtPackageRow({ item }: { item: { id: string; planSnapshot: { name: stri
           <div className="truncate text-[13.5px] font-semibold tracking-[-0.1px]">
             {item.planSnapshot.name}
           </div>
-          <span className={cn('shrink-0 rounded-full px-[7px] py-px text-[11px] font-semibold', tone)}>
+          <span
+            className={cn('shrink-0 rounded-full px-[7px] py-px text-[11px] font-semibold', tone)}
+          >
             {statusLabel}
           </span>
         </div>
@@ -57,11 +71,11 @@ function PtPackageRow({ item }: { item: { id: string; planSnapshot: { name: stri
         {formatRub(item.amountKopecks)}
       </div>
     </div>
-  )
+  );
 }
 
 export function TrainingsTab({ clientId }: { clientId: string }) {
-  const { data, isPending, isError, refetch } = usePtPackagesByClient(clientId)
+  const { data, isPending, isError, refetch } = usePtPackagesByClient(clientId);
 
   if (isPending) {
     return (
@@ -70,7 +84,7 @@ export function TrainingsTab({ clientId }: { clientId: string }) {
         <Skeleton className="mb-2 h-10 w-full" />
         <Skeleton className="h-10 w-full" />
       </Card>
-    )
+    );
   }
 
   if (isError) {
@@ -78,10 +92,10 @@ export function TrainingsTab({ clientId }: { clientId: string }) {
       <Card>
         <PageError onRetry={() => void refetch()} />
       </Card>
-    )
+    );
   }
 
-  const items = data?.items ?? []
+  const items = data?.items ?? [];
 
   if (items.length === 0) {
     return (
@@ -92,7 +106,7 @@ export function TrainingsTab({ clientId }: { clientId: string }) {
           message="Персональные тренировки появятся здесь."
         />
       </Card>
-    )
+    );
   }
 
   return (
@@ -104,5 +118,5 @@ export function TrainingsTab({ clientId }: { clientId: string }) {
         ))}
       </div>
     </Card>
-  )
+  );
 }
