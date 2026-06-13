@@ -1,28 +1,31 @@
-import { useState } from 'react';
+/**
+ * LoadPageHead — page header for the visits load dashboard (Phase 103-03).
+ *
+ * Removed: mock avg/peak subtitle props — replaced with period subtitle.
+ * Actions: DateRangePicker passed as ReactNode.
+ */
+import type { ReactNode } from 'react';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Segmented, type SegmentedOption } from '@/components/ui/Segmented';
+import { formatDateRu } from '@/lib/format';
 
-type Period = 'today' | 'week' | 'month';
-const PERIODS: SegmentedOption<Period>[] = [
-  { value: 'today', label: 'Сегодня' },
-  { value: 'week', label: 'Эта неделя' },
-  { value: 'month', label: 'Месяц' },
-];
+export function LoadPageHead({
+  from,
+  to,
+  dateRangePicker,
+}: {
+  from: string;
+  to: string;
+  dateRangePicker: ReactNode;
+}) {
+  const fromLabel = formatDateRu(from, 'd MMM yyyy');
+  const toLabel = formatDateRu(to, 'd MMM yyyy');
 
-export function LoadPageHead({ avg, peak }: { avg: string; peak: string }) {
-  const [period, setPeriod] = useState<Period>('week');
   return (
     <PageHeader
       title="Загруженность"
-      subtitle={
-        <>
-          Среднее за неделю — <b className="font-semibold text-fg">{avg}</b> · пик во{' '}
-          <b className="font-semibold text-fg">{peak}</b>
-        </>
-      }
-      actions={
-        <Segmented options={PERIODS} value={period} onChange={setPeriod} ariaLabel="Период" />
-      }
+      subtitle={<>{fromLabel} – {toLabel}</>}
+      actions={dateRangePicker}
+      actionsClassName="items-start"
     />
   );
 }
