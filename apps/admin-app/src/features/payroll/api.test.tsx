@@ -169,7 +169,7 @@ describe('T-102-PAY-TERMINAL: 409 payroll_period_already_run handled calmly', ()
       isError: false,
     } as ReturnType<typeof useSession>)
 
-    const conflictError = new ApiError('payroll_period_already_run', 'Period already run', 409)
+    const conflictError = new ApiError('payroll_period_already_run', 'Period already run')
     mockStaffRequest.mockRejectedValue(conflictError)
 
     const wrapper = makeWrapper()
@@ -203,7 +203,7 @@ describe('T-102-PAY-TERMINAL: 409 already_paid handled calmly', () => {
       isError: false,
     } as ReturnType<typeof useSession>)
 
-    const alreadyPaidError = new ApiError('already_paid', 'Already paid', 409)
+    const alreadyPaidError = new ApiError('already_paid', 'Already paid')
     mockStaffRequest.mockRejectedValue(alreadyPaidError)
 
     const wrapper = makeWrapper()
