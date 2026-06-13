@@ -55,8 +55,8 @@ export function TrainerPage() {
       />
 
       {tab === 'overview' && <OverviewTab trainerId={trainerId} />}
-      {/* PayoutsTab: Plan 102-04 owns payroll wiring — passing mock trainer shape for now */}
-      {tab === 'payouts' && <PayoutsTab trainer={trainerDetail} />}
+      {/* PayoutsTab: wired to real /api/v1/payroll/* (Plan 102-04) */}
+      {tab === 'payouts' && <PayoutsTab trainerId={trainerId} />}
       {/* HistoryTab stays on mock — no dedicated history endpoint in Phase 102 */}
       {/* TODO Phase 104: wire history to real endpoint */}
       {tab === 'history' && <HistoryTab groups={trainerDetail.timeline} />}
