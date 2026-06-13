@@ -246,7 +246,8 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
   1. `apps/admin-web` directory is removed from the repo; workspace entry, CI job, ESLint/import-linter zones, and dangling references are cleaned with no build errors.
   2. The three-way RBAC-parity guard (`permissions.py` ↔ chosen admin-app anchor ↔ `registry.ts` or equivalent) is re-homed and green — the mechanic decided at Phase 100 plan is implemented.
   3. The OpenAPI staff drift-gate and `@clubcore/api-client` codegen pipeline pass after removal; no consumer is left dangling.
-**Plans**: TBD
+**Plans**: 1 plan
+- [ ] 105-01-PLAN.md — delete apps/admin-web + regenerate lockfile + repoint CISO-01 byte-parity guard (admin-web→admin-app) + update functional doc pointers + verify gates green
 
 ### Phase 106: OpenAPI Handoff + Milestone Gate
 **Goal**: The staff OpenAPI contract is byte-stable, the full milestone gate passes, and v3.0 is verified complete.
