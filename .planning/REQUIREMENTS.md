@@ -16,7 +16,7 @@
 ### FND — Foundation & Integration
 
 - [x] **FND-01**: `apps/admin-app` is part of the clubcore repo and builds/runs/tests there; the package-manager/workspace decision (Bun → pnpm vs standalone) is made at the Phase 100 plan; a dedicated CI job runs its `check` + `test` + `build`.
-- [ ] **FND-02**: admin-app talks to the real backend — the API client targets `VITE_API_BASE_URL`, sends the staff session cookie (`sz_*`) and an `X-CSRF-Token` on every mutating request, and routes a `401` back to login.
+- [x] **FND-02**: admin-app talks to the real backend — the API client targets `VITE_API_BASE_URL`, sends the staff session cookie (`sz_*`) and an `X-CSRF-Token` on every mutating request, and routes a `401` back to login.
 - [ ] **FND-03**: each wired domain validates backend responses through a lazily-adopted per-domain zod contract layer (spike 010 Option A); the screen's mock `queryFn` is removed once the domain is live.
 - [ ] **FND-04**: deferred screens (Branches, Branch-Settings, System-Settings, ImportExport, Duplicates, clients/trainers Archive, Trash, Messages, Roles-management, Notifications-management) are hidden / gated as "coming soon" — not wired, not broken, not deleted (hide-for-future, PWA D-71-09 pattern).
 
@@ -120,7 +120,7 @@ Which phases cover which requirements.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | FND-01 | Phase 100 | Complete |
-| FND-02 | Phase 100 | Pending |
+| FND-02 | Phase 100 | Complete |
 | FND-03 | Phase 100 | Pending |
 | FND-04 | Phase 100 | Pending |
 | AUTH-01 | Phase 100 | Pending |
