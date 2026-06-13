@@ -54,6 +54,12 @@ export interface PayoutsTabProps {
 
 export function PayoutsTab({ trainerId }: PayoutsTabProps) {
   const session = useSession();
+
+  // WR-03: While session is loading, show nothing — avoids flashing the Lock EmptyState
+  // to an owner for the duration of the session fetch (50–200 ms). TrainerPage is already
+  // behind PageLoading for the trainer data, so this window is narrow in practice.
+  if (session.isPending) return null;
+
   const role = session.data?.role ?? 'reception';
 
   // ── T-102-PAY-RBAC: Reception gate BEFORE any hook fires ──────────────────
