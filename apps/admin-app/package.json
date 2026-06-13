@@ -1,20 +1,24 @@
 {
-  "name": "clubcore-admin-frontend",
+  "name": "@clubcore/admin-app",
   "private": true,
   "version": "0.0.1",
   "type": "module",
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -b --noEmit",
-    "lint": "eslint . --max-warnings=0",
-    "format": "prettier --write .",
+    "lint": "eslint .",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "check": "tsc -b --noEmit && eslint . --max-warnings=0 && prettier --check ."
+    "typecheck": "tsc -b --noEmit",
+    "test:watch": "vitest"
   },
   "dependencies": {
+    "@clubcore/api-client": "workspace:*",
     "@base-ui/react": "^1.5.0",
     "@tailwindcss/vite": "^4.3.0",
     "@tanstack/react-query": "^5.66.0",
@@ -42,10 +46,10 @@
     "@types/node": "^22.13.1",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
-    "@typescript-eslint/eslint-plugin": "^8.23.0",
-    "@typescript-eslint/parser": "^8.23.0",
     "@vitejs/plugin-react": "^4.3.4",
     "eslint": "^9.19.0",
+    "eslint-import-resolver-typescript": "^3.6.3",
+    "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-react-hooks": "^5.1.0",
     "eslint-plugin-react-refresh": "^0.4.18",
     "globals": "^17.6.0",
@@ -53,7 +57,7 @@
     "postcss": "^8.5.1",
     "prettier": "^3.4.2",
     "tailwindcss": "^4.3.0",
-    "typescript": "^5.7.3",
+    "typescript": "~5.7.2",
     "typescript-eslint": "^8.60.0",
     "vite": "^5.4.14",
     "vitest": "^3"

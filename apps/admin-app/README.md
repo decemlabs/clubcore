@@ -1,10 +1,10 @@
 # ClubCore Admin Frontend
 
-Админ-панель для сети фитнес-клубов. React + Bun SPA.
+Админ-панель для сети фитнес-клубов. React + pnpm SPA. Пакет: `@clubcore/admin-app`.
 
 ## Стек
 
-- **Bun** — пакетный менеджер и рантайм
+- **pnpm** — пакетный менеджер (workspaces, версия 9.15.9)
 - **Vite 5** — dev server и production-бандл
 - **React 18 + TypeScript (strict)**
 - **React Router v6** (data router API)
@@ -12,20 +12,22 @@
 - **TanStack Query v5** — слой данных (моки сейчас → реальный API позже)
 - **Radix UI + CVA** — доступные примитивы и варианты компонентов
 - **Recharts**, **date-fns** (ru), **lucide-react**, **zod**
+- **@clubcore/api-client** — workspace-зависимость (`workspace:*`)
 
 ## Скрипты
 
+Запускайте из корня репозитория через pnpm workspace-фильтры:
+
 ```bash
-bun install           # установка зависимостей
-bun run dev           # dev-server на http://localhost:5173
-bun run build         # production-бандл в ./dist
-bun run preview       # предпросмотр продакшен-сборки
-bun run typecheck     # tsc -b --noEmit
-bun run lint          # eslint, ошибка при любом предупреждении
-bun run format        # prettier --write .
-bun run check         # typecheck + lint + prettier --check (gate перед коммитом)
-bun run test          # vitest run (юнит + smoke-тесты роутов)
-bun run test:watch    # vitest в watch-режиме
+pnpm install                                # установка зависимостей (из корня)
+
+pnpm -F @clubcore/admin-app dev             # dev-server на http://localhost:5173
+pnpm -F @clubcore/admin-app build           # production-бандл в ./dist
+pnpm -F @clubcore/admin-app preview         # предпросмотр продакшен-сборки
+pnpm -F @clubcore/admin-app typecheck       # tsc -b --noEmit
+pnpm -F @clubcore/admin-app lint            # eslint .
+pnpm -F @clubcore/admin-app test            # vitest run (юнит + smoke-тесты роутов)
+pnpm -F @clubcore/admin-app test:watch      # vitest в watch-режиме
 ```
 
 ## Структура

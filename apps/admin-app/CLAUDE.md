@@ -10,22 +10,37 @@ Admin panel for a chain of fitness clubs (ClubCore). The UI is in Russian. The p
 
 ## Commands
 
+This package is now part of the clubcore pnpm workspace (`@clubcore/admin-app`). Run all commands from the **repo root** using pnpm workspace filters.
+
 ```bash
-bun install           # install deps
-bun run dev           # Vite dev server on http://localhost:5173
-bun run build         # tsc -b && vite build → ./dist
-bun run preview       # serve the production build
-bun run typecheck     # tsc -b --noEmit
-bun run lint          # eslint, fails on any warning (--max-warnings=0)
-bun run format        # prettier --write .
-bun run check         # typecheck + lint + format check (run before committing)
-bun run test          # vitest run (unit + route smoke tests)
-bun run test:watch    # vitest in watch mode
+# Install deps (run from repo root — generates root pnpm-lock.yaml)
+pnpm install
+
+# Dev server on http://localhost:5173
+pnpm -F @clubcore/admin-app dev
+
+# Production build → ./apps/admin-app/dist
+pnpm -F @clubcore/admin-app build
+
+# Preview production build
+pnpm -F @clubcore/admin-app preview
+
+# TypeScript check
+pnpm -F @clubcore/admin-app typecheck
+
+# ESLint
+pnpm -F @clubcore/admin-app lint
+
+# Vitest unit + smoke tests
+pnpm -F @clubcore/admin-app test
+
+# Vitest in watch mode
+pnpm -F @clubcore/admin-app test:watch
 ```
 
-Tests run on **vitest** (`bun run test`): unit tests for pure logic (`src/lib/format.test.ts`, `src/features/clients/sort.test.ts`) plus a route smoke suite (`src/app/router-smoke.test.tsx`) that renders every registered route. `bun test` (Bun's own runner) will NOT pick up the vitest config — always use `bun run test`.
+Tests run on **vitest** (`pnpm -F @clubcore/admin-app test`): unit tests for pure logic (`src/lib/format.test.ts`, `src/features/clients/sort.test.ts`) plus a route smoke suite (`src/app/router-smoke.test.tsx`) that renders every registered route.
 
-`bun` is canonical and `bun.lock` is authoritative. If `bun` is unavailable, use `npm install --legacy-peer-deps` (plain `npm install` fails on an `@eslint/js`↔`eslint` peer-dep conflict that bun tolerates), then `npm run <script>`; do not commit the resulting `package-lock.json`.
+To add shadcn/ui components: `pnpm dlx shadcn@latest add button card dialog select …` (run from the `apps/admin-app/` directory or pass `--cwd apps/admin-app` from the root).
 
 ## Architecture
 

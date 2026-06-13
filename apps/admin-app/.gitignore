@@ -7,10 +7,6 @@ dist
 *.log
 .vite
 .cache
-bun.lockb
-
-# npm lockfile (project uses bun; lock kept out of VCS)
-package-lock.json
 
 *.tsbuildinfo
 
