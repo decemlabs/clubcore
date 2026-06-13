@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Production Admin — Backend Wiring
 status: completed
-stopped_at: Phase 101 Plan 02 complete (MEM-01 delivered)
-last_updated: "2026-06-13T11:41:57Z"
-last_activity: "2026-06-13 — Phase 101 Plan 02 complete: membership-plans + pt-package-plans mock→http (schemas/api + PlansPage wired; MEM-01 done)"
+stopped_at: Phase 101 Plan 03 complete (MEM-02, MEM-03 delivered)
+last_updated: "2026-06-13T12:02:00Z"
+last_activity: "2026-06-13 — Phase 101 Plan 03 complete: memberships sell/lifecycle + pt-package instance hooks + SubscriptionModal wired + RefundScreen (MEM-02, MEM-03 done)"
 progress:
   total_phases: 11
   completed_phases: 1
   total_plans: 8
-  completed_plans: 6
+  completed_plans: 7
   percent: 9
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 101 of 106 (Clients + Memberships) — In Progress
-Plan: 2/4 complete
-Status: Plan 02 done (membership-plans + pt-package-plans flip); ready for Plan 03 (memberships sell/lifecycle)
-Last activity: 2026-06-13 — Phase 101 Plan 02 complete: membership-plans + pt-package-plans mock→http (schemas/api + PlansPage wired; MEM-01 done)
+Plan: 3/4 complete
+Status: Plan 03 done (memberships lifecycle + SubscriptionModal wired + RefundScreen; MEM-02/MEM-03 done); ready for Plan 04 (client detail wiring: memberships/visits/payments tabs)
+Last activity: 2026-06-13 — Phase 101 Plan 03 complete: memberships sell/lifecycle + pt-package instance hooks + SubscriptionModal wired + RefundScreen (MEM-02, MEM-03 done)
 
 Progress: [████████░░] 75%
 
@@ -60,7 +60,7 @@ Progress: [████████░░] 75%
 
 ### Pending Todos
 
-- Phase 101 Plan 02 complete. Continue Phase 101: Plan 03 (memberships sell/lifecycle).
+- Phase 101 Plan 03 complete. Continue Phase 101: Plan 04 (client detail tabs — memberships/visits/payments wiring).
 
 ### Phase 101 Decisions
 
@@ -71,6 +71,10 @@ Progress: [████████░░] 75%
 - **D-101-02-DURATIONIMMUTABLE**: MembershipPlanUpdateSchema.omit({durationDays}) prevents client-side send; backend extra=forbid is authority for 422
 - **D-101-02-PTUPDATE-NAMEONLY**: PtPackagePlanUpdateSchema accepts only name — sessionCount/priceKopecks/validityDays immutable per backend contract
 - **D-101-02-MOCKSTUBS**: Create/Edit plan modals are toast stubs (plan instructs no net-new modal family); delete fully wired; sales/promos/KPIs stay on mock
+- **D-101-03-PATH-PARAMS**: Backend membership paths use {membership_id} not {id}; pt-package paths use {pt_package_id} — matched to schema.d.ts
+- **D-101-03-RECEIPTX**: lucide-react 0.469 has no ReceiptX icon; used ReceiptText as functional equivalent for RefundScreen icon
+- **D-101-03-HISTORY-STUB**: HistoryScreen remains on mock data; no dedicated history endpoint exists in Phase 101 scope
+- **D-101-03-CANCEL-GATE**: SubscriptionModal dispatcher returns null for 'cancel' screen when can(role,'cancel','memberships') is false (reception role)
 
 ### Phase 100 Decisions
 
@@ -99,6 +103,6 @@ Carrying forward from v2.6 close (2026-06-08):
 
 ## Session Continuity
 
-Last session: 2026-06-13T11:43:32.181Z
-Stopped at: Phase 101 Plan 01 complete (CLI-01, CLI-03 delivered)
-Resume: Continue Phase 101 — Plan 02 (membership plans CRUD).
+Last session: 2026-06-13T12:02:00Z
+Stopped at: Phase 101 Plan 03 complete (MEM-02, MEM-03 delivered)
+Resume: Continue Phase 101 — Plan 04 (client detail tabs: memberships/visits/payments wiring).

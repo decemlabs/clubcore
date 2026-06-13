@@ -35,8 +35,8 @@
 ### MEM — Memberships & Plans
 
 - [x] **MEM-01**: the Plans/Абонементы screen lists real membership plans (`/membership-plans`) and PT-package plans (`/pt-package-plans`); create/edit are owner-only gated.
-- [ ] **MEM-02**: staff sells a membership or PT-package from the admin (cash) — `/memberships` + `/pt-packages` sell over the payment ledger with an `Idempotency-Key`.
-- [ ] **MEM-03**: staff manages a membership lifecycle — freeze / unfreeze / renew / cancel + refund (`/memberships/{id}/…`) with the freeze-days and renewal rules surfaced.
+- [x] **MEM-02**: staff sells a membership or PT-package from the admin (cash) — `/memberships` + `/pt-packages` sell over the payment ledger with an `Idempotency-Key`.
+- [x] **MEM-03**: staff manages a membership lifecycle — freeze / unfreeze / renew / cancel + refund (`/memberships/{id}/…`) with the freeze-days and renewal rules surfaced.
 
 ### SCH — Schedule & Bookings
 
@@ -130,8 +130,8 @@ Which phases cover which requirements.
 | CLI-02 | Phase 101 | Pending |
 | CLI-03 | Phase 101 | Complete |
 | MEM-01 | Phase 101 | Complete |
-| MEM-02 | Phase 101 | Pending |
-| MEM-03 | Phase 101 | Pending |
+| MEM-02 | Phase 101 | Complete |
+| MEM-03 | Phase 101 | Complete |
 | SCH-01 | Phase 102 | Pending |
 | SCH-02 | Phase 102 | Pending |
 | TRN-01 | Phase 102 | Pending |
