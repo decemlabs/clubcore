@@ -204,7 +204,7 @@ export function useCancelPtPackage() {
       void qc.invalidateQueries({ queryKey: ptPackagesKeys.instanceList({ clientId: data.clientId }) })
     },
     onError: (err) => {
-      if (err instanceof ApiError && (err.code === 'forbidden' || err.message.toLowerCase().includes('forbidden'))) {
+      if (err instanceof ApiError && err.code === 'forbidden') {
         toast.error('Недостаточно прав', { description: 'Отмена пакета доступна только владельцу.' })
       } else {
         const msg = err instanceof ApiError ? err.message : undefined

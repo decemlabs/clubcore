@@ -331,10 +331,7 @@ export function useCancelMembership() {
       void qc.invalidateQueries({ queryKey: membershipsKeys.byClient(data.clientId) })
     },
     onError: (err) => {
-      if (
-        err instanceof ApiError &&
-        (err.code === 'forbidden' || err.message.toLowerCase().includes('forbidden'))
-      ) {
+      if (err instanceof ApiError && err.code === 'forbidden') {
         toast.error('Недостаточно прав', {
           description: 'Отмена абонемента доступна только владельцу.',
         })
