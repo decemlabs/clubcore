@@ -159,11 +159,16 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
 **Requirements**: FND-01, FND-02, FND-03, FND-04, AUTH-01, AUTH-02, AUTH-03
 **Success Criteria** (what must be TRUE):
   1. `apps/admin-app` builds, tests, and runs inside the clubcore pnpm workspace (or chosen alternative); a dedicated CI job passes `check`/`test`/`build`.
-  2. The staff login form submits to `/api/v1/auth`, persists the `sz_*` session cookie, captures the CSRF token, and a browser refresh keeps the session alive.
+  2. The staff login form submits to `/api/v1/auth/login`, persists the httpOnly `cc_access`/`cc_refresh` session cookies, captures the JS-readable `clubcore_csrf` token, and a browser refresh keeps the session alive (via `GET /api/v1/auth/me`).
   3. All mutating requests carry `X-CSRF-Token`; a `401` response navigates to `/login` without a crash.
   4. Deferred screens (Branches, Branch-Settings, System-Settings, ImportExport, Duplicates, Archive, Trash, Messages, Roles, Notifications-mgmt) render a "coming soon" placeholder — not broken, not wired.
   5. Owner vs reception role is visible in the UI; each domain's per-domain zod contract seam is in place (mock `queryFn` removal path ready for Phase 101+).
-**Plans**: TBD
+**RBAC re-home (D-V30, decided at plan time):** port `can.ts`/`registry.ts`/`types.ts` byte-identically into `apps/admin-app/src/shared/session/` and repoint the CISO-01 `test_rbac_parity.py` at admin-app — admin-web is left untouched and deleted in Phase 105.
+**Plans**: 4 plans, 4 waves
+- [ ] 100-01-PLAN.md — Workspace absorption (Bun→pnpm `@clubcore/admin-app`, api-client dep, dev proxy, ESLint boundary + VITE_API_MODE chokepoint, dedicated CI job) [FND-01] · wave 1
+- [ ] 100-02-PLAN.md — Transport seam (staffRequest: credentials+CSRF `clubcore_csrf`, 401→refresh→retry→session_expired, authBus, QueryClient cache onError; mockResponse preserved) [FND-02] · wave 2
+- [ ] 100-03-PLAN.md — Auth domain (zod seam + useSession over `/auth/me`, login/logout, RequireAuth guard + 401-expiry redirect, password-reset, hide twofa, anti-oracle login errors, mock-removal doc) [FND-03, AUTH-01, AUTH-02] · wave 3
+- [ ] 100-04-PLAN.md — RBAC re-home + hide-for-future (port can/registry + repoint parity test, ComingSoon placeholder + deferred-route swap + nav removal, session-driven role badge + can()-gated sidebar) [FND-04, AUTH-03] · wave 4
 **UI hint**: yes
 
 ### Phase 101: Clients + Memberships
@@ -256,7 +261,7 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 100. Foundation + Authentication | 0/TBD | Not started | - |
+| 100. Foundation + Authentication | 0/4 | Planned | - |
 | 101. Clients + Memberships | 0/TBD | Not started | - |
 | 102. Schedule + Trainers | 0/TBD | Not started | - |
 | 103. Attendance + Finance | 0/TBD | Not started | - |
