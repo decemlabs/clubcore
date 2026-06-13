@@ -8,47 +8,18 @@
  * Zero-fill utilities: fillHourlyBuckets(), fillDailyBuckets(), fillRevenueBuckets()
  * live in features/reports/utils.ts (pure functions, no React deps).
  *
- * LEGACY COMPAT: useReports() + reportsKeys are preserved so pages/reports/ReportsPage.tsx
- * (Phase 104 scope) continues to build without changes. Both resolve the mock via
- * VITE_API_MODE (mockResponse) — Phase 104 will flip to real data.
+ * IN-02: legacy useReports() + reportsKeys removed — Phase 104 is done and
+ * ReportsPage.tsx no longer calls useReports() (confirmed by grep before removal).
  *
  * ApiError re-exported (D-100-03-APIERROR-REEXPORT).
  */
 import { useQuery } from '@tanstack/react-query';
-import { staffRequest, mockResponse, ApiError } from '@/api/client';
+import { staffRequest, ApiError } from '@/api/client';
 import { can } from '@/shared/session/can';
-import { reportsData } from '@/mocks/reports';
-import type { ReportsData } from './types';
 import { reportsQueryKeys } from './keys';
 import { VisitsReportSchema, RevenueReportSchema, ClientsReportSchema, TrainersReportSchema } from './schemas';
 import type { VisitsReportQuery, RevenueReportQuery, ClientsReportQuery, TrainersReportQuery } from './schemas';
 import type { Role } from '@/shared/session/types';
-
-// ---------------------------------------------------------------------------
-// Legacy key factory — preserved for Phase 104 (ReportsPage.tsx)
-// ---------------------------------------------------------------------------
-
-/** @deprecated Use reportsQueryKeys from './keys' for Phase 103+ hooks. */
-export const reportsKeys = {
-  all: ['reports'] as const,
-  summary: ['reports', 'summary'] as const,
-};
-
-// ---------------------------------------------------------------------------
-// Legacy hook — preserved so ReportsPage (Phase 104) does not break the build
-// ---------------------------------------------------------------------------
-
-/**
- * Данные аналитического дашборда «Отчёты».
- * @deprecated Phase 104 will replace this with real report hooks.
- *             Kept here to avoid breaking pages/reports/ReportsPage.tsx import.
- */
-export function useReports() {
-  return useQuery({
-    queryKey: reportsKeys.summary,
-    queryFn: () => mockResponse<ReportsData>(reportsData),
-  });
-}
 
 // ---------------------------------------------------------------------------
 // Phase 103 hooks — owner-gated real report endpoints
