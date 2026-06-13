@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Production Admin — Backend Wiring
 status: in-progress
-stopped_at: Phase 103 complete (all 4 plans done — ATT-01, ATT-02, FIN-01, FIN-02 all delivered)
-last_updated: "2026-06-13T17:56:00Z"
-last_activity: "2026-06-13 — Phase 103 Plan 04 complete: FinancePage wired to real /reports/revenue (zero-fill, groupBy day|month, signed netKopecks) and /payments?method=online; FIN-02 done; Phase 103 complete"
+stopped_at: Phase 104 Plan 01 complete (downloadCsv + useClientsReport/useTrainersReport + useAuditLog domain layer)
+last_updated: "2026-06-13T19:06:57.519Z"
+last_activity: "2026-06-13 — Phase 104 Plan 01 complete: downloadCsv blob-download helper; useClientsReport/useTrainersReport (owner-gated, Zod schemas); useAuditLog real paginated query (owner-gated, nullable JSONB payload); full admin-app gate green"
 progress:
   total_phases: 11
   completed_phases: 4
-  total_plans: 16
-  completed_plans: 16
-  percent: 100
+  total_plans: 21
+  completed_plans: 17
+  percent: 36
 ---
 
 # Project State
@@ -94,6 +94,12 @@ Progress: [██████████] 100%
 - **D-103-04-FINANCE-SPLIT**: FinancePage split into outer RBAC guard (useSession only) + inner FinancePageContent (data hooks) — same pattern as D-103-03-CASHBOX-HOOKS-SPLIT; React Rules of Hooks safe
 - **D-103-04-ALLZERO-EMPTYSTATE**: All-zero revenue buckets (after zero-fill) and all-empty online payments both render EmptyState inline — no flat-zero/NaN chart
 
+### Phase 104 Decisions
+
+- **D-104-01-CSVLAYER**: csv.ts lives in api/ layer (not features/) to allow same-layer import of appendQuery/parseErrorBody from client.ts without ESLint boundary violation
+- **D-104-01-EXPORT-APPEND**: appendQuery + parseErrorBody exported from client.ts by adding export keyword only — no signature/body changes, no callers broken
+- **D-104-01-AUDITPAGE-STUB**: AuditPage.tsx updated minimally to compile with 2-arg useAuditLog (useSession for role, passes empty filter); renders EmptyState stub; Wave 2 (104-02) will wire full data rendering, filters, pagination, CSV, RBAC gate
+
 ### Phase 100 Decisions
 
 - **D-100-04-OWNERFLAG**: Gate only Финансы+Отчёты via ownerOnly=true flag on NavItem; all other remaining items visible to all roles (UI-SPEC authoritative on nav visibility; can() matrix is still the single authority via ownerOnly check)
@@ -131,6 +137,6 @@ v3.0 in-progress deferrals:
 
 ## Session Continuity
 
-Last session: 2026-06-13T17:55:44.092Z
+Last session: 2026-06-13T19:06:57.515Z
 Stopped at: Phase 103 Plan 02 complete (ATT-01 UI delivered — CheckInModal + AttendancePage wired to real visits)
 Resume: Phase 103 Plan 02 complete. Continue with Phase 103 Plan 03 (Load + nav gating + cashbox).
