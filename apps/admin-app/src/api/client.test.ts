@@ -87,10 +87,12 @@ describe('staffRequest — CSRF injection', () => {
     expect(headers.get('X-CSRF-Token')).toBe(CSRF_TOKEN)
   })
 
-  it('sets X-CSRF-Token on PUT', async () => {
+  it('sets X-CSRF-Token on POST (second mutating verb check — matches production password-reset/confirm)', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(make204Response())
 
-    await staffRequest('put', '/api/v1/auth/password-reset/confirm', { body: { token: 't', password: 'newpassword123' } })
+    await staffRequest('post', '/api/v1/auth/password-reset/confirm', {
+      body: { token: 't', newPassword: 'StrongPass123!' },
+    })
 
     const [, init] = vi.mocked(fetch).mock.calls[0]!
     const headers = init?.headers instanceof Headers ? init.headers : new Headers(init?.headers as HeadersInit | undefined)
