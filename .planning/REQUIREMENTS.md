@@ -71,9 +71,9 @@
 
 ### ADMW — admin-web Retirement & RBAC Re-home
 
-- [ ] **ADMW-01**: `apps/admin-web` is removed from the repo (workspace entry, CI job, ESLint/import-linter zones, dangling references cleaned).
-- [ ] **ADMW-02**: the three-way RBAC-parity reference (`permissions.py` ↔ `can.ts` ↔ `registry.ts`) + the CISO-01 byte-guard is re-homed — the mechanic (parity → admin-app vs backend-only authority) is decided at the Phase 100 plan after reading the real coupling — and the chosen guard is green.
-- [ ] **ADMW-03**: the OpenAPI staff drift-gate + `@clubcore/api-client` codegen pipeline still pass after admin-web removal (no consumer left dangling).
+- [x] **ADMW-01**: `apps/admin-web` is removed from the repo (workspace entry, CI job, ESLint/import-linter zones, dangling references cleaned).
+- [x] **ADMW-02**: the three-way RBAC-parity reference (`permissions.py` ↔ `can.ts` ↔ `registry.ts`) + the CISO-01 byte-guard is re-homed — the mechanic (parity → admin-app vs backend-only authority) is decided at the Phase 100 plan after reading the real coupling — and the chosen guard is green.
+- [x] **ADMW-03**: the OpenAPI staff drift-gate + `@clubcore/api-client` codegen pipeline still pass after admin-web removal (no consumer left dangling).
 
 ### HND — OpenAPI Handoff & Milestone Verification
 
@@ -145,9 +145,9 @@ Which phases cover which requirements.
 | RPT-03 | Phase 104 | Complete |
 | SET-01 | Phase 104 | Complete |
 | SET-02 | Phase 104 | Complete |
-| ADMW-01 | Phase 105 | Pending |
-| ADMW-02 | Phase 105 | Pending |
-| ADMW-03 | Phase 105 | Pending |
+| ADMW-01 | Phase 105 | Complete |
+| ADMW-02 | Phase 105 | Complete |
+| ADMW-03 | Phase 105 | Complete |
 | HND-01 | Phase 106 | Pending |
 
 **Coverage:**

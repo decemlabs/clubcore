@@ -247,7 +247,7 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
   2. The three-way RBAC-parity guard (`permissions.py` ↔ chosen admin-app anchor ↔ `registry.ts` or equivalent) is re-homed and green — the mechanic decided at Phase 100 plan is implemented.
   3. The OpenAPI staff drift-gate and `@clubcore/api-client` codegen pipeline pass after removal; no consumer is left dangling.
 **Plans**: 1 plan
-- [ ] 105-01-PLAN.md — delete apps/admin-web + regenerate lockfile + repoint CISO-01 byte-parity guard (admin-web→admin-app) + update functional doc pointers + verify gates green
+- [x] 105-01-PLAN.md — delete apps/admin-web + regenerate lockfile + repoint CISO-01 byte-parity guard (admin-web→admin-app) + update functional doc pointers + verify gates green
 
 ### Phase 106: OpenAPI Handoff + Milestone Gate
 **Goal**: The staff OpenAPI contract is byte-stable, the full milestone gate passes, and v3.0 is verified complete.
@@ -284,5 +284,5 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
 | 102. Schedule + Trainers | 4/4 | Complete   | 2026-06-13 |
 | 103. Attendance + Finance | 4/4 | Complete   | 2026-06-13 |
 | 104. Dashboard, Reports + Settings | 5/5 | Complete   | 2026-06-13 |
-| 105. admin-web Retirement + RBAC Re-home | 0/TBD | Not started | - |
+| 105. admin-web Retirement + RBAC Re-home | 1/1 | Complete   | 2026-06-13 |
 | 106. OpenAPI Handoff + Milestone Gate | 0/TBD | Not started | - |

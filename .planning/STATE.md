@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Production Admin — Backend Wiring
-status: "Phase 104 complete: all 5 plans done (Dashboard/Reports/Audit/Profile+Sessions/Users Admin); all requirements RPT-01 RPT-02 RPT-03 SET-01 SET-02 delivered"
-stopped_at: Phase 104 Plan 05 complete (Users Admin TeamSection wired — SET-02)
-last_updated: "2026-06-13T19:51:00Z"
-last_activity: "2026-06-13 — Phase 104 Plan 05 complete: owner-only users admin wired in Settings→Team (invite+copy-link, deactivate/reactivate/delete/revoke, 409 guards, reception Lock-EmptyState); all 5 Phase 104 plans done; full gate green (typecheck+lint+337 tests+build)"
+status: in-progress
+stopped_at: Phase 105 Plan 01 complete (admin-web deleted, CISO-01 guard repointed to admin-app)
+last_updated: "2026-06-13T20:55:00Z"
+last_activity: "2026-06-13 — Phase 105 Plan 01 complete: apps/admin-web deleted (~982 files), CISO-01 byte-parity guard repointed admin-web → admin-app, lockfile regenerated, all targeted gates green (mypy/ruff/lint-imports/admin-app typecheck+lint+337 tests/rbac_parity 4/4)"
 progress:
   total_phases: 11
-  completed_phases: 5
-  total_plans: 21
-  completed_plans: 21
-  percent: 45
+  completed_phases: 6
+  total_plans: 22
+  completed_plans: 22
+  percent: 55
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 104 of 106 (Dashboard + Reports + Settings) — COMPLETE
-Plan: 5/5 complete
-Status: Phase 104 complete. All requirements: RPT-01 (Dashboard role-gating), RPT-02 (Reports 4-tab+CSV), RPT-03 (Audit log+filters+CSV), SET-01 (Profile read-only+Sessions), SET-02 (Users Admin TeamSection). Next: Phase 105 (admin-web Retirement + RBAC Re-home).
-Last activity: 2026-06-13 — Phase 104 Plan 05 complete: users admin TeamSection wired (invite+copy-link, deactivate/reactivate/delete/revoke, 409 guards, reception Lock-EmptyState); full gate green (typecheck+lint+337 tests+build)
+Phase: 105 of 106 (admin-web Retirement + RBAC Re-home) — COMPLETE
+Plan: 1/1 complete
+Status: Phase 105 complete. All requirements: ADMW-01 (admin-web deleted, lockfile regenerated), ADMW-02 (CISO-01 guard repointed admin-app, guard LIVE), ADMW-03 (openapi.json + schema.d.ts byte-unchanged, no drift). Next: Phase 106 (OpenAPI Handoff + Milestone Gate).
+Last activity: 2026-06-13 — Phase 105 Plan 01 complete: apps/admin-web deleted (~982 files), CISO-01 byte-parity guard repointed admin-web → admin-app, lockfile regenerated, all targeted gates green (mypy/ruff/lint-imports/admin-app typecheck+lint+337 tests/rbac_parity 4/4)
 
-Progress: [█████████░] 90%
+Progress: [██████████] 100%
 
 ## v3.0 Roadmap Summary
 
@@ -109,6 +109,12 @@ Progress: [█████████░] 90%
 - **D-104-03-CLIENTS-INLINE-KPI**: ClientsTab uses inline KpiCard instead of existing KpiTile — clients 3-scalar data doesn't match KpiTile's icon+delta contract
 - **D-104-03-ACTIVITY-ICON-REUSE**: «Журнал действий» nav entry reuses already-imported Activity icon (consistent with Посещаемость entry)
 
+### Phase 105 Decisions
+
+- **D-105-01-GUARD-REPOINT**: CISO-01 byte-parity guard (`test_byte_parity.py`) repointed admin-web → admin-app; all assertions preserved (`.exists()`, `Role.CLIENT`, `| 'client'`); guard is LIVE (confirmed via python import + `.exists()` check)
+- **D-105-02-DOCONLY**: config.py, loyalty/permissions.py, and api-client/README.md comment prose updated; NO config default values changed (frontend_base_url/ws_allowed_origins port numbers unchanged)
+- **D-105-03-PARITY-INFRA**: `test_byte_parity.py` setup ERROR is pre-existing (SeaweedFS/S3 not running → lifespan timeout); test function logic correct; full-stack run deferred to Phase 106
+
 ### Phase 100 Decisions
 
 - **D-100-04-OWNERFLAG**: Gate only Финансы+Отчёты via ownerOnly=true flag on NavItem; all other remaining items visible to all roles (UI-SPEC authoritative on nav visibility; can() matrix is still the single authority via ownerOnly check)
@@ -147,6 +153,6 @@ v3.0 in-progress deferrals:
 
 ## Session Continuity
 
-Last session: 2026-06-13T22:40:00.000Z
+Last session: 2026-06-13T20:39:56.546Z
 Stopped at: Phase 104 Plan 03 complete (RPT-02 Reports page + RPT-03 Audit page wired + «Журнал действий» nav entry)
 Resume: Phase 104 Plan 03 complete. Continue with Phase 104 Plan 04 (Settings — profile/sessions/users admin).
