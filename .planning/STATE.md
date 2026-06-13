@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Production Admin — Backend Wiring
 status: completed
-stopped_at: Phase 101 Plan 03 complete (MEM-02, MEM-03 delivered)
-last_updated: "2026-06-13T12:02:00Z"
-last_activity: "2026-06-13 — Phase 101 Plan 03 complete: memberships sell/lifecycle + pt-package instance hooks + SubscriptionModal wired + RefundScreen (MEM-02, MEM-03 done)"
+stopped_at: Phase 101 Plan 04 complete (CLI-02 delivered — visits/payments/memberships tabs wired)
+last_updated: "2026-06-13T12:10:00Z"
+last_activity: "2026-06-13 — Phase 101 Plan 04 complete: visits/payments Zod schemas + by-client hooks + ClientPage tabs wired to real data with per-tab error isolation (CLI-02 done)"
 progress:
   total_phases: 11
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 8
-  completed_plans: 7
-  percent: 9
+  completed_plans: 8
+  percent: 18
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 101 of 106 (Clients + Memberships) — In Progress
-Plan: 3/4 complete
-Status: Plan 03 done (memberships lifecycle + SubscriptionModal wired + RefundScreen; MEM-02/MEM-03 done); ready for Plan 04 (client detail wiring: memberships/visits/payments tabs)
-Last activity: 2026-06-13 — Phase 101 Plan 03 complete: memberships sell/lifecycle + pt-package instance hooks + SubscriptionModal wired + RefundScreen (MEM-02, MEM-03 done)
+Phase: 101 of 106 (Clients + Memberships) — Complete
+Plan: 4/4 complete
+Status: Phase 101 complete — all plans done (CLI-01, CLI-02, CLI-03, MEM-01, MEM-02, MEM-03 delivered)
+Last activity: 2026-06-13 — Phase 101 Plan 04 complete: visits/payments Zod schemas + by-client hooks + ClientPage tabs wired to real data with per-tab error isolation (CLI-02 done)
 
-Progress: [████████░░] 75%
+Progress: [██████████] 100%
 
 ## v3.0 Roadmap Summary
 
@@ -60,7 +60,7 @@ Progress: [████████░░] 75%
 
 ### Pending Todos
 
-- Phase 101 Plan 03 complete. Continue Phase 101: Plan 04 (client detail tabs — memberships/visits/payments wiring).
+- Phase 101 complete. Next: Phase 102 (Schedule + Trainers).
 
 ### Phase 101 Decisions
 
@@ -75,6 +75,9 @@ Progress: [████████░░] 75%
 - **D-101-03-RECEIPTX**: lucide-react 0.469 has no ReceiptX icon; used ReceiptText as functional equivalent for RefundScreen icon
 - **D-101-03-HISTORY-STUB**: HistoryScreen remains on mock data; no dedicated history endpoint exists in Phase 101 scope
 - **D-101-03-CANCEL-GATE**: SubscriptionModal dispatcher returns null for 'cancel' screen when can(role,'cancel','memberships') is false (reception role)
+- **D-101-04-PER-TAB-HOOKS**: Hooks called inside each tab component (clientId prop), not lifted to ClientPage — preserves per-tab error isolation
+- **D-101-04-TRAININGS-PTPKG**: TrainingsTab uses usePtPackagesByClient (101-03) — PT-package instances available in scope
+- **D-101-04-MEMBERSHIPS-SECTION**: MembershipsSection rendered inline in ClientPage above tabs using useMembershipsByClient reuse
 
 ### Phase 100 Decisions
 
@@ -103,6 +106,6 @@ Carrying forward from v2.6 close (2026-06-08):
 
 ## Session Continuity
 
-Last session: 2026-06-13T12:02:00Z
-Stopped at: Phase 101 Plan 03 complete (MEM-02, MEM-03 delivered)
-Resume: Continue Phase 101 — Plan 04 (client detail tabs: memberships/visits/payments wiring).
+Last session: 2026-06-13T12:10:00Z
+Stopped at: Phase 101 Plan 04 complete (CLI-02 delivered — visits/payments/memberships tabs wired)
+Resume: Phase 101 complete. Continue with Phase 102 (Schedule + Trainers).
