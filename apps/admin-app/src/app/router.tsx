@@ -1,8 +1,9 @@
-import { createBrowserRouter, Navigate, type RouteObject } from 'react-router-dom';
-import { AppLayout } from '@/layouts/AppLayout/AppLayout';
-import { ROUTES } from './routes';
-import { ErrorPage } from '@/components/feedback/ErrorPage';
-import { RouteErrorBoundary } from '@/components/feedback/RouteErrorBoundary';
+import { createBrowserRouter, Navigate, type RouteObject } from 'react-router-dom'
+import { AppLayout } from '@/layouts/AppLayout/AppLayout'
+import { ROUTES } from './routes'
+import { ErrorPage } from '@/components/feedback/ErrorPage'
+import { RouteErrorBoundary } from '@/components/feedback/RouteErrorBoundary'
+import { RequireAuth } from '@/features/auth/RequireAuth'
 
 /**
  * Три ветки:
@@ -23,9 +24,11 @@ export const routeConfig: RouteObject[] = [
   },
   { path: ROUTES.error, element: <ErrorPage code={500} /> },
 
-  // (B) Приложение.
+  // (B) Приложение — защищено RequireAuth (AUTH-02).
+  // RequireAuth вызывает useSession() над /auth/me; неаутентифицированный доступ
+  // перенаправляется на /login. Ветка /login и /error остаются ВНЕ стража.
   {
-    element: <AppLayout />,
+    element: <RequireAuth><AppLayout /></RequireAuth>,
     errorElement: <RouteErrorBoundary />,
     children: [
       {

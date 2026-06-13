@@ -1,17 +1,20 @@
-import { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { toast } from 'sonner';
-import { ROUTES } from '@/app/routes';
-import { ThemeToggle } from '@/components/ui/ThemeToggle';
-import { BrandPanel } from './components/BrandPanel';
-import { LoginForm } from './components/LoginForm';
-import { ForgotScreen, SentScreen, ResetScreen } from './components/RecoveryScreens';
-import { TwoFactorScreen } from './components/TwoFactorScreen';
-import { ExpiredScreen, LogoutScreen } from './components/SessionScreens';
+import { useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { toast } from 'sonner'
+import { ROUTES } from '@/app/routes'
+import { ThemeToggle } from '@/components/ui/ThemeToggle'
+import { BrandPanel } from './components/BrandPanel'
+import { LoginForm } from './components/LoginForm'
+import { ForgotScreen, SentScreen, ResetScreen } from './components/RecoveryScreens'
+// NOTE: The two-factor auth screen import has been removed (hidden-for-future, UI-SPEC Surface 3).
+// The TwoFactor file remains in the tree un-imported for future graduation.
+import { ExpiredScreen, LogoutScreen } from './components/SessionScreens'
 
-type AuthView = 'login' | 'forgot' | 'forgot-sent' | 'reset' | 'twofa' | 'expired' | 'logout';
+// twofa removed from AuthView — the view is hidden-for-future (no backend staff TOTP).
+type AuthView = 'login' | 'forgot' | 'forgot-sent' | 'reset' | 'expired' | 'logout'
 
-const DEEP_LINKABLE: AuthView[] = ['twofa', 'expired', 'logout'];
+// twofa removed from DEEP_LINKABLE — deep-linking to it falls through to 'login'.
+const DEEP_LINKABLE: AuthView[] = ['expired', 'logout']
 
 function initialView(param: string | null): AuthView {
   return DEEP_LINKABLE.includes(param as AuthView) ? (param as AuthView) : 'login';
@@ -62,8 +65,8 @@ export function LoginPage() {
             }}
           />
         );
-      case 'twofa':
-        return <TwoFactorScreen email={email} onBack={goLogin} onConfirm={goDashboard} />;
+      // twofa case removed — the view is hidden-for-future (no staff TOTP backend).
+      // Deep-link with ?state=twofa falls through to default 'login' screen.
       case 'expired':
         return <ExpiredScreen onRelogin={goLogin} />;
       case 'logout':
