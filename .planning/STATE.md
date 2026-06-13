@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Production Admin — Backend Wiring
 status: completed
-stopped_at: Phase 100 UI-SPEC approved
-last_updated: "2026-06-13T11:30:28.894Z"
-last_activity: "2026-06-13 — Phase 100 complete: workspace absorption, API client + CSRF + 401-redirect, auth hooks (useSession/useLogin/useLogout/password-reset), RequireAuth route guard, RBAC port (41 OWNER_ONLY, byte-parity), ComingSoon hide-for-future, session-driven sidebar"
+stopped_at: Phase 101 Plan 02 complete (MEM-01 delivered)
+last_updated: "2026-06-13T11:41:57Z"
+last_activity: "2026-06-13 — Phase 101 Plan 02 complete: membership-plans + pt-package-plans mock→http (schemas/api + PlansPage wired; MEM-01 done)"
 progress:
   total_phases: 11
   completed_phases: 1
   total_plans: 8
-  completed_plans: 5
+  completed_plans: 6
   percent: 9
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 101 of 106 (Clients + Memberships) — In Progress
-Plan: 1/4 complete
-Status: Plan 01 done (clients domain flip); ready for Plan 02 (membership plans)
-Last activity: 2026-06-13 — Phase 101 Plan 01 complete: clients domain mock→http (schemas/api/query + ClientsPage server-pagination + profile head + modals wired; CLI-01, CLI-03 done)
+Plan: 2/4 complete
+Status: Plan 02 done (membership-plans + pt-package-plans flip); ready for Plan 03 (memberships sell/lifecycle)
+Last activity: 2026-06-13 — Phase 101 Plan 02 complete: membership-plans + pt-package-plans mock→http (schemas/api + PlansPage wired; MEM-01 done)
 
-Progress: [██████░░░░] 63%
+Progress: [████████░░] 75%
 
 ## v3.0 Roadmap Summary
 
@@ -60,13 +60,17 @@ Progress: [██████░░░░] 63%
 
 ### Pending Todos
 
-- Phase 101 Plan 01 complete. Continue Phase 101: Plan 02 (membership plans).
+- Phase 101 Plan 02 complete. Continue Phase 101: Plan 03 (memberships sell/lifecycle).
 
 ### Phase 101 Decisions
 
 - **D-101-01-CLIENTPATH**: API path param is `client_id` (not `id`): `/api/v1/clients/{client_id}` per schema.d.ts
 - **D-101-01-NOHOOKFORM**: `@hookform/resolvers` not installed in admin-app (only admin-web) — manual `ClientCreateSchema.safeParse()` used for modal validation
 - **D-101-01-CLIENTFILTERTABS**: `ClientFilterTabs.tsx` kept on disk for type compatibility; NOT rendered in new ClientsPage
+- **D-101-02-PLANPATH**: Path param is `plan_id` (not `id`): `/membership-plans/{plan_id}` and `/pt-package-plans/{plan_id}` per schema.d.ts
+- **D-101-02-DURATIONIMMUTABLE**: MembershipPlanUpdateSchema.omit({durationDays}) prevents client-side send; backend extra=forbid is authority for 422
+- **D-101-02-PTUPDATE-NAMEONLY**: PtPackagePlanUpdateSchema accepts only name — sessionCount/priceKopecks/validityDays immutable per backend contract
+- **D-101-02-MOCKSTUBS**: Create/Edit plan modals are toast stubs (plan instructs no net-new modal family); delete fully wired; sales/promos/KPIs stay on mock
 
 ### Phase 100 Decisions
 
@@ -95,6 +99,6 @@ Carrying forward from v2.6 close (2026-06-08):
 
 ## Session Continuity
 
-Last session: 2026-06-13T11:30:00Z
+Last session: 2026-06-13T11:43:32.181Z
 Stopped at: Phase 101 Plan 01 complete (CLI-01, CLI-03 delivered)
 Resume: Continue Phase 101 — Plan 02 (membership plans CRUD).
