@@ -373,7 +373,7 @@ function TimeOffTab({ trainers, onSuccess, isPending }: TimeOffTabProps) {
 
     try {
       await createTimeOff.mutateAsync({ body: buildBody() })
-      toast.success('Период заблокирован')
+      // toast owned by useCreateTimeOff.onSuccess (CR-02: avoid double-toast)
       onSuccess()
     } catch (err) {
       if (err instanceof ApiError && err.code === 'time_off_booked_conflict') {

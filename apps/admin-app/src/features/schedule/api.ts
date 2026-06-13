@@ -230,9 +230,8 @@ export function useCreateTimeOff() {
       return TimeOffSchema.parse((raw as { data: unknown }).data)
     },
     onSuccess: (_data, vars) => {
-      if (vars.force) {
-        toast.success('Период заблокирован')
-      } else {
+      // Force path: modal shows a descriptive toast; hook only toasts for the normal path.
+      if (!vars.force) {
         toast.success('Период заблокирован')
       }
       void qc.invalidateQueries({ queryKey: scheduleKeys.all })
