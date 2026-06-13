@@ -578,12 +578,10 @@ export function ScheduleManagementModal({
   const [isPending] = useState(false); // individual tabs manage their own pending
 
   // Trainer data for all selects.
-  // Guard: pre-102-02 useTrainers() returns TrainersPageData (no items field);
-  // post-102-02 returns { items: TrainerData[] }. Read defensively. (D-102-01-TRAINERSHAPE)
+  // Phase 102-02 complete: useTrainers() returns { items: TrainerData[] } as typed by
+  // TrainersListResponseSchema — accessing .items is type-safe without a cast. (D-102-01-TRAINERSHAPE resolved)
   const trainersQuery = useTrainers();
-  const trainers: { id: string; fullName: string }[] =
-    (trainersQuery.data as unknown as { items?: { id: string; fullName: string }[] } | undefined)
-      ?.items ?? [];
+  const trainers: { id: string; fullName: string }[] = trainersQuery.data?.items ?? [];
 
   // Reset on open (pattern from BookModal.tsx)
   useEffect(() => {
