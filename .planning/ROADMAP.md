@@ -230,7 +230,12 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
   3. Audit screen renders the real owner-only audit log with filters, stable pagination, and CSV export; reception sees a gated/disabled state.
   4. Settings (profile) reads/edits the current staff profile + theme and lists active sessions from `/auth/sessions`; sessions can be revoked.
   5. Users screen (owner-only) wires invite / list / deactivate / soft-delete against `/api/v1/users`; reception sees a gated state.
-**Plans**: TBD
+**Plans**: 5 plans
+- [ ] 104-01-PLAN.md — Foundation: downloadCsv helper + reports clients/trainers hooks + audit domain layer
+- [ ] 104-02-PLAN.md — Dashboard role-gated composition on real /reports/* + bookings/memberships
+- [ ] 104-03-PLAN.md — Reports 4-tab page (+CSV) + Audit page (filters/pagination/CSV) + «Журнал действий» nav
+- [ ] 104-04-PLAN.md — Settings: read-only profile (no PATCH /auth/me) + active sessions (revoke + self-revoke→/login)
+- [ ] 104-05-PLAN.md — Users admin (owner-only) in Settings→Team: invite/list/deactivate/reactivate/soft-delete
 **UI hint**: yes
 
 ### Phase 105: admin-web Retirement + RBAC Re-home
@@ -277,6 +282,6 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
 | 101. Clients + Memberships | 4/4 | Complete   | 2026-06-13 |
 | 102. Schedule + Trainers | 4/4 | Complete   | 2026-06-13 |
 | 103. Attendance + Finance | 4/4 | Complete   | 2026-06-13 |
-| 104. Dashboard, Reports + Settings | 0/TBD | Not started | - |
+| 104. Dashboard, Reports + Settings | 0/5 | Not started | - |
 | 105. admin-web Retirement + RBAC Re-home | 0/TBD | Not started | - |
 | 106. OpenAPI Handoff + Milestone Gate | 0/TBD | Not started | - |
