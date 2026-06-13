@@ -77,7 +77,11 @@ export function ModalsProvider({ children }: { children: ReactNode }) {
         onOpenChange={onClose}
         payload={state?.options?.session}
       />
-      <EditClientModal open={active === 'edit-client'} onOpenChange={onClose} />
+      <EditClientModal
+        open={active === 'edit-client'}
+        onOpenChange={onClose}
+        clientId={state?.options?.editClient?.clientId}
+      />
       <CashModal open={active === 'cash'} onOpenChange={onClose} payload={state?.options?.cash} />
       <PresentModal open={active === 'present'} onOpenChange={onClose} />
       <BranchModal

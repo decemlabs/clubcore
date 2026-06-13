@@ -1,160 +1,286 @@
-import { useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
-import { Initials } from '@/components/ui/initials';
-import { Segmented } from '@/components/ui/Segmented';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
-import { Camera, Mail, Phone, Trash2, TriangleAlert } from '@/components/icons';
-import { useModals } from './modals-context';
-import { AdaptiveModal } from './AdaptiveModal';
+/**
+ * Edit Client modal — wired to real PATCH/DELETE /api/v1/clients/{id} (Phase 101 CLI-03).
+ *
+ * Validation via ClientUpdateSchema.safeParse() (no react-hook-form in admin-app).
+ * On PATCH success: toast.success('Изменения сохранены') + close.
+ * On DELETE success: toast.success('Клиент удалён') + close.
+ * On 422: map err.fields → inline field errors.
+ * On 403: non-blocking toast.error.
+ * On 5xx/network: generic toast, form stays open.
+ * Submit state: disables buttons + shows spinner.
+ * Delete button: HIDDEN for reception via can(role, 'delete', 'clients') (T-101-02-OWNERDEL).
+ */
+import { useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
+import { Initials } from '@/components/ui/initials'
+import { Segmented } from '@/components/ui/Segmented'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import { Camera, Loader2, Mail, Phone, Trash2, TriangleAlert } from '@/components/icons'
+import { useSession } from '@/features/auth/api'
+import { can } from '@/shared/session/can'
+import { useClient, useUpdateClient, useDeleteClient, ApiError } from '@/features/clients/api'
+import { ClientUpdateSchema } from '@/features/clients/schemas'
+import { useModals } from './modals-context'
+import { AdaptiveModal } from './AdaptiveModal'
 import {
   Field,
   FieldRow,
   ModalButton,
   ModalInput,
-  ModalSelect,
   ModalTextarea,
   Section,
-} from './fields';
+} from './fields'
 
 interface FormState {
-  firstName: string;
-  lastName: string;
-  birthday: string;
-  gender: 'f' | 'm';
-  phone: string;
-  email: string;
-  plan: string;
-  trainer: string;
-  branch: string;
-  status: string;
-  note: string;
+  lastName: string
+  firstName: string
+  middleName: string
+  phone: string
+  email: string
+  birthday: string
+  gender: '' | 'male' | 'female'
+  notes: string
 }
 
-const INITIAL: FormState = {
-  firstName: 'Карина',
-  lastName: 'Левчук',
-  birthday: '14.03.1994',
-  gender: 'f',
-  phone: '+7 916 408-22-71',
-  email: 'karina.l@mail.ru',
-  plan: '«12 месяцев» · безлимит',
-  trainer: 'Ольга Власова',
-  branch: 'Тверская',
-  status: 'Активен',
-  note: 'Предпочитает утренние тренировки. Восстанавливается после травмы колена — без приседаний с весом.',
-};
+type FieldErrors = Partial<Record<keyof FormState, string>>
 
-const GENDER = [
-  { value: 'f', label: 'Женский' },
-  { value: 'm', label: 'Мужской' },
-] satisfies { value: FormState['gender']; label: string }[];
+const GENDER_OPTIONS: { value: 'male' | 'female'; label: string }[] = [
+  { value: 'female', label: 'Женский' },
+  { value: 'male', label: 'Мужской' },
+]
 
-const PLANS = [
-  '«12 месяцев» · безлимит',
-  '«6 месяцев» · безлимит',
-  '«3 месяца» · 12 визитов',
-  'Разовые посещения',
-];
-const TRAINERS = ['Ольга Власова', 'Артём Поляков', 'Вадим Дроздов', 'Без тренера'];
-const BRANCHES = ['Тверская', 'Сокольники', 'Новокосино'];
-const STATUSES = ['Активен', 'Заморожен', 'Гость'];
+interface EditClientModalProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  clientId?: string
+}
 
-export function EditClientModal({
-  open,
+function EditClientForm({
+  clientId,
   onOpenChange,
 }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  clientId: string
+  onOpenChange: (open: boolean) => void
 }) {
-  const { open: openModal } = useModals();
-  const [state, setState] = useState<FormState>(INITIAL);
-  const [guard, setGuard] = useState(false);
+  const { open: openModal } = useModals()
+  const session = useSession()
+  const role = session.data?.role ?? 'reception'
 
+  const { data: client } = useClient(clientId)
+  const { mutate: updateClient, isPending: isUpdating } = useUpdateClient()
+  const { mutate: deleteClient, isPending: isDeleting } = useDeleteClient()
+
+  const isPending = isUpdating || isDeleting
+
+  const [form, setForm] = useState<FormState>({
+    lastName: '',
+    firstName: '',
+    middleName: '',
+    phone: '',
+    email: '',
+    birthday: '',
+    gender: '',
+    notes: '',
+  })
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
+  const [guard, setGuard] = useState(false)
+
+  // Sync form when client data loads
   useEffect(() => {
-    if (open) {
-      setState(INITIAL);
-      setGuard(false);
+    if (client) {
+      setForm({
+        lastName: client.lastName,
+        firstName: client.firstName,
+        middleName: client.middleName ?? '',
+        phone: client.phone,
+        email: client.email ?? '',
+        birthday: client.birthday ?? '',
+        gender: (client.gender as FormState['gender']) ?? '',
+        notes: client.notes ?? '',
+      })
     }
-  }, [open]);
+  }, [client])
 
-  const dirty = useMemo(() => JSON.stringify(state) !== JSON.stringify(INITIAL), [state]);
+  const initial = useMemo<FormState | null>(() => {
+    if (!client) return null
+    return {
+      lastName: client.lastName,
+      firstName: client.firstName,
+      middleName: client.middleName ?? '',
+      phone: client.phone,
+      email: client.email ?? '',
+      birthday: client.birthday ?? '',
+      gender: (client.gender as FormState['gender']) ?? '',
+      notes: client.notes ?? '',
+    }
+  }, [client])
+
+  const dirty = useMemo(
+    () => initial !== null && JSON.stringify(form) !== JSON.stringify(initial),
+    [form, initial],
+  )
+
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) =>
-    setState((s) => ({ ...s, [k]: v }));
+    setForm((s) => ({ ...s, [k]: v }))
 
   const requestClose = (next: boolean) => {
-    if (next) return;
-    if (dirty) setGuard(true);
-    else onOpenChange(false);
-  };
+    if (next) return
+    if (dirty) setGuard(true)
+    else onOpenChange(false)
+  }
 
-  const save = () => {
-    toast.success('Изменения сохранены');
-    onOpenChange(false);
-  };
+  const handleSubmit = () => {
+    const parsed = ClientUpdateSchema.safeParse({
+      lastName: form.lastName || undefined,
+      firstName: form.firstName || undefined,
+      middleName: form.middleName || undefined,
+      phone: form.phone || undefined,
+      email: form.email || undefined,
+      birthday: form.birthday || undefined,
+      gender: form.gender || undefined,
+      notes: form.notes || undefined,
+    })
 
-  const remove = () => {
-    onOpenChange(false);
+    if (!parsed.success) {
+      const flat = parsed.error.flatten().fieldErrors
+      const errs: FieldErrors = {}
+      for (const [k, msgs] of Object.entries(flat)) {
+        if (msgs && msgs.length > 0) errs[k as keyof FormState] = msgs[0]
+      }
+      setFieldErrors(errs)
+      return
+    }
+
+    setFieldErrors({})
+    updateClient(
+      { id: clientId, body: parsed.data },
+      {
+        onSuccess: () => {
+          toast.success('Изменения сохранены')
+          onOpenChange(false)
+        },
+        onError: (err) => {
+          if (err instanceof ApiError) {
+            if (err.code === 'forbidden') {
+              toast.error('Недостаточно прав', {
+                description: 'Редактирование доступно только сотрудникам.',
+              })
+              return
+            }
+            if (err.fields) {
+              const errs: FieldErrors = {}
+              for (const [field, message] of Object.entries(err.fields)) {
+                errs[field as keyof FormState] = String(message)
+              }
+              setFieldErrors(errs)
+              return
+            }
+            toast.error(err.message || 'Не удалось сохранить изменения. Попробуйте ещё раз.')
+          } else {
+            toast.error('Не удалось сохранить изменения. Проверьте соединение и попробуйте ещё раз.')
+          }
+        },
+      },
+    )
+  }
+
+  const handleDelete = () => {
+    const fullName = [client?.lastName, client?.firstName].filter(Boolean).join(' ')
+    onOpenChange(false)
     openModal('confirm', {
       confirm: {
         title: 'Удалить клиента?',
-        message: (
-          <>
-            «{INITIAL.firstName} {INITIAL.lastName}» и вся история посещений будут удалены без
-            возможности восстановления.
-          </>
-        ),
+        message: `«${fullName}» будет помечен как удалённый. История посещений сохранится в архиве.`,
         tone: 'danger',
         confirmLabel: 'Удалить',
         requireText: 'УДАЛИТЬ',
         onConfirm: () => {
-          toast.success('Клиент удалён');
+          deleteClient(clientId, {
+            onSuccess: () => {
+              toast.success('Клиент удалён')
+            },
+            onError: (err) => {
+              if (err instanceof ApiError && err.code === 'forbidden') {
+                toast.error('Недостаточно прав', {
+                  description: 'Удаление клиента доступно только владельцу.',
+                })
+              } else {
+                toast.error('Не удалось удалить клиента. Попробуйте ещё раз.')
+              }
+            },
+          })
         },
       },
-    });
-  };
+    })
+  }
+
+  const fullName = client
+    ? [client.lastName, client.firstName].filter(Boolean).join(' ')
+    : '…'
+
+  const initials = client
+    ? [client.lastName, client.firstName]
+        .filter(Boolean)
+        .map((s) => s[0]?.toUpperCase() ?? '')
+        .join('')
+        .slice(0, 2)
+    : ''
+
+  const canDelete = can(role, 'delete', 'clients')
 
   return (
     <>
       <AdaptiveModal
-        open={open}
+        open={true}
         onOpenChange={requestClose}
         size="wide"
         icon={
           <Initials
-            initials="КЛ"
-            color="linear-gradient(135deg,#6366f1,#818cf8)"
+            initials={initials}
+            color="linear-gradient(135deg,#2dd4a4,#059669)"
             className="size-11 text-[15px]"
           />
         }
         title="Редактирование клиента"
-        description="Карина Левчук · #CL-00871"
+        description={fullName}
         footerInfo={
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              aria-label="Удалить клиента"
-              onClick={remove}
-              className="grid size-9 place-items-center rounded-full border-[0.5px] border-border bg-surface text-fg-muted transition-colors hover:border-danger hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Trash2 className="size-[15px]" />
-            </button>
+            {/* Delete button — HIDDEN for reception (T-101-02-OWNERDEL defense-in-depth) */}
+            {canDelete && (
+              <button
+                type="button"
+                aria-label="Удалить клиента"
+                onClick={handleDelete}
+                disabled={isPending}
+                className="grid size-9 place-items-center rounded-full border-[0.5px] border-border bg-surface text-fg-muted transition-colors hover:border-danger hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Trash2 className="size-[15px]" />
+              </button>
+            )}
             {dirty ? (
               <span className="flex items-center gap-1.5 font-medium text-warning-deep">
                 <span className="size-[7px] rounded-full bg-current" />
                 Несохранённые изменения
               </span>
             ) : (
-              <span>Сохранено только что</span>
+              <span>Сохранено</span>
             )}
           </div>
         }
         footerActions={
           <>
-            <ModalButton variant="ghost" onClick={() => requestClose(false)}>
+            <ModalButton variant="ghost" disabled={isPending} onClick={() => requestClose(false)}>
               Отмена
             </ModalButton>
-            <ModalButton disabled={!dirty} onClick={save}>
-              Сохранить
+            <ModalButton disabled={isPending || !dirty} onClick={handleSubmit}>
+              {isUpdating ? (
+                <>
+                  <Loader2 className="size-[16px] animate-spin" />
+                  Сохранение…
+                </>
+              ) : (
+                'Сохранить'
+              )}
             </ModalButton>
           </>
         }
@@ -163,124 +289,93 @@ export function EditClientModal({
         <div className="flex items-center gap-3.5">
           <span className="relative shrink-0">
             <Initials
-              initials="КЛ"
-              color="linear-gradient(135deg,#6366f1,#818cf8)"
+              initials={initials}
+              color="linear-gradient(135deg,#2dd4a4,#059669)"
               className="size-[60px] text-xl"
             />
             <span className="absolute -bottom-0.5 -right-0.5 grid size-[22px] place-items-center rounded-full border-[0.5px] border-border bg-surface text-fg-muted">
               <Camera className="size-3" />
             </span>
           </span>
-          <div className="flex gap-2">
-            <ModalButton
-              variant="ghost"
-              className="h-9 px-3.5 text-[12.5px]"
-              onClick={() => toast('Загрузка фото — демо')}
-            >
-              Загрузить фото
-            </ModalButton>
-            <ModalButton
-              variant="ghost"
-              className="h-9 px-3.5 text-[12.5px]"
-              onClick={() => toast('Фото удалено')}
-            >
-              Удалить
-            </ModalButton>
-          </div>
         </div>
 
         <div className="mt-3.5">
           <FieldRow>
-            <Field label="Имя">
+            <Field label="Фамилия" hint={fieldErrors.lastName}>
               <ModalInput
-                value={state.firstName}
-                onChange={(e) => set('firstName', e.target.value)}
+                value={form.lastName}
+                onChange={(e) => set('lastName', e.target.value)}
+                disabled={isPending}
               />
             </Field>
-            <Field label="Фамилия">
+            <Field label="Имя" hint={fieldErrors.firstName}>
               <ModalInput
-                value={state.lastName}
-                onChange={(e) => set('lastName', e.target.value)}
+                value={form.firstName}
+                onChange={(e) => set('firstName', e.target.value)}
+                disabled={isPending}
               />
             </Field>
           </FieldRow>
         </div>
+        <Field label="Отчество" optional hint={fieldErrors.middleName}>
+          <ModalInput
+            value={form.middleName}
+            onChange={(e) => set('middleName', e.target.value)}
+            disabled={isPending}
+          />
+        </Field>
         <FieldRow>
-          <Field label="Дата рождения">
-            <ModalInput value={state.birthday} onChange={(e) => set('birthday', e.target.value)} />
+          <Field label="Дата рождения" optional>
+            <ModalInput
+              type="date"
+              value={form.birthday}
+              onChange={(e) => set('birthday', e.target.value)}
+              disabled={isPending}
+            />
           </Field>
-          <Field label="Пол">
+          <Field label="Пол" optional>
             <Segmented
-              options={GENDER}
-              value={state.gender}
-              onChange={(v) => set('gender', v)}
+              options={GENDER_OPTIONS}
+              value={form.gender === '' ? 'female' : form.gender}
+              onChange={(v) => set('gender', v as FormState['gender'])}
               ariaLabel="Пол"
             />
           </Field>
         </FieldRow>
 
         <Section>Контакты</Section>
-        <Field label="Телефон">
+        <Field label="Телефон" hint={fieldErrors.phone}>
           <ModalInput
             icon={Phone}
             type="tel"
-            value={state.phone}
+            value={form.phone}
             onChange={(e) => set('phone', e.target.value)}
+            disabled={isPending}
           />
         </Field>
-        <Field label="Эл. почта">
+        <Field label="Эл. почта" optional hint={fieldErrors.email}>
           <ModalInput
             icon={Mail}
             type="email"
-            value={state.email}
+            value={form.email}
             onChange={(e) => set('email', e.target.value)}
+            disabled={isPending}
           />
         </Field>
 
-        <Section>Абонемент и тренер</Section>
-        <FieldRow>
-          <Field label="Тариф">
-            <ModalSelect value={state.plan} onChange={(e) => set('plan', e.target.value)}>
-              {PLANS.map((p) => (
-                <option key={p}>{p}</option>
-              ))}
-            </ModalSelect>
-          </Field>
-          <Field label="Персональный тренер">
-            <ModalSelect value={state.trainer} onChange={(e) => set('trainer', e.target.value)}>
-              {TRAINERS.map((t) => (
-                <option key={t}>{t}</option>
-              ))}
-            </ModalSelect>
-          </Field>
-        </FieldRow>
-        <FieldRow>
-          <Field label="Филиал">
-            <ModalSelect value={state.branch} onChange={(e) => set('branch', e.target.value)}>
-              {BRANCHES.map((b) => (
-                <option key={b}>{b}</option>
-              ))}
-            </ModalSelect>
-          </Field>
-          <Field label="Статус">
-            <ModalSelect value={state.status} onChange={(e) => set('status', e.target.value)}>
-              {STATUSES.map((s) => (
-                <option key={s}>{s}</option>
-              ))}
-            </ModalSelect>
-          </Field>
-        </FieldRow>
-
         <Section>Заметка для администраторов</Section>
-        <Field>
+        <Field hint={fieldErrors.notes}>
           <ModalTextarea
             placeholder="Аллергии, пожелания, особенности…"
-            value={state.note}
-            onChange={(e) => set('note', e.target.value)}
+            maxLength={4096}
+            value={form.notes}
+            onChange={(e) => set('notes', e.target.value)}
+            disabled={isPending}
           />
         </Field>
       </AdaptiveModal>
 
+      {/* Unsaved changes guard dialog */}
       <Dialog open={guard} onOpenChange={setGuard}>
         <DialogContent
           showCloseButton={false}
@@ -304,8 +399,8 @@ export function EditClientModal({
               variant="text"
               className="text-danger hover:bg-danger-soft hover:text-danger"
               onClick={() => {
-                setGuard(false);
-                onOpenChange(false);
+                setGuard(false)
+                onOpenChange(false)
               }}
             >
               Не сохранять
@@ -316,8 +411,8 @@ export function EditClientModal({
               </ModalButton>
               <ModalButton
                 onClick={() => {
-                  setGuard(false);
-                  save();
+                  setGuard(false)
+                  handleSubmit()
                 }}
               >
                 Сохранить
@@ -327,5 +422,23 @@ export function EditClientModal({
         </DialogContent>
       </Dialog>
     </>
-  );
+  )
+}
+
+export function EditClientModal({ open, onOpenChange, clientId }: EditClientModalProps) {
+  if (!open || !clientId) {
+    return (
+      <AdaptiveModal
+        open={false}
+        onOpenChange={onOpenChange}
+        title="Редактирование клиента"
+        size="wide"
+        footerActions={<></>}
+      >
+        <></>
+      </AdaptiveModal>
+    )
+  }
+
+  return <EditClientForm clientId={clientId} onOpenChange={onOpenChange} />
 }
