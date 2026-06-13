@@ -14,10 +14,12 @@ import { ChevronLeft, MessageSquare, Phone, SquarePen } from '@/components/icons
 import { getInitials } from '@/lib/format'
 import type { TrainerData } from '@/features/trainers/schemas'
 import { TrainerFormModal } from '@/components/modals/TrainerFormModal'
+import { can } from '@/shared/session/can'
+import type { Role } from '@/shared/session/types'
 
 const HERO_BTN = 'h-[38px] gap-[7px] rounded-full px-[18px] text-[13.5px] font-semibold'
 
-export function TrainerHero({ trainer: t }: { trainer: TrainerData }) {
+export function TrainerHero({ trainer: t, role }: { trainer: TrainerData; role: Role }) {
   const navigate = useNavigate()
   const [editOpen, setEditOpen] = useState(false)
   const initials = getInitials(t.fullName)
@@ -100,10 +102,12 @@ export function TrainerHero({ trainer: t }: { trainer: TrainerData }) {
             <MessageSquare className="size-[14px]" />
             <span className="max-sm:hidden">Написать</span>
           </Button>
-          <Button className={HERO_BTN} onClick={() => setEditOpen(true)}>
-            <SquarePen className="size-[14px]" />
-            <span className="max-sm:hidden">Редактировать</span>
-          </Button>
+          {can(role, 'edit', 'trainers') && (
+            <Button className={HERO_BTN} onClick={() => setEditOpen(true)}>
+              <SquarePen className="size-[14px]" />
+              <span className="max-sm:hidden">Редактировать</span>
+            </Button>
+          )}
         </div>
       </div>
 

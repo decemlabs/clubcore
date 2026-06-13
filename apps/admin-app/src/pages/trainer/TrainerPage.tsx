@@ -12,6 +12,7 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import { useTrainer } from '@/features/trainers/api'
+import { useSession } from '@/features/auth/api'
 import { PageLoading, PageError } from '@/components/feedback/PageState'
 import { TrainerHero } from './components/TrainerHero'
 import { OverviewTab } from './components/OverviewTab'
@@ -32,6 +33,8 @@ export function TrainerPage() {
   const { trainerId = '' } = useParams<{ trainerId: string }>()
   const { hash } = useLocation()
   const { data: trainer, isPending, isError, refetch } = useTrainer(trainerId)
+  const sessionQuery = useSession()
+  const role = sessionQuery.data?.role ?? 'reception'
   const [tab, setTab] = useState<TabKey>('overview')
 
   // Поддержка прямых ссылок на вкладки (#payouts / #history).
@@ -45,7 +48,7 @@ export function TrainerPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-[1120px] flex-col gap-4 px-4 pb-10 pt-5 sm:px-6 sm:pb-12 sm:pt-6 lg:px-7">
-      <TrainerHero trainer={trainer} />
+      <TrainerHero trainer={trainer} role={role} />
       {/* TrainerKpis hidden — no aggregate KPI endpoint in Phase 102 (deferred Phase 104) */}
       <DetailTabs
         options={TABS}
