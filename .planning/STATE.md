@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Production Admin — Backend Wiring
-status: completed
-stopped_at: Phase 103 Plan 02 complete (ATT-01 UI delivered — CheckInModal + AttendancePage wired to real visits)
-last_updated: "2026-06-13T19:30:31.210Z"
-last_activity: "2026-06-13 — Phase 103 Plan 04 complete: FinancePage wired to /reports/revenue (zero-fill, groupBy, signed net) + /payments?method=online (paginated); Lock-EmptyState RBAC guard; mock tabs removed; Phase 103 complete"
+status: in-progress
+stopped_at: Phase 104 Plan 03 complete (RPT-02 Reports page + RPT-03 Audit page wired + «Журнал действий» nav entry)
+last_updated: "2026-06-13T22:40:00.000Z"
+last_activity: "2026-06-13 — Phase 104 Plan 03 complete: 4-tab Reports page + per-tab CSV export; wired AuditPage with server filters/pagination/CSV/XSS-safe payload; «Журнал действий» owner-only nav entry; full admin-app gate green"
 progress:
   total_phases: 11
   completed_phases: 4
   total_plans: 21
-  completed_plans: 19
-  percent: 36
+  completed_plans: 23
+  percent: 40
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 103 of 106 (Attendance + Finance) — COMPLETE
-Plan: 4/4 complete
-Status: Phase 103 complete — ATT-01 (check-in), ATT-02 (load zero-fill), FIN-01 (cashbox ledger), FIN-02 (revenue+online-payments) all delivered
-Last activity: 2026-06-13 — Phase 103 Plan 04 complete: FinancePage wired to /reports/revenue (zero-fill, groupBy, signed net) + /payments?method=online (paginated); Lock-EmptyState RBAC guard; mock tabs removed; Phase 103 complete
+Phase: 104 of 106 (Dashboard + Reports + Settings) — IN PROGRESS
+Plan: 3/5 complete
+Status: RPT-02 (Reports 4-tab + CSV), RPT-03 (Audit log + filters + CSV) delivered; nav entry added; remaining: SET-01 (profile/sessions), SET-02 (users admin) via 104-04/104-05
+Last activity: 2026-06-13 — Phase 104 Plan 03 complete: 4-tab Reports page + per-tab CSV export; wired AuditPage with server filters/pagination/CSV/XSS-safe payload; «Журнал действий» owner-only nav entry; full admin-app gate green
 
 Progress: [█████████░] 90%
 
@@ -102,6 +102,9 @@ Progress: [█████████░] 90%
 - **D-104-04-MOCKCOMPAT**: useSettings renamed to useMockSettingsData (not deleted) — other sections (Branch/Hours/Booking/Payments/Notifications/App/Integrations/Billing) still need mock data; ProfileSection and SecuritySection are now self-fetching; TeamSection wired in 104-05
 - **D-104-04-SELFREVOKE-AUTHBUS**: useRevokeCurrentSession calls publishSessionExpired() on 204 (not navigate()) — routes through RequireAuth authBus subscriber, same path as mid-session 401 (T-104-09 mitigation)
 - **D-104-04-PROFILE-READONLY**: ProfileSection is fully read-only; PATCH /auth/me confirmed absent in backend; code comment added noting edit is deferred
+- **D-104-03-TABSGROUP**: Inline TabsGroup component (not imported from FinancePage parts) — avoids cross-page import, self-contained Reports module
+- **D-104-03-CLIENTS-INLINE-KPI**: ClientsTab uses inline KpiCard instead of existing KpiTile — clients 3-scalar data doesn't match KpiTile's icon+delta contract
+- **D-104-03-ACTIVITY-ICON-REUSE**: «Журнал действий» nav entry reuses already-imported Activity icon (consistent with Посещаемость entry)
 
 ### Phase 100 Decisions
 
@@ -140,6 +143,6 @@ v3.0 in-progress deferrals:
 
 ## Session Continuity
 
-Last session: 2026-06-13T19:30:31.206Z
-Stopped at: Phase 103 Plan 02 complete (ATT-01 UI delivered — CheckInModal + AttendancePage wired to real visits)
-Resume: Phase 103 Plan 02 complete. Continue with Phase 103 Plan 03 (Load + nav gating + cashbox).
+Last session: 2026-06-13T22:40:00.000Z
+Stopped at: Phase 104 Plan 03 complete (RPT-02 Reports page + RPT-03 Audit page wired + «Журнал действий» nav entry)
+Resume: Phase 104 Plan 03 complete. Continue with Phase 104 Plan 04 (Settings — profile/sessions/users admin).
