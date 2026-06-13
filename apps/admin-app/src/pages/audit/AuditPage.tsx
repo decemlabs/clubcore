@@ -36,6 +36,11 @@ import type { AuditEvent, AuditFilter } from '@/features/audit/schemas';
 
 const PAGE_SIZE = 25;
 
+// WR-05 fix: initial date range values captured at module-load time (stable strings).
+// Used to detect when a user has narrowed the date range from the default.
+const INITIAL_FROM_DATE = mskDaysAgoISO(29);
+const INITIAL_TO_DATE = mskTodayISO();
+
 // ---------------------------------------------------------------------------
 // Filter option lists (static, UI-SPEC §3.1)
 // ---------------------------------------------------------------------------
@@ -130,8 +135,8 @@ function AuditPageContent({ role }: { role: Role }) {
   const [actorEmail, setActorEmail] = useState('');
   const [resourceType, setResourceType] = useState('');
   const [action, setAction] = useState('');
-  const [fromDate, setFromDate] = useState(() => mskDaysAgoISO(29));
-  const [toDate, setToDate] = useState(() => mskTodayISO());
+  const [fromDate, setFromDate] = useState(() => INITIAL_FROM_DATE);
+  const [toDate, setToDate] = useState(() => INITIAL_TO_DATE);
   const [page, setPage] = useState(1);
 
   // Detail modal state
@@ -153,8 +158,15 @@ function AuditPageContent({ role }: { role: Role }) {
 
   const { data, isPending, isFetching, isError, refetch } = useAuditLog(filter, role);
 
-  // Track if any filter is active (to distinguish "no events ever" vs "no results for filter")
-  const hasFilter = Boolean(debouncedEmail || resourceType || action);
+  // WR-05 fix: include date range in hasFilter so narrowing the date range to a period
+  // with no events shows "Измените фильтры" rather than "Журнал пуст".
+  const hasFilter = Boolean(
+    debouncedEmail ||
+      resourceType ||
+      action ||
+      fromDate !== INITIAL_FROM_DATE ||
+      toDate !== INITIAL_TO_DATE,
+  );
 
   function handleRangeChange(from: string, to: string) {
     setFromDate(from);
@@ -262,7 +274,7 @@ function AuditPageContent({ role }: { role: Role }) {
             />
           )
         ) : (
-          <AuditItemList items={items} onOpenEvent={openEvent} fromDate={fromDate} />
+          <AuditItemList items={items} onOpenEvent={openEvent} />
         )}
 
         {/* Pagination */}
@@ -291,14 +303,14 @@ function AuditPageContent({ role }: { role: Role }) {
 // Audit item list — groups items by date
 // ---------------------------------------------------------------------------
 
+// WR-02 fix: removed the dead `fromDate` prop (was declared but immediately void-ed).
+// Date grouping uses createdAt from each event item directly.
 function AuditItemList({
   items,
   onOpenEvent,
-  fromDate,
 }: {
   items: AuditEvent[];
   onOpenEvent: (event: AuditEvent) => void;
-  fromDate: string;
 }) {
   // Group items by date (createdAt date portion)
   const groups: { dateLabel: string; events: AuditEvent[] }[] = [];
@@ -313,8 +325,6 @@ function AuditItemList({
     }
     groups[seen.get(dateStr)!]!.events.push(item);
   }
-
-  void fromDate;
 
   return (
     <div>
