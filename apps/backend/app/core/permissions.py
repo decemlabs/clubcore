@@ -1,8 +1,8 @@
 """RBAC primitives: Role / Action / Resource StrEnums + OWNER_ONLY matrix + can() (RBAC-01).
 
 Source of truth mirrored byte-for-byte from:
-  - apps/admin-web/src/shared/session/registry.ts (Resource type + Action type)
-  - apps/admin-web/src/shared/session/can.ts (OWNER_ONLY array + can() body)
+  - apps/admin-app/src/shared/session/registry.ts (Resource type + Action type)
+  - apps/admin-app/src/shared/session/can.ts (OWNER_ONLY array + can() body)
 
 Phase 6 TEST-06 parity test asserts the backend OWNER_ONLY equals the frontend
 one as a set of (action, resource) pairs. Any drift FAILS that test — this
@@ -60,7 +60,7 @@ class Resource(StrEnum):
     GYM = "gym"
 
 
-# Verbatim mirror of apps/admin-web/src/shared/session/can.ts (41 entries after Phase 86 GYM-02).
+# Verbatim mirror of apps/admin-app/src/shared/session/can.ts (41 entries after Phase 86 GYM-02).
 # frozenset for set-membership lookup in can() and parity-set equality in Phase 6.
 OWNER_ONLY: frozenset[tuple[Action, Resource]] = frozenset(
     {
@@ -153,7 +153,7 @@ def can(role: Role, action: Action, resource: Resource) -> bool:
 
     Owner short-circuits to True (D-23). Reception is denied any (action, resource) pair
     in OWNER_ONLY; everything else is allowed. Byte-for-byte semantic mirror of
-    apps/admin-web/src/shared/session/can.ts:24-28.
+    apps/admin-app/src/shared/session/can.ts:24-28.
     """
     if role is Role.OWNER:
         return True

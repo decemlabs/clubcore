@@ -73,7 +73,7 @@ class Settings(BaseSettings):
     refresh_reuse_window_seconds: int = 5
 
     # Phase 7 additions (D-10, D-03): Telegram OTP channel.
-    # Placeholder defaults so fresh-clone dev boot of `web` + admin-web does NOT
+    # Placeholder defaults so fresh-clone dev boot of `web` + admin-app does NOT
     # require setting bot credentials first. The bot worker process must check
     # for this sentinel and refuse to start (see app/workers/telegram_bot.py).
     # Real deployments override via .env / docker-compose env.
@@ -127,7 +127,8 @@ class Settings(BaseSettings):
 
     # Phase 43 addition (D-43-14): frontend base URL for owner-managed
     # invitation links (?include_invite_link=true escape hatch + email body).
-    # Default points at the admin-web dev server; production overrides via .env.
+    # Default points at the admin-app dev server (staff frontend, port 5173);
+    # production overrides via .env.
     # The URL is NEVER stored in audit payloads — only the link_copied bool
     # flag is captured (D-43-14 / Pitfall 4 anti-oracle).
     frontend_base_url: str = "http://localhost:5173"
@@ -140,11 +141,11 @@ class Settings(BaseSettings):
 
     # Phase 90 RT-02 — CSWSH guard allowlist for the WebSocket endpoint.
     # verify_ws_origin (app/core/dependencies.py) compares the WS upgrade
-    # Origin header against this list. Defaults cover the admin-web dev server
-    # (5173) and the client PWA dev port (5174 — vite.config pins 5174 to avoid
-    # the admin-web 5173 clash) + testserver. Production overrides via
-    # WS_ALLOWED_ORIGINS env var (comma-separated or JSON list). Empty list
-    # means same-origin only (no cross-origin WS accepted).
+    # Origin header against this list. Defaults cover the admin-app dev server
+    # (5173, staff frontend) and the client PWA dev port (5174 — vite.config
+    # pins 5174 to avoid the admin-app 5173 clash) + testserver. Production
+    # overrides via WS_ALLOWED_ORIGINS env var (comma-separated or JSON list).
+    # Empty list means same-origin only (no cross-origin WS accepted).
     ws_allowed_origins: list[str] = [
         "http://localhost:5173",
         "http://localhost:5174",

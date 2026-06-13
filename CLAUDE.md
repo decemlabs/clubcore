@@ -14,7 +14,7 @@ clubcore — CRM для тренажёрного зала. Сейчас пет-�
 - **Region**: РФ/СНГ — Stripe запрещён; платежи только ЮKassa; Telegram как первичный канал
 - **Tooling**: ruff + mypy strict + import-linter обязательны с Phase A — архитектурные правила должны быть выполнимы локально
 - **Testing**: backend-тесты используют `httpx ASGITransport` (не реальный сетевой стек) и `pytest-asyncio`
-- **Frontend integrity**: `apps/admin-web` — это перенос `./frontend`, никаких правок внутренней структуры или моков в Phase A
+- **Frontend integrity**: `apps/admin-web` — удалён в Phase 105; `apps/admin-app` — активный staff frontend (React 19 + TanStack Router, полностью подключён к backend API в v3.0)
 - **Placeholders only**: `packages/ui` и `packages/api-client` — только `package.json` + `README.md` в Phase A; никакого реального кода
 <!-- GSD:project-end -->
 
