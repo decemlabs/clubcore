@@ -66,6 +66,41 @@ export type RevenueReportData = z.infer<typeof RevenueReportSchema>['data'];
 export type RevenueBucket = z.infer<typeof RevenueBucketSchema>;
 
 // ---------------------------------------------------------------------------
+// Clients report (GET /api/v1/reports/clients)
+// ---------------------------------------------------------------------------
+
+export const ClientsReportSchema = z.object({
+  data: z.object({
+    activeCount: z.number(),
+    expiringCount: z.number(),
+    newClientsCount: z.number(),
+    withinDays: z.number(),
+  }),
+});
+export type ClientsReportData = z.infer<typeof ClientsReportSchema>['data'];
+
+// ---------------------------------------------------------------------------
+// Trainers report (GET /api/v1/reports/trainers)
+// ---------------------------------------------------------------------------
+
+export const TrainerRowSchema = z.object({
+  trainerId: z.string(),
+  name: z.string(),
+  sessionCount: z.number(),
+  totalHours: z.number(),
+  uniqueClients: z.number(),
+  utilizationPct: z.number(),
+  totalRevenueKopecks: z.number(),
+});
+export const TrainersReportSchema = z.object({
+  data: z.object({
+    rows: z.array(TrainerRowSchema),
+  }),
+});
+export type TrainersReportData = z.infer<typeof TrainersReportSchema>['data'];
+export type TrainerRow = z.infer<typeof TrainerRowSchema>;
+
+// ---------------------------------------------------------------------------
 // Query param types
 // ---------------------------------------------------------------------------
 
@@ -78,4 +113,15 @@ export type RevenueReportQuery = {
   fromDate: string;
   toDate: string;
   groupBy: 'day' | 'month';
+};
+
+export type ClientsReportQuery = {
+  fromDate: string;
+  toDate: string;
+  within?: number;
+};
+
+export type TrainersReportQuery = {
+  fromDate: string;
+  toDate: string;
 };

@@ -20,8 +20,8 @@ import { can } from '@/shared/session/can';
 import { reportsData } from '@/mocks/reports';
 import type { ReportsData } from './types';
 import { reportsQueryKeys } from './keys';
-import { VisitsReportSchema, RevenueReportSchema } from './schemas';
-import type { VisitsReportQuery, RevenueReportQuery } from './schemas';
+import { VisitsReportSchema, RevenueReportSchema, ClientsReportSchema, TrainersReportSchema } from './schemas';
+import type { VisitsReportQuery, RevenueReportQuery, ClientsReportQuery, TrainersReportQuery } from './schemas';
 import type { Role } from '@/shared/session/types';
 
 // ---------------------------------------------------------------------------
@@ -91,6 +91,46 @@ export function useRevenueReport(query: RevenueReportQuery, role: Role) {
         query: { fromDate: query.fromDate, toDate: query.toDate, groupBy: query.groupBy },
       });
       return RevenueReportSchema.parse(raw).data;
+    },
+    enabled: can(role, 'view', 'reports'),
+    staleTime: 30_000,
+  });
+}
+
+/**
+ * Clients aggregate report (GET /api/v1/reports/clients — OWNER_ONLY).
+ * Returns activeCount / expiringCount / newClientsCount / withinDays.
+ *
+ * WR-04: accepts `role` as a parameter (mirrors useVisitsReport pattern).
+ */
+export function useClientsReport(query: ClientsReportQuery, role: Role) {
+  return useQuery({
+    queryKey: reportsQueryKeys.clients(query),
+    queryFn: async () => {
+      const raw = await staffRequest('get', '/api/v1/reports/clients', {
+        query: { fromDate: query.fromDate, toDate: query.toDate, within: query.within ?? 30 },
+      });
+      return ClientsReportSchema.parse(raw).data;
+    },
+    enabled: can(role, 'view', 'reports'),
+    staleTime: 30_000,
+  });
+}
+
+/**
+ * Trainers aggregate report (GET /api/v1/reports/trainers — OWNER_ONLY).
+ * Returns rows[] with per-trainer usage + revenue data.
+ *
+ * WR-04: accepts `role` as a parameter (mirrors useVisitsReport pattern).
+ */
+export function useTrainersReport(query: TrainersReportQuery, role: Role) {
+  return useQuery({
+    queryKey: reportsQueryKeys.trainers(query),
+    queryFn: async () => {
+      const raw = await staffRequest('get', '/api/v1/reports/trainers', {
+        query: { fromDate: query.fromDate, toDate: query.toDate },
+      });
+      return TrainersReportSchema.parse(raw).data;
     },
     enabled: can(role, 'view', 'reports'),
     staleTime: 30_000,

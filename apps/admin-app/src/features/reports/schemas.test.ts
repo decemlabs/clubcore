@@ -3,7 +3,8 @@
  * RED phase: written before schemas are extended.
  */
 import { describe, expect, it } from 'vitest';
-import { ClientsReportSchema, TrainersReportSchema, reportsQueryKeysExtended } from './schemas';
+import { ClientsReportSchema, TrainersReportSchema } from './schemas';
+import { reportsQueryKeys as reportsQueryKeysExtended } from './keys';
 
 describe('ClientsReportSchema', () => {
   it('parses a full clients report response', () => {
