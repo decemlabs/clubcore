@@ -42,8 +42,9 @@ function ExpiringRow({ item, first }: { item: MembershipData; first: boolean }) 
   const { open } = useModals();
   const days = daysUntil(item.endDate);
   const urgency = days <= 2 ? 'text-danger' : days <= 5 ? 'text-warning' : 'text-fg';
-  const initials = getInitials(item.clientId); // clientId is UUIDv4; show plan name as fallback
   const planName = item.planSnapshot.name;
+  // CR-03: clientId is UUIDv4 — use planName for initials until clientFullName is on the wire.
+  const initials = getInitials(planName);
   const color = colorForId(item.clientId);
 
   return (
@@ -70,7 +71,11 @@ function ExpiringRow({ item, first }: { item: MembershipData; first: boolean }) 
       <ListButton
         onClick={() =>
           open('extend', {
-            extend: { clientName: item.clientId },
+            // CR-03 fix: MembershipData has no clientFullName on the wire shape.
+            // Use planSnapshot.name as the human-readable context label so the modal
+            // never shows a raw UUID. When clientFullName is added to the payload,
+            // change this to item.clientFullName.
+            extend: { clientName: planName },
           })
         }
         className="@max-[420px]:w-[30px] @max-[420px]:gap-0 @max-[420px]:px-0"
