@@ -77,7 +77,7 @@
 
 ### HND — OpenAPI Handoff & Milestone Verification
 
-- [ ] **HND-01**: the staff `openapi.json` + `schema.d.ts` stay byte-stable / contract unchanged (no new backend domains); the staff drift-gate is green and the full milestone gate (mypy --strict + lint-imports + pytest + admin-app `check`/`test` + Redocly) passes.
+- [x] **HND-01**: the staff `openapi.json` + `schema.d.ts` stay byte-stable / contract unchanged (no new backend domains); the staff drift-gate is green and the full milestone gate (mypy --strict + lint-imports + pytest + admin-app `check`/`test` + Redocly) passes.
 
 ---
 
@@ -148,7 +148,7 @@ Which phases cover which requirements.
 | ADMW-01 | Phase 105 | Complete |
 | ADMW-02 | Phase 105 | Complete |
 | ADMW-03 | Phase 105 | Complete |
-| HND-01 | Phase 106 | Pending |
+| HND-01 | Phase 106 | Complete |
 
 **Coverage:**
 - v3.0 requirements: 30 total
