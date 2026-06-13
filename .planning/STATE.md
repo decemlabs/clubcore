@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Production Admin — Backend Wiring
-status: in-progress
-stopped_at: Phase 104 Plan 04 complete (settings profile read-only + sessions wired via authBus)
-last_updated: "2026-06-13T19:17:00Z"
-last_activity: "2026-06-13 — Phase 104 Plan 04 complete: read-only ProfileSection (useSession), wired SecuritySection (useSessions + useRevokeSession + useRevokeCurrentSession via authBus), SessionSchema/SessionsListResponseSchema; full admin-app gate green"
+status: completed
+stopped_at: Phase 103 Plan 02 complete (ATT-01 UI delivered — CheckInModal + AttendancePage wired to real visits)
+last_updated: "2026-06-13T19:30:31.210Z"
+last_activity: "2026-06-13 — Phase 103 Plan 04 complete: FinancePage wired to /reports/revenue (zero-fill, groupBy, signed net) + /payments?method=online (paginated); Lock-EmptyState RBAC guard; mock tabs removed; Phase 103 complete"
 progress:
   total_phases: 11
   completed_phases: 4
   total_plans: 21
-  completed_plans: 18
+  completed_plans: 19
   percent: 36
 ---
 
@@ -30,7 +30,7 @@ Plan: 4/4 complete
 Status: Phase 103 complete — ATT-01 (check-in), ATT-02 (load zero-fill), FIN-01 (cashbox ledger), FIN-02 (revenue+online-payments) all delivered
 Last activity: 2026-06-13 — Phase 103 Plan 04 complete: FinancePage wired to /reports/revenue (zero-fill, groupBy, signed net) + /payments?method=online (paginated); Lock-EmptyState RBAC guard; mock tabs removed; Phase 103 complete
 
-Progress: [█████████░] 86%
+Progress: [█████████░] 90%
 
 ## v3.0 Roadmap Summary
 
@@ -140,6 +140,6 @@ v3.0 in-progress deferrals:
 
 ## Session Continuity
 
-Last session: 2026-06-13T19:18:39.313Z
+Last session: 2026-06-13T19:30:31.206Z
 Stopped at: Phase 103 Plan 02 complete (ATT-01 UI delivered — CheckInModal + AttendancePage wired to real visits)
 Resume: Phase 103 Plan 02 complete. Continue with Phase 103 Plan 03 (Load + nav gating + cashbox).

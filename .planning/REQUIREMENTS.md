@@ -60,7 +60,7 @@
 
 ### RPT — Dashboard, Reports & Audit
 
-- [ ] **RPT-01**: the Dashboard (landing `/`) renders real KPI/aggregate data from `/reports/*` (revenue/clients/visits) and charts, with empty-data guards.
+- [x] **RPT-01**: the Dashboard (landing `/`) renders real KPI/aggregate data from `/reports/*` (revenue/clients/visits) and charts, with empty-data guards.
 - [x] **RPT-02**: the Reports screen renders the four aggregate reports (revenue / clients / visits / trainers) with CSV export (`/reports/*.csv`, UTF-8 BOM).
 - [x] **RPT-03**: the Audit screen renders the real owner-only audit log (`/audit-log`) with filters + stable pagination + CSV export.
 
@@ -140,7 +140,7 @@ Which phases cover which requirements.
 | ATT-02 | Phase 103 | Complete |
 | FIN-01 | Phase 103 | Complete |
 | FIN-02 | Phase 103 | Complete |
-| RPT-01 | Phase 104 | Pending |
+| RPT-01 | Phase 104 | Complete |
 | RPT-02 | Phase 104 | Complete |
 | RPT-03 | Phase 104 | Complete |
 | SET-01 | Phase 104 | Complete |
