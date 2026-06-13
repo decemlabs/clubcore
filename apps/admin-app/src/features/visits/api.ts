@@ -67,8 +67,8 @@ export function useVisitsList(filter: VisitsListQuery) {
       if (filter.from) query['from'] = filter.from;
       if (filter.to) query['to'] = filter.to;
       if (filter.clientId) query['clientId'] = filter.clientId;
-      if (filter.page) query['page'] = filter.page;
-      if (filter.pageSize) query['pageSize'] = filter.pageSize;
+      if (filter.page != null) query['page'] = filter.page;
+      if (filter.pageSize != null) query['pageSize'] = filter.pageSize;
       const raw = await staffRequest('get', '/api/v1/visits', { query });
       return VisitsListResponseSchema.parse(raw).data;
     },

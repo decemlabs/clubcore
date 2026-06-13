@@ -72,8 +72,8 @@ export function usePaymentsLedger(filter: PaymentsLedgerQuery, role: Role) {
       if (filter.receivedFrom) query['receivedFrom'] = filter.receivedFrom;
       if (filter.receivedTo) query['receivedTo'] = filter.receivedTo;
       if (filter.method) query['method'] = filter.method;
-      if (filter.page) query['page'] = filter.page;
-      if (filter.pageSize) query['pageSize'] = filter.pageSize;
+      if (filter.page != null) query['page'] = filter.page;
+      if (filter.pageSize != null) query['pageSize'] = filter.pageSize;
       const raw = await staffRequest('get', '/api/v1/payments', { query });
       return PaymentsListResponseSchema.parse(raw).data;
     },
