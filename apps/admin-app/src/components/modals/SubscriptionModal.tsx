@@ -1,511 +1,636 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import type { LucideIcon } from 'lucide-react';
-import { toast } from 'sonner';
-import { cn } from '@/lib/cn';
-import { formatInt } from '@/lib/format';
+/**
+ * SubscriptionModal — membership lifecycle dialogs (Phase 101-03 MEM-02/MEM-03).
+ *
+ * Wire-only update (no visual redesign):
+ *  - CreateScreen → useSellMembership + real plans from usePlans()
+ *  - RenewScreen  → useRenewMembership (removed multi-period picker)
+ *  - FreezeScreen → useFreezeMembership optimistic (removed chip duration picker)
+ *  - UnfreezeScreen → useUnfreezeMembership optimistic
+ *  - CancelScreen → useCancelMembership; HIDDEN for reception via can()
+ *  - HistoryScreen → read-only (unchanged, future Phase)
+ *  - RefundScreen → NEW: useRefundMembership, required reason, no amount field
+ *
+ * Submitting state (all dialogs): primary + ghost buttons disabled, primary shows spinner.
+ * Error state (all dialogs): inline Callout tone="danger" below fields; dialog stays open.
+ * Success (all dialogs): close + toast (per UI-SPEC Copywriting Contract).
+ */
+import { useEffect, useState, type ReactNode } from 'react'
+import type { LucideIcon } from 'lucide-react'
+import { toast } from 'sonner'
+import { cn } from '@/lib/cn'
+import { formatRub, formatDateRu } from '@/lib/format'
+import { useSession } from '@/features/auth/api'
+import { can } from '@/shared/session/can'
+import { usePlans } from '@/features/plans/api'
+import {
+  useSellMembership,
+  useFreezeMembership,
+  useUnfreezeMembership,
+  useRenewMembership,
+  useCancelMembership,
+  useRefundMembership,
+  ApiError,
+} from '@/features/memberships/api'
 import {
   Check,
   CircleX,
   CreditCard,
   History,
-  Info,
+  Loader2,
+  ReceiptText,
   RefreshCw,
   Snowflake,
-  SquarePen,
   Sun,
   TriangleAlert,
   Wallet,
-} from '@/components/icons';
-import type { SubscriptionScreen } from './modals-context';
-import { AdaptiveModal } from './AdaptiveModal';
+} from '@/components/icons'
+import type { SubscriptionScreen } from './modals-context'
+import { AdaptiveModal } from './AdaptiveModal'
 import {
   Callout,
-  ChipGroup,
   Field,
-  FieldRow,
   IconChip,
   ModalButton,
-  ModalInput,
-  ModalSelect,
-  PlanCards,
-  Section,
+  ModalTextarea,
   StatRow,
-  ToggleRow,
-} from './fields';
+} from './fields'
 
-const rub = (n: number) => `${formatInt(n)} ₽`;
+// ---------------------------------------------------------------------------
+// Shared types
+// ---------------------------------------------------------------------------
 
-function SumBox({ children }: { children: ReactNode }) {
-  return (
-    <div className="mt-3.5 rounded-xl border-[0.5px] border-border bg-surface-2 px-3.5 py-1.5">
-      {children}
-    </div>
-  );
+type MembershipPayload = {
+  id: string
+  clientId: string
+  paidAmountKopecks: number
+  paidAt?: string | null
+  planSnapshot: { name: string }
+  endDate: string
+  freezeDaysRemaining?: number | null
+  currentFreezePeriod?: {
+    id: string
+    startedAt: string
+    startedBy: string
+    endedAt: string | null
+    endedBy: string | null
+  } | null
 }
 
-function SumLine({
-  k,
-  sub,
-  v,
-  minus,
-  total,
-}: {
-  k: ReactNode;
-  sub?: string;
-  v: ReactNode;
-  minus?: boolean;
-  total?: boolean;
-}) {
-  return (
-    <div
-      className={cn(
-        'flex items-center py-1.5 text-[13px]',
-        total && 'mt-1 border-t border-border pt-3',
-      )}
-    >
-      <div className={cn('text-fg-muted', total && 'font-bold text-fg')}>
-        {k}
-        {sub ? <div className="mt-px text-[11.5px] text-fg-subtle">{sub}</div> : null}
-      </div>
-      <div
-        className={cn(
-          'ml-auto font-semibold tabular-nums',
-          minus && 'text-primary-deep dark:text-primary',
-          total && 'text-lg font-bold tracking-[-0.3px]',
-        )}
-      >
-        {v}
-      </div>
-    </div>
-  );
+type ScreenProps = {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  clientName?: string
+  membershipId?: string
+  clientId?: string
+  membership?: MembershipPayload
 }
 
-type ScreenProps = { open: boolean; onOpenChange: (open: boolean) => void };
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-const CANCEL_BTN = (onOpenChange: (o: boolean) => void) => (
-  <ModalButton variant="ghost" onClick={() => onOpenChange(false)}>
-    Отмена
-  </ModalButton>
-);
+function ErrorCallout({ error }: { error: Error | null }) {
+  if (!error) return null
+  const msg =
+    error instanceof ApiError
+      ? error.message
+      : 'Не удалось выполнить действие. Проверьте соединение и попробуйте ещё раз.'
+  return (
+    <div className="mt-3.5">
+      <Callout tone="danger" icon={TriangleAlert}>
+        {msg}
+      </Callout>
+    </div>
+  )
+}
 
-/* ───────────────────────── Оформить ───────────────────────── */
+// ---------------------------------------------------------------------------
+// CreateScreen (Sell membership)
+// ---------------------------------------------------------------------------
 
-const CREATE_TARIFFS = [
-  { value: 'm1', name: 'Месяц', price: '3 500 ₽', sub: 'безлимит' },
-  { value: 'm3', name: '3 месяца', price: '9 000 ₽', sub: '3 000 ₽/мес', tag: 'Хит' },
-  { value: 'm12', name: 'Год', price: '24 000 ₽', sub: '2 000 ₽/мес' },
-];
-const CREATE_PRICE: Record<string, number> = { m1: 3500, m3: 9000, m12: 24000 };
-const CREATE_NAME: Record<string, string> = { m1: 'Месяц', m3: '3 месяца', m12: 'Год' };
-
-const CREATE_PLAN_DEFAULT = 'm3';
-
-function CreateScreen({ open, onOpenChange }: ScreenProps) {
-  const [plan, setPlan] = useState(CREATE_PLAN_DEFAULT);
+function CreateScreen({ open, onOpenChange, clientId, clientName }: ScreenProps) {
+  const [selectedPlanId, setSelectedPlanId] = useState<string>('')
+  const [notes, setNotes] = useState('')
+  const plansQuery = usePlans({ active: true })
+  const sellMutation = useSellMembership()
 
   useEffect(() => {
     if (open) {
-      setPlan(CREATE_PLAN_DEFAULT);
+      setSelectedPlanId('')
+      setNotes('')
+      sellMutation.reset()
     }
-  }, [open]);
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const base = CREATE_PRICE[plan] ?? 0;
-  const total = Math.round(base * 0.95);
+  const plans = plansQuery.data?.items ?? []
+  const selectedPlan = plans.find((p) => p.id === selectedPlanId)
+  const isPending = sellMutation.isPending
+
+  function handleSubmit() {
+    if (!clientId || !selectedPlanId) return
+    sellMutation.mutate(
+      { clientId, planId: selectedPlanId, notes: notes.trim() || undefined },
+      {
+        onSuccess: () => {
+          onOpenChange(false)
+        },
+      },
+    )
+  }
 
   return (
     <AdaptiveModal
       open={open}
-      onOpenChange={onOpenChange}
+      onOpenChange={isPending ? () => {} : onOpenChange}
       size="wide"
       icon={<IconChip icon={CreditCard} />}
       title="Оформить абонемент"
-      description="Анна Петрова · выберите тариф и примите оплату"
+      description={clientName ? `${clientName} · выберите тариф и примите оплату` : 'Выберите тариф и примите оплату'}
       footerActions={
         <>
-          {CANCEL_BTN(onOpenChange)}
-          <ModalButton
-            onClick={() => {
-              toast.success('Абонемент оформлен', { description: `К оплате ${rub(total)}` });
-              onOpenChange(false);
-            }}
-          >
-            Создать и принять оплату
+          <ModalButton variant="ghost" disabled={isPending} onClick={() => onOpenChange(false)}>
+            Отмена
           </ModalButton>
-        </>
-      }
-    >
-      <Section>Тариф</Section>
-      <PlanCards options={CREATE_TARIFFS} value={plan} onChange={setPlan} />
-      <div className="mt-3.5">
-        <FieldRow>
-          <Field label="Дата старта">
-            <ModalInput defaultValue="30.04.2026" />
-          </Field>
-          <Field label="Способ оплаты">
-            <ModalSelect defaultValue="Карта · терминал">
-              <option>Карта · терминал</option>
-              <option>Наличные</option>
-              <option>Перевод (СБП)</option>
-              <option>Онлайн-ссылка</option>
-            </ModalSelect>
-          </Field>
-        </FieldRow>
-      </div>
-      <Field label="Промокод">
-        <ModalInput placeholder="Например, STUDENT20" />
-      </Field>
-      <SumBox>
-        <SumLine k={`Тариф «${CREATE_NAME[plan]}»`} v={rub(base)} />
-        <SumLine k="Скидка лояльности" sub="постоянный клиент" v={`−${rub(base - total)}`} minus />
-        <SumLine k="К оплате" v={rub(total)} total />
-      </SumBox>
-    </AdaptiveModal>
-  );
-}
-
-/* ───────────────────────── Редактировать ───────────────────────── */
-
-function EditScreen({ open, onOpenChange }: ScreenProps) {
-  const [autorenew, setAutorenew] = useState(true);
-
-  useEffect(() => {
-    if (open) {
-      setAutorenew(true);
-    }
-  }, [open]);
-
-  return (
-    <AdaptiveModal
-      open={open}
-      onOpenChange={onOpenChange}
-      icon={<IconChip icon={SquarePen} />}
-      title="Редактировать абонемент"
-      description="Анна Петрова · «12 месяцев» · #SUB-4471"
-      footerInfo={
-        <button
-          type="button"
-          aria-label="Удалить абонемент"
-          onClick={() => toast('Откроется удаление абонемента')}
-          className="grid size-9 place-items-center rounded-full border-[0.5px] border-border bg-surface text-fg-muted transition-colors hover:border-danger hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <CircleX className="size-[15px]" />
-        </button>
-      }
-      footerActions={
-        <>
-          {CANCEL_BTN(onOpenChange)}
           <ModalButton
-            onClick={() => {
-              toast.success('Изменения сохранены');
-              onOpenChange(false);
-            }}
+            disabled={isPending || !selectedPlanId || !clientId}
+            onClick={handleSubmit}
           >
-            <Check className="size-3.5" strokeWidth={2.6} />
-            Сохранить
+            {isPending ? (
+              <>
+                <Loader2 className="size-[18px] animate-spin" />
+                Обработка…
+              </>
+            ) : (
+              'Создать и принять оплату'
+            )}
           </ModalButton>
         </>
       }
     >
       <Field label="Тариф">
-        <ModalSelect defaultValue="«12 месяцев» · безлимит">
-          <option>«12 месяцев» · безлимит</option>
-          <option>«6 месяцев» · безлимит</option>
-          <option>«3 месяца» · 12 визитов</option>
-        </ModalSelect>
+        {plansQuery.isPending ? (
+          <div className="h-[42px] animate-pulse rounded-xl bg-surface-3" />
+        ) : (
+          <select
+            value={selectedPlanId}
+            onChange={(e) => setSelectedPlanId(e.target.value)}
+            disabled={isPending}
+            className="w-full h-[42px] cursor-pointer appearance-none rounded-xl border-[0.5px] border-border bg-surface-2 px-3.5 pr-9 text-sm text-fg outline-none transition-colors focus:border-primary focus:bg-surface focus:shadow-[0_0_0_3px_var(--primary-soft)]"
+          >
+            <option value="">Выберите тариф…</option>
+            {plans.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} · {formatRub(p.priceKopecks)}
+              </option>
+            ))}
+          </select>
+        )}
       </Field>
-      <FieldRow>
-        <Field label="Действует с">
-          <ModalInput defaultValue="14.02.2026" />
-        </Field>
-        <Field label="Действует до">
-          <ModalInput defaultValue="14.02.2027" />
-        </Field>
-      </FieldRow>
-      <FieldRow>
-        <Field label="Лимит заморозки, дней">
-          <ModalInput defaultValue="30" inputMode="numeric" />
-        </Field>
-        <Field label="Гостевые визиты">
-          <ModalInput defaultValue="2" inputMode="numeric" />
-        </Field>
-      </FieldRow>
-      <ToggleRow
-        title="Автопродление"
-        sub="Списывать с карты за 3 дня до окончания"
-        checked={autorenew}
-        onChange={setAutorenew}
-      />
-      <div className="mt-3.5">
-        <Callout tone="warn" icon={TriangleAlert}>
-          Изменение тарифа задним числом пересчитает остаток. Клиент получит уведомление.
-        </Callout>
-      </div>
+      {selectedPlan ? (
+        <StatRow
+          label="К оплате"
+          value={formatRub(selectedPlan.priceKopecks)}
+          accent
+        />
+      ) : null}
+      <Field label="Заметка" optional>
+        <ModalTextarea
+          placeholder="Необязательно"
+          value={notes}
+          disabled={isPending}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={2}
+        />
+      </Field>
+      <ErrorCallout error={sellMutation.error} />
     </AdaptiveModal>
-  );
+  )
 }
 
-/* ───────────────────────── Продлить ───────────────────────── */
+// ---------------------------------------------------------------------------
+// RenewScreen
+// ---------------------------------------------------------------------------
 
-const RENEW_OPTS = [
-  { value: '1', label: '1 месяц', price: 3500, end: '14 мар 2027' },
-  { value: '3', label: '3 месяца', price: 9000, end: '14 мая 2027' },
-  { value: '6', label: '6 месяцев', price: 16000, end: '14 авг 2027' },
-  { value: '12', label: 'Год', price: 24000, end: '14 фев 2028' },
-];
-
-const RENEW_SEL_DEFAULT = '3';
-
-function RenewScreen({ open, onOpenChange }: ScreenProps) {
-  const [sel, setSel] = useState(RENEW_SEL_DEFAULT);
-  const [keepPrice, setKeepPrice] = useState(true);
+function RenewScreen({ open, onOpenChange, clientName, membershipId, clientId, membership }: ScreenProps) {
+  const renewMutation = useRenewMembership()
 
   useEffect(() => {
-    if (open) {
-      setSel(RENEW_SEL_DEFAULT);
-      setKeepPrice(true);
-    }
-  }, [open]);
+    if (open) renewMutation.reset()
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const opt = RENEW_OPTS.find((o) => o.value === sel);
-  if (!opt) return null;
+  const isPending = renewMutation.isPending
+
+  function handleSubmit() {
+    if (!membershipId || !clientId) return
+    renewMutation.mutate(
+      { membershipId, clientId },
+      {
+        onSuccess: () => {
+          onOpenChange(false)
+        },
+      },
+    )
+  }
 
   return (
     <AdaptiveModal
       open={open}
-      onOpenChange={onOpenChange}
+      onOpenChange={isPending ? () => {} : onOpenChange}
       icon={<IconChip icon={RefreshCw} />}
       title="Продлить абонемент"
-      description="Сейчас действует до 14 фев 2027"
+      description={
+        membership
+          ? `${clientName ?? ''} · «${membership.planSnapshot.name}»`
+          : clientName ?? undefined
+      }
       footerActions={
         <>
-          {CANCEL_BTN(onOpenChange)}
-          <ModalButton
-            onClick={() => {
-              toast.success('Абонемент продлён', { description: `до ${opt.end}` });
-              onOpenChange(false);
-            }}
-          >
-            Продлить · {rub(opt.price)}
+          <ModalButton variant="ghost" disabled={isPending} onClick={() => onOpenChange(false)}>
+            Отмена
+          </ModalButton>
+          <ModalButton disabled={isPending || !membershipId} onClick={handleSubmit}>
+            {isPending ? (
+              <>
+                <Loader2 className="size-[18px] animate-spin" />
+                Обработка…
+              </>
+            ) : (
+              'Продлить'
+            )}
           </ModalButton>
         </>
       }
     >
-      <Section>Продлить на</Section>
-      <ChipGroup
-        options={RENEW_OPTS.map((o) => ({ value: o.value, label: o.label }))}
-        value={sel}
-        onChange={setSel}
-      />
-      <StatRow label="Новая дата окончания" value={opt.end} accent />
-      <ToggleRow
-        title="Сохранить цену тарифа"
-        sub="Зафиксировать текущую цену на продление"
-        checked={keepPrice}
-        onChange={setKeepPrice}
-      />
-      <SumBox>
-        <SumLine k={`Продление · ${opt.label}`} v={rub(opt.price)} />
-        <SumLine k="К оплате" v={rub(opt.price)} total />
-      </SumBox>
-    </AdaptiveModal>
-  );
-}
-
-/* ───────────────────────── Заморозить ───────────────────────── */
-
-const FREEZE_OPTS = [
-  { value: '7', label: '7 дней', end: '21 фев 2027' },
-  { value: '14', label: '14 дней', end: '28 фев 2027' },
-  { value: '30', label: '30 дней', end: '16 мар 2027' },
-];
-
-const FREEZE_SEL_DEFAULT = '14';
-
-function FreezeScreen({ open, onOpenChange }: ScreenProps) {
-  const [sel, setSel] = useState(FREEZE_SEL_DEFAULT);
-
-  useEffect(() => {
-    if (open) {
-      setSel(FREEZE_SEL_DEFAULT);
-    }
-  }, [open]);
-
-  const opt = FREEZE_OPTS.find((o) => o.value === sel);
-  if (!opt) return null;
-
-  return (
-    <AdaptiveModal
-      open={open}
-      onOpenChange={onOpenChange}
-      icon={<IconChip tone="indigo" icon={Snowflake} />}
-      title="Заморозить абонемент"
-      description="Срок продлится на дни заморозки"
-      footerActions={
-        <>
-          {CANCEL_BTN(onOpenChange)}
-          <ModalButton
-            onClick={() => {
-              toast.success('Абонемент заморожен', { description: `${opt.label} · до ${opt.end}` });
-              onOpenChange(false);
-            }}
-          >
-            Заморозить на {opt.label}
-          </ModalButton>
-        </>
-      }
-    >
-      <Section>Срок заморозки</Section>
-      <ChipGroup
-        options={FREEZE_OPTS.map((o) => ({ value: o.value, label: o.label }))}
-        value={sel}
-        onChange={setSel}
-      />
-      <StatRow label="Новая дата окончания" value={opt.end} accent />
+      {membership ? (
+        <StatRow label="Текущая дата окончания" value={formatDateRu(membership.endDate, 'd MMMM yyyy')} accent />
+      ) : null}
       <div className="mt-3.5">
-        <Field label="Причина (необязательно)">
-          <ModalSelect defaultValue="Отпуск">
-            <option>Отпуск</option>
-            <option>Болезнь / травма</option>
-            <option>Командировка</option>
-            <option>Другое</option>
-          </ModalSelect>
-        </Field>
-      </div>
-      <Callout tone="accent" icon={Info}>
-        Доступно <b>21 из 30 дней</b> в этом году. Разморозить можно досрочно в любой момент.
-      </Callout>
-    </AdaptiveModal>
-  );
-}
-
-/* ───────────────────────── Разморозить ───────────────────────── */
-
-function UnfreezeScreen({ open, onOpenChange }: ScreenProps) {
-  return (
-    <AdaptiveModal
-      open={open}
-      onOpenChange={onOpenChange}
-      icon={<IconChip icon={Sun} />}
-      title="Разморозить абонемент"
-      description="Анна Петрова · «12 месяцев»"
-      footerActions={
-        <>
-          {CANCEL_BTN(onOpenChange)}
-          <ModalButton
-            onClick={() => {
-              toast.success('Абонемент разморожен');
-              onOpenChange(false);
-            }}
-          >
-            Разморозить сейчас
-          </ModalButton>
-        </>
-      }
-    >
-      <div className="mt-1 flex items-center gap-3.5 rounded-xl bg-indigo-500/15 px-3.5 py-3.5">
-        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-indigo-500/20 text-indigo-600 dark:text-indigo-300">
-          <Snowflake className="size-[18px]" />
-        </span>
-        <div>
-          <div className="text-[13.5px] font-semibold text-indigo-600 dark:text-indigo-300">
-            Заморожен до 28 фев 2027
-          </div>
-          <div className="mt-0.5 text-xs text-indigo-600/80 dark:text-indigo-300/80">
-            Прошло 6 из 14 дней · осталось 8 дней
-          </div>
-        </div>
-      </div>
-      <StatRow label="Вернётся в лимит заморозки" value="+8 дней" accent />
-      <StatRow label="Новая дата окончания" value="22 фев 2027" />
-      <div className="mt-3.5">
-        <Callout icon={Info}>
-          Абонемент станет активным сегодня. Неиспользованные <b>8 дней</b> заморозки вернутся
-          клиенту.
+        <Callout icon={TriangleAlert} tone="warn">
+          Срок действия абонемента будет продлён на один период тарифа.
         </Callout>
       </div>
+      <ErrorCallout error={renewMutation.error} />
     </AdaptiveModal>
-  );
+  )
 }
 
-/* ───────────────────────── Отменить ───────────────────────── */
+// ---------------------------------------------------------------------------
+// FreezeScreen
+// ---------------------------------------------------------------------------
 
-const REFUND_OPTS = [
-  { value: 'none', label: 'Без возврата' },
-  { value: 'part', label: 'Частичный' },
-  { value: 'full', label: 'Полный' },
-];
-
-const REFUND_DEFAULT = 'none';
-
-function CancelScreen({ open, onOpenChange }: ScreenProps) {
-  const [refund, setRefund] = useState(REFUND_DEFAULT);
+function FreezeScreen({ open, onOpenChange, clientName, membershipId, clientId, membership }: ScreenProps) {
+  const freezeMutation = useFreezeMembership()
 
   useEffect(() => {
-    if (open) {
-      setRefund(REFUND_DEFAULT);
-    }
-  }, [open]);
+    if (open) freezeMutation.reset()
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const refundSum = refund === 'full' ? 15200 : refund === 'part' ? 9000 : 0;
+  const isPending = freezeMutation.isPending
+
+  function handleSubmit() {
+    if (!membershipId || !clientId) return
+    freezeMutation.mutate(
+      { membershipId, clientId },
+      {
+        onSuccess: () => {
+          onOpenChange(false)
+        },
+      },
+    )
+  }
 
   return (
     <AdaptiveModal
       open={open}
-      onOpenChange={onOpenChange}
-      icon={<IconChip tone="danger" icon={CircleX} />}
-      title="Отменить абонемент?"
-      description="Анна Петрова · «12 месяцев» · осталось 231 день"
+      onOpenChange={isPending ? () => {} : onOpenChange}
+      icon={<IconChip tone="indigo" icon={Snowflake} />}
+      title="Заморозить абонемент"
+      description={
+        membership
+          ? `${clientName ?? ''} · «${membership.planSnapshot.name}»`
+          : 'Срок продлится на дни заморозки'
+      }
       footerActions={
         <>
-          <ModalButton variant="ghost" onClick={() => onOpenChange(false)}>
+          <ModalButton variant="ghost" disabled={isPending} onClick={() => onOpenChange(false)}>
+            Отмена
+          </ModalButton>
+          <ModalButton disabled={isPending || !membershipId} onClick={handleSubmit}>
+            {isPending ? (
+              <>
+                <Loader2 className="size-[18px] animate-spin" />
+                Обработка…
+              </>
+            ) : (
+              'Заморозить'
+            )}
+          </ModalButton>
+        </>
+      }
+    >
+      {membership?.freezeDaysRemaining != null ? (
+        <StatRow
+          label="Доступно дней заморозки"
+          value={String(membership.freezeDaysRemaining)}
+          accent
+        />
+      ) : null}
+      <div className="mt-3.5">
+        <Callout tone="accent" icon={TriangleAlert}>
+          Срок абонемента продлится на дни заморозки. Разморозить можно досрочно в любой момент.
+        </Callout>
+      </div>
+      <ErrorCallout error={freezeMutation.error} />
+    </AdaptiveModal>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// UnfreezeScreen
+// ---------------------------------------------------------------------------
+
+function UnfreezeScreen({ open, onOpenChange, clientName, membershipId, clientId, membership }: ScreenProps) {
+  const unfreezeMutation = useUnfreezeMembership()
+
+  useEffect(() => {
+    if (open) unfreezeMutation.reset()
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const isPending = unfreezeMutation.isPending
+  const fp = membership?.currentFreezePeriod
+
+  function handleSubmit() {
+    if (!membershipId || !clientId) return
+    unfreezeMutation.mutate(
+      { membershipId, clientId },
+      {
+        onSuccess: () => {
+          onOpenChange(false)
+        },
+      },
+    )
+  }
+
+  return (
+    <AdaptiveModal
+      open={open}
+      onOpenChange={isPending ? () => {} : onOpenChange}
+      icon={<IconChip icon={Sun} />}
+      title="Разморозить абонемент"
+      description={
+        membership
+          ? `${clientName ?? ''} · «${membership.planSnapshot.name}»`
+          : clientName ?? undefined
+      }
+      footerActions={
+        <>
+          <ModalButton variant="ghost" disabled={isPending} onClick={() => onOpenChange(false)}>
+            Отмена
+          </ModalButton>
+          <ModalButton disabled={isPending || !membershipId} onClick={handleSubmit}>
+            {isPending ? (
+              <>
+                <Loader2 className="size-[18px] animate-spin" />
+                Обработка…
+              </>
+            ) : (
+              'Разморозить сейчас'
+            )}
+          </ModalButton>
+        </>
+      }
+    >
+      {fp ? (
+        <div className="mt-1 flex items-center gap-3.5 rounded-xl bg-indigo-500/15 px-3.5 py-3.5">
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-indigo-500/20 text-indigo-600 dark:text-indigo-300">
+            <Snowflake className="size-[18px]" />
+          </span>
+          <div>
+            <div className="text-[13.5px] font-semibold text-indigo-600 dark:text-indigo-300">
+              Заморожен с {formatDateRu(fp.startedAt, 'd MMMM yyyy')}
+            </div>
+            {fp.endedAt ? (
+              <div className="mt-0.5 text-xs text-indigo-600/80 dark:text-indigo-300/80">
+                До {formatDateRu(fp.endedAt, 'd MMMM yyyy')}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+      <div className="mt-3.5">
+        <Callout icon={TriangleAlert}>
+          Абонемент станет активным сегодня.
+        </Callout>
+      </div>
+      <ErrorCallout error={unfreezeMutation.error} />
+    </AdaptiveModal>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// CancelScreen (OWNER_ONLY — hidden for reception)
+// ---------------------------------------------------------------------------
+
+function CancelScreen({ open, onOpenChange, clientName, membershipId, clientId, membership }: ScreenProps) {
+  const [reason, setReason] = useState('')
+  const cancelMutation = useCancelMembership()
+
+  useEffect(() => {
+    if (open) {
+      setReason('')
+      cancelMutation.reset()
+    }
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const isPending = cancelMutation.isPending
+
+  function handleSubmit() {
+    if (!membershipId || !clientId) return
+    cancelMutation.mutate(
+      { membershipId, body: reason.trim() ? { reason: reason.trim() } : {} },
+      {
+        onSuccess: () => {
+          onOpenChange(false)
+        },
+      },
+    )
+  }
+
+  return (
+    <AdaptiveModal
+      open={open}
+      onOpenChange={isPending ? () => {} : onOpenChange}
+      icon={<IconChip tone="danger" icon={CircleX} />}
+      title="Отменить абонемент?"
+      description={
+        membership
+          ? `${clientName ?? ''} · «${membership.planSnapshot.name}»`
+          : clientName ?? undefined
+      }
+      footerActions={
+        <>
+          <ModalButton variant="ghost" disabled={isPending} onClick={() => onOpenChange(false)}>
             Не отменять
           </ModalButton>
           <ModalButton
             variant="danger"
-            onClick={() => {
-              toast.success(
-                'Абонемент отменён',
-                refundSum ? { description: `Возврат ${rub(refundSum)}` } : undefined,
-              );
-              onOpenChange(false);
-            }}
+            disabled={isPending || !membershipId}
+            onClick={handleSubmit}
           >
-            Отменить абонемент
+            {isPending ? (
+              <>
+                <Loader2 className="size-[18px] animate-spin" />
+                Обработка…
+              </>
+            ) : (
+              'Отменить абонемент'
+            )}
           </ModalButton>
         </>
       }
     >
-      <Section>Возврат средств</Section>
-      <ChipGroup options={REFUND_OPTS} value={refund} onChange={setRefund} />
-      {refundSum > 0 ? <StatRow label="Сумма к возврату" value={rub(refundSum)} /> : null}
-      <div className="mt-3.5">
-        <Field label="Причина отмены">
-          <ModalSelect defaultValue="Клиент отказался">
-            <option>Клиент отказался</option>
-            <option>Переезд</option>
-            <option>Недоволен качеством</option>
-            <option>Перевод в другой филиал</option>
-            <option>Другое</option>
-          </ModalSelect>
-        </Field>
-      </div>
+      <Field label="Причина отмены" optional>
+        <ModalTextarea
+          placeholder="Необязательно, до 500 символов"
+          maxLength={500}
+          value={reason}
+          disabled={isPending}
+          onChange={(e) => setReason(e.target.value)}
+          rows={3}
+        />
+      </Field>
       <Callout tone="danger" icon={TriangleAlert}>
         Абонемент станет неактивным сразу. Будущие записи в расписании <b>отменятся</b>. Действие
         необратимо.
       </Callout>
+      <ErrorCallout error={cancelMutation.error} />
     </AdaptiveModal>
-  );
+  )
 }
 
-/* ───────────────────────── История ───────────────────────── */
+// ---------------------------------------------------------------------------
+// RefundScreen (NET-NEW — Phase 101-03)
+// ---------------------------------------------------------------------------
+
+function RefundScreen({ open, onOpenChange, clientName, membershipId, membership }: ScreenProps) {
+  const [reason, setReason] = useState('')
+  const [touched, setTouched] = useState(false)
+  const refundMutation = useRefundMembership()
+
+  useEffect(() => {
+    if (open) {
+      setReason('')
+      setTouched(false)
+      refundMutation.reset()
+    }
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const isPending = refundMutation.isPending
+  const reasonTrimmed = reason.trim()
+
+  function handleSubmit() {
+    setTouched(true)
+    if (!reasonTrimmed || !membershipId) return
+    refundMutation.mutate(
+      { membershipId, body: { reason: reasonTrimmed } },
+      {
+        onSuccess: () => {
+          onOpenChange(false)
+        },
+      },
+    )
+  }
+
+  return (
+    <AdaptiveModal
+      open={open}
+      onOpenChange={isPending ? () => {} : onOpenChange}
+      icon={<IconChip tone="danger" icon={ReceiptText} />}
+      title="Оформить возврат"
+      description={
+        membership
+          ? `${clientName ?? ''} · «${membership.planSnapshot.name}»`
+          : clientName ?? undefined
+      }
+      footerActions={
+        <>
+          <ModalButton variant="ghost" disabled={isPending} onClick={() => onOpenChange(false)}>
+            Отмена
+          </ModalButton>
+          <ModalButton
+            variant="danger"
+            disabled={isPending || !reasonTrimmed}
+            onClick={handleSubmit}
+          >
+            {isPending ? (
+              <>
+                <Loader2 className="size-[18px] animate-spin" />
+                Обработка…
+              </>
+            ) : (
+              `Вернуть ${membership ? formatRub(membership.paidAmountKopecks) : ''}`
+            )}
+          </ModalButton>
+        </>
+      }
+    >
+      <Callout tone="warn" icon={TriangleAlert}>
+        Возврат полный и необратимый. Средства вернутся тем же способом, которым была принята
+        оплата.
+      </Callout>
+      {membership ? (
+        <>
+          <StatRow label="Оплачено" value={formatRub(membership.paidAmountKopecks)} accent />
+          {membership.paidAt ? (
+            <StatRow
+              label="Дата покупки"
+              value={formatDateRu(membership.paidAt, 'd MMMM yyyy')}
+            />
+          ) : null}
+        </>
+      ) : null}
+      <div className="mt-3.5">
+        <Field label="Причина возврата" required>
+          <textarea
+            className={cn(
+              'min-h-[80px] w-full resize-none rounded-[10px] border-[0.5px] border-border bg-surface-2 px-3 py-2.5 text-[13.5px] outline-none placeholder:text-fg-subtle',
+              'focus:border-primary focus:ring-2 focus:ring-primary/20',
+            )}
+            maxLength={200}
+            placeholder="Укажите причину возврата"
+            value={reason}
+            disabled={isPending}
+            onChange={(e) => setReason(e.target.value)}
+            onBlur={() => setTouched(true)}
+          />
+          <div className="mt-1 flex justify-between">
+            {touched && reasonTrimmed.length === 0 ? (
+              <span className="text-[12px] text-danger">Причина обязательна для возврата</span>
+            ) : (
+              <span />
+            )}
+            <span className="ml-auto text-[11.5px] tabular-nums text-fg-subtle">
+              {reason.length}/200
+            </span>
+          </div>
+        </Field>
+      </div>
+      <ErrorCallout error={refundMutation.error} />
+    </AdaptiveModal>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// HistoryScreen (read-only, unchanged)
+// ---------------------------------------------------------------------------
 
 const HISTORY: {
-  id: string;
-  icon: LucideIcon;
-  tone: 'accent' | 'warn' | 'indigo';
-  title: ReactNode;
-  meta: string;
-  amount?: string;
+  id: string
+  icon: LucideIcon
+  tone: 'accent' | 'warn' | 'indigo'
+  title: ReactNode
+  meta: string
+  amount?: string
 }[] = [
   {
     id: '1',
@@ -549,22 +674,22 @@ const HISTORY: {
     meta: '14 фев 2025 · карта •• 4417',
     amount: '24 000 ₽',
   },
-];
+]
 
 const TL_DOT: Record<'accent' | 'warn' | 'indigo', string> = {
   accent: 'border-transparent bg-primary-soft text-primary-deep dark:text-primary',
   warn: 'border-transparent bg-warning-soft text-warning-deep',
   indigo: 'border-transparent bg-indigo-500/15 text-indigo-600 dark:text-indigo-300',
-};
+}
 
-function HistoryScreen({ open, onOpenChange }: ScreenProps) {
+function HistoryScreen({ open, onOpenChange, clientName }: ScreenProps) {
   return (
     <AdaptiveModal
       open={open}
       onOpenChange={onOpenChange}
       icon={<IconChip icon={History} />}
       title="История абонемента"
-      description="Анна Петрова · #SUB-4471"
+      description={clientName ?? undefined}
       footerActions={
         <>
           <ModalButton variant="ghost" onClick={() => toast('Выгрузка в PDF')}>
@@ -576,7 +701,7 @@ function HistoryScreen({ open, onOpenChange }: ScreenProps) {
     >
       <div className="relative mt-2 pl-[30px] before:absolute before:bottom-1 before:left-[9px] before:top-1 before:w-[1.5px] before:bg-border before:content-['']">
         {HISTORY.map((it) => {
-          const Icon = it.icon;
+          const Icon = it.icon
           return (
             <div key={it.id} className="relative pb-[18px] last:pb-0.5">
               <span
@@ -595,42 +720,79 @@ function HistoryScreen({ open, onOpenChange }: ScreenProps) {
               </div>
               <div className="mt-0.5 text-[11.5px] tabular-nums text-fg-subtle">{it.meta}</div>
             </div>
-          );
+          )
         })}
       </div>
     </AdaptiveModal>
-  );
+  )
 }
 
-/* ───────────────────────── Диспетчер ───────────────────────── */
+// ---------------------------------------------------------------------------
+// Dispatcher
+// ---------------------------------------------------------------------------
 
 export function SubscriptionModal({
   open,
   onOpenChange,
   payload,
 }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  payload?: { screen?: SubscriptionScreen };
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  payload?: {
+    screen?: SubscriptionScreen
+    clientName?: string
+    membershipId?: string
+    clientId?: string
+    membership?: MembershipPayload
+  }
 }) {
-  const screen = payload?.screen ?? 'edit';
-  const props = { open, onOpenChange };
+  const session = useSession()
+  const role = session.data?.role ?? 'reception'
+  const screen = payload?.screen ?? 'edit'
+  const props: ScreenProps = {
+    open,
+    onOpenChange,
+    clientName: payload?.clientName,
+    membershipId: payload?.membershipId,
+    clientId: payload?.clientId,
+    membership: payload?.membership,
+  }
 
   switch (screen) {
     case 'create':
-      return <CreateScreen {...props} />;
+      return <CreateScreen {...props} />
     case 'renew':
-      return <RenewScreen {...props} />;
+      return <RenewScreen {...props} />
     case 'freeze':
-      return <FreezeScreen {...props} />;
+      return <FreezeScreen {...props} />
     case 'unfreeze':
-      return <UnfreezeScreen {...props} />;
+      return <UnfreezeScreen {...props} />
     case 'cancel':
-      return <CancelScreen {...props} />;
+      // OWNER_ONLY: hide for reception (can() gating per T-101-09-CANCELPRIV)
+      if (!can(role, 'cancel', 'memberships')) return null
+      return <CancelScreen {...props} />
+    case 'refund':
+      return <RefundScreen {...props} />
     case 'history':
-      return <HistoryScreen {...props} />;
+      return <HistoryScreen {...props} />
     case 'edit':
     default:
-      return <EditScreen {...props} />;
+      // edit screen: show placeholder (no backend edit endpoint in scope for Phase 101)
+      return (
+        <AdaptiveModal
+          open={open}
+          onOpenChange={onOpenChange}
+          icon={<IconChip icon={CreditCard} />}
+          title="Абонемент"
+          description={payload?.clientName ?? undefined}
+          footerActions={
+            <ModalButton onClick={() => onOpenChange(false)}>Закрыть</ModalButton>
+          }
+        >
+          <div className="py-4 text-center text-[13px] text-fg-muted">
+            Редактирование абонемента доступно в следующей версии.
+          </div>
+        </AdaptiveModal>
+      )
   }
 }

@@ -114,4 +114,6 @@ export {
   Command,
   CornerDownLeft,
   Loader2,
+  // Возврат средств (Phase 101-03)
+  ReceiptText,
 } from 'lucide-react';

@@ -30,11 +30,14 @@ export function Field({
   label,
   hint,
   optional,
+  required,
   children,
 }: {
   label?: string;
   hint?: string;
   optional?: boolean;
+  /** Показывает красную звёздочку рядом с подписью (обязательное поле). */
+  required?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -42,6 +45,7 @@ export function Field({
       {label ? (
         <label className="mb-1.5 block text-xs font-semibold tracking-[-0.05px] text-fg-muted">
           {label}
+          {required ? <span className="ml-0.5 text-danger">*</span> : null}
           {optional ? <span className="font-medium text-fg-subtle"> — необязательно</span> : null}
         </label>
       ) : null}

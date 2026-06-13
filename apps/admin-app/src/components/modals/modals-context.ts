@@ -38,7 +38,8 @@ export type SubscriptionScreen =
   | 'freeze'
   | 'unfreeze'
   | 'cancel'
-  | 'history';
+  | 'history'
+  | 'refund';
 
 /** Экран семейства модалок тренировки/сессии (Session.html). */
 export type SessionScreen =
@@ -62,8 +63,33 @@ export interface OpenOptions {
   editClient?: { clientId?: string };
   /** Без trainerId — создание; с trainerId — редактирование. */
   trainerForm?: { trainerId?: string };
-  /** Экран семейства абонемента + имя клиента для подзаголовка. */
-  subscription?: { screen?: SubscriptionScreen; clientName?: string };
+  /**
+   * Экран семейства абонемента.
+   * membershipId + clientId — обязательны для lifecycle-действий (freeze/unfreeze/renew/cancel/refund).
+   * membership — полный объект для RefundScreen (paidAmountKopecks, paidAt, planSnapshot).
+   */
+  subscription?: {
+    screen?: SubscriptionScreen
+    clientName?: string
+    membershipId?: string
+    clientId?: string
+    membership?: {
+      id: string
+      clientId: string
+      paidAmountKopecks: number
+      paidAt?: string | null
+      planSnapshot: { name: string }
+      endDate: string
+      freezeDaysRemaining?: number | null
+      currentFreezePeriod?: {
+        id: string
+        startedAt: string
+        startedBy: string
+        endedAt: string | null
+        endedBy: string | null
+      } | null
+    }
+  };
   /** Экран семейства тренировки/сессии. */
   session?: { screen?: SessionScreen };
   /** Кассовая операция; onDone — пост-действие (закрыть/открыть смену переключает состояние страницы). */
