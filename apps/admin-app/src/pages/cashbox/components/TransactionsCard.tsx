@@ -1,213 +1,173 @@
-import { useMemo, useState } from 'react';
-import type { LucideIcon } from 'lucide-react';
-import { toast } from 'sonner';
+/**
+ * TransactionsCard — cash ledger with refund rows and daily-total separators (Phase 103-03).
+ *
+ * Renders real PaymentData items from GET /api/v1/payments.
+ *
+ * Refund rows (refundOf != null):
+ *   - Icon chip: bg-danger-soft text-danger with Undo2 icon
+ *   - Title: «Возврат»
+ *   - Amount: text-danger with «−» (U+2212) prefix, READ-ONLY
+ *
+ * Non-refund rows:
+ *   - Icon chip: based on subjectKind
+ *   - Amount: text-fg with «+» prefix
+ *
+ * REMOVED: «Оформить возврат» dropdown item — there is no /payments refund
+ * endpoint. Refund rows are READ-ONLY display only. The refund action lives on
+ * membership/PT detail (P101). This prevents a fake/no-op refund control
+ * per T-103-03-FAKEREFUND.
+ *
+ * Daily-total separators are injected between date groups using DailyTotal[].
+ * Negative daily totals shown in text-danger.
+ */
 import { cn } from '@/lib/cn';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Card, CardHeader } from '@/components/layout/Card';
-import { formatInt } from '@/lib/format';
-import {
-  ArrowDown,
-  ArrowRightLeft,
-  ChevronRight,
-  Coffee,
-  CreditCard,
-  MoreHorizontal,
-  Undo2,
-  User,
-  Wallet,
-} from '@/components/icons';
-import type {
-  CashboxData,
-  Transaction,
-  TxCategory,
-  TxFilter,
-  TxMethod,
-} from '@/features/cashbox/types';
+import { formatRub, formatWeekdayLongRu } from '@/lib/format';
+import { CreditCard, Undo2, User } from '@/components/icons';
+import type { PaymentData } from '@/features/payments/schemas';
+import type { DailyTotal } from '@/features/payments/schemas';
 
-const TX_ICON: Record<TxCategory, { Icon: LucideIcon; cls: string }> = {
-  membership: { Icon: CreditCard, cls: 'bg-primary-soft text-primary-deep dark:text-primary' },
-  bar: { Icon: Coffee, cls: 'bg-warning-soft text-warning-deep' },
-  pt: { Icon: User, cls: 'bg-surface-3 text-fg-muted' },
-  refund: { Icon: Undo2, cls: 'bg-danger-soft text-danger' },
-  cashin: { Icon: ArrowDown, cls: 'bg-surface-3 text-fg-subtle' },
-};
+// ---------------------------------------------------------------------------
+// Icon chip mapping by subjectKind
+// ---------------------------------------------------------------------------
 
-const METHOD_ICON: Record<TxMethod, LucideIcon> = {
-  card: CreditCard,
-  cash: Wallet,
-  transfer: ArrowRightLeft,
-  refund: Undo2,
-};
-
-function Chip({
-  active,
-  label,
-  count,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  count: number;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'inline-flex h-7 items-center gap-1.5 rounded-full px-3 text-[12px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        active
-          ? 'bg-fg text-bg dark:bg-primary dark:text-[#06120c]'
-          : 'border-[0.5px] border-border text-fg-muted hover:border-border-strong hover:text-fg',
-      )}
-    >
-      {label}
-      <span
-        className={cn(
-          'font-mono text-[11px] tabular-nums',
-          active ? 'opacity-70' : 'text-fg-subtle',
-        )}
-      >
-        {count}
-      </span>
-    </button>
-  );
+function getChipClass(subjectKind: string, isRefund: boolean): string {
+  if (isRefund) return 'bg-danger-soft text-danger';
+  if (subjectKind === 'membership') return 'bg-primary-soft text-primary-deep dark:text-primary';
+  // pt_package or unknown
+  return 'bg-surface-3 text-fg-muted';
 }
 
-function TxRow({ tx, first }: { tx: Transaction; first: boolean }) {
-  const { Icon, cls } = TX_ICON[tx.category];
-  const MethodIcon = METHOD_ICON[tx.method];
-  const refund = tx.amount < 0;
+function getIcon(subjectKind: string, isRefund: boolean) {
+  if (isRefund) return Undo2;
+  if (subjectKind === 'membership') return CreditCard;
+  return User;
+}
+
+function getTitle(subjectKind: string, isRefund: boolean): string {
+  if (isRefund) return 'Возврат';
+  if (subjectKind === 'membership') return 'Абонемент';
+  return 'PT-пакет';
+}
+
+// ---------------------------------------------------------------------------
+// Payment row
+// ---------------------------------------------------------------------------
+
+function PaymentRow({ payment, first }: { payment: PaymentData; first: boolean }) {
+  const isRefund = payment.refundOf != null;
+  const Icon = getIcon(payment.subjectKind, isRefund);
+  const chipClass = getChipClass(payment.subjectKind, isRefund);
+  const title = getTitle(payment.subjectKind, isRefund);
+  const absAmount = Math.abs(payment.amountKopecks);
+
   return (
     <div
       className={cn(
-        'grid grid-cols-[52px_32px_minmax(0,1fr)_120px_auto_28px] items-center gap-3.5 px-5 py-3 transition-colors hover:bg-surface-2',
-        'max-sm:grid-cols-[44px_28px_minmax(0,1fr)_auto]',
+        'grid grid-cols-[36px_minmax(0,1fr)_auto] items-center gap-3 px-5 py-3 transition-colors hover:bg-surface-2',
         !first && 'border-t-[0.5px] border-border',
       )}
     >
-      <div className="font-mono text-[12.5px] tabular-nums leading-tight">
-        {tx.time}
-        <div className="text-[11px] text-fg-subtle">{tx.ago}</div>
-      </div>
-      <span className={cn('grid size-8 place-items-center rounded-[10px]', cls)}>
+      <span className={cn('grid size-9 place-items-center rounded-[10px]', chipClass)}>
         <Icon className="size-4" />
       </span>
       <div className="min-w-0">
-        <div className="truncate text-[13.5px] font-semibold">{tx.title}</div>
+        <div className="truncate text-[13.5px] font-semibold">{title}</div>
         <div className="truncate text-[11.5px] text-fg-subtle">
-          <b className="font-semibold text-fg-muted">{tx.client}</b>
-          {tx.note ? <> · {tx.note}</> : null}
+          {payment.method === 'cash' ? 'Наличные' : 'Онлайн'} · {payment.receivedAt.slice(11, 16)}
         </div>
       </div>
-      <div className="flex items-center gap-1.5 text-[11.5px] font-semibold text-fg-muted max-sm:hidden">
-        <MethodIcon
-          className={cn(
-            'size-3.5 shrink-0',
-            tx.method === 'cash' && 'text-primary-deep dark:text-primary',
-          )}
-        />
-        <span className="truncate">
-          {tx.methodLabel}
-          {tx.methodTail ? <small className="ml-0.5 text-fg-subtle">{tx.methodTail}</small> : null}
-        </span>
+      <div
+        className={cn(
+          'whitespace-nowrap text-right text-[14.5px] font-bold tabular-nums',
+          isRefund ? 'text-danger' : 'text-fg',
+        )}
+      >
+        {/* U+2212 minus sign for refunds, + for payments */}
+        {isRefund ? '−' : '+'}
+        {formatRub(absAmount / 100)}
       </div>
-      <div className="whitespace-nowrap text-right">
-        <div
-          className={cn(
-            'text-[14.5px] font-bold tabular-nums',
-            refund ? 'text-danger' : tx.muted ? 'text-fg-subtle' : 'text-fg',
-          )}
-        >
-          {refund ? '−' : '+'}
-          {formatInt(Math.abs(tx.amount))}
-        </div>
-        <div className="text-[11px] text-fg-subtle">{tx.doc}</div>
-      </div>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            aria-label="Действия с операцией"
-            className="grid size-7 place-items-center rounded-lg text-fg-subtle transition-colors hover:bg-surface-3 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-sm:hidden"
-          >
-            <MoreHorizontal className="size-4" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="min-w-[180px]">
-          <DropdownMenuItem onSelect={() => toast.success('Чек распечатан')}>
-            Печать чека
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => toast('Детали операции')}>
-            Детали операции
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            className="text-danger focus:text-danger"
-            onSelect={() => toast.success('Возврат оформлен')}
-          >
-            Оформить возврат
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
     </div>
   );
 }
 
-/** Лента операций смены с фильтр-чипами и итогом. */
-export function TransactionsCard({ data }: { data: CashboxData }) {
-  const [filter, setFilter] = useState<TxFilter>('all');
-  const visible = useMemo(
-    () =>
-      filter === 'all'
-        ? data.transactions
-        : data.transactions.filter((t) => (t.category as string) === filter),
-    [data.transactions, filter],
+// ---------------------------------------------------------------------------
+// Daily total separator row
+// ---------------------------------------------------------------------------
+
+function DailyTotalRow({ total }: { total: DailyTotal }) {
+  const negative = total.totalKopecks < 0;
+  return (
+    <div className="flex items-center justify-between bg-surface-2 px-5 py-2 text-[11.5px]">
+      <span className="font-semibold text-fg-muted capitalize">
+        {formatWeekdayLongRu(total.date)}
+      </span>
+      <span
+        className={cn(
+          'font-bold tabular-nums',
+          negative ? 'text-danger' : 'text-fg-muted',
+        )}
+      >
+        Итого: {negative ? '−' : '+'}{formatRub(Math.abs(total.totalKopecks) / 100)}
+      </span>
+    </div>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Main card
+// ---------------------------------------------------------------------------
+
+/**
+ * Cash ledger card. Renders payments grouped by date with daily-total separator rows.
+ * Refund rows are READ-ONLY — no action button (T-103-03-FAKEREFUND).
+ */
+export function TransactionsCard({
+  items,
+  dailyTotals,
+}: {
+  items: PaymentData[];
+  dailyTotals: DailyTotal[];
+}) {
+  // Build a map of date → DailyTotal for O(1) lookup during render
+  const totalsMap = new Map(dailyTotals.map((t) => [t.date, t]));
+
+  // Group items by date (ISO prefix) to inject separators
+  const seenDates = new Set<string>();
+  const rows: Array<{ type: 'total'; total: DailyTotal } | { type: 'payment'; payment: PaymentData; firstOfDate: boolean }> = [];
+
+  for (const payment of items) {
+    const date = payment.receivedAt.slice(0, 10);
+    const isFirst = !seenDates.has(date);
+    if (isFirst) {
+      seenDates.add(date);
+      const total = totalsMap.get(date);
+      if (total) {
+        rows.push({ type: 'total', total });
+      }
+    }
+    rows.push({ type: 'payment', payment, firstOfDate: isFirst });
+  }
 
   return (
     <Card as="section" className="flex min-w-0 flex-col">
       <CardHeader
-        title="Операции за смену"
-        subtitle={`${data.txCount} операций · обновлено только что`}
+        title="Операции"
+        subtitle={`${items.length} операций в периоде`}
       />
-
-      <div className="flex flex-wrap gap-2 px-5 pb-3">
-        {data.filters.map((c) => (
-          <Chip
-            key={c.filter}
-            active={filter === c.filter}
-            label={c.label}
-            count={c.count}
-            onClick={() => setFilter(c.filter)}
-          />
-        ))}
-      </div>
-
       <div>
-        {visible.map((tx, i) => (
-          <TxRow key={tx.id} tx={tx} first={i === 0} />
-        ))}
-      </div>
-
-      <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t-[0.5px] border-border px-5 py-3.5 text-[12.5px] text-fg-muted">
-        <span>
-          Итого: <b className="font-bold tabular-nums text-fg">+{formatInt(data.txTotal)} ₽</b> по{' '}
-          {data.txCount} операциям
-        </span>
-        <button
-          type="button"
-          className="inline-flex items-center gap-1 rounded-md font-semibold text-fg-muted transition-colors hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          Показать все
-          <ChevronRight className="size-3" strokeWidth={2.4} />
-        </button>
+        {rows.map((row, i) => {
+          if (row.type === 'total') {
+            return <DailyTotalRow key={`total-${row.total.date}`} total={row.total} />;
+          }
+          return (
+            <PaymentRow
+              key={row.payment.id}
+              payment={row.payment}
+              first={i === 0}
+            />
+          );
+        })}
       </div>
     </Card>
   );
