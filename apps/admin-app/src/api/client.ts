@@ -80,7 +80,7 @@ export function staffRefreshOnce(): Promise<Response> {
   return inFlightStaffRefresh
 }
 
-async function parseErrorBody(
+export async function parseErrorBody(
   res: Response,
 ): Promise<{ code: string; message: string; fields?: Record<string, unknown> }> {
   try {
@@ -119,7 +119,7 @@ function interpolatePath(path: string, params?: Record<string, string | number>)
   })
 }
 
-function appendQuery(url: string, query?: Record<string, string | number | boolean>): string {
+export function appendQuery(url: string, query?: Record<string, string | number | boolean>): string {
   if (!query) return url
   const sp = new URLSearchParams()
   for (const [k, v] of Object.entries(query)) {
