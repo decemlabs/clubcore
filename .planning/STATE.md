@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Production Admin — Backend Wiring
-status: planning
-stopped_at: Phase 100 Plan 04 complete
-last_updated: "2026-06-13T09:21:00Z"
-last_activity: 2026-06-13 — Phase 100 complete (4/4 plans: FND-01..04 + AUTH-01..03 delivered)
+status: completed
+stopped_at: Phase 100 UI-SPEC approved
+last_updated: "2026-06-13T11:30:28.894Z"
+last_activity: "2026-06-13 — Phase 100 complete: workspace absorption, API client + CSRF + 401-redirect, auth hooks (useSession/useLogin/useLogout/password-reset), RequireAuth route guard, RBAC port (41 OWNER_ONLY, byte-parity), ComingSoon hide-for-future, session-driven sidebar"
 progress:
   total_phases: 11
   completed_phases: 1
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 8
+  completed_plans: 5
   percent: 9
 ---
 
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 100 of 106 (Foundation + Authentication) — COMPLETE
-Plan: 4/4 complete
-Status: Phase 100 done; ready for Phase 101 (Clients + Memberships)
-Last activity: 2026-06-13 — Phase 100 complete: workspace absorption, API client + CSRF + 401-redirect, auth hooks (useSession/useLogin/useLogout/password-reset), RequireAuth route guard, RBAC port (41 OWNER_ONLY, byte-parity), ComingSoon hide-for-future, session-driven sidebar
+Phase: 101 of 106 (Clients + Memberships) — In Progress
+Plan: 1/4 complete
+Status: Plan 01 done (clients domain flip); ready for Plan 02 (membership plans)
+Last activity: 2026-06-13 — Phase 101 Plan 01 complete: clients domain mock→http (schemas/api/query + ClientsPage server-pagination + profile head + modals wired; CLI-01, CLI-03 done)
 
-Progress: [██████████] 100%
+Progress: [██████░░░░] 63%
 
 ## v3.0 Roadmap Summary
 
@@ -60,7 +60,13 @@ Progress: [██████████] 100%
 
 ### Pending Todos
 
-- Phase 100 complete. Start Phase 101: `/gsd:plan-phase 101`
+- Phase 101 Plan 01 complete. Continue Phase 101: Plan 02 (membership plans).
+
+### Phase 101 Decisions
+
+- **D-101-01-CLIENTPATH**: API path param is `client_id` (not `id`): `/api/v1/clients/{client_id}` per schema.d.ts
+- **D-101-01-NOHOOKFORM**: `@hookform/resolvers` not installed in admin-app (only admin-web) — manual `ClientCreateSchema.safeParse()` used for modal validation
+- **D-101-01-CLIENTFILTERTABS**: `ClientFilterTabs.tsx` kept on disk for type compatibility; NOT rendered in new ClientsPage
 
 ### Phase 100 Decisions
 
@@ -89,6 +95,6 @@ Carrying forward from v2.6 close (2026-06-08):
 
 ## Session Continuity
 
-Last session: 2026-06-13T09:21:51.487Z
-Stopped at: Phase 100 UI-SPEC approved
-Resume: `/gsd:plan-phase 101` to begin Phase 101 (Clients + Memberships).
+Last session: 2026-06-13T11:30:00Z
+Stopped at: Phase 101 Plan 01 complete (CLI-01, CLI-03 delivered)
+Resume: Continue Phase 101 — Plan 02 (membership plans CRUD).

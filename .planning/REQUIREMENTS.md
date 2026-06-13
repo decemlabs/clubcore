@@ -28,9 +28,9 @@
 
 ### CLI — Clients
 
-- [ ] **CLI-01**: the Clients list renders real `GET /api/v1/clients` with server-side search + the pagination envelope `{items,total,page,pageSize}`, including loading / error / empty states.
+- [x] **CLI-01**: the Clients list renders real `GET /api/v1/clients` with server-side search + the pagination envelope `{items,total,page,pageSize}`, including loading / error / empty states.
 - [ ] **CLI-02**: the Client detail screen renders real `GET /api/v1/clients/{id}` plus that client's memberships / visits / payments.
-- [ ] **CLI-03**: create + edit client persist via `POST` / `PATCH /api/v1/clients` (Zod-validated form, money in kopecks); soft-delete via `DELETE`.
+- [x] **CLI-03**: create + edit client persist via `POST` / `PATCH /api/v1/clients` (Zod-validated form, money in kopecks); soft-delete via `DELETE`.
 
 ### MEM — Memberships & Plans
 
@@ -126,9 +126,9 @@ Which phases cover which requirements.
 | AUTH-01 | Phase 100 | Complete |
 | AUTH-02 | Phase 100 | Complete |
 | AUTH-03 | Phase 100 | Complete |
-| CLI-01 | Phase 101 | Pending |
+| CLI-01 | Phase 101 | Complete |
 | CLI-02 | Phase 101 | Pending |
-| CLI-03 | Phase 101 | Pending |
+| CLI-03 | Phase 101 | Complete |
 | MEM-01 | Phase 101 | Pending |
 | MEM-02 | Phase 101 | Pending |
 | MEM-03 | Phase 101 | Pending |
