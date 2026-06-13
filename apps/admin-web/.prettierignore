@@ -1,9 +1,0 @@
-dist
-node_modules
-coverage
-pnpm-lock.yaml
-src/routeTree.gen.ts
-src/__fixtures/**
-.planning
-.claude
-.omc

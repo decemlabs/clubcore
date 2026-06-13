@@ -1,7 +1,0 @@
-export { AppShell } from './AppShell'
-export { Header } from './Header'
-export { AppSidebar } from './Sidebar'
-export { RoleSwitcher } from './RoleSwitcher'
-export { ThemeSwitcher } from './ThemeSwitcher'
-export { NotificationsBell } from './NotificationsBell'
-export { ProfileMenu } from './ProfileMenu'
