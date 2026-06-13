@@ -33,6 +33,10 @@ export async function downloadCsv(
   const a = document.createElement('a');
   a.href = href;
   a.download = filename;
+  // WR-01 fix: append to DOM before click for Firefox compatibility, then remove.
+  a.style.display = 'none';
+  document.body.appendChild(a);
   a.click();
+  document.body.removeChild(a);
   URL.revokeObjectURL(href);
 }
