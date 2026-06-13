@@ -1,15 +1,24 @@
+/**
+ * AuditPage — Phase 104-01 stub.
+ *
+ * Wave 1 wired the domain layer (useAuditLog, AuditLogResponseSchema).
+ * Wave 2 (104-02) will replace this stub with the full wired implementation:
+ * filters, pagination, CSV download, RBAC Lock-EmptyState for reception.
+ *
+ * TODO Phase 104-02: wire useAuditLog(filter, role) + AuditRow + CSV export.
+ */
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { useAuditLog } from '@/features/audit/api';
 import { PageLoading, PageError } from '@/components/feedback/PageState';
-import type { AuditEvent } from '@/features/audit/types';
+import type { AuditEvent as LegacyAuditEvent } from '@/features/audit/types';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card } from '@/components/layout/Card';
 import { SearchInput, FilterSelect } from '@/components/data/Toolbar';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { Download, User, SlidersHorizontal, Calendar, Search } from '@/components/icons';
-import { AuditRow } from './components/parts';
 import { AuditDetailModal } from './components/AuditDetailModal';
+import { useSession } from '@/features/auth/api';
 
 const EMPLOYEES = [
   { value: 'all', label: 'Все сотрудники' },
@@ -31,35 +40,34 @@ const RANGES = [
 ];
 
 export function AuditPage() {
-  const { data, isPending, isError, refetch } = useAuditLog();
+  const { data: session } = useSession();
+  const role = session?.role ?? 'reception';
+
+  // Wave 2 will add full filter state + pagination
+  const { data, isPending, isError, refetch } = useAuditLog({}, role);
+
   const [search, setSearch] = useState('');
   const [employee, setEmployee] = useState('all');
   const [action, setAction] = useState('all');
   const [range, setRange] = useState('7d');
-  const [selected, setSelected] = useState<{ event: AuditEvent; date: string } | null>(null);
+  const [selected, setSelected] = useState<{ event: LegacyAuditEvent; date: string } | null>(null);
   const [open, setOpen] = useState(false);
 
   if (isPending) return <PageLoading />;
   if (isError || !data) return <PageError onRetry={() => void refetch()} />;
 
-  const q = search.trim().toLowerCase();
-  const groups = data.groups
-    .map((g) => ({
-      ...g,
-      events: g.events.filter((e) => {
-        if (employee !== 'all' && e.actor.name !== employee) return false;
-        if (action !== 'all' && e.action !== action) return false;
-        if (range === 'today' && !g.label.startsWith('Сегодня')) return false;
-        if (q && !`${e.lead}${e.obj}${e.tail} ${e.object}`.toLowerCase().includes(q)) return false;
-        return true;
-      }),
-    }))
-    .filter((g) => g.events.length > 0);
+  // Wave 2 will render real data.items with AuditRow.
+  // For now: show an EmptyState so the page compiles and routes work.
+  void search;
+  void employee;
+  void action;
+  void range;
 
-  const openEvent = (event: AuditEvent, date: string) => {
-    setSelected({ event, date });
+  const openEvent = (_event: LegacyAuditEvent, _date: string) => {
+    setSelected({ event: _event, date: _date });
     setOpen(true);
   };
+  void openEvent;
 
   return (
     <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-5 px-4 pb-10 pt-5 sm:px-6 sm:pb-12 sm:pt-6 lg:px-7">
@@ -110,25 +118,12 @@ export function AuditPage() {
           />
         </div>
 
-        {/* Log */}
-        {groups.length === 0 ? (
-          <EmptyState
-            icon={Search}
-            title="Записей не найдено"
-            message="Измените фильтры или поисковый запрос."
-          />
-        ) : (
-          groups.map((g) => (
-            <div key={g.label}>
-              <div className="px-[18px] pb-1 pt-3.5 text-[11px] font-bold uppercase tracking-[0.5px] text-fg-subtle">
-                {g.label}
-              </div>
-              {g.events.map((e) => (
-                <AuditRow key={e.id} event={e} onClick={() => openEvent(e, g.date)} />
-              ))}
-            </div>
-          ))
-        )}
+        {/* Wave 2 TODO: render data.items via AuditRow components */}
+        <EmptyState
+          icon={Search}
+          title="Записей не найдено"
+          message="Фильтрация и список будут доступны в следующей версии."
+        />
       </Card>
 
       <AuditDetailModal
