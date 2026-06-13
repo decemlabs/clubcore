@@ -53,7 +53,7 @@ export function ClientsPage() {
     gender: gender !== 'all' ? (gender as 'male' | 'female') : undefined,
     hasTelegram: telegram === 'yes' ? true : telegram === 'no' ? false : undefined,
     tag: tag !== 'all' ? tag : undefined,
-    sort: sort as SortPreset,
+    sort,
     page,
     pageSize: PAGE_SIZE,
   };
