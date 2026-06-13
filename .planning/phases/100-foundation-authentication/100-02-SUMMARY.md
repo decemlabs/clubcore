@@ -144,6 +144,19 @@ The following STRIDE mitigations from the plan's threat model are confirmed impl
 
 No new security-relevant surface introduced beyond what the plan's threat model covers.
 
+## Self-Check: PASSED
+
+All files verified present:
+- `apps/admin-app/src/api/client.ts` — found
+- `apps/admin-app/src/lib/authBus.ts` — found
+- `apps/admin-app/src/api/query-client.ts` — found
+- `apps/admin-app/src/api/client.test.ts` — found
+- `.planning/phases/100-foundation-authentication/100-02-SUMMARY.md` — found
+
+All commits verified:
+- `d6018689` — Task 1 (transport)
+- `16606594` — Task 2 (authBus + QueryClient + tests)
+
 ## Next Phase Readiness
 
 - `staffRequest` is available for plan 100-03 to wire `useLogin`, `useLogout`, `useSession`
