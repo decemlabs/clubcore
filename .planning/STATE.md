@@ -111,6 +111,7 @@ v3.0 in-progress deferrals:
 | feature | P101 WR-01 — Plans create/edit form modals (list/gating/delete/API-hooks done; forms are toast stubs) | deferred → follow-up (user-accepted 2026-06-13) |
 | human-verify | P100 — login round-trip + 401 redirect | ✅ validated live 2026-06-13 |
 | human-verify | P101 — 9 live-backend UAT items (CRUD round-trips, sell/freeze/refund, role gating) | deferred → batch-validate at Phase 106 gate |
+| human-verify | P102 — 5 live items (time-off force-cascade, booking-race calendar refresh, 24h cancel window, payroll kopecks round-trip, reception zero-payroll-calls) | deferred → batch-validate at Phase 106 gate |
 
 ## Session Continuity
 
