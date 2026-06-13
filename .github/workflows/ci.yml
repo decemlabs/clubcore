@@ -135,14 +135,15 @@ jobs:
       # D-72-05: exclude @clubcore/client-pwa from recursive steps — it has a
       # dedicated parallel `client-pwa` job. Running it here too would double-run
       # lint/typecheck/test across two CI jobs for every push.
+      # Also exclude @clubcore/admin-app — it has its own dedicated parallel job.
       - name: Lint (workspaces)
-        run: pnpm -r --filter '!@clubcore/client-pwa' lint
+        run: pnpm -r --filter '!@clubcore/client-pwa' --filter '!@clubcore/admin-app' lint
 
       - name: Typecheck (workspaces)
-        run: pnpm -r --filter '!@clubcore/client-pwa' typecheck
+        run: pnpm -r --filter '!@clubcore/client-pwa' --filter '!@clubcore/admin-app' typecheck
 
       - name: Test (workspaces)
-        run: pnpm -r --filter '!@clubcore/client-pwa' --filter '!@clubcore/api-client' test
+        run: pnpm -r --filter '!@clubcore/client-pwa' --filter '!@clubcore/api-client' --filter '!@clubcore/admin-app' test
 
       - name: Test @clubcore/api-client
         run: pnpm -F @clubcore/api-client test
@@ -198,6 +199,42 @@ jobs:
 
       - name: Build
         run: pnpm -F @clubcore/client-pwa build
+
+  # Dedicated parallel admin-app gate — runs typecheck, lint, test, AND build
+  # alongside backend / frontend / client-pwa / redocly-lint (no needs:).
+  # Excluded from the recursive `pnpm -r` frontend steps to prevent double-running.
+  admin-app:
+    name: Admin App (typecheck + lint + test + build)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: pnpm install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm -F @clubcore/admin-app typecheck
+
+      - name: Lint
+        run: pnpm -F @clubcore/admin-app lint
+
+      - name: Test
+        run: pnpm -F @clubcore/admin-app test
+
+      - name: Build
+        run: pnpm -F @clubcore/admin-app build
 
   # FRZ-07 / D-64-REDOCLY-CI-PLACEMENT — 7th parallel CI gate.
   # Validates apps/backend/openapi.json against the `recommended` Redocly ruleset

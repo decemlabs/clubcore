@@ -35,14 +35,14 @@ export default tseslint.config(
         {
           zones: [
             {
+              // Pages, layouts, and components must not import api/client.ts directly.
+              // Only the per-domain api.ts swap-seam files (features/*/api.ts) are allowed.
               target: [
-                './src/features/**',
                 './src/pages/**',
                 './src/layouts/**',
                 './src/components/**',
               ],
               from: ['./src/api/client.ts'],
-              except: ['./src/features/auth/**'],
               message:
                 'Use TanStack Query hooks from features/*/api.ts, not staffRequest directly.',
             },
