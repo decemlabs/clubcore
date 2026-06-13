@@ -1,6 +1,6 @@
-import { useMemo, useState, type FormEvent } from 'react'
-import { toast } from 'sonner'
-import { Mail, Lock, CheckCircle2, Check } from '@/components/icons'
+import { useMemo, useState, type FormEvent } from 'react';
+import { toast } from 'sonner';
+import { Mail, Lock, CheckCircle2, Check } from '@/components/icons';
 import {
   ScreenIcon,
   BackLink,
@@ -12,51 +12,48 @@ import {
   AuthFooter,
   AuthLink,
   SentToPill,
-} from './auth-ui'
-import { cn } from '@/lib/cn'
-import { usePasswordResetRequest, usePasswordResetConfirm, ApiError } from '@/features/auth/api'
-import { PasswordResetRequestSchema } from '@/features/auth/schemas'
+} from './auth-ui';
+import { cn } from '@/lib/cn';
+import { usePasswordResetRequest, usePasswordResetConfirm, ApiError } from '@/features/auth/api';
+import { PasswordResetRequestSchema } from '@/features/auth/schemas';
 
 /* ─── Забыли пароль ─── */
 export function ForgotScreen({
   onBack,
   onSent,
 }: {
-  onBack: () => void
-  onSent: (email: string) => void
+  onBack: () => void;
+  onSent: (email: string) => void;
 }) {
-  const [email, setEmail] = useState('')
-  const [error, setError] = useState<string>()
-  const { mutate: requestReset, isPending } = usePasswordResetRequest()
+  const [email, setEmail] = useState('');
+  const [error, setError] = useState<string>();
+  const { mutate: requestReset, isPending } = usePasswordResetRequest();
 
   const submit = (event: FormEvent) => {
-    event.preventDefault()
+    event.preventDefault();
 
     // Client-side email validation via schema (backend accepts any string — anti-oracle).
-    const parsed = PasswordResetRequestSchema.safeParse({ email })
+    const parsed = PasswordResetRequestSchema.safeParse({ email });
     if (!parsed.success) {
-      setError(parsed.error.flatten().fieldErrors.email?.[0] ?? 'Введите корректный адрес почты')
-      return
+      setError(parsed.error.flatten().fieldErrors.email?.[0] ?? 'Введите корректный адрес почты');
+      return;
     }
-    setError(undefined)
+    setError(undefined);
 
-    requestReset(
-      parsed.data,
-      {
-        onSuccess: () => {
-          // Anti-oracle: always proceed to sent screen regardless of backend result.
-          onSent(email)
-        },
-        onError: () => {
-          // Backend always returns 202 for this endpoint (anti-oracle).
-          // Only genuine 5xx / network errors reach here.
-          toast.error('Не удалось отправить ссылку', {
-            description: 'Проверьте соединение и попробуйте ещё раз.',
-          })
-        },
+    requestReset(parsed.data, {
+      onSuccess: () => {
+        // Anti-oracle: always proceed to sent screen regardless of backend result.
+        onSent(email);
       },
-    )
-  }
+      onError: () => {
+        // Backend always returns 202 for this endpoint (anti-oracle).
+        // Only genuine 5xx / network errors reach here.
+        toast.error('Не удалось отправить ссылку', {
+          description: 'Проверьте соединение и попробуйте ещё раз.',
+        });
+      },
+    });
+  };
 
   return (
     <form onSubmit={submit} noValidate>
@@ -85,7 +82,7 @@ export function ForgotScreen({
         Вспомнили пароль? <AuthLink onClick={onBack}>Войти</AuthLink>
       </AuthFooter>
     </form>
-  )
+  );
 }
 
 /* ─── Письмо отправлено ─── */
@@ -95,10 +92,10 @@ export function SentScreen({
   onResend,
   onBack,
 }: {
-  email: string
-  onOpenReset: () => void
-  onResend: () => void
-  onBack: () => void
+  email: string;
+  onOpenReset: () => void;
+  onResend: () => void;
+  onBack: () => void;
 }) {
   return (
     <div>
@@ -114,8 +111,8 @@ export function SentScreen({
         <PrimaryButton onClick={onOpenReset}>Открыть ссылку из письма</PrimaryButton>
         <GhostButton
           onClick={() => {
-            onResend()
-            toast('Письмо отправлено повторно')
+            onResend();
+            toast('Письмо отправлено повторно');
           }}
         >
           Отправить ещё раз
@@ -126,7 +123,7 @@ export function SentScreen({
         <AuthLink onClick={onBack}>вернитесь ко входу</AuthLink>
       </AuthFooter>
     </div>
-  )
+  );
 }
 
 /* ─── Сила пароля ─── */
@@ -139,7 +136,7 @@ const REQS: { key: string; label: string; test: (v: string) => boolean }[] = [
   },
   { key: 'num', label: 'Хотя бы одна цифра', test: (v) => /\d/.test(v) },
   { key: 'sym', label: 'Символ (!@#$…)', test: (v) => /[^\p{L}\p{N}\s]/u.test(v) },
-]
+];
 
 const SCORE_HINT = [
   'Используйте буквы, цифры и символы.',
@@ -147,18 +144,18 @@ const SCORE_HINT = [
   'Средний пароль',
   'Хороший пароль',
   'Надёжный пароль',
-]
+];
 
 const SEGMENT_TONE = (score: number, index: number): string => {
-  if (index >= score) return 'bg-border'
-  if (score === 1) return 'bg-danger'
-  if (score <= 3) return 'bg-warning'
-  return 'bg-primary-deep dark:bg-primary'
-}
+  if (index >= score) return 'bg-border';
+  if (score === 1) return 'bg-danger';
+  if (score <= 3) return 'bg-warning';
+  return 'bg-primary-deep dark:bg-primary';
+};
 
 function PasswordStrength({ value }: { value: string }) {
-  const met = useMemo(() => REQS.map((r) => r.test(value)), [value])
-  const score = met.filter(Boolean).length
+  const met = useMemo(() => REQS.map((r) => r.test(value)), [value]);
+  const score = met.filter(Boolean).length;
   return (
     <div className="-mt-2.5 mb-[18px]">
       <div className="flex gap-1.5">
@@ -186,34 +183,36 @@ function PasswordStrength({ value }: { value: string }) {
         ))}
       </ul>
     </div>
-  )
+  );
 }
 
 /* ─── Новый пароль ─── */
 export function ResetScreen({ onDone }: { onDone: () => void }) {
-  const [password, setPassword] = useState('')
-  const [confirm, setConfirm] = useState('')
-  const [errors, setErrors] = useState<{ password?: string; confirm?: string }>({})
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [errors, setErrors] = useState<{ password?: string; confirm?: string }>({});
 
   // Extract reset token from URL query string if present (deep-link flow).
   // The token is passed via the email link as a query param: /login?state=reset&token=<value>
-  const token = new URLSearchParams(window.location.search).get('token') ?? ''
+  const token = new URLSearchParams(window.location.search).get('token') ?? '';
 
-  const { mutate: confirmReset, isPending } = usePasswordResetConfirm()
+  const { mutate: confirmReset, isPending } = usePasswordResetConfirm();
 
   const submit = (event: FormEvent) => {
-    event.preventDefault()
-    const next: typeof errors = {}
+    event.preventDefault();
+    const next: typeof errors = {};
     // Guard: token must be present (deep-link flow). Without it the backend call is pointless.
     if (!token) {
-      setErrors({ password: 'Ссылка для сброса пароля недействительна. Перейдите по ссылке из письма.' })
-      return
+      setErrors({
+        password: 'Ссылка для сброса пароля недействительна. Перейдите по ссылке из письма.',
+      });
+      return;
     }
     // Mirror backend password.min(12) — T-100-10.
-    if (password.length < 12) next.password = 'Пароль должен содержать не менее 12 символов'
-    if (confirm !== password) next.confirm = 'Пароли не совпадают'
-    setErrors(next)
-    if (Object.keys(next).length > 0) return
+    if (password.length < 12) next.password = 'Пароль должен содержать не менее 12 символов';
+    if (confirm !== password) next.confirm = 'Пароли не совпадают';
+    setErrors(next);
+    if (Object.keys(next).length > 0) return;
 
     confirmReset(
       { token, newPassword: password },
@@ -222,16 +221,16 @@ export function ResetScreen({ onDone }: { onDone: () => void }) {
         onError: (err) => {
           if (err instanceof ApiError && err.code === 'weak_password') {
             // T-100-10: backend re-enforces password strength — surface as field error.
-            setErrors({ password: 'Пароль слишком простой. Добавьте цифры и символы.' })
-            return
+            setErrors({ password: 'Пароль слишком простой. Добавьте цифры и символы.' });
+            return;
           }
           toast.error('Не удалось обновить пароль', {
             description: 'Проверьте соединение и попробуйте ещё раз.',
-          })
+          });
         },
       },
-    )
-  }
+    );
+  };
 
   return (
     <form onSubmit={submit} noValidate>
@@ -265,5 +264,5 @@ export function ResetScreen({ onDone }: { onDone: () => void }) {
         Сохранить и войти
       </PrimaryButton>
     </form>
-  )
+  );
 }

@@ -1,5 +1,5 @@
-import { ChevronRight } from 'lucide-react'
-import { Link, useLocation } from 'react-router-dom'
+import { ChevronRight } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
 import {
   Sidebar,
   SidebarContent,
@@ -10,15 +10,15 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-} from '@/components/ui/sidebar'
-import { Skeleton } from '@/components/ui/skeleton'
-import { cn } from '@/lib/cn'
-import { APP_NAME } from '@/lib/constants'
-import { getInitials } from '@/lib/format'
-import { useSession } from '@/features/auth/api'
-import { can } from '@/shared/session/can'
-import { ClubSelector } from './ClubSelector'
-import { NAV_SECTIONS } from './nav-items'
+} from '@/components/ui/sidebar';
+import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/cn';
+import { APP_NAME } from '@/lib/constants';
+import { getInitials } from '@/lib/format';
+import { useSession } from '@/features/auth/api';
+import { can } from '@/shared/session/can';
+import { ClubSelector } from './ClubSelector';
+import { NAV_SECTIONS } from './nav-items';
 
 // Активный пункт — высококонтрастная «пилюля» (тёмная в светлой теме, светлая в тёмной),
 // перебивает дефолтные data-[active=true] классы shadcn через tailwind-merge.
@@ -26,33 +26,29 @@ const NAV_ITEM =
   'h-9 gap-[11px] rounded-[10px] px-3 text-[13.5px] font-medium text-fg-muted [&>svg]:size-[17px] ' +
   'hover:bg-surface hover:text-fg ' +
   'data-[active=true]:bg-ink data-[active=true]:font-medium data-[active=true]:text-surface ' +
-  'data-[active=true]:hover:bg-ink data-[active=true]:hover:text-surface'
+  'data-[active=true]:hover:bg-ink data-[active=true]:hover:text-surface';
 
 export function AppSidebar() {
-  const { pathname } = useLocation()
-  const session = useSession()
+  const { pathname } = useLocation();
+  const session = useSession();
 
   // Default to least-privilege ('reception') while role is unknown (session.isPending).
   // This prevents owner-only items from flashing before the role resolves (T-100-14).
-  const role = session.data?.role ?? 'reception'
+  const role = session.data?.role ?? 'reception';
 
   const isActive = (to: string) =>
-    to === '/' ? pathname === '/' : pathname === to || pathname.startsWith(`${to}/`)
+    to === '/' ? pathname === '/' : pathname === to || pathname.startsWith(`${to}/`);
 
   // UI-SPEC Surface 2: gate ONLY ownerOnly items via can().
   // All other remaining items are visible to all roles (absent = deferred items
   // were removed from NAV_SECTIONS in Task 2 — they are gone for everyone).
   // ownerResource is the explicit resource to check — no URL-string heuristics (WR-02).
-  const visibleSections = NAV_SECTIONS
-    .map((section) => ({
-      ...section,
-      items: section.items.filter(
-        (item) =>
-          !item.ownerOnly ||
-          can(role, 'view', item.ownerResource ?? 'finance'),
-      ),
-    }))
-    .filter((section) => section.items.length > 0)
+  const visibleSections = NAV_SECTIONS.map((section) => ({
+    ...section,
+    items: section.items.filter(
+      (item) => !item.ownerOnly || can(role, 'view', item.ownerResource ?? 'finance'),
+    ),
+  })).filter((section) => section.items.length > 0);
 
   return (
     <Sidebar>
@@ -87,8 +83,8 @@ export function AppSidebar() {
             </SidebarGroupLabel>
             <SidebarMenu className="gap-1">
               {section.items.map((item) => {
-                const Icon = item.icon
-                const active = isActive(item.to)
+                const Icon = item.icon;
+                const active = isActive(item.to);
                 return (
                   <SidebarMenuItem key={item.to}>
                     <SidebarMenuButton
@@ -117,7 +113,7 @@ export function AppSidebar() {
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                )
+                );
               })}
             </SidebarMenu>
           </SidebarGroup>
@@ -159,5 +155,5 @@ export function AppSidebar() {
         ) : null}
       </SidebarFooter>
     </Sidebar>
-  )
+  );
 }

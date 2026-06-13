@@ -1,21 +1,21 @@
-import { useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
-import { toast } from 'sonner'
-import { ROUTES } from '@/app/routes'
-import { ThemeToggle } from '@/components/ui/ThemeToggle'
-import { BrandPanel } from './components/BrandPanel'
-import { LoginForm } from './components/LoginForm'
-import { ForgotScreen, SentScreen, ResetScreen } from './components/RecoveryScreens'
+import { useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { toast } from 'sonner';
+import { ROUTES } from '@/app/routes';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
+import { BrandPanel } from './components/BrandPanel';
+import { LoginForm } from './components/LoginForm';
+import { ForgotScreen, SentScreen, ResetScreen } from './components/RecoveryScreens';
 // NOTE: The two-factor auth screen import has been removed (hidden-for-future, UI-SPEC Surface 3).
 // The TwoFactor file remains in the tree un-imported for future graduation.
-import { ExpiredScreen, LogoutScreen } from './components/SessionScreens'
+import { ExpiredScreen, LogoutScreen } from './components/SessionScreens';
 
 // twofa removed from AuthView — the view is hidden-for-future (no backend staff TOTP).
-type AuthView = 'login' | 'forgot' | 'forgot-sent' | 'reset' | 'expired' | 'logout'
+type AuthView = 'login' | 'forgot' | 'forgot-sent' | 'reset' | 'expired' | 'logout';
 
 // twofa removed from DEEP_LINKABLE — deep-linking to it falls through to 'login'.
 // 'reset' added: the backend email link is /login?state=reset&token=<value> (T-100-11).
-const DEEP_LINKABLE: AuthView[] = ['expired', 'logout', 'reset']
+const DEEP_LINKABLE: AuthView[] = ['expired', 'logout', 'reset'];
 
 function initialView(param: string | null): AuthView {
   return DEEP_LINKABLE.includes(param as AuthView) ? (param as AuthView) : 'login';
