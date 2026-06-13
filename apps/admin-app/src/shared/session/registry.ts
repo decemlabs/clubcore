@@ -68,5 +68,6 @@ export const routeRegistry: readonly RouteEntry[] = [
   { path: ROUTES.reports,    resource: 'reports',           label: 'Отчёты',       icon: 'BarChart3',       navKey: 'finance' },
   { path: ROUTES.finance,    resource: 'finance',           label: 'Финансы',      icon: 'Banknote',        navKey: 'finance' },
   { path: ROUTES.attendance, resource: 'visits',            label: 'Посещаемость', icon: 'Activity',        navKey: 'visits' },
+  { path: ROUTES.load,       resource: 'reports',           label: 'Загруженность', icon: 'Clock',           navKey: 'finance' },
   { path: ROUTES.settings,   resource: 'settings',          label: 'Настройки',    icon: 'Settings',        navKey: 'settings' },
 ] as const
