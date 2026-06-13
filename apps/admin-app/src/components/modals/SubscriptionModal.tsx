@@ -769,7 +769,13 @@ export function SubscriptionModal({
       return <UnfreezeScreen {...props} />
     case 'cancel':
       // OWNER_ONLY: hide for reception (can() gating per T-101-09-CANCELPRIV)
-      if (!can(role, 'cancel', 'memberships')) return null
+      if (!can(role, 'cancel', 'memberships')) {
+        return (
+          <AdaptiveModal open={false} onOpenChange={onOpenChange} title="" footerActions={null}>
+            <></>
+          </AdaptiveModal>
+        )
+      }
       return <CancelScreen {...props} />
     case 'refund':
       return <RefundScreen {...props} />
