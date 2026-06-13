@@ -42,16 +42,14 @@ export function AppSidebar() {
   // UI-SPEC Surface 2: gate ONLY ownerOnly items via can().
   // All other remaining items are visible to all roles (absent = deferred items
   // were removed from NAV_SECTIONS in Task 2 — they are gone for everyone).
+  // ownerResource is the explicit resource to check — no URL-string heuristics (WR-02).
   const visibleSections = NAV_SECTIONS
     .map((section) => ({
       ...section,
       items: section.items.filter(
         (item) =>
           !item.ownerOnly ||
-          // ownerOnly=true: check the relevant owner-only resource via can().
-          // Финансы maps to 'finance', Отчёты maps to 'reports'.
-          // Both are in OWNER_ONLY as { view, finance } and { view, reports }.
-          can(role, 'view', item.to.includes('finance') ? 'finance' : 'reports'),
+          can(role, 'view', item.ownerResource ?? 'finance'),
       ),
     }))
     .filter((section) => section.items.length > 0)
