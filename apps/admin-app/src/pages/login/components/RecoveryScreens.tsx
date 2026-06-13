@@ -15,6 +15,7 @@ import {
 } from './auth-ui'
 import { cn } from '@/lib/cn'
 import { usePasswordResetRequest, usePasswordResetConfirm, ApiError } from '@/features/auth/api'
+import { PasswordResetRequestSchema } from '@/features/auth/schemas'
 
 /* ─── Забыли пароль ─── */
 export function ForgotScreen({
@@ -31,15 +32,16 @@ export function ForgotScreen({
   const submit = (event: FormEvent) => {
     event.preventDefault()
 
-    // Client-side email format check (backend accepts any string — anti-oracle).
-    if (!email.includes('@')) {
-      setError('Введите корректный адрес почты')
+    // Client-side email validation via schema (backend accepts any string — anti-oracle).
+    const parsed = PasswordResetRequestSchema.safeParse({ email })
+    if (!parsed.success) {
+      setError(parsed.error.flatten().fieldErrors.email?.[0] ?? 'Введите корректный адрес почты')
       return
     }
     setError(undefined)
 
     requestReset(
-      { email },
+      parsed.data,
       {
         onSuccess: () => {
           // Anti-oracle: always proceed to sent screen regardless of backend result.
@@ -202,6 +204,11 @@ export function ResetScreen({ onDone }: { onDone: () => void }) {
   const submit = (event: FormEvent) => {
     event.preventDefault()
     const next: typeof errors = {}
+    // Guard: token must be present (deep-link flow). Without it the backend call is pointless.
+    if (!token) {
+      setErrors({ password: 'Ссылка для сброса пароля недействительна. Перейдите по ссылке из письма.' })
+      return
+    }
     // Mirror backend password.min(12) — T-100-10.
     if (password.length < 12) next.password = 'Пароль должен содержать не менее 12 символов'
     if (confirm !== password) next.confirm = 'Пароли не совпадают'
