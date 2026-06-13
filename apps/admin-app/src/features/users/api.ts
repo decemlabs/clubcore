@@ -19,16 +19,16 @@
  * ApiError re-exported (D-100-03-APIERROR-REEXPORT) so page/modal layers can
  * `instanceof ApiError` without importing @/api/client directly.
  */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { staffRequest, ApiError } from '@/api/client'
-import { can } from '@/shared/session/can'
-import type { Role } from '@/shared/session/types'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { staffRequest, ApiError } from '@/api/client';
+import { can } from '@/shared/session/can';
+import type { Role } from '@/shared/session/types';
 import {
   UsersListResponseSchema,
   UserInviteResponseSchema,
   type UserInviteInput,
   type UsersFilter,
-} from './schemas'
+} from './schemas';
 
 // ---------------------------------------------------------------------------
 // Key factory
@@ -39,7 +39,7 @@ export const usersKeys = {
   lists: () => [...usersKeys.all, 'list'] as const,
   list: (filter: UsersFilter) => [...usersKeys.lists(), filter] as const,
   detail: (id: string) => [...usersKeys.all, 'detail', id] as const,
-}
+};
 
 // ---------------------------------------------------------------------------
 // Queries
@@ -55,12 +55,12 @@ export function useUsers(filter: UsersFilter, role: Role) {
     queryFn: async () => {
       const raw = await staffRequest('get', '/api/v1/users', {
         query: { page: filter.page ?? 1, pageSize: 20 },
-      })
-      return UsersListResponseSchema.parse(raw).data
+      });
+      return UsersListResponseSchema.parse(raw).data;
     },
     enabled: can(role, 'list', 'users'),
     staleTime: 30_000,
-  })
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -73,19 +73,19 @@ export function useUsers(filter: UsersFilter, role: Role) {
  * Returns UserInviteData (includes optional inviteLinkUrl + invitationExpiresAt).
  */
 export function useInviteUser() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async (body: UserInviteInput) => {
       const raw = await staffRequest('post', '/api/v1/users', {
         query: { includeInviteLink: true },
         body,
-      })
-      return UserInviteResponseSchema.parse((raw as { data: unknown }).data)
+      });
+      return UserInviteResponseSchema.parse((raw as { data: unknown }).data);
     },
     onSettled: () => {
-      void qc.invalidateQueries({ queryKey: usersKeys.lists() })
+      void qc.invalidateQueries({ queryKey: usersKeys.lists() });
     },
-  })
+  });
 }
 
 /**
@@ -94,14 +94,14 @@ export function useInviteUser() {
  * May throw ApiError with code: cannot_deactivate_self | cannot_deactivate_last_owner | already_inactive
  */
 export function useDeactivateUser() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
       staffRequest('patch', '/api/v1/users/{user_id}/deactivate', { params: { user_id: id } }),
     onSettled: () => {
-      void qc.invalidateQueries({ queryKey: usersKeys.lists() })
+      void qc.invalidateQueries({ queryKey: usersKeys.lists() });
     },
-  })
+  });
 }
 
 /**
@@ -109,14 +109,14 @@ export function useDeactivateUser() {
  * PATCH /api/v1/users/{user_id}/reactivate
  */
 export function useReactivateUser() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
       staffRequest('patch', '/api/v1/users/{user_id}/reactivate', { params: { user_id: id } }),
     onSettled: () => {
-      void qc.invalidateQueries({ queryKey: usersKeys.lists() })
+      void qc.invalidateQueries({ queryKey: usersKeys.lists() });
     },
-  })
+  });
 }
 
 /**
@@ -124,14 +124,14 @@ export function useReactivateUser() {
  * DELETE /api/v1/users/{user_id}
  */
 export function useDeleteUser() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
       staffRequest('delete', '/api/v1/users/{user_id}', { params: { user_id: id } }),
     onSettled: () => {
-      void qc.invalidateQueries({ queryKey: usersKeys.lists() })
+      void qc.invalidateQueries({ queryKey: usersKeys.lists() });
     },
-  })
+  });
 }
 
 /**
@@ -139,20 +139,20 @@ export function useDeleteUser() {
  * POST /api/v1/users/invitations/{token_id}/revoke
  */
 export function useRevokeInvitation() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (tokenId: string) =>
       staffRequest('post', '/api/v1/users/invitations/{token_id}/revoke', {
         params: { token_id: tokenId },
       }),
     onSettled: () => {
-      void qc.invalidateQueries({ queryKey: usersKeys.lists() })
+      void qc.invalidateQueries({ queryKey: usersKeys.lists() });
     },
-  })
+  });
 }
 
 // ---------------------------------------------------------------------------
 // Re-export for page/modal layers (ESLint import-boundary — D-100-03-APIERROR-REEXPORT)
 // ---------------------------------------------------------------------------
 
-export { ApiError }
+export { ApiError };

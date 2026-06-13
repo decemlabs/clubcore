@@ -6,7 +6,7 @@
  *
  * All fields camelCase (alias_generator=to_camel on backend ContractModel).
  */
-import { z } from 'zod'
+import { z } from 'zod';
 
 // ---------------------------------------------------------------------------
 // Session
@@ -19,7 +19,7 @@ export const SessionSchema = z.object({
   userAgent: z.string(),
   channel: z.string(), // 'admin_web' | 'api'
   isCurrent: z.boolean(),
-})
+});
 
 export const SessionsListResponseSchema = z.object({
   data: z.object({
@@ -28,7 +28,7 @@ export const SessionsListResponseSchema = z.object({
     page: z.number(),
     pageSize: z.number(),
   }),
-})
+});
 
-export type SessionData = z.infer<typeof SessionSchema>
-export type SessionsListData = z.infer<typeof SessionsListResponseSchema>['data']
+export type SessionData = z.infer<typeof SessionSchema>;
+export type SessionsListData = z.infer<typeof SessionsListResponseSchema>['data'];

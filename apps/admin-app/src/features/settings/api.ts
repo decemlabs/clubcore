@@ -15,12 +15,12 @@
  *   Notifications/App/Integrations/Billing). Renamed from `useSettings` so the old mock is gone.
  *   TODO: Remove when all SettingsPage sections are wired to real endpoints.
  */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { staffRequest, mockResponse, ApiError } from '@/api/client'
-import { publishSessionExpired } from '@/lib/authBus'
-import { settingsData } from '@/mocks/settings'
-import type { SettingsData } from './types'
-import { SessionsListResponseSchema } from './schemas'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { staffRequest, mockResponse, ApiError } from '@/api/client';
+import { publishSessionExpired } from '@/lib/authBus';
+import { settingsData } from '@/mocks/settings';
+import type { SettingsData } from './types';
+import { SessionsListResponseSchema } from './schemas';
 
 // ---------------------------------------------------------------------------
 // Key factory
@@ -28,7 +28,7 @@ import { SessionsListResponseSchema } from './schemas'
 
 export const settingsKeys = {
   sessions: ['auth', 'sessions'] as const,
-}
+};
 
 // ---------------------------------------------------------------------------
 // useSessions — list active sessions
@@ -38,11 +38,11 @@ export function useSessions() {
   return useQuery({
     queryKey: settingsKeys.sessions,
     queryFn: async () => {
-      const raw = await staffRequest('get', '/api/v1/auth/sessions')
-      return SessionsListResponseSchema.parse(raw).data
+      const raw = await staffRequest('get', '/api/v1/auth/sessions');
+      return SessionsListResponseSchema.parse(raw).data;
     },
     staleTime: 30_000,
-  })
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -55,16 +55,16 @@ export function useSessions() {
  * For the CURRENT session, use useRevokeCurrentSession instead.
  */
 export function useRevokeSession() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (familyId: string) =>
       staffRequest('post', '/api/v1/auth/sessions/{family_id}/revoke', {
         params: { family_id: familyId },
       }),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: settingsKeys.sessions })
+      void qc.invalidateQueries({ queryKey: settingsKeys.sessions });
     },
-  })
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -88,9 +88,9 @@ export function useRevokeCurrentSession() {
     onSuccess: () => {
       // Route through authBus session-expiry path (same as mid-session 401):
       // RequireAuth subscriber removes authKeys.me + navigates to /login?state=expired.
-      publishSessionExpired()
+      publishSessionExpired();
     },
-  })
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -107,11 +107,11 @@ export function useMockSettingsData() {
   return useQuery({
     queryKey: ['settings', 'mock'],
     queryFn: () => mockResponse<SettingsData>(settingsData),
-  })
+  });
 }
 
 // ---------------------------------------------------------------------------
 // Re-exports
 // ---------------------------------------------------------------------------
 
-export { ApiError }
+export { ApiError };
