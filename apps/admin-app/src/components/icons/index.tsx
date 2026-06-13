@@ -123,4 +123,6 @@ export {
   Pencil,
   // Бронирование (Phase 102-03)
   CalendarCheck,
+  // Посещаемость — чек-ин (Phase 103-02)
+  UserCheck,
 } from 'lucide-react';

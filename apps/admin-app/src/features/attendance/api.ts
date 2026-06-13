@@ -1,21 +1,16 @@
-import { useQuery } from '@tanstack/react-query';
-import { mockResponse } from '@/api/client';
-import { attendanceData } from '@/mocks/attendance';
-import type { AttendanceData } from './types';
-
-/** Ключи запросов посещаемости. */
-export const attendanceKeys = {
-  all: ['attendance'] as const,
-  summary: ['attendance', 'summary'] as const,
-};
-
 /**
- * Данные дашборда «Посещаемость». Пока резолвит мок; при появлении backend
- * меняется только queryFn — страница не трогается.
+ * Attendance feature API hooks (Phase 103-02 — wire from mock to real).
+ *
+ * Delegates to features/visits hooks. This thin re-export layer lets
+ * AttendancePage/CheckInModal import from @/features/attendance/api without
+ * knowing the visits domain key structure directly (ESLint boundary).
+ *
+ * useCheckIn and useGymMeta re-exported so CheckInModal only needs one import.
  */
-export function useAttendance() {
-  return useQuery({
-    queryKey: attendanceKeys.summary,
-    queryFn: () => mockResponse<AttendanceData>(attendanceData),
-  });
-}
+export {
+  useVisitsList as useAttendanceList,
+  useCheckIn,
+  useGymMeta,
+} from '@/features/visits/api';
+export { visitsKeys as attendanceVisitsKeys } from '@/features/visits/api';
+export { ApiError } from '@/features/visits/api';
