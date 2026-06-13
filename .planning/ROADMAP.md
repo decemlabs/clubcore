@@ -201,7 +201,7 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
 - [x] 102-01-PLAN.md — Schedule write layer: features/schedule http (slots/templates/time-off zod + keys + Idempotency-Key hooks) + owner-only ScheduleManagementModal (slot/template/time-off tabs, time_off_booked_conflict force-override) [SCH-01] · wave 1
 - [x] 102-02-PLAN.md — Trainers catalog + CRUD: features/trainers http (queries + PATCH/POST/DELETE), TrainersPage reduction (hide Load/Requests/Earnings/KPIs), owner edit/create/delete affordances, TrainerHero/Overview real data, TrainerFormModal wired [TRN-01] · wave 1
 - [x] 102-03-PLAN.md — Bookings lifecycle + calendar merge: features/bookings http (create/cancel/complete-via-pt-sessions), BookingModal (race-safe 409), BookingDetailModal (24h cancel + complete), SchedulePage slot+booking merge + owner FAB, OverviewTab today-schedule [SCH-02] · wave 2
-- [ ] 102-04-PLAN.md — Payroll: features/payroll http (comp-config INSERT-only + preview→run + accruals + mark-paid, owner-only enabled-gated), PayoutsTab wired (reception Lock state, kopecks↔rubles/bps↔pct, 409 already_run/already_paid) [TRN-02] · wave 2
+- [x] 102-04-PLAN.md — Payroll: features/payroll http (comp-config INSERT-only + preview→run + accruals + mark-paid, owner-only enabled-gated), PayoutsTab wired (reception Lock state, kopecks↔rubles/bps↔pct, 409 already_run/already_paid) [TRN-02] · wave 2
 **UI hint**: yes
 
 ### Phase 103: Attendance + Finance
@@ -271,7 +271,7 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
 |-------|----------------|--------|-----------|
 | 100. Foundation + Authentication | 4/4 | Complete   | 2026-06-13 |
 | 101. Clients + Memberships | 4/4 | Complete   | 2026-06-13 |
-| 102. Schedule + Trainers | 3/4 | In Progress|  |
+| 102. Schedule + Trainers | 4/4 | Complete   | 2026-06-13 |
 | 103. Attendance + Finance | 0/TBD | Not started | - |
 | 104. Dashboard, Reports + Settings | 0/TBD | Not started | - |
 | 105. admin-web Retirement + RBAC Re-home | 0/TBD | Not started | - |
