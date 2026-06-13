@@ -2,7 +2,13 @@ import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Segmented, type SegmentedOption } from '@/components/ui/Segmented';
 import { Download } from '@/components/icons';
-import type { ScheduleData } from '@/features/schedule/types';
+
+/** Minimal data shape needed by SchedulePageHead (Phase 102-03: decoupled from mock ScheduleData). */
+export interface ScheduleHeadData {
+  rangeLabel: string;
+  sessionsWeek: number;
+  plannedToday: number;
+}
 
 export type CalView = 'day' | 'week' | 'month';
 
@@ -17,7 +23,7 @@ export function SchedulePageHead({
   view,
   onViewChange,
 }: {
-  data: ScheduleData;
+  data: ScheduleHeadData;
   view: CalView;
   onViewChange: (view: CalView) => void;
 }) {

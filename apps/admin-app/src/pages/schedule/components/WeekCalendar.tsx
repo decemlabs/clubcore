@@ -1,6 +1,17 @@
+/**
+ * WeekCalendar — Phase 102-03 SCH-02.
+ *
+ * Updated to accept CalendarEvent[] (merged slots+bookings with type discriminator)
+ * instead of the old mock SessionEvent[]. The days/now/colorByTrainerId props
+ * still come from the parent SchedulePage.
+ *
+ * CalendarEvent is a superset of SessionEvent so layoutDay() works unchanged.
+ * EventBlock receives each event's resolved color from the trainerColorMap.
+ */
 import { cn } from '@/lib/cn';
 import { Card } from '@/components/layout/Card';
-import type { DayState, ScheduleData, ScheduleDay, SessionEvent } from '@/features/schedule/types';
+import type { DayState, ScheduleDay, SessionEvent } from '@/features/schedule/types';
+import type { CalendarEvent } from './calendar-utils';
 import { EventBlock } from './EventBlock';
 import { BODY_HEIGHT, HOUR_PX, HOURS, layoutDay, toMinutes } from './calendar-utils';
 
@@ -59,17 +70,28 @@ function DayHeader({ day }: { day: ScheduleDay }) {
   );
 }
 
-/** Недельный календарь: липкая шапка дней + часовая сетка с блоками-сессиями и линией «сейчас». */
+/** Недельный календарь: липкая шапка дней + часовая сетка с блоками-сессиями и линией «сейчас».
+ *
+ * Phase 102-03: events are CalendarEvent[] (merged slots+bookings).
+ * onEventClick receives the CalendarEvent so SchedulePage can route by event.type.
+ */
 export function WeekCalendar({
-  data,
+  days,
+  events,
+  nowLabel,
+  trainerColorMap,
   onEventClick,
 }: {
-  data: ScheduleData;
-  onEventClick?: (ev: SessionEvent) => void;
+  days: ScheduleDay[];
+  events: CalendarEvent[];
+  nowLabel: string;
+  trainerColorMap: Map<string, string>;
+  onEventClick?: (ev: CalendarEvent) => void;
 }) {
-  const colorByKey = new Map(data.trainers.map((t) => [t.key, t.color]));
-  const layoutByDay = data.days.map((_, di) => layoutDay(data.events.filter((e) => e.day === di)));
-  const nowTop = (toMinutes(data.now.label) * HOUR_PX) / 60;
+  const layoutByDay = days.map((_, di) =>
+    layoutDay(events.filter((e) => e.day === di) as SessionEvent[]),
+  );
+  const nowTop = (toMinutes(nowLabel) * HOUR_PX) / 60;
 
   return (
     <Card className="overflow-auto max-h-[calc(100vh-13rem)]">
@@ -77,7 +99,7 @@ export function WeekCalendar({
         {/* Липкая шапка дней */}
         <div className={cn(GRID, 'sticky top-0 z-20 border-b-[0.5px] border-border bg-surface-2')}>
           <div className="bg-surface-2" />
-          {data.days.map((day, di) => (
+          {days.map((day, di) => (
             <DayHeader key={di} day={day} />
           ))}
         </div>
@@ -98,19 +120,26 @@ export function WeekCalendar({
           </div>
 
           {/* Колонки дней */}
-          {data.days.map((day, di) => (
+          {days.map((day, di) => (
             <div
               key={di}
               className={cn('relative border-l-[0.5px] border-border', DAY_COL_BG[day.state])}
             >
-              {layoutByDay[di]!.map((item) => (
-                <EventBlock
-                  key={item.ev.id}
-                  item={item}
-                  color={colorByKey.get(item.ev.trainer) ?? '#999'}
-                  onClick={onEventClick}
-                />
-              ))}
+              {layoutByDay[di]!.map((item) => {
+                const calEv = item.ev as CalendarEvent;
+                return (
+                  <EventBlock
+                    key={item.ev.id}
+                    item={item}
+                    color={
+                      calEv.trainerColor ??
+                      trainerColorMap.get(calEv.trainerId ?? item.ev.trainer) ??
+                      '#999'
+                    }
+                    onClick={onEventClick ? (ev) => onEventClick(ev as CalendarEvent) : undefined}
+                  />
+                );
+              })}
             </div>
           ))}
 
@@ -132,7 +161,7 @@ export function WeekCalendar({
           >
             <span className="absolute -left-[5px] top-1/2 size-2.5 -translate-y-1/2 rounded-full bg-danger" />
             <span className="absolute left-2 top-1/2 -translate-y-1/2 rounded bg-danger px-1.5 py-px text-[10.5px] font-bold tabular-nums text-white">
-              {data.now.label}
+              {nowLabel}
             </span>
           </div>
         </div>
