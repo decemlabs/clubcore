@@ -1,198 +1,278 @@
+/**
+ * FinancePage — owner-only 2-tab Finance screen (Phase 103-04).
+ *
+ * RBAC: early-return Lock-EmptyState BEFORE any data hook fires.
+ * Reception makes ZERO API calls when navigating to /finance.
+ *
+ * Two real tabs:
+ *   «Выручка»       — GET /api/v1/reports/revenue via useRevenueReport
+ *   «Онлайн-платежи» — GET /api/v1/payments?method=online via useOnlinePayments
+ *
+ * Removed (no backend): «Неудачные», «Выплаты тренерам», CSV «Экспорт» button.
+ *
+ * Revenue chart: zero-filled via fillRevenueBuckets (no NaN); groupBy day|month toggle.
+ * All-zero → inline EmptyState instead of flat-zero chart.
+ * Signed netKopecks formats correctly (negative = refund-heavy period).
+ */
 import { useState } from 'react';
-import { toast } from 'sonner';
-import { formatInt } from '@/lib/format';
-import { useFinance } from '@/features/finance/api';
+import { useSession } from '@/features/auth/api';
+import { useRevenueReport, useOnlinePayments } from '@/features/finance/api';
+import { can } from '@/shared/session/can';
+import { fillRevenueBuckets } from '@/features/reports/utils';
 import { PageLoading, PageError } from '@/components/feedback/PageState';
-import type { PayRow, RegRow } from '@/features/finance/types';
+import { EmptyState } from '@/components/feedback/EmptyState';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Lock, TrendingUp } from '@/components/icons';
+import { DateRangePicker } from '@/components/common/DateRangePicker';
+import { ChipGroup } from '@/components/modals/fields';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { StatStrip } from '@/components/layout/StatStrip';
-import { FilterSelect } from '@/components/data/Toolbar';
-import {
-  Banknote,
-  CheckCircle2,
-  CircleX,
-  Users,
-  Download,
-  SlidersHorizontal,
-  CreditCard,
-} from '@/components/icons';
-import {
-  FinanceKpi,
-  FinanceTabs,
-  Panel,
-  Toolbar,
-  RegTable,
-  FailTable,
-  PayTable,
-} from './components/parts';
-import { TxModal, PayoutModal } from './components/FinanceModals';
+import { FinanceTabs } from './components/parts';
+import { RevenueChart } from './components/RevenueChart';
+import { OnlinePaymentsTable } from './components/OnlinePaymentsTable';
+import type { Role } from '@/shared/session/types';
+import type { RevenueBucket } from '@/features/reports/schemas';
+import type { PaymentData } from '@/features/payments/schemas';
 
-const STATUS_OPTS = [
-  { value: 'all', label: 'Все статусы' },
-  { value: 'ok', label: 'Успешные' },
-  { value: 'refund', label: 'Возвраты' },
-  { value: 'pending', label: 'Ожидание' },
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function subtractDays(date: Date, days: number): string {
+  const d = new Date(date);
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+const TABS = [
+  { key: 'revenue', label: 'Выручка' },
+  { key: 'online', label: 'Онлайн-платежи' },
 ];
-const METHOD_OPTS = [
-  { value: 'all', label: 'Все способы' },
-  { value: 'Карта', label: 'Карта' },
-  { value: 'СБП', label: 'СБП' },
-  { value: 'Наличные', label: 'Наличные' },
+
+const GROUP_BY_OPTIONS = [
+  { value: 'day', label: 'По дням' },
+  { value: 'month', label: 'По месяцам' },
 ];
+
+const PAGE_SIZE = 25;
+
+// ---------------------------------------------------------------------------
+// Outer guard component — only calls useSession (Rules of Hooks safe)
+// ---------------------------------------------------------------------------
 
 export function FinancePage() {
-  const { data, isPending, isError, refetch } = useFinance();
-  const [tab, setTab] = useState('reg');
-  const [search, setSearch] = useState('');
-  const [status, setStatus] = useState('all');
-  const [method, setMethod] = useState('all');
-  const [tx, setTx] = useState<{ row: RegRow; screen: 'detail' | 'refund' } | null>(null);
-  const [payRow, setPayRow] = useState<PayRow | null>(null);
+  // RBAC guard: MUST be FIRST — before any data hook fires.
+  const session = useSession();
+  const role = session.data?.role ?? 'reception';
+  if (!can(role, 'view', 'reports')) {
+    return (
+      <EmptyState
+        icon={Lock}
+        title="Недостаточно прав"
+        message="Этот раздел доступен только владельцу. Обратитесь к владельцу клуба."
+        className="py-24"
+      />
+    );
+  }
 
-  if (isPending) return <PageLoading />;
-  if (isError || !data) return <PageError onRetry={() => void refetch()} />;
+  return <FinancePageContent role={role} />;
+}
 
-  const q = search.trim().toLowerCase();
-  const reg = data.reg.filter(
-    (r) =>
-      (status === 'all' || r.status === status) &&
-      (method === 'all' || r.method.includes(method)) &&
-      (!q || `${r.name} ${r.desc}`.toLowerCase().includes(q)),
-  );
-  const fail = data.fail.filter((r) => !q || r.name.toLowerCase().includes(q));
+// ---------------------------------------------------------------------------
+// Inner content component — data hooks only called when RBAC guard passes
+// ---------------------------------------------------------------------------
+
+function FinancePageContent({ role }: { role: Role }) {
+  const today = todayISO();
+  const [fromDate, setFromDate] = useState(() => subtractDays(new Date(), 29));
+  const [toDate, setToDate] = useState(today);
+  const [tab, setTab] = useState('revenue');
+  const [groupBy, setGroupBy] = useState<'day' | 'month'>('day');
+  const [page, setPage] = useState(1);
+
+  // Revenue tab data
+  const revenueQuery = useRevenueReport({ fromDate, toDate, groupBy });
+
+  // Online payments tab data (method='online' filter)
+  const onlineFilter = { receivedFrom: fromDate, receivedTo: toDate, method: 'online' as const, page, pageSize: PAGE_SIZE };
+  const onlineQuery = useOnlinePayments(onlineFilter, role);
+
+  function handleRangeChange(from: string, to: string) {
+    setFromDate(from);
+    setToDate(to);
+    setPage(1); // reset pagination on date range change
+  }
+
+  function handleGroupByChange(value: string) {
+    setGroupBy(value as 'day' | 'month');
+  }
+
+  function handleTabChange(key: string) {
+    setTab(key);
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-4 px-4 pb-10 pt-5 sm:px-6 sm:pb-12 sm:pt-6 lg:px-7">
       <PageHeader
         title="Финансы"
-        subtitle="Все платежи, возвраты и выплаты тренерам · апрель 2026"
+        subtitle={`${fromDate} – ${toDate} · выручка и онлайн-платежи`}
         actions={
-          <button
-            type="button"
-            onClick={() => toast.success('Реестр выгружен в Excel')}
-            className="inline-flex h-[38px] shrink-0 items-center gap-[7px] rounded-full border-[0.5px] border-border bg-surface px-[14px] text-[13px] font-semibold text-fg transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <Download className="size-[14px]" />
-            Экспорт
-          </button>
+          <DateRangePicker from={fromDate} to={toDate} onChange={handleRangeChange} />
         }
       />
 
-      <StatStrip className="grid-cols-2 gap-3 lg:grid-cols-4">
-        <FinanceKpi
-          icon={Banknote}
-          label="Оборот за месяц"
-          value={formatInt(data.kpi.turnover)}
-          unit=" ₽"
-        />
-        <FinanceKpi
-          icon={CheckCircle2}
-          label="Успешных"
-          value={formatInt(data.kpi.success)}
-          variant="accent"
-        />
-        <FinanceKpi
-          icon={CircleX}
-          label="Неудачных"
-          value={formatInt(data.kpi.failed)}
-          variant="danger"
-        />
-        <FinanceKpi
-          icon={Users}
-          label="К выплате тренерам"
-          value={formatInt(data.kpi.payout)}
-          unit=" ₽"
-        />
-      </StatStrip>
+      <FinanceTabs tabs={TABS} value={tab} onChange={handleTabChange} />
 
-      <FinanceTabs
-        value={tab}
-        onChange={(t) => {
-          setTab(t);
-          setSearch('');
-        }}
-        tabs={[
-          { key: 'reg', label: 'Реестр платежей' },
-          { key: 'fail', label: 'Неудачные', badge: data.failCount },
-          { key: 'pay', label: 'Выплаты тренерам' },
-        ]}
-      />
-
-      {tab === 'reg' ? (
-        <Panel>
-          <Toolbar
-            search={search}
-            onSearch={setSearch}
-            placeholder="Поиск по клиенту, ID…"
-            right={
-              <>
-                <FilterSelect
-                  icon={SlidersHorizontal}
-                  label="Статус"
-                  options={STATUS_OPTS}
-                  value={status}
-                  onChange={setStatus}
-                />
-                <FilterSelect
-                  icon={CreditCard}
-                  label="Способ"
-                  options={METHOD_OPTS}
-                  value={method}
-                  onChange={setMethod}
-                />
-                <span className="ml-auto text-[12.5px] text-fg-muted">
-                  Всего <b className="font-semibold text-fg">{formatInt(data.regCount)}</b>
-                </span>
-              </>
-            }
-          />
-          <RegTable rows={reg} onRow={(row) => setTx({ row, screen: 'detail' })} />
-        </Panel>
+      {tab === 'revenue' ? (
+        <RevenueTab
+          fromDate={fromDate}
+          toDate={toDate}
+          groupBy={groupBy}
+          onGroupByChange={handleGroupByChange}
+          revenueQuery={revenueQuery}
+        />
       ) : null}
 
-      {tab === 'fail' ? (
-        <Panel>
-          <Toolbar
-            search={search}
-            onSearch={setSearch}
-            placeholder="Поиск…"
-            right={
-              <span className="ml-auto text-[12.5px] text-fg-muted">
-                Требуют внимания · <b className="font-semibold text-danger">{data.failCount}</b>
-              </span>
-            }
-          />
-          <FailTable
-            rows={fail}
-            onRetry={(r) => toast.success(`Повторный платёж отправлен · ${r.name}`)}
-          />
-        </Panel>
+      {tab === 'online' ? (
+        <OnlineTab
+          onlineQuery={onlineQuery}
+          page={page}
+          pageSize={PAGE_SIZE}
+          onPageChange={setPage}
+        />
       ) : null}
-
-      {tab === 'pay' ? (
-        <Panel>
-          <Toolbar
-            right={
-              <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-1">
-                <span className="text-[13px] font-semibold">Период: апрель 2026</span>
-                <span className="ml-auto text-[12.5px] text-fg-muted">
-                  К выплате <b className="font-semibold text-fg">{formatInt(data.payoutTotal)} ₽</b>{' '}
-                  · {data.payoutTrainers} тренеров
-                </span>
-              </div>
-            }
-          />
-          <PayTable rows={data.pay} onPayout={setPayRow} />
-        </Panel>
-      ) : null}
-
-      <TxModal
-        row={tx?.row ?? null}
-        screen={tx?.screen ?? 'detail'}
-        onScreen={(screen) => setTx((p) => (p ? { ...p, screen } : p))}
-        onClose={() => setTx(null)}
-      />
-      <PayoutModal row={payRow} onClose={() => setPayRow(null)} />
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Revenue tab panel
+// ---------------------------------------------------------------------------
+
+interface RevenueQueryResult {
+  data: { buckets: RevenueBucket[]; fromDate: string; toDate: string; groupBy: 'day' | 'month' } | undefined;
+  isPending: boolean;
+  isFetching: boolean;
+  isError: boolean;
+  refetch: () => unknown;
+}
+
+function RevenueTab({
+  fromDate,
+  toDate,
+  groupBy,
+  onGroupByChange,
+  revenueQuery,
+}: {
+  fromDate: string;
+  toDate: string;
+  groupBy: 'day' | 'month';
+  onGroupByChange: (v: string) => void;
+  revenueQuery: RevenueQueryResult;
+}) {
+  const { data, isPending, isFetching, isError, refetch } = revenueQuery;
+
+  if (isPending) return <PageLoading />;
+  if (isError) return <PageError onRetry={() => void refetch()} />;
+
+  // Section skeleton on date re-fetch (keeps head + tabs visible).
+  if (isFetching && !isPending) {
+    return <Skeleton className="h-[320px] w-full rounded-xl" />;
+  }
+
+  const buckets = data?.buckets ?? [];
+
+  // Check all-zero after fill
+  const filled = fillRevenueBuckets(buckets, fromDate, toDate, groupBy);
+  const allZero = filled.every((b) => b.netKopecks === 0);
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* groupBy toggle */}
+      <div className="flex items-center gap-2">
+        <ChipGroup
+          options={GROUP_BY_OPTIONS}
+          value={groupBy}
+          onChange={onGroupByChange}
+        />
+      </div>
+
+      {allZero ? (
+        <EmptyState
+          icon={TrendingUp}
+          title="Нет данных за этот период"
+          message="В выбранном диапазоне нет транзакций."
+          className="py-16"
+        />
+      ) : (
+        <RevenueChart
+          buckets={buckets}
+          fromDate={fromDate}
+          toDate={toDate}
+          groupBy={groupBy}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Online payments tab panel
+// ---------------------------------------------------------------------------
+
+interface OnlineQueryResult {
+  data: { items: PaymentData[]; total: number; page: number; pageSize: number } | undefined;
+  isPending: boolean;
+  isFetching: boolean;
+  isError: boolean;
+  refetch: () => unknown;
+}
+
+function OnlineTab({
+  onlineQuery,
+  page,
+  pageSize,
+  onPageChange,
+}: {
+  onlineQuery: OnlineQueryResult;
+  page: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+}) {
+  const { data, isPending, isFetching, isError, refetch } = onlineQuery;
+
+  if (isPending) return <PageLoading />;
+  if (isError) return <PageError onRetry={() => void refetch()} />;
+
+  // Section skeleton on date/page re-fetch.
+  if (isFetching && !isPending) {
+    return <Skeleton className="h-[320px] w-full rounded-xl" />;
+  }
+
+  const items = data?.items ?? [];
+  const total = data?.total ?? 0;
+
+  if (items.length === 0) {
+    return (
+      <EmptyState
+        icon={TrendingUp}
+        title="Нет данных за этот период"
+        message="В выбранном диапазоне нет транзакций."
+        className="py-16"
+      />
+    );
+  }
+
+  return (
+    <OnlinePaymentsTable
+      items={items}
+      total={total}
+      page={page}
+      pageSize={pageSize}
+      onPageChange={onPageChange}
+    />
   );
 }
