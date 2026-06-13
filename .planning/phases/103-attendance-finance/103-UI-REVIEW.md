@@ -1,9 +1,11 @@
 ---
 phase: 103
 slug: attendance-finance
-status: advisory
+status: fixed
 score: 21/24
 audited: 2026-06-13
+fixed: 2026-06-13
+fix_commit: d990c42f
 baseline: 103-UI-SPEC.md
 screenshots: not captured (no dev server)
 ---
