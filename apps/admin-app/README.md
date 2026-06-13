@@ -50,6 +50,81 @@ src/
 
 Архитектура, конвенции и workflow интеграции шаблонов — в [CLAUDE.md](./CLAUDE.md).
 
+## Mock queryFn removal path (FND-03 per-domain zod seam)
+
+Phase 100 establishes the per-domain zod contract layer on the `auth/session` domain.
+Each subsequent domain (101–104) repeats this pattern to flip from mock data to the real API.
+`features/auth/` is the worked example.
+
+### Steps to graduate a domain from mock to http
+
+**1. Add `features/<domain>/schemas.ts`**
+
+Create zod schemas that match the verified backend wire shapes. The backend serialises to
+camelCase (`alias_generator=to_camel` on `ContractModel`) — confirm field names against the
+backend `schemas.py` file, not the Python identifiers. Export inferred types alongside each
+schema.
+
+```ts
+// features/<domain>/schemas.ts
+import { z } from 'zod'
+
+export const DomainItemSchema = z.object({ id: z.string(), name: z.string() })
+export type DomainItem = z.infer<typeof DomainItemSchema>
+
+export const DomainListResponseSchema = z.object({
+  data: z.object({
+    items: z.array(DomainItemSchema),
+    total: z.number(),
+    page: z.number(),
+    pageSize: z.number(),
+  }),
+})
+```
+
+**2. Replace `mockResponse()` with `staffRequest` + `Schema.parse` in `features/<domain>/api.ts`**
+
+```ts
+// Before (mock):
+export function useDomainItems() {
+  return useQuery({
+    queryKey: domainKeys.list,
+    queryFn: () => mockResponse<DomainItem[]>(mockItems),
+  })
+}
+
+// After (http):
+import { staffRequest } from '@/api/client'
+import { DomainListResponseSchema } from './schemas'
+
+export function useDomainItems() {
+  return useQuery({
+    queryKey: domainKeys.list,
+    queryFn: async () => {
+      const raw = await staffRequest('get', '/api/v1/<domain>')
+      return DomainListResponseSchema.parse(raw).data
+    },
+  })
+}
+```
+
+**3. VITE_API_MODE chokepoint (optional gradual flip)**
+
+If a domain needs a gradual mock→http transition, read `import.meta.env.VITE_API_MODE`
+inside `features/<domain>/api.ts` (the ESLint chokepoint exempts `features/**/api.ts`).
+The end state removes the mock branch entirely — do not leave dead mock branches in
+production-ready domains.
+
+**4. Delete the domain's mock seed file once live**
+
+Once the domain is wired, delete `mocks/<domain>.ts` and its import from `mocks/index.ts`.
+The page components do not change — they only depend on the hook's return type.
+
+### Reference
+
+`features/auth/api.ts` and `features/auth/schemas.ts` are the canonical example.
+See `100-03-SUMMARY.md` for design decisions made during the auth domain wiring.
+
 ## Workflow интеграции HTML-шаблона
 
 1. Шаблон присылается → определяется целевая страница из карты роутов.

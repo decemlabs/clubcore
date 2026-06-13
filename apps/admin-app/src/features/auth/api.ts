@@ -13,7 +13,7 @@
  *   Cost: one extra round-trip on login. Benefit: single source of truth, no cache pollution.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { staffRequest } from '@/api/client'
+import { staffRequest, ApiError } from '@/api/client'
 import {
   LoginRequestSchema,
   LoginResponseSchema,
@@ -112,6 +112,9 @@ export function usePasswordResetConfirm() {
 }
 
 // ---------------------------------------------------------------------------
-// Re-export LoginRequestSchema for form-side validation
+// Re-exports for page-layer consumers (pages import from features/, not api/client directly)
 // ---------------------------------------------------------------------------
+
+// ApiError is re-exported so pages can do `instanceof ApiError` without importing @/api/client.
+export { ApiError }
 export { LoginRequestSchema }
