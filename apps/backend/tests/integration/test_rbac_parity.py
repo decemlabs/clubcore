@@ -55,7 +55,15 @@ def _read_text(path: Path) -> str:
 
 
 def _parse_owner_only_pairs() -> set[tuple[str, str]]:
-    return set(_PAIR_RE.findall(_read_text(_CAN_TS)))
+    # Pre-filter comment lines so the regex does not match pairs mentioned
+    # in inline comments (e.g. the v1.9 comment at can.ts line 69). Without
+    # this filter the raw hit count inflates to 43 and relies on set() dedup
+    # to collapse back to 41 — masking future add/remove mistakes (WR-06).
+    non_comment_lines = [
+        ln for ln in _read_text(_CAN_TS).splitlines()
+        if not ln.lstrip().startswith('//')
+    ]
+    return set(_PAIR_RE.findall('\n'.join(non_comment_lines)))
 
 
 def _parse_ts_union(text: str, name: str) -> set[str]:
@@ -137,7 +145,7 @@ def test_action_values_match() -> None:
     )
 
 
-def test_owner_only_count_is_forty() -> None:
+def test_owner_only_count_is_forty_one() -> None:
     """Sanity belt — `OWNER_ONLY` is exactly 41 entries.
 
     Breakdown: 9 v1.1 + 6 v1.2 INFRA-08 + 11 v1.4 INFRA-19 - 1 D-34-09a
