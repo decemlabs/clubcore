@@ -45,7 +45,7 @@
 
 ### TRN — Trainers & Payroll
 
-- [ ] **TRN-01**: the Trainers list + Trainer detail render real `/trainers` (catalog + bio/specialization).
+- [x] **TRN-01**: the Trainers list + Trainer detail render real `/trainers` (catalog + bio/specialization).
 - [ ] **TRN-02**: trainer payroll — comp-config + accrual preview/run + pending→paid (`/payroll`) — is wired on the trainer detail / finance surface (owner-only).
 
 ### ATT — Attendance & Load
@@ -134,7 +134,7 @@ Which phases cover which requirements.
 | MEM-03 | Phase 101 | Complete |
 | SCH-01 | Phase 102 | Complete |
 | SCH-02 | Phase 102 | Pending |
-| TRN-01 | Phase 102 | Pending |
+| TRN-01 | Phase 102 | Complete |
 | TRN-02 | Phase 102 | Pending |
 | ATT-01 | Phase 103 | Pending |
 | ATT-02 | Phase 103 | Pending |
