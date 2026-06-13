@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useSettings } from '@/features/settings/api';
+import { useMockSettingsData } from '@/features/settings/api';
 import { PageLoading, PageError } from '@/components/feedback/PageState';
 import { SettingsContext } from '@/components/settings/context';
 import { ScrollspyNav as SettingsNav } from '@/components/settings/ScrollspyNav';
@@ -23,7 +23,9 @@ import {
 } from './components/SectionsBottom';
 
 export function SettingsPage() {
-  const { data, isPending, isError, refetch } = useSettings();
+  // ProfileSection and SecuritySection are self-fetching (Plan 104-04).
+  // Other sections still use mock data until their wiring plans run.
+  const { data, isPending, isError, refetch } = useMockSettingsData();
   const [dirty, setDirty] = useState<Set<string>>(() => new Set());
 
   const ctx = useMemo(
@@ -44,14 +46,16 @@ export function SettingsPage() {
         <div className="grid items-start gap-7 lg:grid-cols-[224px_minmax(0,1fr)]">
           <SettingsNav groups={data.nav} />
           <div className="flex min-w-0 flex-col gap-[18px]">
+            {/* ProfileSection and SecuritySection self-fetch (Plan 104-04) */}
             <ProfileSection />
-            <SecuritySection data={data} />
+            <SecuritySection />
             <BranchSection />
             <HoursSection />
             <BookingSection />
             <PaymentsSection />
             <NotificationsSection data={data} />
             <AppSection data={data} />
+            {/* TeamSection will be wired in Plan 104-05 */}
             <TeamSection data={data} />
             <IntegrationsSection data={data} />
             <BillingSection data={data} />

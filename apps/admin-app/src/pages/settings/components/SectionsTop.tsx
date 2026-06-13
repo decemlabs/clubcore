@@ -1,6 +1,10 @@
-import { toast } from 'sonner';
-import { cn } from '@/lib/cn';
-import { Initials } from '@/components/ui/initials';
+import { useState } from 'react'
+import { toast } from 'sonner'
+import { cn } from '@/lib/cn'
+import { Initials } from '@/components/ui/initials'
+import { Skeleton } from '@/components/ui/skeleton'
+import { ThemeToggle } from '@/components/ui/ThemeToggle'
+import { useModals } from '@/components/modals/modals-context'
 import {
   Activity,
   Building2,
@@ -9,13 +13,13 @@ import {
   ChevronDown,
   Clock,
   CreditCard,
+  Loader2,
   Lock,
   Monitor,
   Smartphone,
   Trash2,
   User,
-} from '@/components/icons';
-import type { SettingsData } from '@/features/settings/types';
+} from '@/components/icons'
 import {
   Chip,
   GhostBtn,
@@ -27,14 +31,17 @@ import {
   TextArea,
   TextField,
   Toggle,
-} from '@/components/settings/controls';
+} from '@/components/settings/controls'
+import { useSession } from '@/features/auth/api'
+import { useSessions, useRevokeSession, useRevokeCurrentSession } from '@/features/settings/api'
+import { formatRelativeRu, getInitials } from '@/lib/format'
 
-const ID_PROFILE = 'profile';
-const ID_SECURITY = 'security';
-const ID_BRANCH = 'branch';
-const ID_HOURS = 'hours';
-const ID_BOOKING = 'booking';
-const ID_PAYMENTS = 'payments';
+const ID_PROFILE = 'profile'
+const ID_SECURITY = 'security'
+const ID_BRANCH = 'branch'
+const ID_HOURS = 'hours'
+const ID_BOOKING = 'booking'
+const ID_PAYMENTS = 'payments'
 
 function ActionPill({ icon: Icon, children }: { icon?: typeof Check; children: React.ReactNode }) {
   return (
@@ -42,82 +49,134 @@ function ActionPill({ icon: Icon, children }: { icon?: typeof Check; children: R
       {Icon ? <Icon className="size-3.5" /> : null}
       {children}
     </span>
-  );
+  )
 }
 
+// Profile edit deferred — no PATCH /auth/me endpoint (Phase 104).
 export function ProfileSection() {
+  const { data, isPending, isError, refetch } = useSession()
+
+  const ROLE_LABEL: Record<string, string> = {
+    owner: 'Владелец',
+    reception: 'Ресепшн',
+  }
+
   return (
     <SectionCard
       id={ID_PROFILE}
       icon={User}
       title="Профиль"
-      desc="Личные данные, доступные коллегам и клиентам."
+      desc="Личные данные. Редактирование недоступно — обратитесь к владельцу."
     >
-      <SettingRow first label="Аватар" hint="PNG или JPG, до 2 МБ. Лучше 400×400 px.">
-        <div className="flex flex-wrap items-center gap-3">
-          <Initials
-            initials="МК"
-            color="linear-gradient(135deg,#f59e0b,#f97316)"
-            className="size-16 text-[20px]"
-          />
-          <div className="min-w-0">
-            <div className="text-[14px] font-bold">Маша Костина</div>
-            <div className="text-[11.5px] text-fg-subtle">
-              Без фото · показывается тренерам и клиентам в чате
-            </div>
-            <div className="mt-2 flex gap-2">
-              <GhostBtn>Загрузить</GhostBtn>
-              <GhostBtn danger>Удалить</GhostBtn>
-            </div>
+      {isPending ? (
+        <div className="flex items-center gap-4 py-4">
+          <Skeleton className="size-16 rounded-full" />
+          <div className="flex flex-col gap-2">
+            <Skeleton className="h-4 w-48" />
+            <Skeleton className="h-3 w-36" />
           </div>
         </div>
-      </SettingRow>
-      <SettingRow label="Имя и фамилия">
-        <div className="grid gap-2 sm:grid-cols-2">
-          <TextField defaultValue="Мария" sectionId={ID_PROFILE} />
-          <TextField defaultValue="Костина" sectionId={ID_PROFILE} />
+      ) : isError || !data ? (
+        <div className="py-4 text-[12px] text-fg-muted">
+          Не удалось загрузить профиль.{' '}
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            className="font-semibold text-fg hover:underline"
+          >
+            Повторить
+          </button>
         </div>
-      </SettingRow>
-      <SettingRow label="Должность" hint="Подпись в чате и письмах клиентам.">
-        <TextField defaultValue="Старший администратор · Тверская" sectionId={ID_PROFILE} />
-      </SettingRow>
-      <SettingRow label="Контакты">
-        <div className="grid gap-2 sm:grid-cols-2">
-          <TextField defaultValue="masha@moy-zal.ru" sectionId={ID_PROFILE} />
-          <TextField defaultValue="+7 (985) 412-08-90" sectionId={ID_PROFILE} />
-        </div>
-      </SettingRow>
-      <SettingRow label="Язык интерфейса">
-        <RadioGroup
-          options={['Русский', 'English', 'Қазақша']}
-          defaultValue="Русский"
-          sectionId={ID_PROFILE}
-        />
-      </SettingRow>
-      <SettingRow label="Часовой пояс" hint="Для уведомлений, отчётов и расписания.">
-        <SelectField
-          className="max-w-[360px]"
-          options={[
-            'Москва, GMT+3 (по умолчанию для сети)',
-            'Санкт-Петербург, GMT+3',
-            'Алматы, GMT+5',
-            'Екатеринбург, GMT+5',
-          ]}
-          sectionId={ID_PROFILE}
-        />
-      </SettingRow>
-      <SettingRow label="Рабочие смены" hint="Когда вы доступны для назначения диалогов.">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Chip tone="accent">Пн–Пт · 09:00–18:00</Chip>
-          <Chip>Сб · 10:00–15:00</Chip>
-          <GhostBtn>+ Смена</GhostBtn>
-        </div>
-      </SettingRow>
+      ) : (
+        <>
+          <SettingRow first label="Имя и должность">
+            <div className="flex items-center gap-3">
+              <Initials
+                initials={getInitials(data.fullName)}
+                color="linear-gradient(135deg,#2dd4a4,#059669)"
+                className="size-16 text-[20px]"
+              />
+              <div className="min-w-0">
+                <div className="text-[14px] font-bold text-fg">{data.fullName}</div>
+                <div className="mt-0.5 text-[13px] text-fg-muted">{data.email}</div>
+                <div className="mt-1.5">
+                  <span
+                    className={cn(
+                      'inline-flex h-[22px] items-center rounded-full px-2.5 text-[11.5px] font-semibold',
+                      data.role === 'owner'
+                        ? 'bg-primary-soft text-primary-deep dark:text-primary'
+                        : 'bg-surface-3 text-fg-muted',
+                    )}
+                  >
+                    {ROLE_LABEL[data.role] ?? data.role}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <p className="mt-3 text-[11.5px] text-fg-subtle">
+              Для изменения данных обратитесь к владельцу.
+            </p>
+          </SettingRow>
+          <SettingRow label="Тема оформления" hint="Смена между светлой и тёмной темой.">
+            <ThemeToggle />
+          </SettingRow>
+        </>
+      )}
     </SectionCard>
-  );
+  )
 }
 
-export function SecuritySection({ data }: { data: SettingsData }) {
+/** Map session channel code to a human-readable label. */
+function channelLabel(channel: string): string {
+  if (channel === 'admin_web') return 'Браузер'
+  if (channel === 'api') return 'API'
+  return 'Браузер'
+}
+
+export function SecuritySection() {
+  const { data: sessionsData, isPending, isError, refetch } = useSessions()
+  const revokeSession = useRevokeSession()
+  const revokeCurrentSession = useRevokeCurrentSession()
+  const [revokingId, setRevokingId] = useState<string | null>(null)
+  const { open } = useModals()
+
+  const currentSession = sessionsData?.items.find((s) => s.isCurrent)
+
+  function handleRevoke(familyId: string) {
+    setRevokingId(familyId)
+    revokeSession.mutate(familyId, {
+      onSuccess: () => {
+        toast.success('Сессия завершена')
+      },
+      onError: () => {
+        toast.error('Не удалось завершить сессию. Попробуйте ещё раз.')
+      },
+      onSettled: () => {
+        setRevokingId(null)
+      },
+    })
+  }
+
+  function handleLogoutEverywhere() {
+    open('confirm', {
+      confirm: {
+        title: 'Завершить все сессии?',
+        message: 'Все активные сессии, включая эту, будут завершены. Вам потребуется войти снова.',
+        confirmLabel: 'Да, выйти',
+        cancelLabel: 'Отмена',
+        tone: 'danger',
+        onConfirm: () => {
+          if (!currentSession) return
+          revokeCurrentSession.mutate(currentSession.familyId, {
+            onError: () => {
+              toast.error('Не удалось завершить сессию. Попробуйте ещё раз.')
+            },
+          })
+        },
+      },
+    })
+  }
+
   return (
     <SectionCard
       id={ID_SECURITY}
@@ -155,80 +214,87 @@ export function SecuritySection({ data }: { data: SettingsData }) {
           }
         />
       </SettingRow>
-      <SettingRow label="Активные сессии" hint="Устройства, где вы вошли в админку «Мой зал».">
+      <SettingRow label="Активные сессии" hint="Устройства, где вы вошли в систему.">
         <div className="flex flex-col gap-2">
-          {data.sessions.map((s) => {
-            const Icon = s.device === 'phone' ? Smartphone : Monitor;
-            return (
-              <div
-                key={s.name}
-                className="flex items-center gap-3 rounded-xl border-[0.5px] border-border bg-surface-2 px-3 py-2.5"
+          {isPending ? (
+            <>
+              <Skeleton className="h-[52px] w-full rounded-xl" />
+              <Skeleton className="h-[52px] w-full rounded-xl" />
+              <Skeleton className="h-[52px] w-full rounded-xl" />
+            </>
+          ) : isError || !sessionsData ? (
+            <div className="text-[12px] text-fg-muted">
+              Не удалось загрузить сессии.{' '}
+              <button
+                type="button"
+                onClick={() => void refetch()}
+                className="font-semibold text-fg hover:underline"
               >
-                <span
-                  className={cn(
-                    'grid size-8 shrink-0 place-items-center rounded-lg',
-                    s.current
-                      ? 'bg-primary-soft text-primary-deep dark:text-primary'
-                      : 'bg-surface-3 text-fg-muted',
-                  )}
-                >
-                  <Icon className="size-4" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 text-[12.5px] font-semibold">
-                    {s.name}
-                    {s.current ? (
-                      <span className="rounded-full bg-primary-soft px-1.5 py-px text-[9.5px] font-bold uppercase text-primary-deep dark:text-primary">
-                        Сейчас
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="truncate text-[11px] text-fg-subtle">{s.meta}</div>
-                </div>
-                {s.current ? (
-                  <span className="text-[12px] text-fg-subtle">—</span>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => toast.success('Сессия завершена', { description: s.name })}
-                    className="text-[12px] font-semibold text-danger hover:underline"
-                  >
-                    Завершить
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </SettingRow>
-      <SettingRow label="Журнал входов" hint="Только успешные входы за последние 30 дней.">
-        <div className="flex flex-col">
-          {data.audit.map((a, i) => (
-            <div
-              key={a.time}
-              className={cn(
-                'grid grid-cols-[120px_minmax(0,1fr)_auto] items-center gap-3 py-2 text-[12px] max-sm:grid-cols-1 max-sm:gap-0.5',
-                i > 0 && 'border-t-[0.5px] border-border',
-              )}
-            >
-              <span className="text-fg-subtle tabular-nums">{a.time}</span>
-              <span className="truncate text-fg-muted">{a.text}</span>
-              <span className="text-right font-mono text-[11px] text-fg-subtle max-sm:text-left">
-                {a.ip}
-              </span>
+                Повторить
+              </button>
             </div>
-          ))}
-          <button
-            type="button"
-            onClick={() => toast('Полный журнал входов')}
-            className="mt-2 self-start text-[12px] font-semibold text-fg-muted hover:text-fg"
-          >
-            Открыть полный журнал · 47 записей →
-          </button>
+          ) : (
+            sessionsData.items.map((s) => {
+              const isMobile = /mobile/i.test(s.userAgent)
+              const Icon = isMobile ? Smartphone : Monitor
+              const isRevoking = revokingId === s.familyId
+
+              return (
+                <div
+                  key={s.familyId}
+                  className="flex items-center gap-3 rounded-xl border-[0.5px] border-border bg-surface-2 px-3 py-2.5"
+                >
+                  <span
+                    className={cn(
+                      'grid size-8 shrink-0 place-items-center rounded-lg',
+                      s.isCurrent
+                        ? 'bg-primary-soft text-primary-deep dark:text-primary'
+                        : 'bg-surface-3 text-fg-muted',
+                    )}
+                  >
+                    <Icon className="size-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 text-[12.5px] font-semibold">
+                      <span className="truncate">{s.userAgent || 'Неизвестное устройство'}</span>
+                      {s.isCurrent ? (
+                        <span className="shrink-0 rounded-full bg-primary-soft px-1.5 py-px text-[9.5px] font-bold uppercase text-primary-deep dark:text-primary">
+                          Сейчас
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="truncate text-[11px] text-fg-subtle">
+                      {channelLabel(s.channel)} · {formatRelativeRu(s.lastUsedAt)}
+                    </div>
+                  </div>
+                  {s.isCurrent ? (
+                    <span className="shrink-0 text-[12px] text-fg-subtle">—</span>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={isRevoking}
+                      onClick={() => handleRevoke(s.familyId)}
+                      className="flex shrink-0 items-center gap-1 text-[12px] font-semibold text-danger hover:underline disabled:opacity-50"
+                    >
+                      {isRevoking ? <Loader2 className="size-3 animate-spin" /> : null}
+                      Завершить
+                    </button>
+                  )}
+                </div>
+              )
+            })
+          )}
         </div>
+        {!isPending && !isError && sessionsData && currentSession ? (
+          <div className="mt-3">
+            <GhostBtn danger onClick={handleLogoutEverywhere}>
+              Выйти везде
+            </GhostBtn>
+          </div>
+        ) : null}
       </SettingRow>
     </SectionCard>
-  );
+  )
 }
 
 const DAYS: [string, string, string, boolean?, string?][] = [
@@ -239,7 +305,7 @@ const DAYS: [string, string, string, boolean?, string?][] = [
   ['Пятница', '07:00', '22:00', false, '— раньше из-за уборки'],
   ['Суббота', '09:00', '22:00', true],
   ['Воскресенье', '09:00', '21:00', true, '— санитарный день первое вс месяца'],
-];
+]
 
 export function BranchSection() {
   return (
@@ -304,7 +370,7 @@ export function BranchSection() {
         </div>
       </SettingRow>
     </SectionCard>
-  );
+  )
 }
 
 export function HoursSection() {
@@ -378,7 +444,7 @@ export function HoursSection() {
         </div>
       </SettingRow>
     </SectionCard>
-  );
+  )
 }
 
 export function BookingSection() {
@@ -465,16 +531,16 @@ export function BookingSection() {
         </div>
       </SettingRow>
     </SectionCard>
-  );
+  )
 }
 
 const ACQUIRERS: {
-  logo: string;
-  bg: string;
-  name: string;
-  desc: string;
-  chip?: string;
-  action: string;
+  logo: string
+  bg: string
+  name: string
+  desc: string
+  chip?: string
+  action: string
 }[] = [
   {
     logo: 'ЮК',
@@ -499,7 +565,7 @@ const ACQUIRERS: {
     desc: 'Без эквайринга · 0.4% · только для рассрочки и переводов > 50 000 ₽',
     action: 'Включить',
   },
-];
+]
 
 export function PaymentsSection() {
   return (
@@ -594,5 +660,5 @@ export function PaymentsSection() {
         </div>
       </SettingRow>
     </SectionCard>
-  );
+  )
 }
