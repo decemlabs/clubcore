@@ -28,6 +28,7 @@ import {
 import { useClients } from '@/features/clients/api';
 import { useCheckIn, useGymMeta, ApiError } from '@/features/attendance/api';
 import { useSession } from '@/features/auth/api';
+import { getInitials } from '@/lib/format';
 
 // ---------------------------------------------------------------------------
 // 409 code → российская копия (T-103-02-409CHAIN)
@@ -62,14 +63,8 @@ const GENERIC_ERROR: ErrorCopy = {
 // Вспомогательные функции
 // ---------------------------------------------------------------------------
 
-function getInitials(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return '?';
-  return words
-    .slice(0, 2)
-    .map((w) => w.charAt(0)?.toUpperCase() ?? '')
-    .join('');
-}
+/** Brand emerald via CSS token (WR-05: no raw hex palette in JSX props). */
+const AVATAR_COLOR = 'var(--color-primary)';
 
 function clientFullName(c: { firstName: string; lastName: string }): string {
   return `${c.firstName} ${c.lastName}`.trim();
@@ -223,7 +218,7 @@ export function CheckInModal({
         <ResultList>
           <ResultItem
             initials={getInitials(selectedClientName ?? '')}
-            color="#2dd4a4"
+            color={AVATAR_COLOR}
             name={selectedClientName ?? ''}
             meta=""
             active
@@ -254,7 +249,7 @@ export function CheckInModal({
               <ResultItem
                 key={client.id}
                 initials={getInitials(clientFullName(client))}
-                color="#2dd4a4"
+                color={AVATAR_COLOR}
                 name={clientFullName(client)}
                 meta={client.phone ?? ''}
                 onClick={() => {
