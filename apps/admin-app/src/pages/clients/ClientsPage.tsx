@@ -1,148 +1,203 @@
-import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ROUTES } from '@/app/routes';
-import { useClients } from '@/features/clients/api';
-import { PageLoading, PageError } from '@/components/feedback/PageState';
-import type { ClientFilter, ClientSort, ClientSortKey } from '@/features/clients/types';
-import { compare, DEFAULT_DIR } from '@/features/clients/sort';
-import { DataTable } from '@/components/data/DataTable';
-import { Pagination } from '@/components/data/Pagination';
-import { useTableSelection } from '@/components/data/useTableSelection';
-import { ClientsPageHead } from './components/ClientsPageHead';
-import { ClientFilterTabs } from './components/ClientFilterTabs';
-import { ClientsToolbar, type PlanTypeFilter, type ViewMode } from './components/ClientsToolbar';
-import { BulkBar } from './components/BulkBar';
-import { ClientCard } from './components/ClientCard';
-import { clientColumns } from './components/columns';
-import { EmptyState } from './components/EmptyState';
+/**
+ * Clients list page — wired to real GET /api/v1/clients (Phase 101 CLI-01).
+ *
+ * Changes from mock version:
+ *  - useClients(filter) over staffRequest (server search + server pagination)
+ *  - Search: debounced 300ms, min-2-char gate (q<2 → not sent, list unchanged)
+ *  - Pagination: server-side {items,total,page,pageSize}; page synced to URL ?page=N
+ *  - Filters: backend-supported only — gender, hasTelegram, tag, sort
+ *  - REMOVED: ClientFilterTabs (membership-status), planType, trainer, «Ещё фильтры»,
+ *    unsupported sort presets (expires/visits/last)
+ *  - Two distinct empty states: zero-clients vs filter-empty
+ */
+import { useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { useClients } from '@/features/clients/api'
+import { PageLoading, PageError } from '@/components/feedback/PageState'
+import { EmptyState } from '@/components/feedback/EmptyState'
+import { useDebounce } from '@/lib/useDebounce'
+import { Pagination } from '@/components/data/Pagination'
+import { Users, Search, UserPlus } from '@/components/icons'
+import { useModals } from '@/components/modals/modals-context'
+import { ClientsToolbar, type GenderFilter, type TelegramFilter, type SortPreset, type ViewMode } from './components/ClientsToolbar'
+import { ClientRow } from './components/ClientRow'
+import type { FilterOption } from '@/components/data/Toolbar'
+
+const PAGE_SIZE = 25
 
 export function ClientsPage() {
-  const { data, isPending, isError, refetch } = useClients();
-  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams()
+  const page = parseInt(searchParams.get('page') ?? '1', 10) || 1
 
-  const [statusFilter, setStatusFilter] = useState<ClientFilter>('all');
-  const [search, setSearch] = useState('');
-  const [planType, setPlanType] = useState<PlanTypeFilter>('all');
-  const [trainer, setTrainer] = useState('all');
-  const [sort, setSort] = useState<ClientSort>({ key: 'expires', dir: 'asc' });
-  const [view, setView] = useState<ViewMode>('table');
+  const { open } = useModals()
 
-  const clients = data?.clients;
+  // --- filter state ---
+  const [searchRaw, setSearchRaw] = useState('')
+  const [gender, setGender] = useState<GenderFilter>('all')
+  const [telegram, setTelegram] = useState<TelegramFilter>('all')
+  const [tag, setTag] = useState('all')
+  const [sort, setSort] = useState<SortPreset>('recent:desc')
+  const [view, setView] = useState<ViewMode>('table')
 
-  const trainerOptions = useMemo(() => {
-    const names = Array.from(
-      new Set((clients ?? []).map((c) => c.trainer?.name).filter((n): n is string => !!n)),
-    );
+  const searchDebounced = useDebounce(searchRaw, 300)
+  const q = searchDebounced.length >= 2 ? searchDebounced : undefined
+
+  const filter = {
+    q,
+    gender: gender !== 'all' ? (gender as 'male' | 'female') : undefined,
+    hasTelegram:
+      telegram === 'yes' ? true : telegram === 'no' ? false : undefined,
+    tag: tag !== 'all' ? tag : undefined,
+    sort: sort as SortPreset,
+    page,
+    pageSize: PAGE_SIZE,
+  }
+
+  const { data, isPending, isError, refetch } = useClients(filter)
+
+  // Derive tag options from current page items for the tag filter pill
+  const tagOptions: FilterOption[] = useMemo(() => {
+    const tags = new Set<string>()
+    data?.items.forEach((c) => c.tags.forEach((t) => tags.add(t)))
     return [
-      { value: 'all', label: 'Любой' },
-      ...names.map((n) => ({ value: n, label: n })),
-      { value: 'none', label: 'Без тренера' },
-    ];
-  }, [clients]);
+      { value: 'all', label: 'Все теги' },
+      ...Array.from(tags)
+        .sort()
+        .map((t) => ({ value: t, label: t })),
+    ]
+  }, [data])
 
-  const visible = useMemo(() => {
-    if (!clients) return [];
-    const q = search.trim().toLowerCase();
-    const qDigits = q.replace(/\D/g, '');
-    const rows = clients.filter((c) => {
-      if (statusFilter !== 'all' && c.status !== statusFilter) return false;
-      if (planType !== 'all' && c.plan?.type !== planType) return false;
-      if (trainer === 'none' ? c.trainer != null : trainer !== 'all' && c.trainer?.name !== trainer)
-        return false;
-      if (q) {
-        const byName = c.name.toLowerCase().includes(q);
-        const byPhone = qDigits.length > 0 && c.phone.replace(/\D/g, '').includes(qDigits);
-        if (!byName && !byPhone) return false;
-      }
-      return true;
-    });
-    return [...rows].sort((a, b) => compare(a, b, sort));
-  }, [clients, statusFilter, planType, trainer, search, sort]);
+  const pageCount = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1
 
-  const visibleIds = useMemo(() => visible.map((c) => c.id), [visible]);
-  const selection = useTableSelection(visibleIds);
-
-  if (isPending) return <PageLoading />;
-  if (isError || !data) return <PageError onRetry={() => void refetch()} />;
-
-  const handleSort = (key: ClientSortKey) =>
-    setSort((prev) =>
-      prev.key === key
-        ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
-        : { key, dir: DEFAULT_DIR[key] },
-    );
+  const handlePageChange = (p: number) => {
+    setSearchParams(p === 1 ? {} : { page: String(p) }, { replace: true })
+  }
 
   const resetFilters = () => {
-    setStatusFilter('all');
-    setSearch('');
-    setPlanType('all');
-    setTrainer('all');
-  };
+    setSearchRaw('')
+    setGender('all')
+    setTelegram('all')
+    setTag('all')
+    handlePageChange(1)
+  }
+
+  if (isPending) return <PageLoading />
+  if (isError) return <PageError onRetry={() => void refetch()} />
+
+  const items = data.items
+  const hasActiveFilter = q !== undefined || gender !== 'all' || telegram !== 'all' || tag !== 'all'
+  const isFilterEmpty = hasActiveFilter && items.length === 0
+  const isZeroClients = !hasActiveFilter && items.length === 0
 
   return (
     <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-4 px-4 pb-10 pt-5 sm:px-6 sm:pb-12 sm:pt-6 lg:px-7">
-      <ClientsPageHead summary={data.summary} />
-
-      <ClientFilterTabs tabs={data.filters} value={statusFilter} onChange={setStatusFilter} />
+      {/* Page header */}
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h1 className="text-[22px] font-bold tracking-[-0.5px]">Клиенты</h1>
+          {data.total > 0 && (
+            <p className="mt-0.5 text-[13px] text-fg-muted">
+              Всего{' '}
+              <b className="font-semibold text-fg">{data.total}</b> клиентов
+            </p>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => open('new-client')}
+          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-fg px-4 text-[13px] font-semibold text-bg transition-colors hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-primary dark:text-[#06120c] dark:hover:bg-[#5ee9b8]"
+        >
+          <UserPlus className="size-3.5" />
+          <span className="max-sm:hidden">Добавить клиента</span>
+        </button>
+      </div>
 
       <ClientsToolbar
-        search={search}
-        onSearchChange={setSearch}
-        planType={planType}
-        onPlanTypeChange={setPlanType}
-        trainer={trainer}
-        onTrainerChange={setTrainer}
-        trainerOptions={trainerOptions}
+        search={searchRaw}
+        onSearchChange={(v) => {
+          setSearchRaw(v)
+          handlePageChange(1)
+        }}
+        gender={gender}
+        onGenderChange={(v) => {
+          setGender(v)
+          handlePageChange(1)
+        }}
+        telegram={telegram}
+        onTelegramChange={(v) => {
+          setTelegram(v)
+          handlePageChange(1)
+        }}
+        tag={tag}
+        onTagChange={(v) => {
+          setTag(v)
+          handlePageChange(1)
+        }}
+        tagOptions={tagOptions}
         sort={sort}
-        onSortChange={setSort}
+        onSortChange={(v) => {
+          setSort(v)
+          handlePageChange(1)
+        }}
         view={view}
         onViewChange={setView}
       />
 
       <section className="overflow-hidden rounded-lg border-[0.5px] border-border bg-surface shadow-1">
-        {selection.count > 0 && <BulkBar count={selection.count} onClear={selection.clear} />}
+        {isZeroClients && (
+          <EmptyState
+            icon={Users}
+            title="Клиентов пока нет"
+            message="Добавьте первого клиента, чтобы начать работу."
+            action={
+              <button
+                type="button"
+                onClick={() => open('new-client')}
+                className="mt-1 inline-flex h-9 items-center gap-1.5 rounded-full bg-fg px-4 text-[13px] font-semibold text-bg transition-colors hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-primary dark:text-[#06120c] dark:hover:bg-[#5ee9b8]"
+              >
+                <UserPlus className="size-3.5" />
+                Добавить клиента
+              </button>
+            }
+          />
+        )}
 
-        <div className="@container">
-          {visible.length === 0 ? (
-            <EmptyState onReset={resetFilters} />
-          ) : view === 'cards' ? (
-            <div className="grid gap-3 p-4 @min-[640px]:grid-cols-2 @min-[980px]:grid-cols-3">
-              {visible.map((c) => (
-                <ClientCard key={c.id} client={c} variant="grid" />
-              ))}
-            </div>
-          ) : (
-            <>
-              <div className="hidden @min-[640px]:block">
-                <DataTable
-                  data={visible}
-                  columns={clientColumns}
-                  getRowId={(c) => c.id}
-                  sort={sort}
-                  onSort={(key) => handleSort(key as ClientSortKey)}
-                  selection={selection}
-                  selectAllLabel="Выбрать всех"
-                  rowLabel={(c) => c.name}
-                  onRowClick={(c) => navigate(ROUTES.client(c.id))}
-                />
-              </div>
-              <div className="@min-[640px]:hidden">
-                {visible.map((c) => (
-                  <ClientCard key={c.id} client={c} variant="list" />
-                ))}
-              </div>
-            </>
-          )}
-        </div>
+        {isFilterEmpty && (
+          <EmptyState
+            icon={Search}
+            title="Ничего не найдено"
+            message="Под текущие фильтры нет клиентов. Попробуйте изменить запрос."
+            action={
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="mt-1 inline-flex h-9 items-center rounded-full bg-fg px-4 text-[13px] font-semibold text-bg transition-colors hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-primary dark:text-[#06120c] dark:hover:bg-[#5ee9b8]"
+              >
+                Сбросить фильтры
+              </button>
+            }
+          />
+        )}
 
-        <Pagination
-          page={data.currentPage}
-          pageCount={data.totalPages}
-          shown={visible.length}
-          total={data.totalCount}
-          noun="клиентов"
-        />
+        {items.length > 0 && (
+          <div className="divide-y-0">
+            {items.map((c) => (
+              <ClientRow key={c.id} client={c} />
+            ))}
+          </div>
+        )}
+
+        {!isZeroClients && (
+          <Pagination
+            page={data.page}
+            pageCount={pageCount}
+            onPageChange={handlePageChange}
+            shown={items.length}
+            total={data.total}
+            noun="клиентов"
+          />
+        )}
       </section>
     </div>
-  );
+  )
 }

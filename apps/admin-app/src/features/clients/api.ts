@@ -61,7 +61,7 @@ export function useClient(id: string) {
   return useQuery({
     queryKey: clientsKeys.detail(id),
     queryFn: async () => {
-      const raw = await staffRequest('get', '/api/v1/clients/{id}', { params: { id } })
+      const raw = await staffRequest('get', '/api/v1/clients/{client_id}', { params: { client_id: id } })
       return ClientSchema.parse((raw as { data: unknown }).data)
     },
     enabled: !!id,
@@ -96,7 +96,10 @@ export function useUpdateClient() {
       id: string
       body: ClientUpdateInput
     }): Promise<ClientData> => {
-      const raw = await staffRequest('patch', '/api/v1/clients/{id}', { params: { id }, body })
+      const raw = await staffRequest('patch', '/api/v1/clients/{client_id}', {
+        params: { client_id: id },
+        body,
+      })
       return ClientSchema.parse((raw as { data: unknown }).data)
     },
     onSettled: (_data, _err, vars) => {
@@ -110,7 +113,7 @@ export function useDeleteClient() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: string) =>
-      staffRequest('delete', '/api/v1/clients/{id}', { params: { id } }),
+      staffRequest('delete', '/api/v1/clients/{client_id}', { params: { client_id: id } }),
     onSettled: (_data, _err, id) => {
       void qc.invalidateQueries({ queryKey: clientsKeys.lists() })
       void qc.invalidateQueries({ queryKey: clientsKeys.detail(id) })
