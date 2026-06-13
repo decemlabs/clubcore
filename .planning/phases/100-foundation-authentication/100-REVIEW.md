@@ -35,7 +35,7 @@ findings:
   warning: 6
   info: 3
   total: 11
-status: issues_found
+status: fixes_applied
 ---
 
 # Phase 100: Code Review Report
