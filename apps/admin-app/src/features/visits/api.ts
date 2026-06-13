@@ -96,17 +96,20 @@ export function useGymMeta() {
 // ---------------------------------------------------------------------------
 
 type CheckInVars = { clientId: string; clientName: string; currentUserId: string };
+type VisitsListPage = { items: VisitData[]; total: number; page: number; pageSize: number };
 type CheckInCtx = {
-  listSnapshots: [
-    readonly unknown[],
-    { items: VisitData[]; total: number; page: number; pageSize: number } | undefined,
-  ][];
+  // Snapshots for ALL visits queries (lists + byClient families) for full rollback.
+  allSnapshots: [readonly unknown[], VisitsListPage | undefined][];
 };
 
 /**
  * Post a visit check-in (POST /api/v1/visits {clientId}).
  *
- * Optimistic: prepends a placeholder row to all cached lists; rolls back on error.
+ * Optimistic: prepends a placeholder row to all cached list queries; rolls back on error.
+ * CR-03: cancel/snapshot/rollback/invalidate now covers visitsKeys.all (not just
+ * visitsKeys.lists()) so the byClient family (useClientVisits on client-detail page)
+ * is also cancelled, snapshotted, and refreshed after a successful check-in.
+ *
  * 409 codes (outside_gym_hours / no_active_membership / duplicate_checkin) are NOT
  * toasted here — the caller (CheckInModal) catches ApiError.code and maps to specific
  * Russian copy. Pattern: bookings/api.ts useCreateBooking.
@@ -121,14 +124,12 @@ export function useCheckIn() {
       return VisitSchema.parse((raw as { data: unknown }).data);
     },
     onMutate: async ({ clientId, currentUserId }: CheckInVars) => {
-      await qc.cancelQueries({ queryKey: visitsKeys.lists() });
-      const listSnapshots = qc.getQueriesData<{
-        items: VisitData[];
-        total: number;
-        page: number;
-        pageSize: number;
-      }>({
-        queryKey: visitsKeys.lists(),
+      // CR-03: cancel ALL visits queries (lists + byClient) to prevent race conditions.
+      await qc.cancelQueries({ queryKey: visitsKeys.all });
+
+      // Snapshot all visits queries for full rollback on error.
+      const allSnapshots = qc.getQueriesData<VisitsListPage>({
+        queryKey: visitsKeys.all,
       });
 
       const optimisticRow = {
@@ -136,29 +137,31 @@ export function useCheckIn() {
         clientId,
         membershipId: '',
         checkedInAt: new Date().toISOString(),
-        gymDate: new Date().toISOString().slice(0, 10),
+        gymDate: new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Moscow' }),
         channel: 'reception',
         checkedInBy: currentUserId,
         createdAt: new Date().toISOString(),
         _optimistic: true,
       } as VisitData & { _optimistic: boolean };
 
-      // Prepend optimistic row to each cached list
-      for (const [key, data] of listSnapshots) {
+      // Prepend optimistic row only to list queries (paginated lists have .items).
+      // byClient queries also have .items so they benefit from the same optimistic prepend.
+      for (const [key, data] of allSnapshots) {
         if (!data) continue;
         qc.setQueryData(key, { ...data, items: [optimisticRow, ...data.items] });
       }
 
-      return { listSnapshots };
+      return { allSnapshots };
     },
     onSuccess: () => {
-      // Caller shows toast.success('Визит зафиксирован', { description: clientName }) and closes modal
-      void qc.invalidateQueries({ queryKey: visitsKeys.lists() });
+      // Caller shows toast.success('Визит зафиксирован', { description: clientName }) and closes modal.
+      // CR-03: invalidate all visits queries so byClient family also refreshes.
+      void qc.invalidateQueries({ queryKey: visitsKeys.all });
     },
     onError: (_err, _vars, ctx) => {
-      // Rollback optimistic rows (pattern from memberships freeze/unfreeze)
+      // Rollback all optimistic rows across all visits queries (pattern from memberships freeze/unfreeze).
       if (ctx) {
-        for (const [key, data] of ctx.listSnapshots) {
+        for (const [key, data] of ctx.allSnapshots) {
           qc.setQueryData(key as readonly unknown[], data);
         }
       }
