@@ -5,6 +5,7 @@
  * Keeps React hook rules: useBooking is always called (enabled by id truthy).
  * Shows PageLoading overlay inside the modal while fetching.
  */
+import { useEffect } from 'react';
 import { Loader2 } from '@/components/icons';
 import { useBooking } from '@/features/bookings/api';
 import { BookingDetailModal } from '@/components/modals/BookingDetailModal';
@@ -19,6 +20,16 @@ interface Props {
 
 export function BookingDetailLoader({ bookingId, role, open, onOpenChange }: Props) {
   const { data: booking, isPending, isError } = useBooking(bookingId);
+
+  // WR-02: close the modal after render via effect, not during render.
+  // Calling onOpenChange(false) synchronously in the render body violates React's rules:
+  // it updates parent state during child render, causing cascading re-renders and a
+  // "Cannot update a component while rendering a different component" warning in Strict Mode.
+  useEffect(() => {
+    if (!isPending && (isError || !booking)) {
+      onOpenChange(false);
+    }
+  }, [isPending, isError, booking, onOpenChange]);
 
   if (isPending) {
     return (
@@ -35,8 +46,7 @@ export function BookingDetailLoader({ bookingId, role, open, onOpenChange }: Pro
   }
 
   if (isError || !booking) {
-    // Silently close on error — the transport layer already toasted
-    onOpenChange(false);
+    // Effect above will close the modal; render null in the meantime
     return null;
   }
 
