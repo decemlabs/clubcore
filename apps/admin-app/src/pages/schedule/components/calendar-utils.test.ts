@@ -137,6 +137,32 @@ describe('mergeSlotBookings — type discriminator', () => {
     expect(tueEvent?.type).toBe('booked');
   });
 
+  it('marks a booked-status slot with no confirmed booking as type=booked (wire status respected)', () => {
+    // CR-01: slot.status='booked' (backend wire status) but no confirmed booking in array
+    // (booking was cancelled/completed/no_show and therefore excluded from confirmedBySlot).
+    // Fix: `booking != null || slot.status === 'booked'`
+    //   → booking=undefined, slot.status='booked' → false || true → true → type='booked'
+    // The slot still renders as booked (backend wire status is authoritative),
+    // but bookingId is undefined — the click handler must guard against opening
+    // BookingDetailLoader with bookingId=undefined.
+    const slotBookedStatus: TrainerSlotData = {
+      ...SLOT_MON,
+      id: 'slot-booked-status',
+      status: 'booked', // backend reports booked status; no confirmed booking in list
+    };
+    const events = mergeSlotBookings(
+      [slotBookedStatus],
+      [], // cancelled booking excluded from array
+      trainerColorMap,
+      trainerNameMap,
+      WEEK_START,
+    );
+    expect(events).toHaveLength(1);
+    expect(events[0]!.type).toBe('booked');
+    // bookingId must be undefined — click handler guards against undefined bookingId
+    expect(events[0]!.bookingId).toBeUndefined();
+  });
+
   it('excludes slots outside the 0-6 day window', () => {
     const slotOutsideWeek: TrainerSlotData = {
       ...SLOT_MON,

@@ -88,7 +88,7 @@ export function mergeSlotBookings(
     let type: CalendarEventType;
     if (slot.status === 'cancelled') {
       type = 'cancelled';
-    } else if (booking ?? slot.status === 'booked') {
+    } else if (booking != null || slot.status === 'booked') {
       type = 'booked';
     } else {
       type = 'available';
