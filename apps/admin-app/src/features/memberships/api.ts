@@ -367,16 +367,19 @@ export function useRefundMembership() {
     }: {
       membershipId: string
       body: MembershipRefundInput
-    }) =>
-      staffRequest('post', '/api/v1/memberships/{membership_id}/refund', {
+    }) => {
+      const raw = await staffRequest('post', '/api/v1/memberships/{membership_id}/refund', {
         params: { membership_id: membershipId },
         body,
         // Deliberately NO Idempotency-Key header (UI-SPEC §3.2)
-      }),
-    onSuccess: (_data, vars) => {
+      })
+      return MembershipSchema.parse((raw as { data: unknown }).data)
+    },
+    onSuccess: (data) => {
       toast.success('Возврат оформлен', { description: 'Средства будут возвращены клиенту.' })
-      void qc.invalidateQueries({ queryKey: membershipsKeys.detail(vars.membershipId) })
+      void qc.invalidateQueries({ queryKey: membershipsKeys.detail(data.id) })
       void qc.invalidateQueries({ queryKey: membershipsKeys.lists() })
+      void qc.invalidateQueries({ queryKey: membershipsKeys.byClient(data.clientId) })
     },
     onError: (err) => {
       const msg = err instanceof ApiError ? err.message : undefined
