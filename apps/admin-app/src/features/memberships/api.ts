@@ -165,6 +165,9 @@ export function useFreezeMembership() {
 
       return { listSnapshots, detailSnapshot }
     },
+    onSuccess: () => {
+      toast.success('Абонемент заморожен')
+    },
     onError: (_err, vars, ctx) => {
       if (!ctx) return
       for (const [key, data] of ctx.listSnapshots) {
@@ -179,7 +182,6 @@ export function useFreezeMembership() {
       void qc.invalidateQueries({ queryKey: membershipsKeys.lists() })
       void qc.invalidateQueries({ queryKey: membershipsKeys.detail(vars.membershipId) })
       void qc.invalidateQueries({ queryKey: membershipsKeys.byClient(vars.clientId) })
-      toast.success('Абонемент заморожен')
     },
   })
 }
@@ -235,6 +237,9 @@ export function useUnfreezeMembership() {
 
       return { listSnapshots, detailSnapshot }
     },
+    onSuccess: () => {
+      toast.success('Абонемент разморожен')
+    },
     onError: (_err, vars, ctx) => {
       if (!ctx) return
       for (const [key, data] of ctx.listSnapshots) {
@@ -249,7 +254,6 @@ export function useUnfreezeMembership() {
       void qc.invalidateQueries({ queryKey: membershipsKeys.lists() })
       void qc.invalidateQueries({ queryKey: membershipsKeys.detail(vars.membershipId) })
       void qc.invalidateQueries({ queryKey: membershipsKeys.byClient(vars.clientId) })
-      toast.success('Абонемент разморожен')
     },
   })
 }
