@@ -16,13 +16,13 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { staffRequest, mockResponse, ApiError } from '@/api/client';
-import { useSession } from '@/features/auth/api';
 import { can } from '@/shared/session/can';
 import { reportsData } from '@/mocks/reports';
 import type { ReportsData } from './types';
 import { reportsQueryKeys } from './keys';
 import { VisitsReportSchema, RevenueReportSchema } from './schemas';
 import type { VisitsReportQuery, RevenueReportQuery } from './schemas';
+import type { Role } from '@/shared/session/types';
 
 // ---------------------------------------------------------------------------
 // Legacy key factory — preserved for Phase 104 (ReportsPage.tsx)
@@ -57,10 +57,12 @@ export function useReports() {
 /**
  * Visits aggregate report (GET /api/v1/reports/visits — OWNER_ONLY).
  * Returns sparse hourly+daily buckets; callers must zero-fill (utils.ts).
+ *
+ * WR-04: accepts `role` as a parameter instead of calling useSession() internally.
+ * The caller (useLoad → LoadPage) already has the resolved role from the RBAC guard,
+ * so this avoids a double-waterfall (session fetch → role resolved → report fetch).
  */
-export function useVisitsReport(query: VisitsReportQuery) {
-  const session = useSession();
-  const role = session.data?.role ?? 'reception';
+export function useVisitsReport(query: VisitsReportQuery, role: Role) {
   return useQuery({
     queryKey: reportsQueryKeys.visits(query),
     queryFn: async () => {
@@ -77,10 +79,11 @@ export function useVisitsReport(query: VisitsReportQuery) {
 /**
  * Revenue report (GET /api/v1/reports/revenue — OWNER_ONLY).
  * Returns sparse period buckets (day|month); callers must zero-fill (utils.ts).
+ *
+ * WR-04: accepts `role` as a parameter instead of calling useSession() internally.
+ * Mirrors usePaymentsLedger which already receives role from the caller.
  */
-export function useRevenueReport(query: RevenueReportQuery) {
-  const session = useSession();
-  const role = session.data?.role ?? 'reception';
+export function useRevenueReport(query: RevenueReportQuery, role: Role) {
   return useQuery({
     queryKey: reportsQueryKeys.revenue(query),
     queryFn: async () => {

@@ -79,8 +79,8 @@ function FinancePageContent({ role }: { role: Role }) {
   const [groupBy, setGroupBy] = useState<'day' | 'month'>('day');
   const [page, setPage] = useState(1);
 
-  // Revenue tab data
-  const revenueQuery = useRevenueReport({ fromDate, toDate, groupBy });
+  // Revenue tab data — WR-04: pass role directly to avoid session double-waterfall
+  const revenueQuery = useRevenueReport({ fromDate, toDate, groupBy }, role);
 
   // Online payments tab data (method='online' filter)
   const onlineFilter = { receivedFrom: fromDate, receivedTo: toDate, method: 'online' as const, page, pageSize: PAGE_SIZE };

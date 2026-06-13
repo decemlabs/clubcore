@@ -16,6 +16,7 @@
 import { useVisitsReport } from '@/features/reports/api';
 import { fillHourlyBuckets, fillDailyBuckets } from '@/features/reports/utils';
 import type { VisitsReportQuery } from '@/features/reports/schemas';
+import type { Role } from '@/shared/session/types';
 
 export { reportsQueryKeys as loadKeys } from '@/features/reports/keys';
 
@@ -26,9 +27,12 @@ export { reportsQueryKeys as loadKeys } from '@/features/reports/keys';
  * - hourly: 24 points (hours 0–23), missing → count:0
  * - daily: every day in [fromDate, toDate], missing → count:0
  * averagePerDay is passed through unchanged.
+ *
+ * WR-04: accepts `role` parameter, forwarded to useVisitsReport to avoid
+ * the double-waterfall (session fetch → role resolved → report fetch).
  */
-export function useLoad(query: VisitsReportQuery) {
-  const result = useVisitsReport(query);
+export function useLoad(query: VisitsReportQuery, role: Role) {
+  const result = useVisitsReport(query, role);
   // Transform sparse → complete only when data is present
   const data = result.data
     ? {

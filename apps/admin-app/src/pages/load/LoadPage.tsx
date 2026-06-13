@@ -24,6 +24,7 @@ import { LoadPageHead } from './components/LoadPageHead';
 import { LoadKpis } from './components/LoadKpis';
 import { LoadHeatmapCard } from './components/LoadHeatmapCard';
 import { mskTodayISO, mskDaysAgoISO } from '@/lib/format';
+import type { Role } from '@/shared/session/types';
 
 // LiveNowCard intentionally omitted — TODO Phase 104: wire LiveNow to real-time endpoint.
 
@@ -42,15 +43,15 @@ export function LoadPage() {
     );
   }
 
-  return <LoadPageContent />;
+  return <LoadPageContent role={role} />;
 }
 
-function LoadPageContent() {
+function LoadPageContent({ role }: { role: Role }) {
   const [fromDate, setFromDate] = useState(() => mskDaysAgoISO(29));
   const [toDate, setToDate] = useState(() => mskTodayISO());
 
   const query = { fromDate, toDate };
-  const { data, isPending, isFetching, isError, refetch } = useLoad(query);
+  const { data, isPending, isFetching, isError, refetch } = useLoad(query, role);
 
   // Initial full-page skeleton.
   if (isPending) return <PageLoading />;
