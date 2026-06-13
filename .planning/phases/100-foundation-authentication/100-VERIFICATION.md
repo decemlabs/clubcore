@@ -1,23 +1,25 @@
 ---
 phase: 100-foundation-authentication
 verified: 2026-06-13T12:26:00Z
-status: human_needed
-score: 14/14 must-haves verified
+status: passed
+score: 16/16 (14 automated + 2 human-validated live)
 overrides_applied: 0
 human_verification:
   - test: "Staff member logs in, receives cc_access/cc_refresh/clubcore_csrf cookies, and the session survives a full browser refresh"
     expected: "After login, refreshing the browser still shows the authenticated dashboard (not the login page); dev tools show cc_* cookies persisted; the CSRF cookie is JS-readable"
     why_human: "Requires a running docker compose up stack; cookie round-trip cannot be verified by static analysis or unit tests"
+    result: "PASS — validated live 2026-06-13 against docker compose stack. Login owner@clubcore.dev → POST /auth/login 200 → dashboard; GET /auth/me 200; hard reload (ignoreCache) stayed on / with role «Владелец/Owner»; document.cookie exposes clubcore_csrf but NOT cc_access/cc_refresh (httpOnly confirmed)."
   - test: "Mid-session 401 — expire the cc_access cookie server-side and perform any query"
     expected: "The app transparently navigates to /login?state=expired; the ExpiredScreen renders; no crash or stale data visible; network tab shows exactly one POST /api/v1/auth/refresh before the redirect"
     why_human: "Requires a live backend, manual cookie manipulation in DevTools, and browser-level observation of the redirect sequence"
+    result: "PASS — validated live 2026-06-13. Cleared cookies via POST /auth/logout (200), then forced a reconnect refetch: GET /auth/me 401 → POST /auth/refresh 401 (one refresh per 401, single-flight) → navigated to /login?state=expired; «Сессия истекла» screen rendered, no crash, _redirecting storm-collapse held it to a single redirect."
 ---
 
 # Phase 100: Foundation + Authentication — Verification Report
 
 **Phase Goal:** admin-app is in the clubcore repo, talks to the real backend over staff cookies + CSRF, the deferred screens are gated, and a staff member can log in / log out / see their role reflected in the UI.
 **Verified:** 2026-06-13T12:26:00Z
-**Status:** human_needed
+**Status:** passed (14 automated + 2 human items validated live 2026-06-13)
 **Re-verification:** No — initial verification
 
 ---
