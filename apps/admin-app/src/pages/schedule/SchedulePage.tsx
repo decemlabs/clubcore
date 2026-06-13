@@ -1,11 +1,23 @@
 import { useMemo, useState } from 'react';
-import { useSchedule } from '@/features/schedule/api';
+// TODO Phase 102-03: replace mock with useTrainerSlots (real schedule read layer)
+import { useQuery } from '@tanstack/react-query';
+import { mockResponse } from '@/api/client';
+import { scheduleData } from '@/mocks/schedule';
+import type { ScheduleData } from '@/features/schedule/types';
 import { PageLoading, PageError } from '@/components/feedback/PageState';
 import { useModals } from '@/components/modals/modals-context';
 import { Plus } from '@/components/icons';
 import { SchedulePageHead, type CalView } from './components/SchedulePageHead';
 import { ScheduleToolbar, type ScheduleFilters } from './components/ScheduleToolbar';
 import { WeekCalendar } from './components/WeekCalendar';
+
+/** Interim mock hook — will be replaced in Phase 102-03 with real calendar read-merge. */
+function useSchedule() {
+  return useQuery({
+    queryKey: ['schedule', 'week', 'mock'],
+    queryFn: () => mockResponse<ScheduleData>(scheduleData),
+  });
+}
 
 export function SchedulePage() {
   const { data, isPending, isError, refetch } = useSchedule();
