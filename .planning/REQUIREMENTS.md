@@ -40,7 +40,7 @@
 
 ### SCH — Schedule & Bookings
 
-- [ ] **SCH-01**: the Schedule screen renders real trainer slots (`/trainer-slots`), recurring templates (`/recurring-templates`) and time-off (`/time-off`); create/edit are owner-only.
+- [x] **SCH-01**: the Schedule screen renders real trainer slots (`/trainer-slots`), recurring templates (`/recurring-templates`) and time-off (`/time-off`); create/edit are owner-only.
 - [ ] **SCH-02**: staff books / cancels / completes a PT booking against a slot (`/bookings`, `/pt-sessions`); race-safe conflicts surface as a clear state.
 
 ### TRN — Trainers & Payroll
@@ -132,7 +132,7 @@ Which phases cover which requirements.
 | MEM-01 | Phase 101 | Complete |
 | MEM-02 | Phase 101 | Complete |
 | MEM-03 | Phase 101 | Complete |
-| SCH-01 | Phase 102 | Pending |
+| SCH-01 | Phase 102 | Complete |
 | SCH-02 | Phase 102 | Pending |
 | TRN-01 | Phase 102 | Pending |
 | TRN-02 | Phase 102 | Pending |
