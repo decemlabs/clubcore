@@ -32,7 +32,7 @@ import { OnlinePaymentsTable } from './components/OnlinePaymentsTable';
 import type { Role } from '@/shared/session/types';
 import type { RevenueBucket } from '@/features/reports/schemas';
 import type { PaymentData } from '@/features/payments/schemas';
-import { mskTodayISO, mskDaysAgoISO } from '@/lib/format';
+import { mskTodayISO, mskDaysAgoISO, formatDateRu } from '@/lib/format';
 
 const TABS = [
   { key: 'revenue', label: 'Выручка' },
@@ -104,7 +104,7 @@ function FinancePageContent({ role }: { role: Role }) {
     <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-4 px-4 pb-10 pt-5 sm:px-6 sm:pb-12 sm:pt-6 lg:px-7">
       <PageHeader
         title="Финансы"
-        subtitle={`${fromDate} – ${toDate} · выручка и онлайн-платежи`}
+        subtitle={`${formatDateRu(fromDate, 'dd.MM.yy')} – ${formatDateRu(toDate, 'dd.MM.yy')} · выручка и онлайн-платежи`}
         actions={
           <DateRangePicker from={fromDate} to={toDate} onChange={handleRangeChange} />
         }
