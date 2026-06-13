@@ -78,6 +78,13 @@ export const NAV_SECTIONS: NavSection[] = [
       },
       { label: 'Посещаемость', to: ROUTES.attendance, icon: Activity },
       { label: 'Загруженность', to: ROUTES.load, icon: Clock, ownerOnly: true, ownerResource: 'reports' },
+      {
+        label: 'Журнал действий',
+        to: ROUTES.audit,
+        icon: Activity,
+        ownerOnly: true,
+        ownerResource: 'audit-log',
+      },
     ],
   },
   {

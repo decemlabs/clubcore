@@ -40,7 +40,12 @@ import { LoadHeatmapCard } from '@/pages/load/components/LoadHeatmapCard';
 import { fillHourlyBuckets, fillDailyBuckets } from '@/features/reports/utils';
 import { mskTodayISO, mskDaysAgoISO, formatRub } from '@/lib/format';
 import type { Role } from '@/shared/session/types';
-import type { TrainerRow } from '@/features/reports/schemas';
+import type {
+  TrainerRow,
+  RevenueBucket,
+  VisitsReportDailyBucket,
+  VisitsReportHourlyBucket,
+} from '@/features/reports/schemas';
 
 // ---------------------------------------------------------------------------
 // Tab config
@@ -280,7 +285,7 @@ function RevenueTab({
   groupBy: 'day' | 'month';
   onGroupByChange: (v: string) => void;
   query: {
-    data: { buckets: import('@/features/reports/schemas').RevenueBucket[]; fromDate: string; toDate: string; groupBy: 'day' | 'month' } | undefined;
+    data: { buckets: RevenueBucket[]; fromDate: string; toDate: string; groupBy: 'day' | 'month' } | undefined;
     isPending: boolean;
     isFetching: boolean;
     isError: boolean;
@@ -400,8 +405,8 @@ function VisitsTab({
 }: {
   query: {
     data: {
-      daily: import('@/features/reports/schemas').VisitsReportDailyBucket[];
-      hourly: import('@/features/reports/schemas').VisitsReportHourlyBucket[];
+      daily: VisitsReportDailyBucket[];
+      hourly: VisitsReportHourlyBucket[];
       averagePerDay: number;
       fromDate: string;
       toDate: string;
