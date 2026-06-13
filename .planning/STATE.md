@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Production Admin — Backend Wiring
 status: in-progress
-stopped_at: Phase 103 Plan 01 complete (ATT-01/ATT-02/FIN-01/FIN-02 data layer delivered)
-last_updated: "2026-06-13T17:25:00Z"
-last_activity: "2026-06-13 — Phase 103 Plan 01 complete: visits+payments+reports schemas+keys+utils+hooks wired (useVisitsList/useGymMeta/useCheckIn/usePaymentsLedger/useVisitsReport/useRevenueReport + TDD zero-fill utils)"
+stopped_at: Phase 103 Plan 02 complete (ATT-01 UI delivered — CheckInModal + AttendancePage wired)
+last_updated: "2026-06-13T17:35:00Z"
+last_activity: "2026-06-13 — Phase 103 Plan 02 complete: CheckInModal (client-picker + 3-code 409) + AttendancePage wired to real visits list; VisitsList + AttendancePageHead + attendance/api delegation"
 progress:
   total_phases: 11
   completed_phases: 3
   total_plans: 16
-  completed_plans: 13
-  percent: 27
+  completed_plans: 14
+  percent: 30
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 103 of 106 (Attendance + Finance)
-Plan: 1/4 complete
-Status: Phase 103 Plan 01 complete — data layer done (ATT-01, ATT-02, FIN-01, FIN-02 delivered)
-Last activity: 2026-06-13 — Phase 103 Plan 01 complete: visits+payments+reports schemas+utils+hooks (useVisitsList/useGymMeta/useCheckIn/usePaymentsLedger/useVisitsReport/useRevenueReport + TDD zero-fill)
+Plan: 2/4 complete
+Status: Phase 103 Plan 02 complete — ATT-01 UI delivered (CheckInModal + AttendancePage wired to real visits)
+Last activity: 2026-06-13 — Phase 103 Plan 02 complete: CheckInModal (client-picker + 3 distinct 409 Callouts) + AttendancePage wired to real visits list + VisitsList + AttendancePageHead with check-in button
 
 Progress: [███░░░░░░░] 30%
 
@@ -60,7 +60,7 @@ Progress: [███░░░░░░░] 30%
 
 ### Pending Todos
 
-- Phase 103 Plan 01 complete. Continue with Phase 103 Plan 02 (Attendance page wire).
+- Phase 103 Plan 02 complete. Continue with Phase 103 Plan 03 (Load page wire + nav gating + cashbox).
 
 ### Phase 101 Decisions
 
@@ -84,6 +84,9 @@ Progress: [███░░░░░░░] 30%
 - **D-103-01-SESSION-FROM-CALLER**: useCheckIn receives currentUserId as a mutation var from caller rather than calling useSession() internally — avoids hook coupling in mutationFn, keeps hook context-free
 - **D-103-01-LEGACY-USEREPORTS**: useReports() + reportsKeys preserved in reports/api.ts so ReportsPage (Phase 104 scope) builds without changes; reportsQueryKeys uses ['reports-data'] root to avoid key collision
 - **D-103-01-NOSESSION-VISITS**: visits/api.ts does NOT import useSession — currentUserId is caller-provided via CheckInVars; payments/api.ts accepts role as explicit parameter
+- **D-103-02-CHECKIN-RENAME**: Old mock CheckinModal.tsx (QR scanner) replaced/renamed to CheckInModal.tsx with real client-picker + 3-code 409 implementation; git mv used for proper case rename on macOS case-insensitive FS
+- **D-103-02-ATTENDANCE-STATIC-RANGE**: AttendancePage uses static last-30-days range (no date picker); date-range filter UI deferred to Phase 103-03+ where cashbox/finance also need it (shared component)
+- **D-103-02-CLIENTNAME-TODO**: VisitData does not embed clientName from server; VisitsList shows fallback label; N+1 client fetches avoided; wiring deferred to Phase 104
 
 ### Phase 100 Decisions
 
@@ -121,6 +124,6 @@ v3.0 in-progress deferrals:
 
 ## Session Continuity
 
-Last session: 2026-06-13T17:25:28.000Z
-Stopped at: Phase 101 Plan 04 complete (CLI-02 delivered — visits/payments/memberships tabs wired)
-Resume: Phase 101 complete. Continue with Phase 102 (Schedule + Trainers).
+Last session: 2026-06-13T17:35:00Z
+Stopped at: Phase 103 Plan 02 complete (ATT-01 UI delivered — CheckInModal + AttendancePage wired to real visits)
+Resume: Phase 103 Plan 02 complete. Continue with Phase 103 Plan 03 (Load + nav gating + cashbox).
