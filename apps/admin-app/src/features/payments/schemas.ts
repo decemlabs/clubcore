@@ -44,3 +44,25 @@ export const PaymentsListResponseSchema = z.object({
   }),
 });
 export type PaymentsListResponse = z.infer<typeof PaymentsListResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// Global ledger query params (GET /api/v1/payments — OWNER_ONLY)
+// ---------------------------------------------------------------------------
+
+export const PaymentsLedgerQuerySchema = z.object({
+  receivedFrom: z.string().optional(),
+  receivedTo: z.string().optional(),
+  method: z.enum(['cash', 'online']).optional(),
+  page: z.number().optional(),
+  pageSize: z.number().optional(),
+});
+export type PaymentsLedgerQuery = z.infer<typeof PaymentsLedgerQuerySchema>;
+
+// ---------------------------------------------------------------------------
+// Client-side computed daily total
+// ---------------------------------------------------------------------------
+
+export type DailyTotal = {
+  date: string; // ISO date string 'YYYY-MM-DD' (MSK)
+  totalKopecks: number; // signed sum (refunds subtract)
+};

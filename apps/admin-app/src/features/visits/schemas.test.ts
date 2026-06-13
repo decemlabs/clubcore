@@ -1,9 +1,9 @@
 /**
- * TDD tests for visits domain Zod schemas (Phase 101-04).
+ * TDD tests for visits domain Zod schemas (Phase 101-04, extended Phase 103-01).
  * RED phase: written before schemas.ts exists.
  */
 import { describe, expect, it } from 'vitest'
-import { VisitSchema, VisitsListResponseSchema } from './schemas'
+import { VisitSchema, VisitsListResponseSchema, VisitsListQuerySchema, GymMetaSchema, CheckInInputSchema } from './schemas'
 
 describe('VisitSchema', () => {
   const baseVisit = {
@@ -88,5 +88,70 @@ describe('VisitsListResponseSchema', () => {
 
   it('rejects missing data field', () => {
     expect(() => VisitsListResponseSchema.parse({ items: [] })).toThrow()
+  })
+})
+
+describe('VisitsListQuerySchema', () => {
+  it('accepts an empty object (all fields optional)', () => {
+    expect(() => VisitsListQuerySchema.parse({})).not.toThrow()
+  })
+
+  it('accepts a full filter object', () => {
+    const filter = {
+      from: '2026-06-01',
+      to: '2026-06-30',
+      clientId: 'client-1',
+      page: 1,
+      pageSize: 25,
+    }
+    expect(() => VisitsListQuerySchema.parse(filter)).not.toThrow()
+  })
+
+  it('returns typed fields when provided', () => {
+    const result = VisitsListQuerySchema.parse({ from: '2026-06-01', page: 2 })
+    expect(result.from).toBe('2026-06-01')
+    expect(result.page).toBe(2)
+    expect(result.clientId).toBeUndefined()
+  })
+})
+
+describe('GymMetaSchema', () => {
+  it('accepts a valid data-wrapped gym meta shape', () => {
+    const meta = {
+      data: {
+        gymHoursStart: '07:00',
+        gymHoursEnd: '23:00',
+      },
+    }
+    expect(() => GymMetaSchema.parse(meta)).not.toThrow()
+  })
+
+  it('returns gymHoursStart and gymHoursEnd from data', () => {
+    const result = GymMetaSchema.parse({ data: { gymHoursStart: '08:00', gymHoursEnd: '22:00' } })
+    expect(result.data.gymHoursStart).toBe('08:00')
+    expect(result.data.gymHoursEnd).toBe('22:00')
+  })
+
+  it('rejects missing data field', () => {
+    expect(() => GymMetaSchema.parse({ gymHoursStart: '07:00' })).toThrow()
+  })
+})
+
+describe('CheckInInputSchema', () => {
+  it('rejects empty clientId', () => {
+    expect(() => CheckInInputSchema.parse({ clientId: '' })).toThrow()
+  })
+
+  it('rejects missing clientId', () => {
+    expect(() => CheckInInputSchema.parse({})).toThrow()
+  })
+
+  it('accepts a valid non-empty clientId', () => {
+    expect(() => CheckInInputSchema.parse({ clientId: 'client-123' })).not.toThrow()
+  })
+
+  it('returns the clientId value', () => {
+    const result = CheckInInputSchema.parse({ clientId: 'client-abc' })
+    expect(result.clientId).toBe('client-abc')
   })
 })

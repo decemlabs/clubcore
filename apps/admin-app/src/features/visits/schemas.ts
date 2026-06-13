@@ -38,3 +38,37 @@ export const VisitsListResponseSchema = z.object({
   }),
 });
 export type VisitsListResponse = z.infer<typeof VisitsListResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// Paginated list query params (GET /api/v1/visits)
+// ---------------------------------------------------------------------------
+
+export const VisitsListQuerySchema = z.object({
+  from: z.string().optional(),
+  to: z.string().optional(),
+  clientId: z.string().optional(),
+  page: z.number().optional(),
+  pageSize: z.number().optional(),
+});
+export type VisitsListQuery = z.infer<typeof VisitsListQuerySchema>;
+
+// ---------------------------------------------------------------------------
+// Gym meta (GET /api/v1/visits/_meta) — cacheable
+// ---------------------------------------------------------------------------
+
+export const GymMetaSchema = z.object({
+  data: z.object({
+    gymHoursStart: z.string(), // e.g. "07:00"
+    gymHoursEnd: z.string(), // e.g. "23:00"
+  }),
+});
+export type GymMetaData = z.infer<typeof GymMetaSchema>['data'];
+
+// ---------------------------------------------------------------------------
+// Check-in input (POST /api/v1/visits)
+// ---------------------------------------------------------------------------
+
+export const CheckInInputSchema = z.object({
+  clientId: z.string().min(1, 'Клиент обязателен'),
+});
+export type CheckInInput = z.infer<typeof CheckInInputSchema>;
