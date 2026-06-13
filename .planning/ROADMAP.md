@@ -181,7 +181,11 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
   3. Create and edit client forms validate via Zod, submit to `POST`/`PATCH /api/v1/clients`, and soft-delete via `DELETE`; owner-only actions are gated for reception.
   4. Plans screen lists real membership plans and PT-package plans; create/edit are owner-only gated with a `403` surfaced as a friendly state.
   5. Staff can sell a membership or PT-package (cash, with `Idempotency-Key`); and manage a membership lifecycle — freeze, unfreeze, renew, cancel + refund — with rules surfaced.
-**Plans**: TBD
+**Plans**: 4 plans, 3 waves
+- [ ] 101-01-PLAN.md — Clients domain: list (server search+pagination, filter/sort reduction), detail profile head, create/edit/soft-delete (Zod, owner-gated delete) [CLI-01, CLI-03] · wave 1
+- [ ] 101-02-PLAN.md — Plans domain: membership-plans + pt-package-plans list + owner-only CRUD (immutable-field rules, 403 friendly state) [MEM-01] · wave 1
+- [ ] 101-03-PLAN.md — Memberships + PT-package lifecycle: sell (cash, Idempotency-Key), freeze/unfreeze (optimistic), renew, cancel (owner), refund (required reason, full-only) + net-new RefundScreen [MEM-02, MEM-03] · wave 2
+- [ ] 101-04-PLAN.md — Client-detail child reads: memberships/visits/payments tabs on real data (payments /by-client/{id}, read-only) with per-tab states [CLI-02] · wave 3
 **UI hint**: yes
 
 ### Phase 102: Schedule + Trainers
@@ -262,7 +266,7 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 100. Foundation + Authentication | 4/4 | Complete   | 2026-06-13 |
-| 101. Clients + Memberships | 0/TBD | Not started | - |
+| 101. Clients + Memberships | 0/4 | Planned | - |
 | 102. Schedule + Trainers | 0/TBD | Not started | - |
 | 103. Attendance + Finance | 0/TBD | Not started | - |
 | 104. Dashboard, Reports + Settings | 0/TBD | Not started | - |
