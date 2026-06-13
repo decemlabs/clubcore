@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Production Admin — Backend Wiring
 status: planning
-stopped_at: Phase 100 UI-SPEC approved
-last_updated: "2026-06-13T09:12:58.546Z"
-last_activity: 2026-06-13 — v3.0 roadmap created (Phases 100-106, 30 requirements mapped)
+stopped_at: Phase 100 Plan 04 complete
+last_updated: "2026-06-13T09:21:00Z"
+last_activity: 2026-06-13 — Phase 100 complete (4/4 plans: FND-01..04 + AUTH-01..03 delivered)
 progress:
   total_phases: 11
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
-  completed_plans: 3
-  percent: 0
+  completed_plans: 4
+  percent: 9
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 100 of 106 (Foundation + Authentication)
-Plan: —
-Status: Ready to plan
-Last activity: 2026-06-13 — v3.0 roadmap created (Phases 100-106, 30 requirements mapped)
+Phase: 100 of 106 (Foundation + Authentication) — COMPLETE
+Plan: 4/4 complete
+Status: Phase 100 done; ready for Phase 101 (Clients + Memberships)
+Last activity: 2026-06-13 — Phase 100 complete: workspace absorption, API client + CSRF + 401-redirect, auth hooks (useSession/useLogin/useLogout/password-reset), RequireAuth route guard, RBAC port (41 OWNER_ONLY, byte-parity), ComingSoon hide-for-future, session-driven sidebar
 
-Progress: [████████░░] 75%
+Progress: [██████████] 100%
 
 ## v3.0 Roadmap Summary
 
@@ -60,7 +60,13 @@ Progress: [████████░░] 75%
 
 ### Pending Todos
 
-- Start Phase 100 plan: `/gsd:plan-phase 100`
+- Phase 100 complete. Start Phase 101: `/gsd:plan-phase 101`
+
+### Phase 100 Decisions
+
+- **D-100-04-OWNERFLAG**: Gate only Финансы+Отчёты via ownerOnly=true flag on NavItem; all other remaining items visible to all roles (UI-SPEC authoritative on nav visibility; can() matrix is still the single authority via ownerOnly check)
+- **D-100-04-RBAC-REHOME**: admin-app is CISO-01 parity source; parity test repointed admin-web → admin-app; admin-web untouched (deleted Phase 105)
+- **D-100-04-LEASTPRIV-DEFAULT**: sidebar role defaults to 'reception' while session.isPending; T-100-14 mitigation
 
 ### Blockers/Concerns
 
@@ -83,6 +89,6 @@ Carrying forward from v2.6 close (2026-06-08):
 
 ## Session Continuity
 
-Last session: 2026-06-13T09:12:58.542Z
+Last session: 2026-06-13T09:21:51.487Z
 Stopped at: Phase 100 UI-SPEC approved
-Resume: `/gsd:plan-phase 100` to begin Phase 100 (Foundation + Authentication).
+Resume: `/gsd:plan-phase 101` to begin Phase 101 (Clients + Memberships).

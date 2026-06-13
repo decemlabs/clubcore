@@ -168,7 +168,7 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
 - [x] 100-01-PLAN.md — Workspace absorption (Bun→pnpm `@clubcore/admin-app`, api-client dep, dev proxy, ESLint boundary + VITE_API_MODE chokepoint, dedicated CI job) [FND-01] · wave 1
 - [x] 100-02-PLAN.md — Transport seam (staffRequest: credentials+CSRF `clubcore_csrf`, 401→refresh→retry→session_expired, authBus, QueryClient cache onError; mockResponse preserved) [FND-02] · wave 2
 - [x] 100-03-PLAN.md — Auth domain (zod seam + useSession over `/auth/me`, login/logout, RequireAuth guard + 401-expiry redirect, password-reset, hide twofa, anti-oracle login errors, mock-removal doc) [FND-03, AUTH-01, AUTH-02] · wave 3
-- [ ] 100-04-PLAN.md — RBAC re-home + hide-for-future (port can/registry + repoint parity test, ComingSoon placeholder + deferred-route swap + nav removal, session-driven role badge + can()-gated sidebar) [FND-04, AUTH-03] · wave 4
+- [x] 100-04-PLAN.md — RBAC re-home + hide-for-future (port can/registry + repoint parity test, ComingSoon placeholder + deferred-route swap + nav removal, session-driven role badge + can()-gated sidebar) [FND-04, AUTH-03] · wave 4
 **UI hint**: yes
 
 ### Phase 101: Clients + Memberships
@@ -261,7 +261,7 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 100. Foundation + Authentication | 3/4 | In Progress|  |
+| 100. Foundation + Authentication | 4/4 | Complete   | 2026-06-13 |
 | 101. Clients + Memberships | 0/TBD | Not started | - |
 | 102. Schedule + Trainers | 0/TBD | Not started | - |
 | 103. Attendance + Finance | 0/TBD | Not started | - |
