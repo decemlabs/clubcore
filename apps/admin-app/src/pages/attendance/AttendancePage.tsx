@@ -1,50 +1,94 @@
-import { useAttendance } from '@/features/attendance/api';
+/**
+ * AttendancePage — страница «Посещаемость» (Phase 103-02 ATT-01).
+ *
+ * Wired to real GET /api/v1/visits via useAttendanceList from @/features/attendance/api.
+ *
+ * Scope reduction (UI-SPEC §1.5):
+ * The 9 mock-only analytics widgets (HeatmapCard, PeakHero, HourCurveCard, FrequencyCard,
+ * DayOfWeekCard, DurationCard, CohortCard, AnomalyCards, RiskList) are NOT rendered here.
+ * Files remain on disk for future wiring. No backend in Phase 103 scope.
+ *
+ * Renders: page head (check-in button) + total KPI + real visits list with pagination.
+ * Roles: reception + owner (ATT-01 — NOT owner-only).
+ */
+import { useState } from 'react';
+import { useAttendanceList } from '@/features/attendance/api';
 import { PageLoading, PageError } from '@/components/feedback/PageState';
 import { AttendancePageHead } from './components/AttendancePageHead';
-import { AttendanceFilters } from './components/AttendanceFilters';
-import { AttendanceKpis } from './components/AttendanceKpis';
-import { HeatmapCard } from './components/HeatmapCard';
-import { PeakHero } from './components/PeakHero';
-import { HourCurveCard } from './components/HourCurveCard';
-import { FrequencyCard } from './components/FrequencyCard';
-import { DayOfWeekCard } from './components/DayOfWeekCard';
-import { DurationCard } from './components/DurationCard';
-import { CohortCard } from './components/CohortCard';
-import { AnomalyCards } from './components/AnomalyCards';
-import { RiskList } from './components/RiskList';
+import { VisitsList } from './components/VisitsList';
+import { Activity } from '@/components/icons';
+import { formatDateRu } from '@/lib/format';
+
+// ---------------------------------------------------------------------------
+// Константы фильтра
+// ---------------------------------------------------------------------------
+
+const PAGE_SIZE = 25;
+
+/** ISO-строка сегодняшней даты. */
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** ISO-строка даты N дней назад. */
+function daysAgoISO(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
+// ---------------------------------------------------------------------------
+// KPI — простая плитка с общим числом визитов
+// ---------------------------------------------------------------------------
+
+function TotalVisitsKpi({ total, from, to }: { total: number; from: string; to: string }) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border-[0.5px] border-border bg-surface px-4 py-3">
+      <span className="grid size-9 place-items-center rounded-full bg-surface-3 text-fg-subtle">
+        <Activity className="size-4" />
+      </span>
+      <div>
+        <div className="text-[22px] font-bold tabular-nums tracking-[-0.5px]">{total}</div>
+        <div className="text-[12px] text-fg-subtle">
+          визитов · {formatDateRu(from, 'dd.MM.yy')} – {formatDateRu(to, 'dd.MM.yy')}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Страница
+// ---------------------------------------------------------------------------
 
 export function AttendancePage() {
-  const { data, isPending, isError, refetch } = useAttendance();
+  const [page, setPage] = useState(1);
+
+  const from = daysAgoISO(29);
+  const to = todayISO();
+  const filter = { from, to, page, pageSize: PAGE_SIZE };
+
+  const { data, isPending, isError, refetch } = useAttendanceList(filter);
 
   if (isPending) return <PageLoading />;
   if (isError || !data) return <PageError onRetry={() => void refetch()} />;
 
+  const hasFilter = true; // всегда фильтруем по диапазону дат
+
   return (
     <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-4 px-4 pb-10 pt-5 sm:px-6 sm:pb-12 sm:pt-6 lg:px-7">
-      <AttendancePageHead subtitle={data.subtitle} />
+      <AttendancePageHead subtitle={`${formatDateRu(from, 'dd.MM.yy')} – ${formatDateRu(to, 'dd.MM.yy')}`} />
 
-      <AttendanceFilters />
+      <TotalVisitsKpi total={data.total} from={from} to={to} />
 
-      <AttendanceKpis kpis={data.kpis} />
-
-      <div className="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
-        <HeatmapCard data={data.heatmap} />
-        <PeakHero data={data.peak} />
-      </div>
-
-      <HourCurveCard data={data.curve} />
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[1.2fr_1fr_1fr]">
-        <FrequencyCard data={data.frequency} />
-        <DayOfWeekCard bars={data.dow} />
-        <DurationCard data={data.duration} />
-      </div>
-
-      <CohortCard data={data.cohort} />
-
-      <AnomalyCards items={data.anomalies} />
-
-      <RiskList data={data.risk} />
+      <VisitsList
+        items={data.items}
+        total={data.total}
+        page={data.page}
+        pageSize={data.pageSize}
+        hasFilter={hasFilter}
+        onPageChange={(p) => setPage(p)}
+      />
     </div>
   );
 }

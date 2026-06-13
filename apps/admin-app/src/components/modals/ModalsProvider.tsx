@@ -6,7 +6,7 @@ import {
   type ModalsContextValue,
   type OpenOptions,
 } from './modals-context';
-import { CheckinModal } from './CheckinModal';
+import { CheckInModal } from './CheckInModal';
 import { NewClientModal } from './NewClientModal';
 import { ExtendModal } from './ExtendModal';
 import { BookModal } from './BookModal';
@@ -49,7 +49,7 @@ export function ModalsProvider({ children }: { children: ReactNode }) {
   return (
     <ModalsContext.Provider value={value}>
       {children}
-      <CheckinModal open={active === 'checkin'} onOpenChange={onClose} />
+      <CheckInModal open={active === 'checkin'} onOpenChange={onClose} />
       <NewClientModal open={active === 'new-client'} onOpenChange={onClose} />
       <ExtendModal
         open={active === 'extend'}
