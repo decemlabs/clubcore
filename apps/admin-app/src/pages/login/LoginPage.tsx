@@ -14,7 +14,8 @@ import { ExpiredScreen, LogoutScreen } from './components/SessionScreens'
 type AuthView = 'login' | 'forgot' | 'forgot-sent' | 'reset' | 'expired' | 'logout'
 
 // twofa removed from DEEP_LINKABLE — deep-linking to it falls through to 'login'.
-const DEEP_LINKABLE: AuthView[] = ['expired', 'logout']
+// 'reset' added: the backend email link is /login?state=reset&token=<value> (T-100-11).
+const DEEP_LINKABLE: AuthView[] = ['expired', 'logout', 'reset']
 
 function initialView(param: string | null): AuthView {
   return DEEP_LINKABLE.includes(param as AuthView) ? (param as AuthView) : 'login';
