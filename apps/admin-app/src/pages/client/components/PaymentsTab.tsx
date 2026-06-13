@@ -96,7 +96,7 @@ export function PaymentsTab({ clientId }: { clientId: string }) {
         <EmptyState
           className="py-12"
           title="Нет платежей"
-          message="История платежей клиента появятся здесь."
+          message="История платежей клиента появится здесь."
         />
       </Card>
     )
