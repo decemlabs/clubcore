@@ -4,6 +4,7 @@ import { ROUTES } from './routes'
 import { ErrorPage } from '@/components/feedback/ErrorPage'
 import { RouteErrorBoundary } from '@/components/feedback/RouteErrorBoundary'
 import { RequireAuth } from '@/features/auth/RequireAuth'
+import { ComingSoon } from '@/components/feedback/ComingSoon'
 
 /**
  * Три ветки:
@@ -13,6 +14,9 @@ import { RequireAuth } from '@/features/auth/RequireAuth'
  *
  * Статические подмаршруты (/clients/archive и т.п.) при добавлении регистрируются
  * ДО соответствующих `:id`-маршрутов. Внутренний catch-all '*' рендерит 404 с хромом.
+ *
+ * Отложенные маршруты (FND-04 hide-for-future): рендерят <ComingSoon/> вместо страницы.
+ * Файлы страниц остаются в дереве (не удаляются) и будут подключены в будущих фазах.
  */
 export const routeConfig: RouteObject[] = [
   // (A) Без оболочки.
@@ -31,6 +35,7 @@ export const routeConfig: RouteObject[] = [
     element: <RequireAuth><AppLayout /></RequireAuth>,
     errorElement: <RouteErrorBoundary />,
     children: [
+      // --- Активные маршруты (lazy-load) ---
       {
         path: ROUTES.dashboard,
         lazy: async () => ({
@@ -73,37 +78,10 @@ export const routeConfig: RouteObject[] = [
           Component: (await import('@/pages/trainer/TrainerPage')).TrainerPage,
         }),
       },
-      // Филиалы: список (статический) — ДО :branchId-детали.
-      {
-        path: ROUTES.branches,
-        lazy: async () => ({
-          Component: (await import('@/pages/branches/BranchesPage')).BranchesPage,
-        }),
-      },
-      {
-        path: ROUTES.branch(),
-        lazy: async () => ({
-          Component: (await import('@/pages/branch-settings/BranchSettingsPage'))
-            .BranchSettingsPage,
-        }),
-        handle: { breadcrumb: ['Филиалы'] },
-      },
       {
         path: ROUTES.cashbox,
         lazy: async () => ({
           Component: (await import('@/pages/cashbox/CashboxPage')).CashboxPage,
-        }),
-      },
-      {
-        path: ROUTES.messages,
-        lazy: async () => ({
-          Component: (await import('@/pages/messages/MessagesPage')).MessagesPage,
-        }),
-      },
-      {
-        path: ROUTES.notifications,
-        lazy: async () => ({
-          Component: (await import('@/pages/notifications/NotificationsPage')).NotificationsPage,
         }),
       },
       {
@@ -136,22 +114,6 @@ export const routeConfig: RouteObject[] = [
           Component: (await import('@/pages/settings/SettingsPage')).SettingsPage,
         }),
       },
-      // Подстраницы настроек (статические /settings/*) — крошка задаётся handle.
-      {
-        path: ROUTES.systemSettings,
-        lazy: async () => ({
-          Component: (await import('@/pages/system-settings/SystemSettingsPage'))
-            .SystemSettingsPage,
-        }),
-        handle: { breadcrumb: ['Настройки', 'Система'] },
-      },
-      {
-        path: ROUTES.roles,
-        lazy: async () => ({
-          Component: (await import('@/pages/roles/RolesPage')).RolesPage,
-        }),
-        handle: { breadcrumb: ['Настройки', 'Роли и права'] },
-      },
       {
         path: ROUTES.audit,
         lazy: async () => ({
@@ -159,26 +121,44 @@ export const routeConfig: RouteObject[] = [
         }),
         handle: { breadcrumb: ['Настройки', 'Журнал действий'] },
       },
+
+      // --- Отложенные маршруты (FND-04 hide-for-future) — рендерят <ComingSoon/> ---
+      // Файлы страниц сохранены в дереве; подключаются в будущих фазах.
+      { path: ROUTES.branches,       element: <ComingSoon /> },
+      {
+        path: ROUTES.branch(),
+        element: <ComingSoon />,
+        handle: { breadcrumb: ['Филиалы'] },
+      },
+      { path: ROUTES.messages,       element: <ComingSoon /> },
+      { path: ROUTES.notifications,  element: <ComingSoon /> },
+      {
+        path: ROUTES.systemSettings,
+        element: <ComingSoon />,
+        handle: { breadcrumb: ['Настройки', 'Система'] },
+      },
+      {
+        path: ROUTES.roles,
+        element: <ComingSoon />,
+        handle: { breadcrumb: ['Настройки', 'Роли и права'] },
+      },
       {
         path: ROUTES.trash,
-        lazy: async () => ({
-          Component: (await import('@/pages/trash/TrashPage')).TrashPage,
-        }),
+        element: <ComingSoon />,
         handle: { breadcrumb: ['Настройки', 'Корзина'] },
       },
       {
         path: ROUTES.importExport,
-        lazy: async () => ({
-          Component: (await import('@/pages/import-export/ImportExportPage')).ImportExportPage,
-        }),
+        element: <ComingSoon />,
         handle: { breadcrumb: ['Настройки', 'Импорт / экспорт'] },
       },
+
       { path: '*', element: <ErrorPage code={404} /> },
     ],
   },
 
   // (C) Совместимость со статическим прототипом.
   { path: '/index.html', element: <Navigate to={ROUTES.dashboard} replace /> },
-];
+]
 
-export const router = createBrowserRouter(routeConfig);
+export const router = createBrowserRouter(routeConfig)
