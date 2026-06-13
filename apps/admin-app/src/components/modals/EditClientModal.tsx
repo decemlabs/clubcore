@@ -10,7 +10,7 @@
  * Submit state: disables buttons + shows spinner.
  * Delete button: HIDDEN for reception via can(role, 'delete', 'clients') (T-101-02-OWNERDEL).
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Initials } from '@/components/ui/initials'
 import { Segmented } from '@/components/ui/Segmented'
@@ -85,9 +85,12 @@ function EditClientForm({
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [guard, setGuard] = useState(false)
 
-  // Sync form when client data loads
+  // One-shot init: populate form on first client load only.
+  // Subsequent background refetches must NOT overwrite in-progress edits.
+  const initialised = useRef(false)
   useEffect(() => {
-    if (client) {
+    if (client && !initialised.current) {
+      initialised.current = true
       setForm({
         lastName: client.lastName,
         firstName: client.firstName,
