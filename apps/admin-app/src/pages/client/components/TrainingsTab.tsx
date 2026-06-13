@@ -1,98 +1,108 @@
-import { useState } from 'react';
-import { cn } from '@/lib/cn';
-import { Initials } from '@/components/ui/initials';
-import type { TrainingItem, TrainingsTabData, TrainingType } from '@/features/clients/detail';
-import { Card, CardHead, RichText } from './shared';
+/**
+ * Trainings tab — real PT-packages via usePtPackagesByClient (Phase 101-04).
+ *
+ * Per-tab inline error/empty states (UI-SPEC §Surface 1):
+ *   - loading: Skeleton rows
+ *   - error: inline <PageError onRetry/> (NOT full-page)
+ *   - empty: inline EmptyState (no icon tile) «Нет тренировок» / «Персональные тренировки появятся здесь.»
+ *   - data: real PtPackageData rows (planSnapshot.name, sessionsRemaining, status)
+ *
+ * Read-only display of PT-package data. No lifecycle actions here —
+ * those live in SubscriptionModal (101-03 scope).
+ */
+import { usePtPackagesByClient } from '@/features/pt-packages/api'
+import { formatRub, formatDateRu } from '@/lib/format'
+import { PageError } from '@/components/feedback/PageState'
+import { EmptyState } from '@/components/feedback/EmptyState'
+import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/cn'
+import { Card, CardHead } from './shared'
 
-type Filter = 'all' | TrainingType;
-
-const FILTERS: { value: Filter; label: string }[] = [
-  { value: 'all', label: 'Все' },
-  { value: 'personal', label: 'Персональные' },
-  { value: 'group', label: 'Групповые' },
-];
-
-function TrainingRow({ item }: { item: TrainingItem }) {
-  return (
-    <div className="grid grid-cols-[44px_28px_1fr] items-start gap-x-3 gap-y-1 border-t-[0.5px] border-border px-4 py-3.5 first:border-t-0 sm:px-5 @[520px]:grid-cols-[48px_32px_1fr_auto] @[520px]:gap-3.5">
-      <div className="rounded-[10px] bg-surface-2 py-1.5 text-center">
-        <div className="text-[17px] font-bold leading-none tabular-nums tracking-[-0.4px]">
-          {item.day}
-        </div>
-        <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.4px] text-fg-subtle">
-          {item.month}
-        </div>
-      </div>
-      <Initials
-        initials={item.trainerInitials}
-        color={item.trainerColor}
-        className="size-8 text-xs"
-      />
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2 text-sm font-semibold tracking-[-0.1px]">
-          {item.title}
-          <span className="rounded-full bg-surface-3 px-[7px] py-0.5 text-[10.5px] font-semibold text-fg-muted">
-            {item.tag}
-          </span>
-        </div>
-        <div className="mt-[3px] text-xs text-fg-muted">
-          <RichText value={item.meta} />
-        </div>
-        <div className="mt-1.5 text-[12.5px] italic text-fg-muted">{item.note}</div>
-      </div>
-      <div className="whitespace-nowrap pt-1 text-sm font-bold tabular-nums tracking-[-0.2px] @max-[520px]:col-span-3 @max-[520px]:pt-0 @max-[520px]:text-right">
-        {item.amount}
-      </div>
-    </div>
-  );
+const STATUS_LABEL: Record<string, string> = {
+  active: 'Активный',
+  exhausted: 'Исчерпан',
+  expired: 'Истёк',
+  cancelled: 'Отменён',
 }
 
-export function TrainingsTab({ data }: { data: TrainingsTabData }) {
-  const [filter, setFilter] = useState<Filter>('all');
-  const items = data.items.filter((i) => filter === 'all' || i.type === filter);
+const STATUS_TONE: Record<string, string> = {
+  active: 'bg-primary-soft text-primary-deep dark:text-primary',
+  exhausted: 'bg-surface-3 text-fg-muted',
+  expired: 'bg-surface-3 text-fg-muted',
+  cancelled: 'bg-danger-soft text-danger',
+}
+
+function PtPackageRow({ item }: { item: { id: string; planSnapshot: { name: string; priceKopecks: number }; sessionsRemaining: number; sessionsTotal: number; amountKopecks: number; status: string; createdAt: string } }) {
+  const tone = STATUS_TONE[item.status] ?? 'bg-surface-3 text-fg-muted'
+  const statusLabel = STATUS_LABEL[item.status] ?? item.status
+
+  return (
+    <div className="grid grid-cols-[1fr_auto] items-center gap-3 border-t-[0.5px] border-border px-4 py-3 first:border-t-0 sm:px-5">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <div className="truncate text-[13.5px] font-semibold tracking-[-0.1px]">
+            {item.planSnapshot.name}
+          </div>
+          <span className={cn('shrink-0 rounded-full px-[7px] py-px text-[11px] font-semibold', tone)}>
+            {statusLabel}
+          </span>
+        </div>
+        <div className="mt-0.5 text-[11.5px] tabular-nums text-fg-subtle">
+          Занятий: {item.sessionsRemaining} из {item.sessionsTotal}
+          {' · '}
+          {formatDateRu(item.createdAt, 'd MMM yyyy')}
+        </div>
+      </div>
+      <div className="shrink-0 text-sm font-bold tabular-nums tracking-[-0.2px]">
+        {formatRub(item.amountKopecks)}
+      </div>
+    </div>
+  )
+}
+
+export function TrainingsTab({ clientId }: { clientId: string }) {
+  const { data, isPending, isError, refetch } = usePtPackagesByClient(clientId)
+
+  if (isPending) {
+    return (
+      <Card className="px-4 py-4 sm:px-5">
+        <Skeleton className="mb-2 h-10 w-full" />
+        <Skeleton className="mb-2 h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+      </Card>
+    )
+  }
+
+  if (isError) {
+    return (
+      <Card>
+        <PageError onRetry={() => void refetch()} />
+      </Card>
+    )
+  }
+
+  const items = data?.items ?? []
+
+  if (items.length === 0) {
+    return (
+      <Card>
+        <EmptyState
+          className="py-12"
+          title="Нет тренировок"
+          message="Персональные тренировки появятся здесь."
+        />
+      </Card>
+    )
+  }
 
   return (
     <Card>
-      <CardHead
-        title={data.title}
-        sub={data.sub}
-        action={
-          <div className="inline-flex gap-px rounded-full bg-surface-3 p-0.5">
-            {FILTERS.map((f) => {
-              const active = f.value === filter;
-              return (
-                <button
-                  key={f.value}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => setFilter(f.value)}
-                  className={cn(
-                    'h-[22px] rounded-full px-[9px] text-[11.5px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                    active ? 'bg-surface text-fg shadow-1' : 'text-fg-muted hover:text-fg',
-                  )}
-                >
-                  {f.label}
-                </button>
-              );
-            })}
-          </div>
-        }
-      />
+      <CardHead title="Пакеты тренировок" sub={`${items.length} пакет(ов)`} />
       <div className="border-t-[0.5px] border-border">
-        {items.length > 0 ? (
-          items.map((item) => <TrainingRow key={item.id} item={item} />)
-        ) : (
-          <div className="px-5 py-10 text-center text-[13px] text-fg-subtle">
-            Нет тренировок в этой категории
-          </div>
-        )}
+        {items.map((item) => (
+          <PtPackageRow key={item.id} item={item} />
+        ))}
       </div>
-      <button
-        type="button"
-        className="w-full border-t-[0.5px] border-border py-3.5 text-[12.5px] font-semibold text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
-      >
-        {data.moreLabel}
-      </button>
     </Card>
-  );
+  )
 }

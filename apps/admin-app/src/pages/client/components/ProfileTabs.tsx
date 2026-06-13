@@ -1,7 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { Activity, CreditCard, FileText, MessageSquare, User } from '@/components/icons';
-import type { ClientDetail } from '@/features/clients/detail';
 
 export type ProfileTabKey = 'activity' | 'trainings' | 'payments' | 'chat' | 'notes';
 
@@ -13,21 +12,28 @@ interface TabDef {
   accent?: boolean;
 }
 
+interface ProfileTabCounts {
+  trainings?: number;
+  payments?: number;
+  chat?: number;
+  notes?: number;
+}
+
 export function ProfileTabs({
   counts,
   value,
   onChange,
 }: {
-  counts: ClientDetail['counts'];
+  counts?: ProfileTabCounts;
   value: ProfileTabKey;
   onChange: (key: ProfileTabKey) => void;
 }) {
   const tabs: TabDef[] = [
     { key: 'activity', label: 'Активность', icon: Activity },
-    { key: 'trainings', label: 'Тренировки', icon: User, count: counts.trainings },
-    { key: 'payments', label: 'Платежи', icon: CreditCard, count: counts.payments },
-    { key: 'chat', label: 'Чат', icon: MessageSquare, count: counts.chat, accent: true },
-    { key: 'notes', label: 'Заметки', icon: FileText, count: counts.notes },
+    { key: 'trainings', label: 'Тренировки', icon: User, count: counts?.trainings },
+    { key: 'payments', label: 'Платежи', icon: CreditCard, count: counts?.payments },
+    { key: 'chat', label: 'Чат', icon: MessageSquare, count: counts?.chat, accent: true },
+    { key: 'notes', label: 'Заметки', icon: FileText, count: counts?.notes },
   ];
 
   return (

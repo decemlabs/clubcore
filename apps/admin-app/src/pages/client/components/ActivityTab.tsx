@@ -1,92 +1,91 @@
-import type { LucideIcon } from 'lucide-react';
-import { cn } from '@/lib/cn';
-import { FileText, Lock, MessageSquare, User } from '@/components/icons';
-import type {
-  ActivityEvent,
-  ActivityKind,
-  ActivityTone,
-  ClientDetail,
-} from '@/features/clients/detail';
-import { Card, MiniButton, RichText } from './shared';
+/**
+ * Activity tab — real client visits via useClientVisits (Phase 101-04).
+ *
+ * Per-tab inline error/empty states (UI-SPEC §Surface 1):
+ *   - loading: Skeleton rows
+ *   - error: inline <PageError onRetry/> (NOT full-page)
+ *   - empty: inline EmptyState (no icon tile) «Нет активности» / «Визиты клиента появятся здесь.»
+ *   - data: real VisitData rows (checkedInAt, gymDate, channel)
+ *
+ * T-101-12-IDOR: 403/404 on useClientVisits collapses to per-tab inline error,
+ * no cross-client render possible.
+ * T-101-14-PII-ERR: error rendered via PageError curated copy, no raw internals.
+ */
+import { useClientVisits } from '@/features/visits/api'
+import { formatDateRu, formatTime } from '@/lib/format'
+import { PageError } from '@/components/feedback/PageState'
+import { EmptyState } from '@/components/feedback/EmptyState'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Card } from './shared'
 
-const MARKER_ICON: Record<ActivityKind, LucideIcon> = {
-  checkin: Lock,
-  chat: MessageSquare,
-  training: User,
-  note: FileText,
-};
-
-const MARKER_TONE: Record<ActivityTone, string> = {
-  default: 'bg-surface-3 text-fg-muted',
-  accent: 'bg-primary-soft text-primary-deep dark:text-primary',
-  warn: 'bg-warning-soft text-warning-deep',
-  note: 'bg-lead-soft text-lead',
-};
-
-function TimelineRow({ event }: { event: ActivityEvent }) {
-  const Icon = MARKER_ICON[event.kind];
+function VisitRow({ item }: { item: { id: string; checkedInAt: string; gymDate: string; channel: string; checkedInBy?: string | null } }) {
+  const channelLabel = (ch: string) => {
+    if (ch === 'qr') return 'QR-код'
+    if (ch === 'manual') return 'Вручную'
+    if (ch === 'app') return 'Приложение'
+    return ch
+  }
   return (
-    <div className="grid grid-cols-[44px_28px_1fr] items-start gap-2.5 border-t-[0.5px] border-border px-4 py-3 sm:grid-cols-[50px_32px_1fr] sm:gap-3 sm:px-5">
-      <div className="pt-1.5 text-xs font-semibold tabular-nums tracking-[-0.1px] text-fg-muted">
-        {event.time}
-      </div>
-      <div
-        className={cn(
-          'mt-[3px] grid size-7 place-items-center rounded-full',
-          MARKER_TONE[event.tone],
-        )}
-      >
-        <Icon className="size-[13px]" strokeWidth={2.4} />
+    <div className="grid grid-cols-[50px_1fr_auto] items-center gap-3 border-t-[0.5px] border-border px-4 py-3 first:border-t-0 sm:px-5">
+      <div className="text-xs font-semibold tabular-nums tracking-[-0.1px] text-fg-muted">
+        {formatTime(item.checkedInAt)}
       </div>
       <div className="min-w-0">
-        <div className="text-[13.5px] font-semibold leading-[1.3] tracking-[-0.1px]">
-          <RichText value={event.title} />
+        <div className="truncate text-[13.5px] font-semibold tracking-[-0.1px]">
+          {formatDateRu(item.gymDate, 'd MMMM yyyy')}
         </div>
-        {event.sub ? (
-          <div className="mt-0.5 text-xs text-fg-muted">
-            <RichText value={event.sub} />
-          </div>
-        ) : null}
-        {event.quote ? (
-          <div className="mt-1.5 rounded-r-lg border-l-2 border-border-strong bg-surface-2 px-3 py-2 text-[13px] italic leading-snug text-fg-muted">
-            {event.quote}
-          </div>
-        ) : null}
-        {event.action ? (
-          <div className="mt-2 flex items-center gap-2.5">
-            <MiniButton>{event.action.button}</MiniButton>
-            <span className="text-xs text-fg-subtle">{event.action.note}</span>
-          </div>
-        ) : null}
+        <div className="mt-0.5 truncate text-[11.5px] text-fg-subtle">
+          {channelLabel(item.channel)}
+          {item.checkedInBy ? ` · ${item.checkedInBy}` : null}
+        </div>
+      </div>
+      <div className="text-[11.5px] text-fg-subtle">
+        {formatDateRu(item.checkedInAt, 'd MMM')}
       </div>
     </div>
-  );
+  )
 }
 
-export function ActivityTab({ activity }: { activity: ClientDetail['activity'] }) {
+export function ActivityTab({ clientId }: { clientId: string }) {
+  const { data, isPending, isError, refetch } = useClientVisits(clientId)
+
+  if (isPending) {
+    return (
+      <Card className="px-4 py-4 sm:px-5">
+        <Skeleton className="mb-2 h-10 w-full" />
+        <Skeleton className="mb-2 h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+      </Card>
+    )
+  }
+
+  if (isError) {
+    return (
+      <Card>
+        <PageError onRetry={() => void refetch()} />
+      </Card>
+    )
+  }
+
+  const items = data?.items ?? []
+
+  if (items.length === 0) {
+    return (
+      <Card>
+        <EmptyState
+          className="py-12"
+          title="Нет активности"
+          message="Визиты клиента появятся здесь."
+        />
+      </Card>
+    )
+  }
+
   return (
     <Card className="pb-2">
-      {activity.groups.map((group, gi) => (
-        <div key={group.day}>
-          <div
-            className={cn(
-              'bg-surface-2 px-5 pb-1.5 pt-3 text-[11px] font-bold uppercase tracking-[0.5px] text-fg-subtle',
-              gi > 0 && 'border-t-[0.5px] border-border',
-            )}
-          >
-            {group.day}
-          </div>
-          {group.events.map((event) => (
-            <TimelineRow key={event.id} event={event} />
-          ))}
-        </div>
+      {items.map((item) => (
+        <VisitRow key={item.id} item={item} />
       ))}
-      <button
-        type="button"
-        className="w-full border-t-[0.5px] border-border py-3.5 text-[12.5px] font-semibold text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
-      >
-        {activity.moreLabel}
-      </button>
     </Card>
-  );
+  )
 }
