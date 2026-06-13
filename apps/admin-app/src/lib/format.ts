@@ -37,6 +37,19 @@ export function formatTime(date: Date | string): string {
   return format(d, 'HH:mm');
 }
 
+/**
+ * Возвращает инициалы из полного имени (первые буквы первых двух слов, в верхнем регистре).
+ * Примеры: "Маша Костина" → "МК", "Иван" → "И", "" → "?".
+ */
+export function getInitials(fullName: string): string {
+  const words = fullName.trim().split(/\s+/).filter(Boolean)
+  if (words.length === 0) return '?'
+  return words
+    .slice(0, 2)
+    .map((w) => w.charAt(0).toUpperCase())
+    .join('')
+}
+
 /** Русская плюрализация: forms = [один, два-четыре, пять]. */
 export function pluralRu(n: number, forms: [string, string, string]): string {
   const n10 = n % 10;
