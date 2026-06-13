@@ -32,20 +32,7 @@ import { OnlinePaymentsTable } from './components/OnlinePaymentsTable';
 import type { Role } from '@/shared/session/types';
 import type { RevenueBucket } from '@/features/reports/schemas';
 import type { PaymentData } from '@/features/payments/schemas';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function subtractDays(date: Date, days: number): string {
-  const d = new Date(date);
-  d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
-}
-
-function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
-}
+import { mskTodayISO, mskDaysAgoISO } from '@/lib/format';
 
 const TABS = [
   { key: 'revenue', label: 'Выручка' },
@@ -86,9 +73,8 @@ export function FinancePage() {
 // ---------------------------------------------------------------------------
 
 function FinancePageContent({ role }: { role: Role }) {
-  const today = todayISO();
-  const [fromDate, setFromDate] = useState(() => subtractDays(new Date(), 29));
-  const [toDate, setToDate] = useState(today);
+  const [fromDate, setFromDate] = useState(() => mskDaysAgoISO(29));
+  const [toDate, setToDate] = useState(() => mskTodayISO());
   const [tab, setTab] = useState('revenue');
   const [groupBy, setGroupBy] = useState<'day' | 'month'>('day');
   const [page, setPage] = useState(1);

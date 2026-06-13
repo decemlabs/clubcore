@@ -1,4 +1,4 @@
-import { format, formatDistanceToNowStrict } from 'date-fns';
+import { format, formatDistanceToNowStrict, parseISO } from 'date-fns';
 import { ru } from 'date-fns/locale';
 
 const RUB = new Intl.NumberFormat('ru-RU', {
@@ -17,23 +17,55 @@ export function formatInt(value: number): string {
   return INT.format(value);
 }
 
+// ---------------------------------------------------------------------------
+// MSK-safe date helpers (CR-02 / WR-02)
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns today's date as 'YYYY-MM-DD' in the Europe/Moscow timezone.
+ * Uses sv-SE locale which natively produces ISO yyyy-MM-dd format.
+ * Avoids the UTC date-slip that occurs with toISOString().slice(0,10)
+ * between 00:00–02:59 MSK (UTC+3).
+ */
+export function mskTodayISO(): string {
+  return new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Moscow' })
+}
+
+/**
+ * Returns the date N days ago as 'YYYY-MM-DD' in the Europe/Moscow timezone.
+ */
+export function mskDaysAgoISO(n: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() - n)
+  return d.toLocaleDateString('sv-SE', { timeZone: 'Europe/Moscow' })
+}
+
+// ---------------------------------------------------------------------------
+// Formatting helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Format a date or ISO date string using date-fns with Russian locale.
+ * Date-only strings ('YYYY-MM-DD') are parsed via parseISO (local midnight)
+ * per CLAUDE.md Dates convention: Never new Date(dateOnlyString) (DST risk).
+ */
 export function formatDateRu(date: Date | string, pattern = 'd MMMM'): string {
-  const d = typeof date === 'string' ? new Date(date) : date;
+  const d = typeof date === 'string' ? parseISO(date) : date;
   return format(d, pattern, { locale: ru });
 }
 
 export function formatWeekdayLongRu(date: Date | string): string {
-  const d = typeof date === 'string' ? new Date(date) : date;
+  const d = typeof date === 'string' ? parseISO(date) : date;
   return format(d, 'EEEE, d MMMM', { locale: ru });
 }
 
 export function formatRelativeRu(date: Date | string): string {
-  const d = typeof date === 'string' ? new Date(date) : date;
+  const d = typeof date === 'string' ? parseISO(date) : date;
   return formatDistanceToNowStrict(d, { locale: ru, addSuffix: true });
 }
 
 export function formatTime(date: Date | string): string {
-  const d = typeof date === 'string' ? new Date(date) : date;
+  const d = typeof date === 'string' ? parseISO(date) : date;
   return format(d, 'HH:mm');
 }
 

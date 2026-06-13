@@ -17,25 +17,13 @@ import { PageLoading, PageError } from '@/components/feedback/PageState';
 import { AttendancePageHead } from './components/AttendancePageHead';
 import { VisitsList } from './components/VisitsList';
 import { Activity } from '@/components/icons';
-import { formatDateRu } from '@/lib/format';
+import { formatDateRu, mskTodayISO, mskDaysAgoISO } from '@/lib/format';
 
 // ---------------------------------------------------------------------------
 // Константы фильтра
 // ---------------------------------------------------------------------------
 
 const PAGE_SIZE = 25;
-
-/** ISO-строка сегодняшней даты. */
-function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-/** ISO-строка даты N дней назад. */
-function daysAgoISO(n: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
-}
 
 // ---------------------------------------------------------------------------
 // KPI — простая плитка с общим числом визитов
@@ -64,8 +52,8 @@ function TotalVisitsKpi({ total, from, to }: { total: number; from: string; to: 
 export function AttendancePage() {
   const [page, setPage] = useState(1);
 
-  const from = daysAgoISO(29);
-  const to = todayISO();
+  const from = mskDaysAgoISO(29);
+  const to = mskTodayISO();
   const filter = { from, to, page, pageSize: PAGE_SIZE };
 
   const { data, isPending, isError, refetch } = useAttendanceList(filter);

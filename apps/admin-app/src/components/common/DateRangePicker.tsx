@@ -12,19 +12,16 @@
  * Uses date-fns `differenceInCalendarDays` for span check.
  * Native <input type="date"> — no date picker library (no new dep).
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { differenceInCalendarDays, parseISO } from 'date-fns';
 import { cn } from '@/lib/cn';
+import { mskTodayISO } from '@/lib/format';
 
 export interface DateRangePickerProps {
   from: string; // 'YYYY-MM-DD'
   to: string;   // 'YYYY-MM-DD'
   onChange: (from: string, to: string) => void;
   className?: string;
-}
-
-function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
 }
 
 /** Validate the range and return an error string or null. */
@@ -49,7 +46,17 @@ export function DateRangePicker({ from, to, onChange, className }: DateRangePick
   const [localFrom, setLocalFrom] = useState(from);
   const [localTo, setLocalTo] = useState(to);
   const [error, setError] = useState<string | null>(null);
-  const today = todayISO();
+  const today = mskTodayISO();
+
+  // CR-01: Sync external prop changes back to local state (e.g. parent resets range).
+  // Guard against feedback loops — effects only fire when the prop value actually changes.
+  useEffect(() => {
+    setLocalFrom(from);
+  }, [from]);
+
+  useEffect(() => {
+    setLocalTo(to);
+  }, [to]);
 
   function handleBlur(nextFrom: string, nextTo: string) {
     const err = validate(nextFrom, nextTo);

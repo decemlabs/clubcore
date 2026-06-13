@@ -23,18 +23,9 @@ import { DateRangePicker } from '@/components/common/DateRangePicker';
 import { LoadPageHead } from './components/LoadPageHead';
 import { LoadKpis } from './components/LoadKpis';
 import { LoadHeatmapCard } from './components/LoadHeatmapCard';
+import { mskTodayISO, mskDaysAgoISO } from '@/lib/format';
 
 // LiveNowCard intentionally omitted — TODO Phase 104: wire LiveNow to real-time endpoint.
-
-function subtractDays(date: Date, days: number): string {
-  const d = new Date(date);
-  d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
-}
-
-function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 export function LoadPage() {
   // RBAC guard: MUST be FIRST — before any data hook fires.
@@ -55,9 +46,8 @@ export function LoadPage() {
 }
 
 function LoadPageContent() {
-  const today = todayISO();
-  const [fromDate, setFromDate] = useState(() => subtractDays(new Date(), 29));
-  const [toDate, setToDate] = useState(today);
+  const [fromDate, setFromDate] = useState(() => mskDaysAgoISO(29));
+  const [toDate, setToDate] = useState(() => mskTodayISO());
 
   const query = { fromDate, toDate };
   const { data, isPending, isFetching, isError, refetch } = useLoad(query);

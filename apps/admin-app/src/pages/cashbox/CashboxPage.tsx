@@ -22,16 +22,7 @@ import { DateRangePicker } from '@/components/common/DateRangePicker';
 import { CashboxPageHead } from './components/CashboxPageHead';
 import { CashboxKpis } from './components/CashboxKpis';
 import { TransactionsCard } from './components/TransactionsCard';
-
-function subtractDays(date: Date, days: number): string {
-  const d = new Date(date);
-  d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
-}
-
-function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
-}
+import { mskTodayISO, mskDaysAgoISO } from '@/lib/format';
 
 export function CashboxPage() {
   // RBAC guard: MUST be FIRST — before any data hook fires.
@@ -52,9 +43,8 @@ export function CashboxPage() {
 }
 
 function CashboxPageContent() {
-  const today = todayISO();
-  const [receivedFrom, setReceivedFrom] = useState(() => subtractDays(new Date(), 29));
-  const [receivedTo, setReceivedTo] = useState(today);
+  const [receivedFrom, setReceivedFrom] = useState(() => mskDaysAgoISO(29));
+  const [receivedTo, setReceivedTo] = useState(() => mskTodayISO());
 
   const filter = { receivedFrom, receivedTo, pageSize: 100 };
   const { data, dailyTotals, isPending, isFetching, isError, refetch } = useCashbox(filter);
