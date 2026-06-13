@@ -2,7 +2,7 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Production Admin — Backend Wiring
-status: completed
+status: in-progress
 stopped_at: Phase 101 Plan 04 complete (CLI-02 delivered — visits/payments/memberships tabs wired)
 last_updated: "2026-06-13T15:01:33.124Z"
 last_activity: "2026-06-13 — Phase 101 Plan 04 complete: visits/payments Zod schemas + by-client hooks + ClientPage tabs wired to real data with per-tab error isolation (CLI-02 done)"
