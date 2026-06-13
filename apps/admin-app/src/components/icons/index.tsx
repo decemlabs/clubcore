@@ -121,4 +121,6 @@ export {
   CalendarX,
   // Тренеры CRUD (Phase 102-02)
   Pencil,
+  // Бронирование (Phase 102-03)
+  CalendarCheck,
 } from 'lucide-react';
