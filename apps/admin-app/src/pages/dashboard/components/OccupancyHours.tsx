@@ -15,8 +15,22 @@ const BAR_STYLES: Record<HourState, string> = {
 const FUTURE_BG =
   'repeating-linear-gradient(45deg, var(--surface-3) 0 4px, var(--surface) 4px 8px)';
 
+// WR-03 fix: use MSK hour instead of browser-local hour.
+// The domain is pinned to Europe/Moscow — an admin in a non-Moscow TZ
+// would see the wrong bar highlighted without this.
+function getMskHour(): number {
+  return parseInt(
+    new Date().toLocaleString('en-US', {
+      hour: 'numeric',
+      hour12: false,
+      timeZone: 'Europe/Moscow',
+    }),
+    10,
+  );
+}
+
 function getHourState(hour: number): HourState {
-  const nowHour = new Date().getHours();
+  const nowHour = getMskHour();
   if (hour < nowHour) return 'past';
   if (hour === nowHour) return 'now';
   return 'future';
@@ -91,7 +105,7 @@ export function OccupancyHours({ data, isPending }: OccupancyHoursProps) {
             {bars.map((bar) => (
               <span
                 key={bar.hour}
-                className={cn(bar.hour === new Date().getHours() && 'font-bold text-primary-deep')}
+                className={cn(bar.hour === getMskHour() && 'font-bold text-primary-deep')}
               >
                 {bar.hour}
               </span>
