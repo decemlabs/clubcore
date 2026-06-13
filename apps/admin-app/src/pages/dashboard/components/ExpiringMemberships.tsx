@@ -1,18 +1,51 @@
-import { cn } from '@/lib/cn';
 import { ROUTES } from '@/app/routes';
-import { MessageSquare, RefreshCw } from '@/components/icons';
+import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/feedback/EmptyState';
+import { RefreshCw } from '@/components/icons';
+import { cn } from '@/lib/cn';
+import { formatDateRu, getInitials } from '@/lib/format';
+import type { MembershipData } from '@/features/memberships/schemas';
 import { useModals } from '@/components/modals/modals-context';
-import type { ExpiringMembership, ExpiryUrgency } from '@/features/dashboard/types';
 import { CardLink, DashboardCard, Initials, ListButton } from './shared';
 
-const URGENCY_TOP: Record<ExpiryUrgency, string> = {
-  urgent: 'text-danger',
-  soon: 'text-warning',
-  normal: 'text-fg',
-};
+interface ExpiringMembershipsProps {
+  items: MembershipData[];
+  isPending: boolean;
+}
 
-function ExpiringRow({ item, first }: { item: ExpiringMembership; first: boolean }) {
+/** Simple hash to pick a deterministic avatar color. */
+function colorForId(id: string): string {
+  const COLORS = [
+    '#4f46e5',
+    '#0891b2',
+    '#059669',
+    '#d97706',
+    '#dc2626',
+    '#7c3aed',
+    '#db2777',
+    '#65a30d',
+  ];
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return COLORS[h % COLORS.length] ?? '#4f46e5';
+}
+
+function daysUntil(dateStr: string): number {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const end = new Date(dateStr);
+  end.setHours(0, 0, 0, 0);
+  return Math.round((end.getTime() - today.getTime()) / 86_400_000);
+}
+
+function ExpiringRow({ item, first }: { item: MembershipData; first: boolean }) {
   const { open } = useModals();
+  const days = daysUntil(item.endDate);
+  const urgency = days <= 2 ? 'text-danger' : days <= 5 ? 'text-warning' : 'text-fg';
+  const initials = getInitials(item.clientId); // clientId is UUIDv4; show plan name as fallback
+  const planName = item.planSnapshot.name;
+  const color = colorForId(item.clientId);
+
   return (
     <div
       className={cn(
@@ -20,59 +53,59 @@ function ExpiringRow({ item, first }: { item: ExpiringMembership; first: boolean
         !first && 'border-t-[0.5px] border-border',
       )}
     >
-      <Initials initials={item.initials} color={item.color} className="size-8 text-[11px]" />
+      <Initials initials={initials.slice(0, 2) || '?'} color={color} className="size-8 text-[11px]" />
 
       <div className="min-w-0">
-        <div className="truncate text-[13.5px] font-semibold tracking-[-0.1px]">{item.name}</div>
-        <div className="mt-px truncate text-xs text-fg-muted">{item.meta}</div>
+        <div className="truncate text-[13.5px] font-semibold tracking-[-0.1px]">{planName}</div>
+        <div className="mt-px truncate text-xs text-fg-muted">
+          до {formatDateRu(item.endDate)}
+        </div>
       </div>
 
       <div className="text-right text-xs font-semibold tabular-nums">
-        <div className={URGENCY_TOP[item.urgency]}>{item.whenTop}</div>
-        <div className="text-[11px] font-medium text-fg-subtle">{item.whenDate}</div>
+        <div className={urgency}>{days <= 0 ? 'Истёк' : `${days} дн.`}</div>
+        <div className="text-[11px] font-medium text-fg-subtle">{item.status}</div>
       </div>
 
-      <div className="flex items-center gap-1.5">
-        <ListButton
-          onClick={() => open('extend', { extend: { clientName: item.name } })}
-          className="@max-[420px]:w-[30px] @max-[420px]:gap-0 @max-[420px]:px-0"
-        >
-          <RefreshCw className="size-[13px]" strokeWidth={2.2} />
-          <span className="@max-[420px]:hidden">Продлить</span>
-        </ListButton>
-        <ListButton
-          variant="icon"
-          aria-label="Написать клиенту"
-          title="Написать клиенту"
-          className="@max-[320px]:hidden"
-        >
-          <MessageSquare className="size-[14px]" strokeWidth={2} />
-        </ListButton>
-      </div>
+      <ListButton
+        onClick={() =>
+          open('extend', {
+            extend: { clientName: item.clientId },
+          })
+        }
+        className="@max-[420px]:w-[30px] @max-[420px]:gap-0 @max-[420px]:px-0"
+      >
+        <RefreshCw className="size-[13px]" strokeWidth={2.2} />
+        <span className="@max-[420px]:hidden">Продлить</span>
+      </ListButton>
     </div>
   );
 }
 
-export function ExpiringMemberships({
-  items,
-  daysAhead,
-  totalClients,
-}: {
-  items: ExpiringMembership[];
-  daysAhead: number;
-  totalClients: number;
-}) {
+export function ExpiringMemberships({ items, isPending }: ExpiringMembershipsProps) {
   return (
     <DashboardCard
       title="Истекающие абонементы"
-      subtitle={`Ближайшие ${daysAhead} дней · ${totalClients} клиентов`}
+      subtitle={isPending ? '—' : `Ближайшие 7 дней · ${items.length} абонементов`}
       action={<CardLink to={ROUTES.clients}>Все</CardLink>}
     >
-      <div className="@container pb-2">
-        {items.map((item, i) => (
-          <ExpiringRow key={item.id} item={item} first={i === 0} />
-        ))}
-      </div>
+      {isPending ? (
+        <div className="flex flex-col gap-2 px-5 py-3">
+          <Skeleton className="h-[52px] w-full rounded-xl" />
+          <Skeleton className="h-[52px] w-full rounded-xl" />
+        </div>
+      ) : items.length === 0 ? (
+        <EmptyState
+          title="Нет истекающих абонементов"
+          message="Все абонементы активны и не истекают в ближайшие 7 дней."
+        />
+      ) : (
+        <div className="@container pb-2">
+          {items.map((item, i) => (
+            <ExpiringRow key={item.id} item={item} first={i === 0} />
+          ))}
+        </div>
+      )}
     </DashboardCard>
   );
 }

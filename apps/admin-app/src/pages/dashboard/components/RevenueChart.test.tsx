@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { RevenueChart } from './RevenueChart';
-import type { RevenueData } from '@/features/dashboard/types';
+import type { RevenueReportData } from '@/features/reports/schemas';
 
 function Wrapper({ children }: { children: React.ReactNode }) {
   const qc = new QueryClient();
@@ -17,90 +17,59 @@ function Wrapper({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Минимальная фикстура с пустыми точками для дефолтного периода. */
-const emptyData: RevenueData = {
-  defaultPeriod: '30',
-  series: {
-    '30': {
-      period: '30',
-      title: 'Выручка',
-      rangeLabel: '1–30 апр',
-      total: 0,
-      delta: { label: '+0%', direction: 'flat' },
-      deltaSub: 'к марту',
-      points: [],
-      breakdown: [],
-      ticksEvery: 5,
-    },
-    '90': {
-      period: '90',
-      title: 'Выручка',
-      rangeLabel: 'Янв–Апр',
-      total: 0,
-      delta: { label: '+0%', direction: 'flat' },
-      deltaSub: 'к Q1',
-      points: [],
-      breakdown: [],
-      ticksEvery: 2,
-    },
-    year: {
-      period: 'year',
-      title: 'Выручка',
-      rangeLabel: '2025',
-      total: 0,
-      delta: { label: '+0%', direction: 'flat' },
-      deltaSub: 'к 2024',
-      points: [],
-      breakdown: [],
-      ticksEvery: 2,
-    },
-  },
+const fromDate = '2026-05-14';
+const toDate = '2026-06-12';
+
+/** Fixture with empty buckets — should show empty state. */
+const emptyData: RevenueReportData = {
+  buckets: [],
+  fromDate,
+  toDate,
+  groupBy: 'day',
 };
 
-/** Фикстура с тремя точками для дефолтного периода. */
-const withDataFixture: RevenueData = {
-  defaultPeriod: '30',
-  series: {
-    ...emptyData.series,
-    '30': {
-      ...emptyData.series['30'],
-      title: 'Выручка · апрель',
-      rangeLabel: '1–30 апр',
-      total: 3248000,
-      delta: { label: '+18.4%', direction: 'up' },
-      deltaSub: 'к марту',
-      points: [
-        { label: '1 апр', short: '1', value: 96000 },
-        { label: '15 апр', short: '15', value: 112000 },
-        { label: '30 апр', short: '30', value: 108000 },
-      ],
-      breakdown: [
-        { label: 'Абонементы', value: 2248000, color: '#2dd4a4' },
-        { label: 'ПТ', value: 812400, color: '#818cf8' },
-        { label: 'Магазин', value: 188200, color: '#fb923c' },
-      ],
-      ticksEvery: 1,
+/** Fixture with one bucket. */
+const withDataFixture: RevenueReportData = {
+  buckets: [
+    {
+      period: '2026-05-14',
+      netKopecks: 9600000,
+      byMethod: { cash: 4800000, online: 4800000 },
+      bySubjectKind: { membership: 9600000, pt_package: 0 },
     },
-  },
+  ],
+  fromDate,
+  toDate,
+  groupBy: 'day',
 };
 
-describe('RevenueChart', () => {
-  it('показывает пустое состояние когда points пуст', () => {
+describe('RevenueChart (wired — Phase 104-02)', () => {
+  it('показывает пустое состояние когда buckets пусты', () => {
     render(
       <Wrapper>
-        <RevenueChart data={emptyData} />
+        <RevenueChart data={emptyData} fromDate={fromDate} toDate={toDate} isPending={false} />
       </Wrapper>,
     );
     expect(screen.getByText('Нет данных за период')).toBeInTheDocument();
-    expect(screen.getByText('Выберите другой период.')).toBeInTheDocument();
   });
 
-  it('рендерит заголовок серии при наличии данных', () => {
+  it('рендерит заголовок карточки при наличии данных', () => {
     render(
       <Wrapper>
-        <RevenueChart data={withDataFixture} />
+        <RevenueChart data={withDataFixture} fromDate={fromDate} toDate={toDate} isPending={false} />
       </Wrapper>,
     );
-    expect(screen.getByText('Выручка · апрель')).toBeInTheDocument();
+    // The card title is always rendered regardless of chart data
+    expect(screen.getAllByText('Выручка за 30 дней').length).toBeGreaterThan(0);
+  });
+
+  it('показывает скелет при isPending=true', () => {
+    render(
+      <Wrapper>
+        <RevenueChart data={undefined} fromDate={fromDate} toDate={toDate} isPending={true} />
+      </Wrapper>,
+    );
+    // Subtitle collapses to em-dash while loading
+    expect(screen.getByText('—')).toBeInTheDocument();
   });
 });

@@ -1,143 +1,96 @@
-import { Fragment } from 'react';
-import { cn } from '@/lib/cn';
 import { ROUTES } from '@/app/routes';
-import type { ScheduleSession, SessionState, SessionType } from '@/features/dashboard/types';
-import { CardLink, DashboardCard, Initials } from './shared';
+import { Calendar } from '@/components/icons';
+import { EmptyState } from '@/components/feedback/EmptyState';
+import { PageError } from '@/components/feedback/PageState';
+import { Skeleton } from '@/components/ui/skeleton';
+import { formatTime } from '@/lib/format';
+import type { BookingData } from '@/features/bookings/schemas';
+import { CardLink, DashboardCard } from './shared';
 
-const ACCENT_BAR: Record<SessionState, string> = {
-  done: 'bg-transparent',
-  live: 'bg-primary',
-  planned: 'bg-border-strong',
-  group: 'bg-warning',
-};
+interface ScheduleTodayProps {
+  items: BookingData[];
+  total: number;
+  isPending: boolean;
+  isError: boolean;
+  refetch: () => void;
+}
 
-const CHIP_STYLES: Record<SessionType, string> = {
-  pt: 'bg-primary-soft text-primary-deep dark:text-primary',
-  gr: 'bg-warning-soft text-[#a36a16] dark:text-[#e9a23b]',
-};
+function BookingRow({ booking, showBorder }: { booking: BookingData; showBorder: boolean }) {
+  const startTime = booking.slot?.startTime ? formatTime(booking.slot.startTime) : '—';
+  const endTime = booking.slot?.endTime ? formatTime(booking.slot.endTime) : '';
+  const trainerName = booking.slot?.trainerFullName ?? '—';
+  const clientName = booking.clientFullName ?? '—';
+  const planName = booking.ptPackage?.planName ?? 'PT';
+  const statusLabel: Record<BookingData['status'], string> = {
+    confirmed: 'Подтверждено',
+    cancelled: 'Отменено',
+    no_show: 'Не явился',
+    completed: 'Завершено',
+  };
+  const label = statusLabel[booking.status];
+  const isLive = booking.status === 'confirmed';
 
-const CHIP_LABEL: Record<SessionType, string> = { pt: 'ПТ', gr: 'ГР' };
-
-const STATE_TEXT: Record<SessionState, string> = {
-  done: 'text-fg-subtle',
-  live: 'font-semibold text-primary-deep dark:text-primary',
-  planned: 'text-fg-muted',
-  group: 'text-fg-muted',
-};
-
-const STATE_DOT: Record<SessionState, string> = {
-  done: 'bg-border-strong',
-  live: 'animate-pulse bg-primary-deep shadow-[0_0_0_3px_color-mix(in_oklab,var(--primary)_28%,transparent)] dark:bg-primary',
-  planned: 'border-[1.5px] border-border-strong bg-transparent',
-  group: 'bg-warning',
-};
-
-function ScheduleRow({ session, showBorder }: { session: ScheduleSession; showBorder: boolean }) {
-  const done = session.state === 'done';
   return (
     <div
-      className={cn(
-        'relative grid grid-cols-[52px_28px_1fr_auto] items-center gap-3.5 px-5 py-[11px] sm:grid-cols-[56px_28px_1fr_auto]',
-        showBorder && 'border-t-[0.5px] border-border',
-        session.state === 'live' && 'bg-[color-mix(in_oklab,var(--primary-soft)_55%,transparent)]',
-      )}
+      className={`grid grid-cols-[72px_1fr_auto] items-center gap-3 px-5 py-3${showBorder ? ' border-t-[0.5px] border-border' : ''}`}
     >
-      <span
-        className={cn(
-          'absolute bottom-2.5 left-2 top-2.5 w-[3px] rounded-r-sm',
-          ACCENT_BAR[session.state],
-        )}
-      />
-
-      <div className="leading-[1.05] tabular-nums tracking-[-0.3px]">
-        <div className={cn('text-[15px] font-[650]', done ? 'text-fg-muted' : 'text-fg')}>
-          {session.time}
+      <div className="tabular-nums leading-tight">
+        <div className="text-[14px] font-[650] text-fg">
+          {startTime}
+          {endTime ? `–${endTime}` : ''}
         </div>
-        <div className="mt-[3px] text-[10.5px] font-medium text-fg-subtle">{session.duration}</div>
+        <div className="mt-px text-[11px] text-fg-subtle">{planName}</div>
       </div>
-
-      <Initials initials={session.initials} color={session.color} />
 
       <div className="min-w-0">
-        <div
-          className={cn(
-            'flex min-w-0 items-center gap-[7px] text-[13.5px] font-semibold tracking-[-0.1px]',
-            done && 'text-fg-muted',
-          )}
-        >
-          <span
-            className={cn(
-              'inline-flex h-[17px] shrink-0 items-center rounded px-1.5 text-[9.5px] font-bold uppercase tracking-[0.5px] tabular-nums',
-              CHIP_STYLES[session.type],
-            )}
-          >
-            {CHIP_LABEL[session.type]}
-          </span>
-          <span className="truncate">{session.who}</span>
-        </div>
-        <div className="mt-0.5 truncate text-xs text-fg-muted">
-          <b className="font-semibold text-fg">{session.whatBold}</b>
-          {session.whatRest}
-        </div>
+        <div className="truncate text-[13px] font-semibold">{clientName}</div>
+        <div className="mt-px truncate text-[11.5px] text-fg-muted">{trainerName}</div>
       </div>
 
       <span
-        className={cn(
-          'inline-flex items-center gap-1.5 whitespace-nowrap text-[11.5px] font-medium tabular-nums',
-          STATE_TEXT[session.state],
-        )}
+        className={`whitespace-nowrap text-[11px] font-medium ${isLive ? 'text-primary-deep dark:text-primary' : 'text-fg-subtle'}`}
       >
-        <span className={cn('size-1.5 shrink-0 rounded-full', STATE_DOT[session.state])} />
-        {session.stateLabel}
+        {label}
       </span>
     </div>
   );
 }
 
-export function ScheduleToday({
-  sessions,
-  nowLabel,
-  total,
-  done,
-  live,
-  planned,
-}: {
-  sessions: ScheduleSession[];
-  nowLabel: string;
-  total: number;
-  done: number;
-  live: number;
-  planned: number;
-}) {
-  const firstLiveIndex = sessions.findIndex((s) => s.state === 'live');
+export function ScheduleToday({ items, total, isPending, isError, refetch }: ScheduleTodayProps) {
+  const confirmed = items.filter((b) => b.status === 'confirmed').length;
+  const completed = items.filter((b) => b.status === 'completed').length;
 
   return (
     <DashboardCard
       title="Расписание тренировок · сегодня"
-      subtitle={`${total} сессий · ${done} завершено · ${live} идут · ${planned} запланировано`}
+      subtitle={
+        isPending || isError
+          ? '—'
+          : `${total} бронирований · ${confirmed} подтверждено · ${completed} завершено`
+      }
       action={<CardLink to={ROUTES.schedule}>Все</CardLink>}
     >
-      <div className="py-1">
-        {sessions.map((session, i) => {
-          const dividerHere = i === firstLiveIndex && firstLiveIndex > 0;
-          // Граница сверху — только если предыдущий элемент тоже строка (разделитель её прерывает).
-          const showBorder = i > 0 && i !== firstLiveIndex;
-          return (
-            <Fragment key={session.id}>
-              {dividerHere ? (
-                <div className="relative flex items-center gap-3 px-5 py-1.5" aria-hidden>
-                  <span className="inline-flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[0.6px] tabular-nums text-primary-deep dark:text-primary">
-                    <span className="size-1.5 rounded-full bg-primary shadow-[0_0_0_3px_color-mix(in_oklab,var(--primary)_30%,transparent)]" />
-                    {nowLabel}
-                  </span>
-                  <span className="h-px flex-1 bg-[linear-gradient(90deg,var(--primary),transparent)] opacity-55" />
-                </div>
-              ) : null}
-              <ScheduleRow session={session} showBorder={showBorder} />
-            </Fragment>
-          );
-        })}
-      </div>
+      {isPending ? (
+        <div className="flex flex-col gap-2 px-5 py-3">
+          <Skeleton className="h-[46px] w-full rounded-xl" />
+          <Skeleton className="h-[46px] w-full rounded-xl" />
+          <Skeleton className="h-[46px] w-full rounded-xl" />
+        </div>
+      ) : isError ? (
+        <PageError onRetry={refetch} />
+      ) : items.length === 0 ? (
+        <EmptyState
+          icon={Calendar}
+          title="Тренировок сегодня нет"
+          message="Занятий в расписании не запланировано."
+        />
+      ) : (
+        <div className="py-1">
+          {items.map((booking, i) => (
+            <BookingRow key={booking.id} booking={booking} showBorder={i > 0} />
+          ))}
+        </div>
+      )}
     </DashboardCard>
   );
 }

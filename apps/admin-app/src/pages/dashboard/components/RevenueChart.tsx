@@ -1,36 +1,36 @@
-import { useState } from 'react';
 import { Area, AreaChart, CartesianGrid, ReferenceLine, XAxis, YAxis } from 'recharts';
 import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart';
-import { formatInt } from '@/lib/format';
-import { ChevronUp } from '@/components/icons';
-import type { RevenueData, RevenuePeriod, RevenuePoint } from '@/features/dashboard/types';
-import { DashboardCard, MiniSegmented, type MiniSegmentedOption } from './shared';
+import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/feedback/EmptyState';
+import { formatRub, formatDateRu } from '@/lib/format';
+import { fillRevenueBuckets } from '@/features/reports/utils';
+import type { RevenueReportData, RevenueBucket } from '@/features/reports/schemas';
+import { DashboardCard } from './shared';
 
-const PERIOD_OPTIONS: MiniSegmentedOption<RevenuePeriod>[] = [
-  { value: '30', label: '30д' },
-  { value: '90', label: '90д' },
-  { value: 'year', label: 'Год' },
-];
+interface RevenueChartProps {
+  data: RevenueReportData | undefined;
+  fromDate: string;
+  toDate: string;
+  isPending: boolean;
+}
 
 const CHART_CONFIG: ChartConfig = {
   value: { label: 'Выручка', color: 'var(--primary-deep)' },
 };
 
-/** Постоянная точка в конце линии (на последней позиции серии). */
-function EndDot(props: { cx?: number; cy?: number; index?: number; lastIndex?: number }) {
-  const { cx, cy, index, lastIndex } = props;
-  if (cx == null || cy == null || index !== lastIndex) return <g />;
-  return (
-    <circle
-      cx={cx}
-      cy={cy}
-      r={3.5}
-      fill="var(--surface)"
-      stroke="var(--primary-deep)"
-      strokeWidth={2}
-    />
-  );
+interface RevenuePoint {
+  period: string;
+  label: string;
+  value: number;
+}
+
+function bucketToPoint(b: RevenueBucket): RevenuePoint {
+  const v = Number.isFinite(b.netKopecks) ? Math.round(b.netKopecks / 100) : 0;
+  return {
+    period: b.period,
+    label: formatDateRu(b.period, b.period.length === 7 ? 'MMM yyyy' : 'd MMM'),
+    value: Math.max(v, 0), // treat negative net as 0 for chart display
+  };
 }
 
 function RevenueTooltip({
@@ -48,78 +48,84 @@ function RevenueTooltip({
       <div className="text-[10px] font-medium uppercase tracking-[0.3px] opacity-70">
         {point.label}
       </div>
-      <div className="tabular-nums">{formatInt(Math.round(point.value))} ₽</div>
+      <div className="tabular-nums">{formatRub(point.value)}</div>
     </div>
   );
 }
 
-export function RevenueChart({ data }: { data: RevenueData }) {
-  const [period, setPeriod] = useState<RevenuePeriod>(data.defaultPeriod);
-  const series = data.series[period];
-  const points = series.points;
+function EndDot(props: { cx?: number; cy?: number; index?: number; lastIndex?: number }) {
+  const { cx, cy, index, lastIndex } = props;
+  if (cx == null || cy == null || index !== lastIndex) return <g />;
+  return (
+    <circle
+      cx={cx}
+      cy={cy}
+      r={3.5}
+      fill="var(--surface)"
+      stroke="var(--primary-deep)"
+      strokeWidth={2}
+    />
+  );
+}
 
-  if (points.length === 0) {
+export function RevenueChart({ data, fromDate, toDate, isPending }: RevenueChartProps) {
+  const title = 'Выручка за 30 дней';
+  const subtitle = `${formatDateRu(fromDate)} — ${formatDateRu(toDate)}`;
+
+  if (isPending) {
     return (
-      <DashboardCard
-        title={series.title}
-        subtitle={series.rangeLabel}
-        action={
-          <MiniSegmented
-            options={PERIOD_OPTIONS}
-            value={period}
-            onChange={setPeriod}
-            ariaLabel="Период выручки"
-          />
-        }
-        className="md:col-span-2 xl:col-span-1"
-      >
+      <DashboardCard title={title} subtitle="—">
+        <div className="px-5 pb-5 pt-1">
+          <Skeleton className="h-[220px] w-full rounded-xl" />
+        </div>
+      </DashboardCard>
+    );
+  }
+
+  const filled = data
+    ? fillRevenueBuckets(data.buckets, fromDate, toDate, 'day')
+    : [];
+  const points = filled.map(bucketToPoint);
+
+  const totalKopecks = data
+    ? data.buckets.reduce((s, b) => s + (Number.isFinite(b.netKopecks) ? b.netKopecks : 0), 0)
+    : 0;
+  const totalRub = Math.max(Math.round(totalKopecks / 100), 0);
+
+  // Show empty state when no raw buckets (no transactions in period)
+  const hasData = data != null && data.buckets.length > 0;
+  if (!hasData) {
+    return (
+      <DashboardCard title={title} subtitle={subtitle}>
         <EmptyState
           className="py-10"
           title="Нет данных за период"
-          message="Выберите другой период."
+          message="Выберите другой период или подождите первых данных."
         />
       </DashboardCard>
     );
   }
 
   const lastIndex = points.length - 1;
-
   const values = points.map((p) => p.value);
   const min = Math.min(...values);
   const max = Math.max(...values);
   const avg = values.reduce((s, v) => s + v, 0) / values.length;
-  const pad = (max - min) * 0.12 || max * 0.1;
+  const pad = (max - min) * 0.12 || max * 0.1 || 100;
+
+  // Show every 5th tick so the axis isn't crowded over 30 days
+  const ticksEvery = Math.max(Math.floor(points.length / 6), 1);
 
   return (
-    <DashboardCard
-      title={series.title}
-      subtitle={series.rangeLabel}
-      action={
-        <MiniSegmented
-          options={PERIOD_OPTIONS}
-          value={period}
-          onChange={setPeriod}
-          ariaLabel="Период выручки"
-        />
-      }
-      className="md:col-span-2 xl:col-span-1"
-    >
+    <DashboardCard title={title} subtitle={subtitle}>
       <div className="flex flex-1 flex-col">
-        {/* Шапка чисел */}
         <div className="px-5 pt-1">
           <div className="text-[28px] font-bold tracking-[-0.6px] tabular-nums">
-            {formatInt(series.total)}&nbsp;₽
+            {formatRub(totalRub)}
           </div>
-          <div className="mt-1 flex items-center gap-2 text-[12.5px] text-fg-muted">
-            <span className="inline-flex items-center gap-[3px] rounded-full bg-primary-soft px-[7px] py-0.5 text-xs font-semibold text-primary-deep">
-              <ChevronUp className="size-2.5" strokeWidth={3} />
-              {series.delta.label}
-            </span>
-            <span>{series.deltaSub}</span>
-          </div>
+          <div className="mt-1 text-[12.5px] text-fg-muted">Итого за период</div>
         </div>
 
-        {/* График */}
         <ChartContainer config={CHART_CONFIG} className="aspect-auto h-[170px] w-full px-2">
           <AreaChart data={points} margin={{ top: 10, right: 8, left: 8, bottom: 0 }}>
             <defs>
@@ -130,11 +136,11 @@ export function RevenueChart({ data }: { data: RevenueData }) {
             </defs>
             <CartesianGrid vertical={false} stroke="var(--border)" strokeOpacity={0.55} />
             <XAxis
-              dataKey="short"
+              dataKey="label"
               tickLine={false}
               axisLine={false}
               tickMargin={8}
-              interval={series.ticksEvery - 1}
+              interval={ticksEvery - 1}
               tick={{ fontSize: 10 }}
             />
             <YAxis hide domain={[Math.max(0, min - pad), max + pad]} />
@@ -165,29 +171,6 @@ export function RevenueChart({ data }: { data: RevenueData }) {
             />
           </AreaChart>
         </ChartContainer>
-
-        {/* Разбивка */}
-        <div className="@container border-t-[0.5px] border-border px-5 pb-[18px] pt-3.5">
-          <div className="grid grid-cols-3 gap-3 @max-[400px]:grid-cols-1">
-            {series.breakdown.map((cell) => (
-              <div
-                key={cell.label}
-                className="min-w-0 @max-[400px]:flex @max-[400px]:items-baseline @max-[400px]:justify-between @max-[400px]:gap-3"
-              >
-                <div className="flex items-center gap-1.5 text-[11.5px] text-fg-subtle">
-                  <span
-                    className="size-2 shrink-0 rounded-[2px]"
-                    style={{ background: cell.color }}
-                  />
-                  {cell.label}
-                </div>
-                <div className="mt-1 whitespace-nowrap text-base font-bold tracking-[-0.3px] tabular-nums @max-[400px]:mt-0 @max-[400px]:text-[14.5px]">
-                  {formatInt(cell.value)}&nbsp;₽
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
     </DashboardCard>
   );

@@ -21,7 +21,6 @@ describe('dashboard api.ts exports (104-02)', () => {
   });
 
   it('does NOT export useDashboard (mock removed)', () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect((dashboardApi as Record<string, unknown>)['useDashboard']).toBeUndefined();
   });
 
