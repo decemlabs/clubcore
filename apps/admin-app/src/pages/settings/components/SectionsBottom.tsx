@@ -1,22 +1,49 @@
+import { useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/cn';
 import { Initials } from '@/components/ui/initials';
+import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/feedback/EmptyState';
 import { useModals } from '@/components/modals/modals-context';
+import { AdaptiveModal } from '@/components/modals/AdaptiveModal';
+import { IconChip, ModalButton } from '@/components/modals/fields';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Bell,
   Check,
+  CheckCircle2,
   Code,
   Download,
   Gift,
+  Lock,
   Mail,
   MessageSquare,
   MoreHorizontal,
   Send,
   Smartphone,
   TriangleAlert,
+  UserPlus,
   Users,
 } from '@/components/icons';
-import type { Role, SettingsData } from '@/features/settings/types';
+import type { SettingsData } from '@/features/settings/types';
+import { useSession } from '@/features/auth/api';
+import {
+  useUsers,
+  useInviteUser,
+  useDeactivateUser,
+  useReactivateUser,
+  useDeleteUser,
+  useRevokeInvitation,
+  ApiError,
+} from '@/features/users/api';
+import type { UserData } from '@/features/users/schemas';
+import { can } from '@/shared/session/can';
+import { formatDateRu, getInitials } from '@/lib/format';
 import {
   Chip,
   GhostBtn,
@@ -32,11 +59,14 @@ const ID_NOTIF = 'notifications';
 const ID_APP = 'app';
 const ID_TEAM = 'team';
 
-const ROLE_TONE: Record<Role, string> = {
+// Real user roles from /api/v1/users
+const ROLE_TONE: Record<'owner' | 'reception', string> = {
   owner: 'bg-primary-soft text-primary-deep dark:text-primary',
-  admin: 'bg-lead-soft text-lead',
-  trainer: 'bg-warning-soft text-warning-deep',
-  cashier: 'bg-surface-3 text-fg-muted',
+  reception: 'bg-surface-3 text-fg-muted',
+};
+const ROLE_LABEL: Record<'owner' | 'reception', string> = {
+  owner: 'Владелец',
+  reception: 'Ресепшн',
 };
 
 const MATRIX_COLS = 'grid grid-cols-[minmax(0,1fr)_56px_56px_56px_56px] items-center gap-2';
@@ -256,123 +286,518 @@ export function AppSection({ data }: { data: SettingsData }) {
 }
 
 const TEAM_COLS =
-  'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 md:grid-cols-[minmax(0,1.6fr)_88px_110px_84px_minmax(0,1fr)_36px]';
+  'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 md:grid-cols-[minmax(0,1.6fr)_88px_auto_36px]';
 
-export function TeamSection({ data }: { data: SettingsData }) {
+// ---------------------------------------------------------------------------
+// Invite modal
+// ---------------------------------------------------------------------------
+
+type InviteRole = 'owner' | 'reception';
+
+type InviteState =
+  | { phase: 'form'; fullName: string; email: string; role: InviteRole; submitting: boolean }
+  | { phase: 'success'; email: string; inviteLinkUrl?: string; invitationExpiresAt?: string };
+
+function InviteModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [state, setState] = useState<InviteState>({
+    phase: 'form',
+    fullName: '',
+    email: '',
+    role: 'reception',
+    submitting: false,
+  });
+  const inviteUser = useInviteUser();
+
+  // Reset when re-opening
+  function handleOpenChange(value: boolean) {
+    if (!value) {
+      onClose();
+      setTimeout(() => {
+        setState({ phase: 'form', fullName: '', email: '', role: 'reception', submitting: false });
+      }, 300);
+    }
+  }
+
+  const isFormValid =
+    state.phase === 'form' &&
+    state.fullName.trim().length >= 2 &&
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(state.email.trim());
+
+  function handleSubmit() {
+    if (state.phase !== 'form' || !isFormValid) return;
+    const { fullName, email, role } = state;
+    setState({ ...state, submitting: true });
+    inviteUser.mutate(
+      { fullName: fullName.trim(), email: email.trim(), role },
+      {
+        onSuccess: (data) => {
+          setState({
+            phase: 'success',
+            email: data.email,
+            inviteLinkUrl: data.inviteLinkUrl,
+            invitationExpiresAt: data.invitationExpiresAt,
+          });
+        },
+        onError: () => {
+          setState({ ...state, submitting: false });
+          toast.error('Не удалось отправить приглашение. Попробуйте ещё раз.');
+        },
+      },
+    );
+  }
+
+  const FIELD =
+    'h-[38px] w-full rounded-[10px] border-[0.5px] border-border-strong bg-surface-2 px-3 text-[13.5px] text-fg outline-none transition-colors placeholder:text-fg-subtle focus:border-fg-subtle focus:bg-surface';
+
+  if (state.phase === 'success') {
+    return (
+      <AdaptiveModal
+        open={open}
+        onOpenChange={handleOpenChange}
+        title="Приглашение отправлено"
+        icon={<IconChip tone="accent" icon={UserPlus} />}
+        description="Сотрудник получит письмо с ссылкой для входа"
+        footerActions={
+          <ModalButton variant="ghost" onClick={() => handleOpenChange(false)}>
+            Закрыть
+          </ModalButton>
+        }
+      >
+        <div className="flex flex-col items-center gap-3 py-2 text-center">
+          <span className="grid size-12 place-items-center rounded-full bg-primary-soft text-primary-deep dark:text-primary">
+            <CheckCircle2 className="size-6" />
+          </span>
+          <div>
+            <div className="text-[15px] font-semibold">Приглашение отправлено</div>
+            <div className="mt-1 text-[13px] text-fg-muted">
+              {state.email} получит письмо в течение нескольких минут.
+            </div>
+          </div>
+        </div>
+        {state.inviteLinkUrl ? (
+          <div className="mt-4">
+            <div className="mb-2 text-[12.5px] text-fg-muted">
+              Если письмо не дошло, скопируйте ссылку:
+            </div>
+            <input
+              readOnly
+              value={state.inviteLinkUrl}
+              onClick={(e) => (e.target as HTMLInputElement).select()}
+              className="h-9 w-full rounded-[10px] border-[0.5px] border-border bg-surface-2 px-3 font-mono text-[12px] text-fg-muted outline-none"
+            />
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <GhostBtn
+                onClick={() => {
+                  void navigator.clipboard.writeText(state.inviteLinkUrl ?? '');
+                  toast.success('Ссылка скопирована');
+                }}
+              >
+                Копировать ссылку
+              </GhostBtn>
+              {state.invitationExpiresAt ? (
+                <span className="text-[11.5px] text-fg-subtle">
+                  Ссылка действует до {formatDateRu(state.invitationExpiresAt)}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+      </AdaptiveModal>
+    );
+  }
+
+  return (
+    <AdaptiveModal
+      open={open}
+      onOpenChange={handleOpenChange}
+      title="Пригласить сотрудника"
+      icon={<IconChip tone="accent" icon={UserPlus} />}
+      description="Сотрудник получит письмо с ссылкой для входа"
+      footerActions={
+        <>
+          <ModalButton variant="ghost" disabled={state.submitting} onClick={() => handleOpenChange(false)}>
+            Отмена
+          </ModalButton>
+          <ModalButton
+            variant="primary"
+            disabled={!isFormValid || state.submitting}
+            onClick={handleSubmit}
+          >
+            Пригласить
+          </ModalButton>
+        </>
+      }
+    >
+      <div className="mb-3.5">
+        <label className="mb-1.5 block text-[12px] font-semibold text-fg-muted">
+          Имя и фамилия
+        </label>
+        <input
+          type="text"
+          placeholder="Иван Иванов"
+          value={state.fullName}
+          onChange={(e) => setState({ ...state, fullName: e.target.value })}
+          disabled={state.submitting}
+          className={FIELD}
+        />
+      </div>
+      <div className="mb-3.5">
+        <label className="mb-1.5 block text-[12px] font-semibold text-fg-muted">Email</label>
+        <input
+          type="email"
+          placeholder="ivan@example.com"
+          value={state.email}
+          onChange={(e) => setState({ ...state, email: e.target.value })}
+          disabled={state.submitting}
+          className={FIELD}
+        />
+      </div>
+      <div className="mb-1">
+        <div className="mb-1.5 text-[12px] font-semibold text-fg-muted">Роль</div>
+        <div className="inline-flex flex-wrap gap-0.5 rounded-full border-[0.5px] border-border bg-surface-2 p-[3px]">
+          {(['reception', 'owner'] as const).map((r) => {
+            const active = state.role === r;
+            return (
+              <button
+                key={r}
+                type="button"
+                disabled={state.submitting}
+                onClick={() => setState({ ...state, role: r })}
+                className={cn(
+                  'h-[28px] rounded-full px-3 text-[12.5px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  active
+                    ? 'bg-fg text-bg dark:bg-primary dark:text-[#06120c]'
+                    : 'text-fg-muted hover:text-fg',
+                )}
+              >
+                {ROLE_LABEL[r]}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </AdaptiveModal>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// User row actions
+// ---------------------------------------------------------------------------
+
+function handle409(err: unknown) {
+  if (err instanceof ApiError) {
+    if (err.code === 'cannot_deactivate_self') {
+      toast.error('Нельзя деактивировать себя');
+    } else if (err.code === 'cannot_deactivate_last_owner') {
+      toast.error('Нельзя деактивировать единственного владельца');
+    } else if (err.code === 'already_inactive') {
+      toast.error('Пользователь уже неактивен');
+    } else {
+      toast.error('Не удалось выполнить действие. Попробуйте ещё раз.');
+    }
+  } else {
+    toast.error('Не удалось выполнить действие. Попробуйте ещё раз.');
+  }
+}
+
+function UserRowActions({
+  user,
+  currentUserId,
+}: {
+  user: UserData;
+  currentUserId: string | undefined;
+}) {
+  const { open } = useModals();
+  const deactivate = useDeactivateUser();
+  const reactivate = useReactivateUser();
+  const deleteUser = useDeleteUser();
+  const revokeInv = useRevokeInvitation();
+
+  const isSelf = user.id === currentUserId;
+
+  if (user.status === 'active') {
+    if (isSelf) {
+      return (
+        <span className="justify-self-end text-[11px] text-fg-subtle">Это вы</span>
+      );
+    }
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-label="Действия с сотрудником"
+            className="grid size-7 place-items-center justify-self-end rounded-lg text-fg-subtle transition-colors hover:bg-surface-3 hover:text-fg"
+          >
+            <MoreHorizontal className="size-4" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            variant="destructive"
+            onClick={() =>
+              open('confirm', {
+                confirm: {
+                  title: `Деактивировать ${user.fullName}?`,
+                  message: 'Сотрудник потеряет доступ к системе. Его данные сохранятся.',
+                  confirmLabel: 'Деактивировать',
+                  cancelLabel: 'Отмена',
+                  tone: 'danger',
+                  onConfirm: () => {
+                    deactivate.mutate(user.id, {
+                      onError: (err) => handle409(err),
+                    });
+                  },
+                },
+              })
+            }
+          >
+            Деактивировать
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            variant="destructive"
+            onClick={() =>
+              open('confirm', {
+                confirm: {
+                  title: `Удалить ${user.fullName}?`,
+                  message: 'Аккаунт будет помечен как удалённый. Данные сохраняются.',
+                  confirmLabel: 'Удалить',
+                  cancelLabel: 'Отмена',
+                  tone: 'danger',
+                  onConfirm: () => {
+                    deleteUser.mutate(user.id, {
+                      onError: () => toast.error('Не удалось выполнить действие. Попробуйте ещё раз.'),
+                    });
+                  },
+                },
+              })
+            }
+          >
+            Удалить
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  }
+
+  if (user.status === 'pending_invitation') {
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-label="Действия с сотрудником"
+            className="grid size-7 place-items-center justify-self-end rounded-lg text-fg-subtle transition-colors hover:bg-surface-3 hover:text-fg"
+          >
+            <MoreHorizontal className="size-4" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            variant="destructive"
+            onClick={() =>
+              open('confirm', {
+                confirm: {
+                  title: `Отозвать приглашение для ${user.email}?`,
+                  message: 'Ссылка для входа перестанет работать.',
+                  confirmLabel: 'Отозвать',
+                  cancelLabel: 'Отмена',
+                  tone: 'danger',
+                  onConfirm: () => {
+                    // tokenId = user.id for pending_invitation rows
+                    revokeInv.mutate(user.id, {
+                      onError: () => toast.error('Не удалось выполнить действие. Попробуйте ещё раз.'),
+                    });
+                  },
+                },
+              })
+            }
+          >
+            Отозвать приглашение
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  }
+
+  // deactivated
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label="Действия с сотрудником"
+          className="grid size-7 place-items-center justify-self-end rounded-lg text-fg-subtle transition-colors hover:bg-surface-3 hover:text-fg"
+        >
+          <MoreHorizontal className="size-4" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem
+          onClick={() =>
+            open('confirm', {
+              confirm: {
+                title: `Восстановить ${user.fullName}?`,
+                message: 'Сотрудник снова получит доступ к системе.',
+                confirmLabel: 'Восстановить',
+                cancelLabel: 'Отмена',
+                onConfirm: () => {
+                  reactivate.mutate(user.id, {
+                    onError: (err) => handle409(err),
+                  });
+                },
+              },
+            })
+          }
+        >
+          Восстановить
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          variant="destructive"
+          onClick={() =>
+            open('confirm', {
+              confirm: {
+                title: `Удалить ${user.fullName}?`,
+                message: 'Аккаунт будет помечен как удалённый. Данные сохраняются.',
+                confirmLabel: 'Удалить',
+                cancelLabel: 'Отмена',
+                tone: 'danger',
+                onConfirm: () => {
+                  deleteUser.mutate(user.id, {
+                    onError: () => toast.error('Не удалось выполнить действие. Попробуйте ещё раз.'),
+                  });
+                },
+              },
+            })
+          }
+        >
+          Удалить
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// TeamSection — wired (Phase 104-05 SET-02)
+// ---------------------------------------------------------------------------
+
+export function TeamSection() {
+  const session = useSession();
+  const role = session.data?.role ?? 'reception';
+  const currentUserId = session.data?.id;
+  const [inviteOpen, setInviteOpen] = useState(false);
+
+  // Owner gate (T-104-12): reception fires ZERO users API calls
+  const usersQuery = useUsers({}, role);
+
   return (
     <SectionCard
       id={ID_TEAM}
       icon={Users}
       title="Доступы команды"
-      desc="Кто и как может работать в админке. Тренеры по умолчанию видят только своё расписание и клиентов."
-      action={<PrimaryBtn>+ Пригласить</PrimaryBtn>}
+      desc="Кто и как может работать в админке."
+      action={
+        can(role, 'list', 'users') ? (
+          <PrimaryBtn onClick={() => setInviteOpen(true)}>+ Пригласить</PrimaryBtn>
+        ) : undefined
+      }
     >
-      <div className="pt-2">
-        <div
-          className={cn(
-            TEAM_COLS,
-            'border-b-[0.5px] border-border pb-2 text-[10.5px] font-semibold uppercase tracking-[0.3px] text-fg-subtle max-md:hidden',
-          )}
-        >
-          <span>Сотрудник</span>
-          <span>Роль</span>
-          <span>Филиал</span>
-          <span>2FA</span>
-          <span>Последний вход</span>
-          <span />
+      {/* Reception: Lock-EmptyState INSIDE body — zero users API calls (T-104-12) */}
+      {!can(role, 'list', 'users') ? (
+        <EmptyState
+          icon={Lock}
+          title="Недостаточно прав"
+          message="Этот раздел доступен только владельцу. Обратитесь к владельцу клуба."
+          className="py-12"
+        />
+      ) : usersQuery.isPending ? (
+        <div className="flex flex-col gap-2 pt-2">
+          <Skeleton className="h-[46px] w-full rounded-xl bg-surface-3" />
+          <Skeleton className="h-[46px] w-full rounded-xl bg-surface-3" />
+          <Skeleton className="h-[46px] w-full rounded-xl bg-surface-3" />
         </div>
-        {data.team.map((m) => (
-          <div
-            key={m.name}
-            className={cn(
-              TEAM_COLS,
-              'border-t-[0.5px] border-border py-2.5 first:border-t-0 md:first:border-t-[0.5px]',
-            )}
-          >
-            <div className="flex min-w-0 items-center gap-2.5">
-              <Initials initials={m.initials} color={m.color} className="size-[30px] text-[11px]" />
-              <div className="min-w-0">
-                <div className="truncate text-[13px] font-semibold">{m.name}</div>
-                {m.note ? (
-                  <div className="truncate text-[11px] text-fg-subtle">{m.note}</div>
-                ) : null}
-              </div>
-            </div>
-            <span
-              className={cn(
-                'justify-self-start rounded-full px-2 py-0.5 text-[10.5px] font-bold uppercase',
-                ROLE_TONE[m.role],
-              )}
-            >
-              {m.roleLabel}
-            </span>
-            <span className="text-[12px] text-fg-muted max-md:hidden">{m.branch}</span>
-            <span
-              className={cn(
-                'inline-flex items-center gap-1.5 text-[12px] max-md:hidden',
-                m.twofaOk ? 'text-fg-muted' : 'text-warning-deep',
-              )}
-            >
-              <span
-                className={cn('size-1.5 rounded-full', m.twofaOk ? 'bg-primary' : 'bg-warning')}
-              />
-              {m.twofaLabel}
-            </span>
-            <div className="text-[12px] max-md:hidden">
-              <div className="tabular-nums">{m.last}</div>
-              <div className="text-[10.5px] text-fg-subtle">{m.lastSub}</div>
-            </div>
-            <button
-              type="button"
-              aria-label="Действия с сотрудником"
-              onClick={() => toast(`Действия · ${m.name}`)}
-              className="grid size-7 place-items-center justify-self-end rounded-lg text-fg-subtle transition-colors hover:bg-surface-3 hover:text-fg"
-            >
-              <MoreHorizontal className="size-4" />
-            </button>
-          </div>
-        ))}
-        <div className={cn(TEAM_COLS, 'border-t-[0.5px] border-border py-2.5')}>
-          <div className="flex items-center gap-2.5">
-            <span className="grid size-[30px] place-items-center rounded-full bg-[#94a3b8] text-[10px] font-bold text-white">
-              +8
-            </span>
-            <span className="text-[12.5px] text-fg-muted">…ещё 8 сотрудников</span>
-          </div>
-          <span className="text-[11.5px] text-fg-subtle max-md:hidden md:col-span-4">
-            6 тренеров, 2 администратора смены
-          </span>
+      ) : usersQuery.isError ? (
+        <div className="py-4 text-[12px] text-fg-muted">
+          Не удалось загрузить список сотрудников.{' '}
           <button
             type="button"
-            onClick={() => toast('Все сотрудники')}
-            className="justify-self-end text-[12px] font-semibold text-fg-muted hover:text-fg"
+            onClick={() => void usersQuery.refetch()}
+            className="font-semibold text-fg hover:underline"
           >
-            Показать всех →
+            Повторить
           </button>
         </div>
-      </div>
-
-      <SettingRow label="Политика ролей" hint="Распространяется на новых сотрудников.">
-        <div className="flex flex-col gap-3.5">
-          <Toggle
-            defaultChecked
-            sectionId={ID_TEAM}
-            label="Требовать 2FA для админов и владельцев"
-            sub="У тренеров — опционально. Кассиры — только в зале по PIN."
-          />
-          <Toggle
-            sectionId={ID_TEAM}
-            label="Тренер видит контакты клиента"
-            sub="По умолчанию — только имя и фото. Включает телефон и email."
-          />
-          <Toggle
-            defaultChecked
-            sectionId={ID_TEAM}
-            label="Авто-блок при отсутствии > 30 дней"
-            sub="Сессии завершаются, доступ — по запросу владельца."
-          />
+      ) : !usersQuery.data || usersQuery.data.items.length === 0 ? (
+        <EmptyState
+          icon={Users}
+          title="Сотрудники не найдены"
+          message={'Пригласите первого сотрудника, нажав «+ Пригласить».'}
+          className="py-12"
+        />
+      ) : (
+        <div className="pt-2">
+          <div
+            className={cn(
+              TEAM_COLS,
+              'border-b-[0.5px] border-border pb-2 text-[10.5px] font-semibold uppercase tracking-[0.3px] text-fg-subtle max-md:hidden',
+            )}
+          >
+            <span>Сотрудник</span>
+            <span>Роль</span>
+            <span>Статус</span>
+            <span />
+          </div>
+          {usersQuery.data.items.map((user) => {
+            const initials = getInitials(user.fullName);
+            return (
+              <div
+                key={user.id}
+                className={cn(
+                  TEAM_COLS,
+                  'border-t-[0.5px] border-border py-2.5 first:border-t-0 md:first:border-t-[0.5px]',
+                )}
+              >
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <Initials
+                    initials={initials}
+                    color="linear-gradient(135deg,#94a3b8,#64748b)"
+                    className="size-[30px] text-[11px]"
+                  />
+                  <div className="min-w-0">
+                    <div className="truncate text-[13px] font-semibold">{user.fullName}</div>
+                    <div className="truncate text-[11px] text-fg-subtle">{user.email}</div>
+                  </div>
+                </div>
+                {/* Role badge */}
+                <span
+                  className={cn(
+                    'justify-self-start rounded-full px-2 py-0.5 text-[10.5px] font-bold uppercase',
+                    ROLE_TONE[user.role],
+                  )}
+                >
+                  {ROLE_LABEL[user.role]}
+                </span>
+                {/* Status badge */}
+                <span className="max-md:hidden">
+                  {user.status === 'pending_invitation' ? (
+                    <span className="rounded-full bg-warning-soft px-2 py-0.5 text-[10.5px] font-bold uppercase text-warning-deep">
+                      Ожидает
+                    </span>
+                  ) : user.status === 'deactivated' ? (
+                    <span className="rounded-full bg-surface-3 px-2 py-0.5 text-[10.5px] font-bold uppercase text-fg-muted">
+                      Неактивен
+                    </span>
+                  ) : null}
+                </span>
+                <UserRowActions user={user} currentUserId={currentUserId} />
+              </div>
+            );
+          })}
         </div>
-      </SettingRow>
+      )}
+
+      <InviteModal open={inviteOpen} onClose={() => setInviteOpen(false)} />
     </SectionCard>
   );
 }

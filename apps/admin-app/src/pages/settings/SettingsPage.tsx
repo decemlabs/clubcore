@@ -55,8 +55,8 @@ export function SettingsPage() {
             <PaymentsSection />
             <NotificationsSection data={data} />
             <AppSection data={data} />
-            {/* TeamSection will be wired in Plan 104-05 */}
-            <TeamSection data={data} />
+            {/* TeamSection self-fetches (Plan 104-05) */}
+            <TeamSection />
             <IntegrationsSection data={data} />
             <BillingSection data={data} />
             <DangerSection />
