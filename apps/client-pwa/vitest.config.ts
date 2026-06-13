@@ -1,16 +1,20 @@
-/// <reference types="vitest" />
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'node:path'
 
-export default defineConfig({
+// `test` is a vitest-only key. Extracting the config to a const avoids TS's
+// object-literal excess-property check (vite's UserConfig has no `test`), while
+// the extra `test` property rides along structurally and vitest reads it at
+// runtime. This is deterministic — no reliance on the flaky `/// <reference>`
+// UserConfig augmentation, which is non-deterministic under `tsc -b` with the
+// vite@6 / vitest@2 split (see Phase 105 admin-web-retirement notes).
+const config = {
   plugins: [react()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
   },
-  // @ts-expect-error — vitest augments vite's UserConfig via types reference above.
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
@@ -19,4 +23,6 @@ export default defineConfig({
     include: ['src/**/*.{test,spec}.{ts,tsx,jsx}'],
     exclude: ['node_modules', 'dist'],
   },
-})
+}
+
+export default defineConfig(config)
