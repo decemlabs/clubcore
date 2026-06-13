@@ -20,7 +20,7 @@ import type { ReactNode } from 'react'
 // ---------------------------------------------------------------------------
 
 vi.mock('@/api/client', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/api/client')>()
+  const actual = await importOriginal<{ staffRequest: unknown; ApiError: unknown }>()
   return {
     ...actual,
     staffRequest: vi.fn(),

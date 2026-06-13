@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 // TODO Phase 102-03: replace mock with useTrainerSlots (real schedule read layer)
 import { useQuery } from '@tanstack/react-query';
-import { mockResponse } from '@/api/client';
 import { scheduleData } from '@/mocks/schedule';
 import type { ScheduleData } from '@/features/schedule/types';
 import { PageLoading, PageError } from '@/components/feedback/PageState';
@@ -15,7 +14,9 @@ import { WeekCalendar } from './components/WeekCalendar';
 function useSchedule() {
   return useQuery({
     queryKey: ['schedule', 'week', 'mock'],
-    queryFn: () => mockResponse<ScheduleData>(scheduleData),
+    // Simulate network delay without importing @/api/client in a page (import boundary)
+    queryFn: (): Promise<ScheduleData> =>
+      new Promise((resolve) => setTimeout(() => resolve(scheduleData), 120)),
   });
 }
 

@@ -116,4 +116,7 @@ export {
   Loader2,
   // Возврат средств (Phase 101-03)
   ReceiptText,
+  // Расписание (Phase 102-01)
+  CalendarPlus,
+  CalendarX,
 } from 'lucide-react';
