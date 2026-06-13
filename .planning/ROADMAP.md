@@ -234,7 +234,7 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
 - [x] 104-01-PLAN.md — Foundation: downloadCsv helper + reports clients/trainers hooks + audit domain layer
 - [ ] 104-02-PLAN.md — Dashboard role-gated composition on real /reports/* + bookings/memberships
 - [ ] 104-03-PLAN.md — Reports 4-tab page (+CSV) + Audit page (filters/pagination/CSV) + «Журнал действий» nav
-- [ ] 104-04-PLAN.md — Settings: read-only profile (no PATCH /auth/me) + active sessions (revoke + self-revoke→/login)
+- [x] 104-04-PLAN.md — Settings: read-only profile (no PATCH /auth/me) + active sessions (revoke + self-revoke→/login)
 - [ ] 104-05-PLAN.md — Users admin (owner-only) in Settings→Team: invite/list/deactivate/reactivate/soft-delete
 **UI hint**: yes
 
@@ -282,6 +282,6 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
 | 101. Clients + Memberships | 4/4 | Complete   | 2026-06-13 |
 | 102. Schedule + Trainers | 4/4 | Complete   | 2026-06-13 |
 | 103. Attendance + Finance | 4/4 | Complete   | 2026-06-13 |
-| 104. Dashboard, Reports + Settings | 1/5 | In Progress|  |
+| 104. Dashboard, Reports + Settings | 2/5 | In Progress|  |
 | 105. admin-web Retirement + RBAC Re-home | 0/TBD | Not started | - |
 | 106. OpenAPI Handoff + Milestone Gate | 0/TBD | Not started | - |
