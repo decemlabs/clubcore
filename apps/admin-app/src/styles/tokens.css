@@ -1,0 +1,92 @@
+/*
+ * Дизайн-токены ClubCore (Tailwind v4).
+ * Сырые значения цветов (HEX/rgba) портированы 1:1 из HTML-прототипов.
+ * Светлая тема — :root, тёмная — переопределением под [data-theme="dark"].
+ * Маппинг этих переменных в Tailwind-утилиты — в globals.css (@theme inline),
+ * поэтому семантические классы переключаются по теме автоматически.
+ *
+ * Бренд = --primary (изумруд). Нейтральные ховеры shadcn идут через --surface-*.
+ */
+:root {
+  /* Поверхности */
+  --bg: #f5f5f4;
+  --surface: #ffffff;
+  --surface-2: #fafaf9;
+  --surface-3: #f1f0ee;
+  --elevated: #181715;
+  --border: #e7e5e4;
+  --border-strong: #d6d3d1;
+
+  /* Текст */
+  --fg: #1c1917;
+  --fg-muted: #57534e;
+  --fg-subtle: #a8a29e;
+  --ink: #1c1917;
+
+  /* Бренд — изумрудный */
+  --primary: #2dd4a4;
+  --primary-foreground: #06120c;
+  --primary-soft: #d6f5ea;
+  --primary-deep: #0f9b76;
+
+  /* Статусы */
+  --success: #2dd4a4;
+  --warning: #e9a23b;
+  --warning-soft: #fef3e2;
+  --warning-deep: #a36a16; /* тёмный янтарь — текст на светлой подложке */
+  --danger: #dc2626;
+  --danger-soft: #fee2e2;
+  --info: #1d4ed8; /* «заморожен» — синий */
+  --info-soft: #dbeafe;
+  --lead: #7c3aed; /* «лид» — фиолетовый */
+  --lead-soft: #f3e8ff;
+
+  /* Палитра графиков — извлечена из акцентных цветов референса
+     (бренд-изумруд + sky/violet/amber/indigo категорий). */
+  --chart-1: #2dd4a4;
+  --chart-2: #0ea5e9;
+  --chart-3: #a855f7;
+  --chart-4: #f59e0b;
+  --chart-5: #6366f1;
+
+  /* Тени */
+  --sh-1: 0 1px 2px rgba(28, 25, 23, 0.04);
+  --sh-2: 0 1px 3px rgba(28, 25, 23, 0.05), 0 4px 14px rgba(28, 25, 23, 0.04);
+  --sh-3: 0 8px 30px rgba(28, 25, 23, 0.08), 0 2px 6px rgba(28, 25, 23, 0.04);
+}
+
+[data-theme='dark'] {
+  --bg: #0c0c0c;
+  --surface: #181715;
+  --surface-2: #141312;
+  --surface-3: #232120;
+  --elevated: #181715;
+  --border: #2a2826;
+  --border-strong: #3a3735;
+
+  --fg: #f5f5f4;
+  --fg-muted: #a8a29e;
+  --fg-subtle: #6b6663;
+  --ink: #f5f5f4;
+
+  --primary-soft: rgba(45, 212, 164, 0.16);
+  /* --primary / --primary-deep не меняются */
+  --warning-soft: rgba(233, 162, 59, 0.18);
+  --warning-deep: #e9a23b; /* на тёмном — яркий янтарь */
+  --danger-soft: rgba(220, 38, 38, 0.18);
+  --info: #60a5fa;
+  --info-soft: rgba(29, 78, 216, 0.18);
+  --lead: #c4b5fd;
+  --lead-soft: rgba(124, 58, 237, 0.22);
+
+  /* Палитра графиков — те же оттенки, читаются на тёмной подложке */
+  --chart-1: #2dd4a4;
+  --chart-2: #38bdf8;
+  --chart-3: #c084fc;
+  --chart-4: #fbbf24;
+  --chart-5: #818cf8;
+
+  --sh-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --sh-2: 0 1px 3px rgba(0, 0, 0, 0.4), 0 4px 14px rgba(0, 0, 0, 0.25);
+  --sh-3: 0 8px 30px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.3);
+}

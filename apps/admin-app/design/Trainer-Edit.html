@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Админка · Мой зал — Тренер</title>
+<script>
+  (function () { var t = localStorage.getItem('admin-theme') || 'light'; if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); })();
+</script>
+<style>
+  :root {
+    --accent: #2dd4a4; --accent-deep: #0f9b76; --accent-soft: #d6f5ea;
+    --bg: #f5f5f4; --surface: #ffffff; --surface-2: #fafaf9; --surface-3: #f1f0ee;
+    --border: #e7e5e4; --border-strong: #d6d3d1;
+    --text: #1c1917; --text-2: #57534e; --text-3: #a8a29e;
+    --warn: #e9a23b; --warn-soft: #fef3e2; --danger: #dc2626; --danger-soft: #fee2e2;
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", system-ui, sans-serif;
+    --mono: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+    --sh-2: 0 1px 3px rgba(28,25,23,.05), 0 4px 14px rgba(28,25,23,.04);
+    --sh-3: 0 30px 80px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.12);
+  }
+  [data-theme="dark"] {
+    --bg: #0c0c0c; --surface: #181715; --surface-2: #141312; --surface-3: #232120;
+    --border: #2a2826; --border-strong: #3a3735;
+    --text: #f5f5f4; --text-2: #a8a29e; --text-3: #6b6663;
+    --accent-soft: rgba(45,212,164,.16); --warn-soft: rgba(233,162,59,.18); --danger-soft: rgba(220,38,38,.18);
+    --sh-2: 0 1px 3px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.25); --sh-3: 0 30px 80px rgba(0,0,0,.6), 0 8px 24px rgba(0,0,0,.4);
+  }
+  [data-theme="dark"] body { background: #050505; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; font-family: var(--font); background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; font-size: 14px; line-height: 1.4; min-height: 100vh; }
+  button { font-family: inherit; cursor: pointer; }
+  input, select, textarea { font-family: inherit; }
+
+  .backdrop { position: fixed; inset: 0; overflow: hidden; background: radial-gradient(900px 500px at 80% -10%, color-mix(in oklab, var(--accent) 12%, transparent), transparent 60%), var(--bg); }
+  .bd-bar { height: 60px; border-bottom: 0.5px solid var(--border); display: flex; align-items: center; padding: 0 24px; gap: 10px; background: var(--surface-2); opacity: .9; }
+  .bd-mark { width: 28px; height: 28px; border-radius: 8px; background: var(--text); color: var(--accent); display: grid; place-items: center; font-weight: 800; font-size: 14px; }
+  [data-theme="dark"] .bd-mark { background: var(--accent); color: #06120c; }
+  .bd-name { font-size: 14px; font-weight: 700; letter-spacing: -0.3px; }
+  .bd-skel { height: 11px; border-radius: 6px; background: var(--surface-3); }
+  .bd-grid { padding: 28px 24px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; max-width: 980px; }
+  .bd-card { height: 150px; border-radius: 16px; background: var(--surface); border: 0.5px solid var(--border); }
+
+  .am-overlay { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(0,0,0,.34); backdrop-filter: blur(6px) saturate(120%); -webkit-backdrop-filter: blur(6px) saturate(120%); }
+  .am-modal { background: var(--surface); border: 0.5px solid var(--border); border-radius: 18px; box-shadow: var(--sh-3); width: min(580px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); display: flex; flex-direction: column; overflow: hidden; animation: pop .26s cubic-bezier(.32,.72,.2,1); }
+  @keyframes pop { from { transform: scale(.96) translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .am-modal-head { display: flex; align-items: center; gap: 13px; padding: 18px 22px; border-bottom: 0.5px solid var(--border); flex-shrink: 0; }
+  .head-ico { width: 44px; height: 44px; border-radius: 13px; flex-shrink: 0; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-deep); }
+  [data-theme="dark"] .head-ico { color: var(--accent); }
+  .head-ava { width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center; color: #fff; font-size: 15px; font-weight: 700; background: linear-gradient(135deg,#8b5cf6,#ec4899); }
+  .am-modal-title { font-size: 16.5px; font-weight: 700; letter-spacing: -0.3px; }
+  .am-modal-sub { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+  .am-modal-close { width: 32px; height: 32px; border-radius: 50%; border: 0; background: var(--surface-3); color: var(--text-2); display: grid; place-items: center; margin-left: auto; flex-shrink: 0; transition: background .15s, color .15s; }
+  .am-modal-close:hover { background: var(--border); color: var(--text); }
+  .am-modal-body { padding: 4px 22px 20px; overflow-y: auto; flex: 1; }
+
+  .am-section { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-3); margin: 20px 0 12px; }
+  .am-section:first-child { margin-top: 16px; }
+
+  .photo-row { display: flex; align-items: center; gap: 14px; }
+  .photo-ava { width: 60px; height: 60px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center; color: #fff; font-size: 20px; font-weight: 700; letter-spacing: -0.5px; background: linear-gradient(135deg,#8b5cf6,#ec4899); position: relative; }
+  .photo-ava.empty { background: var(--surface-3); color: var(--text-3); border: 1.5px dashed var(--border-strong); }
+  .photo-cam { position: absolute; right: -2px; bottom: -2px; width: 22px; height: 22px; border-radius: 50%; background: var(--surface); border: 0.5px solid var(--border); display: grid; place-items: center; color: var(--text-2); }
+  .photo-acts { display: flex; gap: 8px; }
+
+  .field { margin-bottom: 13px; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .label { display: block; font-size: 12px; font-weight: 600; color: var(--text-2); margin-bottom: 7px; }
+  .dirty-dot { display: none; width: 6px; height: 6px; border-radius: 50%; background: var(--warn); margin-left: 6px; vertical-align: middle; }
+  .field.changed .dirty-dot { display: inline-block; }
+  .am-input, .am-select, .am-textarea { width: 100%; height: 42px; border: 0.5px solid var(--border-strong); background: var(--surface-2); border-radius: 11px; padding: 0 13px; font-size: 14px; color: var(--text); outline: none; transition: border-color .15s, background .15s, box-shadow .15s; }
+  .am-textarea { height: auto; min-height: 60px; padding: 11px 13px; line-height: 1.45; resize: vertical; }
+  .am-select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a8a29e' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 13px center; padding-right: 34px; }
+  .am-input:focus, .am-select:focus, .am-textarea:focus { border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .input-money { position: relative; }
+  .input-money .cur { position: absolute; right: 13px; top: 50%; transform: translateY(-50%); color: var(--text-3); font-size: 13px; pointer-events: none; }
+
+  /* spec chips multi-select */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { border: 0.5px solid var(--border-strong); background: var(--surface); border-radius: 999px; padding: 8px 14px; font-size: 12.5px; font-weight: 600; color: var(--text); display: inline-flex; align-items: center; gap: 6px; transition: background .14s, border-color .14s, color .14s; }
+  .chip:hover { border-color: var(--text-3); }
+  .chip.on { background: var(--text); color: var(--bg); border-color: var(--text); }
+  [data-theme="dark"] .chip.on { background: var(--accent); color: #06120c; border-color: var(--accent); }
+  .chip .ck { width: 13px; height: 13px; opacity: 0; }
+  .chip.on .ck { opacity: 1; }
+
+  .seg { display: inline-flex; gap: 3px; background: var(--surface-3); border-radius: 10px; padding: 3px; }
+  .seg button { border: 0; background: transparent; color: var(--text-2); font-size: 12.5px; font-weight: 600; height: 34px; padding: 0 14px; border-radius: 8px; transition: background .14s, color .14s, box-shadow .14s; }
+  .seg button.on { background: var(--surface); color: var(--text); box-shadow: var(--sh-2); }
+
+  .am-modal-foot { padding: 13px 22px; border-top: 0.5px solid var(--border); display: flex; gap: 8px; align-items: center; background: var(--surface-2); flex-shrink: 0; }
+  .foot-info { font-size: 12px; color: var(--text-3); display: flex; align-items: center; gap: 7px; }
+  .foot-info.dirty { color: var(--warn); }
+  .foot-info .fi-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .foot-right { margin-left: auto; display: flex; gap: 8px; }
+
+  .btn { height: 40px; border-radius: 11px; padding: 0 18px; border: 0; font-size: 13.5px; font-weight: 600; letter-spacing: -0.1px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; transition: background .15s, transform .05s, border-color .15s, color .15s; }
+  .btn:active { transform: scale(.98); }
+  .btn-primary { background: var(--text); color: var(--bg); }
+  .btn-primary:hover { background: #000; }
+  [data-theme="dark"] .btn-primary { background: var(--accent); color: #06120c; }
+  .btn-ghost { background: var(--surface); border: 0.5px solid var(--border-strong); color: var(--text); }
+  .btn-ghost:hover { background: var(--surface-3); }
+  .btn-icon { background: var(--surface); border: 0.5px solid var(--border-strong); color: var(--text-2); width: 40px; padding: 0; }
+  .btn-icon:hover { color: var(--danger); border-color: color-mix(in oklab, var(--danger) 35%, var(--border-strong)); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn-sm { height: 34px; padding: 0 13px; font-size: 12.5px; border-radius: 9px; }
+
+  .guard-overlay { position: fixed; inset: 0; z-index: 200; display: none; align-items: center; justify-content: center; padding: 24px; background: rgba(0,0,0,.34); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  .guard-overlay.open { display: flex; }
+  .guard { background: var(--surface); border: 0.5px solid var(--border); border-radius: 18px; box-shadow: var(--sh-3); width: min(400px, calc(100vw - 32px)); overflow: hidden; animation: pop .22s cubic-bezier(.32,.72,.2,1); }
+  .guard-body { padding: 22px; display: flex; gap: 14px; }
+  .guard-ico { width: 42px; height: 42px; border-radius: 12px; flex-shrink: 0; display: grid; place-items: center; background: var(--warn-soft); color: #a36a16; }
+  [data-theme="dark"] .guard-ico { color: var(--warn); }
+  .guard-title { font-size: 16px; font-weight: 700; letter-spacing: -0.3px; }
+  .guard-sub { font-size: 13px; color: var(--text-2); margin-top: 5px; line-height: 1.5; }
+  .guard-foot { padding: 13px 22px; border-top: 0.5px solid var(--border); background: var(--surface-2); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .btn-text { background: transparent; color: var(--danger); padding: 0 12px; height: 40px; border-radius: 11px; border: 0; font-size: 13.5px; font-weight: 600; }
+  .btn-text:hover { background: var(--danger-soft); }
+
+  .toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--text); color: var(--bg); padding: 11px 16px; border-radius: 999px; font-size: 13px; font-weight: 600; box-shadow: var(--sh-3); display: flex; align-items: center; gap: 9px; opacity: 0; pointer-events: none; transition: opacity .22s, transform .22s; z-index: 300; }
+  [data-theme="dark"] .toast { background: var(--accent); color: #06120c; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .switcher { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 250; display: flex; align-items: center; gap: 3px; background: color-mix(in oklab, var(--surface) 88%, transparent); backdrop-filter: blur(14px) saturate(140%); -webkit-backdrop-filter: blur(14px) saturate(140%); border: 0.5px solid var(--border); border-radius: 999px; padding: 5px; box-shadow: var(--sh-3); }
+  .switcher .sw-lbl { font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-3); padding: 0 8px 0 6px; }
+  .switcher button { border: 0; background: transparent; color: var(--text-2); font-size: 12.5px; font-weight: 600; padding: 7px 14px; border-radius: 999px; }
+  .switcher button:hover { color: var(--text); }
+  .switcher button.active { background: var(--text); color: var(--bg); }
+  [data-theme="dark"] .switcher button.active { background: var(--accent); color: #06120c; }
+
+  @media (max-width: 640px) {
+    .am-overlay { align-items: flex-end; padding: 0; }
+    .am-modal { width: 100%; max-width: 100%; border-radius: 22px 22px 0 0; max-height: 94dvh; }
+    .field-row { grid-template-columns: 1fr; gap: 0; }
+    .am-modal-foot { flex-wrap: wrap; padding-bottom: max(13px, env(safe-area-inset-bottom)); }
+    .foot-right { width: 100%; }
+    .foot-right .btn { flex: 1; }
+    .switcher { top: 12px; bottom: auto; }
+    .bd-grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body data-screen-label="Тренер · форма">
+
+  <div class="backdrop" aria-hidden="true">
+    <div class="bd-bar"><div class="bd-mark">М</div><div class="bd-name">Мой&nbsp;зал</div><div class="bd-skel" style="width:120px;margin-left:18px;"></div><div class="bd-skel" style="width:80px;margin-left:auto;"></div></div>
+    <div class="bd-grid"><div class="bd-card"></div><div class="bd-card"></div><div class="bd-card"></div><div class="bd-card"></div><div class="bd-card"></div><div class="bd-card"></div></div>
+  </div>
+
+  <div class="am-overlay">
+    <div class="am-modal" data-screen-label="Trainer form">
+      <div class="am-modal-head">
+        <div class="head-ico" id="headIcoCreate"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg></div>
+        <div class="head-ava" id="headAvaEdit" style="display:none;">ОВ</div>
+        <div style="min-width:0;">
+          <div class="am-modal-title" id="mTitle">Новый тренер</div>
+          <div class="am-modal-sub" id="mSub">Заполните карточку — тренер появится в команде</div>
+        </div>
+        <button class="am-modal-close" type="button" id="closeBtn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+
+      <form class="am-modal-body" id="form" onsubmit="return false;">
+        <div class="am-section">Профиль</div>
+        <div class="photo-row">
+          <div class="photo-ava" id="photoAva">ОВ<span class="photo-cam"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span></div>
+          <div class="photo-acts"><button class="btn btn-ghost btn-sm" type="button">Загрузить фото</button></div>
+        </div>
+        <div class="field-row" style="margin-top:14px;">
+          <div class="field"><label class="label">Имя<span class="dirty-dot"></span></label><input class="am-input" data-track data-edit="Ольга" placeholder="Имя" type="text" /></div>
+          <div class="field"><label class="label">Фамилия<span class="dirty-dot"></span></label><input class="am-input" data-track data-edit="Власова" placeholder="Фамилия" type="text" /></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label class="label">Телефон<span class="dirty-dot"></span></label><input class="am-input" data-track data-edit="+7 916 503-77-12" placeholder="+7 ___ ___-__-__" type="tel" /></div>
+          <div class="field"><label class="label">Эл. почта<span class="dirty-dot"></span></label><input class="am-input" data-track data-edit="o.vlasova@moizal.ru" placeholder="trainer@mail.ru" type="email" /></div>
+        </div>
+
+        <div class="am-section">Специализация</div>
+        <div class="chips" id="specChips" data-track-chips data-edit="Йога,Стретчинг,Пилатес">
+          <button class="chip" type="button" data-v="Йога"><svg class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Йога</button>
+          <button class="chip" type="button" data-v="Стретчинг"><svg class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Стретчинг</button>
+          <button class="chip" type="button" data-v="Пилатес"><svg class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Пилатес</button>
+          <button class="chip" type="button" data-v="Силовые"><svg class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Силовые</button>
+          <button class="chip" type="button" data-v="Кардио"><svg class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Кардио</button>
+          <button class="chip" type="button" data-v="Бокс"><svg class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Бокс</button>
+          <button class="chip" type="button" data-v="Детские группы"><svg class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Детские группы</button>
+        </div>
+
+        <div class="am-section">Условия работы</div>
+        <div class="field">
+          <label class="label">Тип занятости<span class="dirty-dot"></span></label>
+          <div class="seg" data-track-seg data-edit="self"><button type="button" data-v="staff">В штате</button><button type="button" class="on" data-v="self">Самозанятый</button></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label class="label">Персональная, ₽<span class="dirty-dot"></span></label><div class="input-money"><input class="am-input" data-track data-edit="1 800" placeholder="0" type="text" /><span class="cur">₽</span></div></div>
+          <div class="field"><label class="label">Групповая, ₽<span class="dirty-dot"></span></label><div class="input-money"><input class="am-input" data-track data-edit="1 200" placeholder="0" type="text" /><span class="cur">₽</span></div></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label class="label">Комиссия зала<span class="dirty-dot"></span></label><div class="input-money"><input class="am-input" data-track data-edit="30" placeholder="30" type="text" /><span class="cur">%</span></div></div>
+          <div class="field"><label class="label">Филиал<span class="dirty-dot"></span></label><select class="am-select" data-track data-edit="Тверская"><option>Тверская</option><option>Сокольники</option><option>Новокосино</option></select></div>
+        </div>
+
+        <div class="am-section">Доступ и статус</div>
+        <div class="field">
+          <label class="label">Статус<span class="dirty-dot"></span></label>
+          <select class="am-select" data-track data-edit="Активна"><option>Активна</option><option>На рассмотрении</option><option>В отпуске</option><option>В архиве</option></select>
+        </div>
+        <div class="field"><label class="label">Заметка<span class="dirty-dot"></span></label><textarea class="am-textarea" data-track data-edit="Ведёт женские группы по утрам. Сертификат Yoga Alliance RYT-200." placeholder="Опыт, сертификаты, особенности…"></textarea></div>
+      </form>
+
+      <div class="am-modal-foot">
+        <button class="btn btn-icon" type="button" id="deleteBtn" title="Архивировать" style="display:none;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg></button>
+        <div class="foot-info" id="footInfo">Все поля можно изменить позже</div>
+        <div class="foot-right">
+          <button class="btn btn-ghost" type="button" id="cancelBtn">Отмена</button>
+          <button class="btn btn-primary" type="button" id="saveBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span id="saveLabel">Добавить тренера</span></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="guard-overlay" id="guard">
+    <div class="guard">
+      <div class="guard-body">
+        <div class="guard-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+        <div><div class="guard-title">Закрыть без сохранения?</div><div class="guard-sub">Внесённые данные не сохранятся. Точно закрыть?</div></div>
+      </div>
+      <div class="guard-foot">
+        <button class="btn-text" type="button" id="guardDiscard">Не сохранять</button>
+        <div style="display:flex;gap:8px;"><button class="btn btn-ghost" type="button" id="guardStay">Остаться</button><button class="btn btn-primary" type="button" id="guardSave">Сохранить</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span id="toastMsg"></span></div>
+
+  <div class="switcher" id="switcher">
+    <span class="sw-lbl">Режим</span>
+    <button data-mode-btn="create" class="active">Создание</button>
+    <button data-mode-btn="edit">Редактирование</button>
+  </div>
+
+<script>
+  var mode = 'create';
+  var dirty = false;
+  var saveBtn = document.getElementById('saveBtn');
+  var footInfo = document.getElementById('footInfo');
+
+  function applyMode() {
+    var create = mode === 'create';
+    document.getElementById('headIcoCreate').style.display = create ? 'grid' : 'none';
+    document.getElementById('headAvaEdit').style.display = create ? 'none' : 'grid';
+    document.getElementById('mTitle').textContent = create ? 'Новый тренер' : 'Редактирование тренера';
+    document.getElementById('mSub').textContent = create ? 'Заполните карточку — тренер появится в команде' : 'Ольга Власова · #TR-007';
+    document.getElementById('saveLabel').textContent = create ? 'Добавить тренера' : 'Сохранить';
+    document.getElementById('deleteBtn').style.display = create ? 'none' : 'grid';
+    // photo
+    var pa = document.getElementById('photoAva');
+    if (create) { pa.classList.add('empty'); pa.firstChild.textContent = ''; }
+    else { pa.classList.remove('empty'); pa.firstChild.textContent = 'ОВ'; }
+
+    // fields
+    document.querySelectorAll('[data-track]').forEach(function (el) {
+      var v = create ? '' : (el.dataset.edit || '');
+      if (el.tagName === 'SELECT') { el.value = create ? el.options[0].value : v; }
+      else { el.value = v; }
+      el.defaultValue = el.value;
+      var f = el.closest('.field'); if (f) f.classList.remove('changed');
+    });
+    document.querySelectorAll('[data-track-seg]').forEach(function (seg) {
+      var v = create ? seg.querySelectorAll('button')[0].dataset.v : seg.dataset.edit;
+      seg.querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.v === v); });
+      seg.dataset.initial = v;
+      var f = seg.closest('.field'); if (f) f.classList.remove('changed');
+    });
+    document.querySelectorAll('[data-track-chips]').forEach(function (cw) {
+      var sel = create ? [] : (cw.dataset.edit || '').split(',').filter(Boolean);
+      cw.querySelectorAll('.chip').forEach(function (c) { c.classList.toggle('on', sel.indexOf(c.dataset.v) > -1); });
+      cw.dataset.initial = sel.join(',');
+    });
+
+    dirty = false;
+    if (create) { saveBtn.disabled = false; footInfo.className = 'foot-info'; footInfo.textContent = 'Все поля можно изменить позже'; }
+    else { saveBtn.disabled = true; footInfo.className = 'foot-info'; footInfo.textContent = 'Сохранено только что'; }
+  }
+
+  function curChips(cw) { return Array.from(cw.querySelectorAll('.chip.on')).map(function (c) { return c.dataset.v; }).join(','); }
+
+  function recompute() {
+    if (mode === 'create') { saveBtn.disabled = false; return; } // create always allowed
+    var any = document.querySelectorAll('.field.changed').length > 0;
+    // chips
+    document.querySelectorAll('[data-track-chips]').forEach(function (cw) { if (curChips(cw) !== cw.dataset.initial) any = true; });
+    setDirty(any);
+  }
+  function setDirty(on) {
+    dirty = on;
+    if (mode === 'edit') saveBtn.disabled = !on;
+    footInfo.className = 'foot-info' + (on ? ' dirty' : '');
+    footInfo.innerHTML = on ? '<span class="fi-dot"></span>Несохранённые изменения' : (mode === 'edit' ? 'Сохранено только что' : 'Все поля можно изменить позже');
+  }
+
+  document.querySelectorAll('[data-track]').forEach(function (el) {
+    var evt = (el.tagName === 'SELECT') ? 'change' : 'input';
+    el.addEventListener(evt, function () { var f = el.closest('.field'); if (f) f.classList.toggle('changed', el.value !== el.defaultValue); recompute(); });
+  });
+  document.querySelectorAll('[data-track-seg]').forEach(function (seg) {
+    seg.querySelectorAll('button').forEach(function (b) {
+      b.addEventListener('click', function () { seg.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); }); var f = seg.closest('.field'); if (f) f.classList.toggle('changed', b.dataset.v !== seg.dataset.initial); recompute(); });
+    });
+  });
+  document.querySelectorAll('[data-track-chips] .chip').forEach(function (c) {
+    c.addEventListener('click', function () { c.classList.toggle('on'); recompute(); });
+  });
+
+  function doSave() {
+    document.querySelectorAll('.field.changed').forEach(function (f) { f.classList.remove('changed'); });
+    document.querySelectorAll('[data-track]').forEach(function (el) { el.defaultValue = el.value; });
+    document.querySelectorAll('[data-track-chips]').forEach(function (cw) { cw.dataset.initial = curChips(cw); });
+    document.querySelectorAll('[data-track-seg]').forEach(function (seg) { var on = seg.querySelector('.on'); seg.dataset.initial = on ? on.dataset.v : ''; });
+    setDirty(false);
+    showToast(mode === 'create' ? 'Тренер добавлен в команду' : 'Изменения сохранены');
+  }
+  saveBtn.addEventListener('click', doSave);
+
+  function flashClosed() { var m = document.querySelector('.am-modal'); m.style.transition = 'opacity .2s, transform .2s'; m.style.opacity = '0'; m.style.transform = 'scale(.97) translateY(8px)'; setTimeout(function () { m.style.opacity = ''; m.style.transform = ''; m.style.transition = ''; }, 320); }
+  function tryClose() {
+    var has = (mode === 'edit' && dirty) || (mode === 'create' && document.querySelectorAll('.field.changed').length > 0);
+    if (has) { document.getElementById('guard').classList.add('open'); return; }
+    flashClosed();
+  }
+  document.getElementById('closeBtn').addEventListener('click', tryClose);
+  document.getElementById('cancelBtn').addEventListener('click', tryClose);
+  document.getElementById('guardStay').addEventListener('click', function () { document.getElementById('guard').classList.remove('open'); });
+  document.getElementById('guardDiscard').addEventListener('click', function () { document.getElementById('guard').classList.remove('open'); applyMode(); flashClosed(); showToast('Изменения отменены'); });
+  document.getElementById('guardSave').addEventListener('click', function () { document.getElementById('guard').classList.remove('open'); doSave(); flashClosed(); });
+  document.getElementById('deleteBtn').addEventListener('click', function () { showToast('Откроется подтверждение архивации'); });
+
+  document.querySelectorAll('[data-mode-btn]').forEach(function (b) {
+    b.addEventListener('click', function () { mode = b.dataset.modeBtn; document.querySelectorAll('[data-mode-btn]').forEach(function (x) { x.classList.toggle('active', x === b); }); applyMode(); });
+  });
+
+  var toast = document.getElementById('toast'), toastTimer = null;
+  function showToast(msg) { document.getElementById('toastMsg').textContent = msg; toast.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 2200); }
+
+  // init: respect hash
+  if (location.hash === '#edit') { mode = 'edit'; document.querySelectorAll('[data-mode-btn]').forEach(function (x) { x.classList.toggle('active', x.dataset.modeBtn === 'edit'); }); }
+  applyMode();
+</script>
+</body>
+</html>

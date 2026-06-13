@@ -1,0 +1,130 @@
+@import 'tailwindcss';
+@import './tokens.css';
+
+/* Тёмная тема включается атрибутом [data-theme="dark"] на <html> (не .dark / не prefers-color-scheme). */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/*
+ * Маппинг сырых токенов (tokens.css) в Tailwind-утилиты.
+ * `inline` => утилиты используют var(--…), поэтому переключение темы работает в рантайме.
+ * Включает полный набор семантических токенов shadcn (на наших цветах) + наши удобные алиасы.
+ */
+@theme inline {
+  /* shadcn-семантика */
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--fg);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--fg);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--surface-2);
+  --color-secondary-foreground: var(--fg);
+  --color-muted: var(--surface-3);
+  --color-muted-foreground: var(--fg-muted);
+  --color-accent: var(--surface-3);
+  --color-accent-foreground: var(--fg);
+  --color-destructive: var(--danger);
+  --color-destructive-foreground: #ffffff;
+  --color-border: var(--border);
+  --color-input: var(--border);
+  --color-ring: var(--primary);
+
+  /* shadcn sidebar — фон чуть светлее основного (как в референсе: surface-2) */
+  --color-sidebar: var(--surface-2);
+  --color-sidebar-foreground: var(--fg);
+  --color-sidebar-primary: var(--ink);
+  --color-sidebar-primary-foreground: #ffffff;
+  --color-sidebar-accent: var(--surface-3);
+  --color-sidebar-accent-foreground: var(--fg);
+  --color-sidebar-border: var(--border);
+  --color-sidebar-ring: var(--primary);
+
+  /* Наши удобные токены (используются на текущих страницах) */
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-elevated: var(--elevated);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-ink: var(--ink);
+  --color-border-strong: var(--border-strong);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-deep: var(--primary-deep);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-deep: var(--warning-deep);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-lead: var(--lead);
+  --color-lead-soft: var(--lead-soft);
+
+  /* Палитра графиков (shadcn Chart: var(--chart-N)) */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* Шрифты */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Inter Variable', 'Inter',
+    system-ui, sans-serif;
+  --font-mono: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, Consolas, monospace;
+
+  /* Радиусы */
+  --radius-sm: 10px;
+  --radius: 14px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-2xl: 24px;
+  --radius-pill: 999px;
+
+  /* Тени */
+  --shadow-1: var(--sh-1);
+  --shadow-2: var(--sh-2);
+  --shadow-3: var(--sh-3);
+  --shadow-card: var(--sh-2);
+  --shadow-elevated: var(--sh-3);
+
+  /* Размеры каркаса */
+  --spacing-sidebar: 248px;
+  --spacing-topbar: 64px;
+}
+
+/* Вертикальный свип лазерной линии QR-сканера (модалка чек-ина). */
+@keyframes qr-scan {
+  0%,
+  100% {
+    top: 14%;
+  }
+  50% {
+    top: 85%;
+  }
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-bg text-fg font-sans antialiased;
+    font-feature-settings:
+      'cv11' on,
+      'ss01' on;
+  }
+
+  * {
+    @apply border-border;
+  }
+}

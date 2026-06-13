@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Админка · Мой зал — Состояния</title>
+<script>(function(){var t=localStorage.getItem('admin-theme')||'light';if(t==='dark')document.documentElement.setAttribute('data-theme','dark');})();</script>
+<style>
+  :root{--accent:#2dd4a4;--accent-deep:#0f9b76;--accent-soft:#d6f5ea;--bg:#f5f5f4;--surface:#fff;--surface-2:#fafaf9;--surface-3:#f1f0ee;--border:#e7e5e4;--border-strong:#d6d3d1;--text:#1c1917;--text-2:#57534e;--text-3:#a8a29e;--warn:#e9a23b;--warn-soft:#fef3e2;--danger:#dc2626;--danger-soft:#fee2e2;--indigo:#6366f1;--indigo-soft:rgba(99,102,241,.13);--font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter",system-ui,sans-serif;--mono:"SF Mono",ui-monospace,Menlo,monospace;--sh-1:0 1px 2px rgba(28,25,23,.04);--sh-2:0 1px 3px rgba(28,25,23,.05),0 4px 14px rgba(28,25,23,.04);--sh-3:0 8px 30px rgba(28,25,23,.08),0 2px 6px rgba(28,25,23,.04);}
+  [data-theme="dark"]{--bg:#0c0c0c;--surface:#181715;--surface-2:#141312;--surface-3:#232120;--border:#2a2826;--border-strong:#3a3735;--text:#f5f5f4;--text-2:#a8a29e;--text-3:#6b6663;--accent-soft:rgba(45,212,164,.16);--warn-soft:rgba(233,162,59,.18);--danger-soft:rgba(220,38,38,.18);--indigo-soft:rgba(99,102,241,.22);--sh-3:0 8px 30px rgba(0,0,0,.5),0 2px 6px rgba(0,0,0,.3);}
+  [data-theme="dark"] body{background:#050505;}
+  *{box-sizing:border-box;}html,body{margin:0;padding:0;font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.4;min-height:100vh;}
+  button{font-family:inherit;cursor:pointer;}
+  .wrap{min-height:100vh;display:flex;flex-direction:column;}
+  .bar{height:60px;border-bottom:.5px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:12px;background:color-mix(in oklab,var(--surface) 75%,transparent);backdrop-filter:blur(10px);position:sticky;top:0;z-index:10;}
+  .bd-mark{width:28px;height:28px;border-radius:8px;background:var(--text);color:var(--accent);display:grid;place-items:center;font-weight:800;font-size:14px;}[data-theme="dark"] .bd-mark{background:var(--accent);color:#06120c;}
+  .bd-name{font-size:14px;font-weight:700;}.bd-tag{font-size:13px;color:var(--text-2);}.bd-tag b{color:var(--text);}
+  .theme-toggle{margin-left:auto;width:36px;height:36px;border-radius:50%;border:.5px solid var(--border);background:var(--surface);color:var(--text-2);display:grid;place-items:center;}.theme-toggle:hover{background:var(--surface-3);color:var(--text);}.theme-toggle .i-moon{display:none;}[data-theme="dark"] .theme-toggle .i-moon{display:block;}[data-theme="dark"] .theme-toggle .i-sun{display:none;}
+  .stage{flex:1;display:grid;place-items:center;padding:40px 24px 120px;}
+  .demo{width:min(760px,100%);}
+  .demo-head{display:flex;align-items:center;gap:10px;margin-bottom:14px;}.demo-head h2{font-size:15px;font-weight:700;margin:0;}.demo-head .badge{font-size:11px;font-weight:700;font-family:var(--mono);color:var(--text-3);background:var(--surface-3);padding:2px 9px;border-radius:999px;}
+  .card{background:var(--surface);border:.5px solid var(--border);border-radius:18px;box-shadow:var(--sh-2);overflow:hidden;}
+  .card-top{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:.5px solid var(--border);}.card-top h3{font-size:13.5px;font-weight:700;margin:0;}.card-top .sp{margin-left:auto;display:flex;gap:8px;}
+  .ph-btn{height:30px;border-radius:8px;padding:0 11px;border:.5px solid var(--border-strong);background:var(--surface);color:var(--text-2);font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:6px;}
+
+  .state{min-height:360px;display:flex;align-items:center;justify-content:center;padding:40px 24px;}
+  .msg{text-align:center;max-width:380px;}
+  .ico{width:60px;height:60px;border-radius:17px;margin:0 auto 18px;display:grid;place-items:center;background:var(--surface-3);color:var(--text-3);}
+  .ico.accent{background:var(--accent-soft);color:var(--accent-deep);}[data-theme="dark"] .ico.accent{color:var(--accent);}
+  .ico.danger{background:var(--danger-soft);color:var(--danger);}.ico.warn{background:var(--warn-soft);color:#a36a16;}[data-theme="dark"] .ico.warn{color:var(--warn);}.ico.indigo{background:var(--indigo-soft);color:var(--indigo);}[data-theme="dark"] .ico.indigo{color:#a5b4fc;}
+  .t{font-size:18px;font-weight:700;letter-spacing:-.4px;}.s{font-size:13.5px;color:var(--text-2);margin-top:7px;line-height:1.55;}
+  .acts{display:flex;gap:9px;justify-content:center;margin-top:20px;flex-wrap:wrap;}
+  .btn{height:40px;border-radius:10px;padding:0 18px;border:0;font-size:13.5px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:8px;}
+  .btn-primary{background:var(--text);color:var(--bg);}[data-theme="dark"] .btn-primary{background:var(--accent);color:#06120c;}
+  .btn-ghost{background:var(--surface);border:.5px solid var(--border-strong);color:var(--text);}.btn-ghost:hover{background:var(--surface-3);}
+  /* loading skeleton */
+  .skel-list{width:100%;padding:6px 8px;}
+  .skel-row{display:flex;align-items:center;gap:13px;padding:13px 12px;border-bottom:.5px solid var(--border);}.skel-row:last-child{border-bottom:0;}
+  .skel{position:relative;overflow:hidden;background:var(--surface-3);border-radius:8px;}.skel::after{content:"";position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,color-mix(in oklab,var(--surface) 65%,transparent),transparent);animation:sh 1.3s infinite;}@keyframes sh{100%{transform:translateX(100%);}}
+  .spinner{width:38px;height:38px;border-radius:50%;border:3px solid var(--surface-3);border-top-color:var(--accent);animation:spin .8s linear infinite;margin:0 auto 18px;}@keyframes spin{to{transform:rotate(360deg);}}
+  /* offline banner */
+  .ofb{display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--warn-soft);font-size:12.5px;font-weight:600;color:#8a5a13;}[data-theme="dark"] .ofb{background:rgba(233,162,59,.12);color:var(--warn);}
+  .pane{display:none;}.pane.active{display:block;}
+
+  .switcher{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:50;display:flex;align-items:center;gap:3px;background:color-mix(in oklab,var(--surface) 88%,transparent);backdrop-filter:blur(14px) saturate(140%);border:.5px solid var(--border);border-radius:999px;padding:5px;box-shadow:var(--sh-3);max-width:calc(100vw - 24px);overflow-x:auto;scrollbar-width:none;}.switcher::-webkit-scrollbar{display:none;}
+  .switcher .sw-lbl{font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3);padding:0 8px 0 6px;white-space:nowrap;}
+  .switcher button{border:0;background:transparent;color:var(--text-2);font-size:12.5px;font-weight:600;padding:7px 12px;border-radius:999px;white-space:nowrap;}.switcher button:hover{color:var(--text);}.switcher button.active{background:var(--text);color:var(--bg);}[data-theme="dark"] .switcher button.active{background:var(--accent);color:#06120c;}
+</style>
+</head>
+<body data-screen-label="Состояния интерфейса">
+  <div class="wrap">
+    <div class="bar"><div class="bd-mark">М</div><div class="bd-name">Мой&nbsp;зал</div><div class="bd-tag">Состояния интерфейса · <b id="curName">Empty</b></div>
+      <button class="theme-toggle" id="themeToggle" type="button"><svg class="i-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg><svg class="i-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button>
+    </div>
+
+    <div class="stage">
+      <div class="demo">
+        <div class="demo-head"><h2 id="dh">Empty · пустое состояние</h2><span class="badge" id="db">empty</span></div>
+        <div class="card">
+          <div class="card-top"><h3>Клиенты</h3><div class="sp"><span class="ph-btn">Фильтры</span><span class="ph-btn">+ Добавить</span></div></div>
+
+          <div class="pane active" data-pane="empty"><div class="state"><div class="msg"><div class="ico"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg></div><div class="t">Пока нет клиентов</div><div class="s">Добавьте первого клиента вручную или импортируйте базу из файла.</div><div class="acts"><button class="btn btn-primary" type="button">Добавить клиента</button><button class="btn btn-ghost" type="button">Импорт из CSV</button></div></div></div></div>
+
+          <div class="pane" data-pane="loading"><div class="skel-list">
+            <div class="skel-row"><div class="skel" style="width:38px;height:38px;border-radius:50%;"></div><div style="flex:1;"><div class="skel" style="height:11px;width:45%;"></div><div class="skel" style="height:10px;width:30%;margin-top:7px;"></div></div><div class="skel" style="width:70px;height:22px;border-radius:999px;"></div></div>
+            <div class="skel-row"><div class="skel" style="width:38px;height:38px;border-radius:50%;"></div><div style="flex:1;"><div class="skel" style="height:11px;width:55%;"></div><div class="skel" style="height:10px;width:35%;margin-top:7px;"></div></div><div class="skel" style="width:70px;height:22px;border-radius:999px;"></div></div>
+            <div class="skel-row"><div class="skel" style="width:38px;height:38px;border-radius:50%;"></div><div style="flex:1;"><div class="skel" style="height:11px;width:40%;"></div><div class="skel" style="height:10px;width:28%;margin-top:7px;"></div></div><div class="skel" style="width:70px;height:22px;border-radius:999px;"></div></div>
+            <div class="skel-row"><div class="skel" style="width:38px;height:38px;border-radius:50%;"></div><div style="flex:1;"><div class="skel" style="height:11px;width:50%;"></div><div class="skel" style="height:10px;width:32%;margin-top:7px;"></div></div><div class="skel" style="width:70px;height:22px;border-radius:999px;"></div></div>
+            <div style="text-align:center;padding:18px;"><div class="spinner"></div><div class="s">Загружаем клиентов…</div></div>
+          </div></div>
+
+          <div class="pane" data-pane="error"><div class="state"><div class="msg"><div class="ico danger"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div><div class="t">Не удалось загрузить</div><div class="s">Что-то пошло не так при загрузке клиентов. Код ошибки <b style="font-family:var(--mono)">ERR-503</b>.</div><div class="acts"><button class="btn btn-primary" type="button" id="retryBtn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Повторить</button></div></div></div></div>
+
+          <div class="pane" data-pane="noresults"><div class="state"><div class="msg"><div class="ico"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg></div><div class="t">Ничего не найдено</div><div class="s">По запросу «<b>иванов премиум</b>» нет результатов. Измените фильтры или запрос.</div><div class="acts"><button class="btn btn-ghost" type="button">Сбросить фильтры</button></div></div></div></div>
+
+          <div class="pane" data-pane="offline">
+            <div class="ofb"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.58 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>Нет подключения · данные могут быть устаревшими</div>
+            <div class="state" style="min-height:300px;"><div class="msg"><div class="ico warn"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg></div><div class="t">Нет соединения</div><div class="s">Проверьте интернет. Мы автоматически обновим данные, как только связь восстановится.</div><div class="acts"><button class="btn btn-ghost" type="button">Повторить сейчас</button></div></div></div>
+          </div>
+
+          <div class="pane" data-pane="savefail"><div class="state"><div class="msg"><div class="ico danger"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div><div class="t">Не удалось сохранить</div><div class="s">Изменения не сохранены — сервер не ответил. Мы сохранили черновик локально.</div><div class="acts"><button class="btn btn-primary" type="button">Повторить сохранение</button><button class="btn btn-ghost" type="button">Отменить</button></div></div></div></div>
+
+          <div class="pane" data-pane="denied"><div class="state"><div class="msg"><div class="ico warn"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div><div class="t">Нет доступа к разделу</div><div class="s">У вашей роли «Ресепшн» нет прав на просмотр клиентов другого филиала.</div><div class="acts"><button class="btn btn-primary" type="button">Запросить доступ</button><a class="btn btn-ghost" href="Dashboard.html">На дашборд</a></div></div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="switcher" id="switcher">
+    <span class="sw-lbl">Состояние</span>
+    <button data-go="empty" class="active">Empty</button>
+    <button data-go="loading">Loading</button>
+    <button data-go="error">Error</button>
+    <button data-go="noresults">No results</button>
+    <button data-go="offline">Offline</button>
+    <button data-go="savefail">Save failed</button>
+    <button data-go="denied">Permission denied</button>
+  </div>
+
+<script>
+  document.getElementById('themeToggle').addEventListener('click', function () { var d = document.documentElement.getAttribute('data-theme') === 'dark'; if (d) { document.documentElement.removeAttribute('data-theme'); localStorage.setItem('admin-theme', 'light'); } else { document.documentElement.setAttribute('data-theme', 'dark'); localStorage.setItem('admin-theme', 'dark'); } });
+  var META = { empty:['Empty · пустое состояние','empty'], loading:['Loading · загрузка','loading'], error:['Error · ошибка загрузки','error'], noresults:['No results · нет результатов','no-results'], offline:['Offline · нет сети','offline'], savefail:['Save Failed · сбой сохранения','save-failed'], denied:['Permission Denied · нет прав','403'] };
+  var NAMES = { empty:'Empty', loading:'Loading', error:'Error', noresults:'No results', offline:'Offline', savefail:'Save failed', denied:'Permission denied' };
+  function go(name) {
+    document.querySelectorAll('.pane').forEach(function (p) { p.classList.toggle('active', p.dataset.pane === name); });
+    document.querySelectorAll('[data-go]').forEach(function (b) { b.classList.toggle('active', b.dataset.go === name); });
+    document.getElementById('dh').textContent = META[name][0]; document.getElementById('db').textContent = META[name][1]; document.getElementById('curName').textContent = NAMES[name];
+  }
+  document.querySelectorAll('[data-go]').forEach(function (b) { b.addEventListener('click', function () { go(b.dataset.go); }); });
+  document.getElementById('retryBtn').addEventListener('click', function () { go('loading'); setTimeout(function () { go('empty'); }, 1100); });
+  go('empty');
+</script>
+</body>
+</html>

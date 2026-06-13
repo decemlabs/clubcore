@@ -1,0 +1,181 @@
+import { createBrowserRouter, Navigate, type RouteObject } from 'react-router-dom';
+import { AppLayout } from '@/layouts/AppLayout/AppLayout';
+import { ROUTES } from './routes';
+import { ErrorPage } from '@/components/feedback/ErrorPage';
+import { RouteErrorBoundary } from '@/components/feedback/RouteErrorBoundary';
+
+/**
+ * Три ветки:
+ *  (A) chrome-less маршруты — вне AppLayout (логин/ошибки добавляются по фазам);
+ *  (B) приложение под общей оболочкой AppLayout, с errorElement на всю ветку;
+ *  (C) совместимость со статическим прототипом (/index.html → дашборд).
+ *
+ * Статические подмаршруты (/clients/archive и т.п.) при добавлении регистрируются
+ * ДО соответствующих `:id`-маршрутов. Внутренний catch-all '*' рендерит 404 с хромом.
+ */
+export const routeConfig: RouteObject[] = [
+  // (A) Без оболочки.
+  {
+    path: ROUTES.login,
+    lazy: async () => ({
+      Component: (await import('@/pages/login/LoginPage')).LoginPage,
+    }),
+  },
+  { path: ROUTES.error, element: <ErrorPage code={500} /> },
+
+  // (B) Приложение.
+  {
+    element: <AppLayout />,
+    errorElement: <RouteErrorBoundary />,
+    children: [
+      {
+        path: ROUTES.dashboard,
+        lazy: async () => ({
+          Component: (await import('@/pages/dashboard/DashboardPage')).DashboardPage,
+        }),
+      },
+      {
+        path: ROUTES.clients,
+        lazy: async () => ({
+          Component: (await import('@/pages/clients/ClientsPage')).ClientsPage,
+        }),
+      },
+      {
+        path: ROUTES.client(),
+        lazy: async () => ({
+          Component: (await import('@/pages/client/ClientPage')).ClientPage,
+        }),
+      },
+      {
+        path: ROUTES.schedule,
+        lazy: async () => ({
+          Component: (await import('@/pages/schedule/SchedulePage')).SchedulePage,
+        }),
+      },
+      {
+        path: ROUTES.plans,
+        lazy: async () => ({
+          Component: (await import('@/pages/plans/PlansPage')).PlansPage,
+        }),
+      },
+      {
+        path: ROUTES.trainers,
+        lazy: async () => ({
+          Component: (await import('@/pages/trainers/TrainersPage')).TrainersPage,
+        }),
+      },
+      {
+        path: ROUTES.trainer(),
+        lazy: async () => ({
+          Component: (await import('@/pages/trainer/TrainerPage')).TrainerPage,
+        }),
+      },
+      // Филиалы: список (статический) — ДО :branchId-детали.
+      {
+        path: ROUTES.branches,
+        lazy: async () => ({
+          Component: (await import('@/pages/branches/BranchesPage')).BranchesPage,
+        }),
+      },
+      {
+        path: ROUTES.branch(),
+        lazy: async () => ({
+          Component: (await import('@/pages/branch-settings/BranchSettingsPage'))
+            .BranchSettingsPage,
+        }),
+        handle: { breadcrumb: ['Филиалы'] },
+      },
+      {
+        path: ROUTES.cashbox,
+        lazy: async () => ({
+          Component: (await import('@/pages/cashbox/CashboxPage')).CashboxPage,
+        }),
+      },
+      {
+        path: ROUTES.messages,
+        lazy: async () => ({
+          Component: (await import('@/pages/messages/MessagesPage')).MessagesPage,
+        }),
+      },
+      {
+        path: ROUTES.notifications,
+        lazy: async () => ({
+          Component: (await import('@/pages/notifications/NotificationsPage')).NotificationsPage,
+        }),
+      },
+      {
+        path: ROUTES.reports,
+        lazy: async () => ({
+          Component: (await import('@/pages/reports/ReportsPage')).ReportsPage,
+        }),
+      },
+      {
+        path: ROUTES.attendance,
+        lazy: async () => ({
+          Component: (await import('@/pages/attendance/AttendancePage')).AttendancePage,
+        }),
+      },
+      {
+        path: ROUTES.load,
+        lazy: async () => ({
+          Component: (await import('@/pages/load/LoadPage')).LoadPage,
+        }),
+      },
+      {
+        path: ROUTES.finance,
+        lazy: async () => ({
+          Component: (await import('@/pages/finance/FinancePage')).FinancePage,
+        }),
+      },
+      {
+        path: ROUTES.settings,
+        lazy: async () => ({
+          Component: (await import('@/pages/settings/SettingsPage')).SettingsPage,
+        }),
+      },
+      // Подстраницы настроек (статические /settings/*) — крошка задаётся handle.
+      {
+        path: ROUTES.systemSettings,
+        lazy: async () => ({
+          Component: (await import('@/pages/system-settings/SystemSettingsPage'))
+            .SystemSettingsPage,
+        }),
+        handle: { breadcrumb: ['Настройки', 'Система'] },
+      },
+      {
+        path: ROUTES.roles,
+        lazy: async () => ({
+          Component: (await import('@/pages/roles/RolesPage')).RolesPage,
+        }),
+        handle: { breadcrumb: ['Настройки', 'Роли и права'] },
+      },
+      {
+        path: ROUTES.audit,
+        lazy: async () => ({
+          Component: (await import('@/pages/audit/AuditPage')).AuditPage,
+        }),
+        handle: { breadcrumb: ['Настройки', 'Журнал действий'] },
+      },
+      {
+        path: ROUTES.trash,
+        lazy: async () => ({
+          Component: (await import('@/pages/trash/TrashPage')).TrashPage,
+        }),
+        handle: { breadcrumb: ['Настройки', 'Корзина'] },
+      },
+      {
+        path: ROUTES.importExport,
+        lazy: async () => ({
+          Component: (await import('@/pages/import-export/ImportExportPage')).ImportExportPage,
+        }),
+        handle: { breadcrumb: ['Настройки', 'Импорт / экспорт'] },
+      },
+      { path: '*', element: <ErrorPage code={404} /> },
+    ],
+  },
+
+  // (C) Совместимость со статическим прототипом.
+  { path: '/index.html', element: <Navigate to={ROUTES.dashboard} replace /> },
+];
+
+export const router = createBrowserRouter(routeConfig);

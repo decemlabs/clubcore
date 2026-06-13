@@ -1,0 +1,256 @@
+/**
+ * Сид-данные экрана «Абонементы и тарифы». Портированы из Plans.html:
+ * 3 тарифа, продажи за 6 мес, 4 акции, 5 доп. услуг.
+ */
+import type { PlansPageData } from '@/features/plans/types';
+
+export const plansPageData: PlansPageData = {
+  summary: { activeSubs: 847, mrr: 2248000, tariffCount: 4 },
+
+  kpis: [
+    {
+      id: 'subs',
+      icon: 'subs',
+      label: 'Активных абонементов',
+      value: 847,
+      valueKind: 'int',
+      delta: { label: '+34', direction: 'up' },
+      footNote: 'за неделю',
+    },
+    {
+      id: 'mrr',
+      icon: 'mrr',
+      label: 'MRR · текущий',
+      value: 2248000,
+      valueKind: 'int',
+      unit: '₽',
+      delta: { label: '+18%', direction: 'up' },
+      footNote: 'к март',
+    },
+    {
+      id: 'avg',
+      icon: 'avg',
+      label: 'Средний чек',
+      value: 4870,
+      valueKind: 'int',
+      unit: '₽',
+      delta: { label: '+0.4%', direction: 'flat' },
+      footNote: 'к март',
+    },
+    {
+      id: 'funnel',
+      icon: 'funnel',
+      label: 'Лид → клиент',
+      value: 32,
+      valueKind: 'percent',
+      chips: [
+        { label: '15 лидов', tone: 'neutral' },
+        { label: '5 оплат', tone: 'accent' },
+      ],
+    },
+  ],
+
+  tabs: [
+    { tab: 'tariffs', label: 'Тарифы', count: 3 },
+    { tab: 'subs', label: 'Активные абонементы', count: 847 },
+    { tab: 'promos', label: 'Скидки и акции', count: 3 },
+    { tab: 'addons', label: 'Доп. услуги', count: 5 },
+    { tab: 'archive', label: 'Архив', count: 7 },
+  ],
+
+  tariffs: [
+    {
+      id: 'month',
+      name: 'Месячный',
+      tag: 'Без обязательств',
+      priceBig: '4 900',
+      per: '₽ / мес',
+      days: '30',
+      sumLabel: '4 900 ₽',
+      features: [
+        { text: 'Зал · 8:00–22:00', included: true },
+        { text: '2 групповые / нед', included: true },
+        { text: 'Без заморозки', included: false },
+        { text: 'Без скидок на тренера', included: false },
+        { text: 'Сауна — за деньги', included: false },
+      ],
+      stats: [
+        { label: 'Активных', value: '412', foot: '49%' },
+        { label: 'Продано в апр', value: '38', foot: '+5', footUp: true },
+        { label: 'Выручка апр', value: '186К ₽', foot: '8.3%' },
+      ],
+    },
+    {
+      id: 'half',
+      name: 'Полугодовой',
+      tag: 'Самый популярный · 38% продаж',
+      badge: { kind: 'hit', label: 'Хит' },
+      popular: true,
+      priceBig: '4 100',
+      per: '₽ / мес',
+      days: '180',
+      sumLabel: '24 600 ₽',
+      features: [
+        { text: 'Зал · круглосуточно', included: true },
+        { text: 'Группы — без лимита', included: true },
+        { text: 'Сауна включена', included: true },
+        { text: '14 дней заморозки', included: true },
+        { text: '−10% на тренера · 1 гостевой / мес', included: true },
+      ],
+      stats: [
+        { label: 'Активных', value: '318', foot: '38%' },
+        { label: 'Продано в апр', value: '22', foot: '+8', footUp: true },
+        { label: 'Выручка апр', value: '541К ₽', foot: '24%' },
+      ],
+    },
+    {
+      id: 'year',
+      name: 'Годовой',
+      tag: 'Лучшая цена за месяц',
+      badge: { kind: 'deal', label: '−29%' },
+      priceBig: '3 500',
+      per: '₽ / мес',
+      days: '365',
+      sumLabel: '42 000 ₽',
+      features: [
+        { text: 'Зал · круглосуточно', included: true },
+        { text: 'Группы — без лимита', included: true },
+        { text: 'Сауна + бассейн', included: true },
+        { text: '30 дней заморозки', included: true },
+        { text: '−15% на тренера · 2 гостевых', included: true },
+      ],
+      stats: [
+        { label: 'Активных', value: '117', foot: '14%' },
+        { label: 'Продано в апр', value: '6', foot: '±0' },
+        { label: 'Выручка апр', value: '252К ₽', foot: '11.2%' },
+      ],
+    },
+  ],
+
+  sales: {
+    months: [
+      { label: 'Ноя', count: 52, revenueK: 228, seg: { annual: 0.08, half: 0.25, month: 0.67 } },
+      { label: 'Дек', count: 61, revenueK: 268, seg: { annual: 0.1, half: 0.32, month: 0.58 } },
+      { label: 'Янв', count: 78, revenueK: 254, seg: { annual: 0.12, half: 0.38, month: 0.5 } },
+      { label: 'Фев', count: 64, revenueK: 308, seg: { annual: 0.14, half: 0.33, month: 0.53 } },
+      { label: 'Мар', count: 59, revenueK: 290, seg: { annual: 0.1, half: 0.3, month: 0.6 } },
+      {
+        label: 'Апр',
+        count: 66,
+        revenueK: 343,
+        seg: { annual: 0.09, half: 0.33, month: 0.58 },
+        current: true,
+      },
+    ],
+    legend: [
+      { key: 'month', label: 'Месячный', value: 38 },
+      { key: 'half', label: 'Полугодовой', value: 22 },
+      { key: 'annual', label: 'Годовой', value: 6 },
+    ],
+    conversion: '32%',
+  },
+
+  promos: [
+    {
+      id: 'p1',
+      iconKind: 'discount',
+      title: '−15% на годовой',
+      status: 'active',
+      statusLabel: 'активна',
+      sub: 'До 5 мая 2026 · автоматическая скидка на тариф «Годовой» при онлайн-оплате. + бонусный месяц.',
+      stats: [
+        { label: 'Использований', value: '14' },
+        { label: 'Доп. выручка', value: '+96 600 ₽' },
+      ],
+      actions: [{ label: 'Изменить', primary: true }, { label: 'Приостановить' }],
+    },
+    {
+      id: 'p2',
+      iconKind: 'gift',
+      title: 'Приведи друга',
+      status: 'active',
+      statusLabel: 'активна',
+      sub: '+1 бесплатный месяц действующему клиенту за каждого приведённого, плюс 20% скидка другу.',
+      stats: [
+        { label: 'Приведено', value: '8' },
+        { label: 'Месяцев в подарок', value: '8' },
+      ],
+      actions: [{ label: 'Изменить', primary: true }, { label: 'Приостановить' }],
+    },
+    {
+      id: 'p3',
+      iconKind: 'student',
+      title: 'Скидка студентам',
+      status: 'paused',
+      statusLabel: 'пауза',
+      sub: '−20% на любой тариф по студенческому. Включается на каникулах: июнь–август, январь–февраль.',
+      stats: [
+        { label: 'Возобновится', value: '1 июня' },
+        { label: 'За прошл. период', value: '34' },
+      ],
+      actions: [{ label: 'Изменить', primary: true }, { label: 'Активировать' }],
+    },
+    {
+      id: 'p4',
+      iconKind: 'percent',
+      title: 'Промокод',
+      codeChip: 'LETO2026',
+      status: 'active',
+      statusLabel: 'активна',
+      sub: '−10% на полугодовой. Действует до 31 мая, лимит 50 использований.',
+      stats: [
+        { label: 'Использований', value: '17 / 50' },
+        { label: 'Доп. выручка', value: '+41 800 ₽' },
+      ],
+      actions: [{ label: 'Изменить', primary: true }, { label: 'Копировать ссылку' }],
+    },
+  ],
+
+  addons: [
+    {
+      id: 'a1',
+      iconKind: 'sauna',
+      title: 'Сауна',
+      sub: 'Включена в Полугодовой и Годовой · продаётся отдельно для Месячных. 32 продажи в апреле.',
+      price: '500 ₽',
+      unit: 'за визит',
+      on: true,
+    },
+    {
+      id: 'a2',
+      iconKind: 'guest',
+      title: 'Гостевой визит',
+      sub: 'Разовый проход для гостя клиента · 2 шт./мес включены в Годовой. 11 продаж в апреле.',
+      price: '800 ₽',
+      unit: 'за визит',
+      on: true,
+    },
+    {
+      id: 'a3',
+      iconKind: 'towel',
+      title: 'Полотенце',
+      sub: 'Прокат полотенца на визит. 4 продажи в апреле.',
+      price: '200 ₽',
+      unit: 'за визит',
+      on: true,
+    },
+    {
+      id: 'a4',
+      iconKind: 'shaker',
+      title: 'Шейкер · 700 мл',
+      sub: 'Магазин на ресепшене. 9 продаж в апреле.',
+      price: '690 ₽',
+      unit: 'за штуку',
+      on: true,
+    },
+    {
+      id: 'a5',
+      iconKind: 'freeze',
+      title: 'Доп. дни заморозки',
+      sub: 'Сверх лимита тарифа. 17 продаж в апреле · в среднем 4 дня за раз.',
+      price: '200 ₽',
+      unit: 'за день',
+      on: false,
+    },
+  ],
+};

@@ -1,0 +1,700 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Админка · Мой зал — Финансы</title>
+<script>
+  (function () { var t = localStorage.getItem('admin-theme') || 'light'; if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); })();
+</script>
+<style>
+  :root {
+    --accent: #2dd4a4; --accent-deep: #0f9b76; --accent-soft: #d6f5ea;
+    --bg: #f5f5f4; --surface: #ffffff; --surface-2: #fafaf9; --surface-3: #f1f0ee;
+    --border: #e7e5e4; --border-strong: #d6d3d1; --text: #1c1917; --text-2: #57534e; --text-3: #a8a29e;
+    --warn: #e9a23b; --warn-soft: #fef3e2; --danger: #dc2626; --danger-soft: #fee2e2; --indigo: #6366f1; --indigo-soft: rgba(99,102,241,.13);
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", system-ui, sans-serif;
+    --mono: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+    --r-sm: 10px; --r-md: 14px; --r-lg: 18px;
+    --sh-1: 0 1px 2px rgba(28,25,23,.04); --sh-2: 0 1px 3px rgba(28,25,23,.05), 0 4px 14px rgba(28,25,23,.04); --sh-3: 0 8px 30px rgba(28,25,23,.08), 0 2px 6px rgba(28,25,23,.04); --sh-3m: 0 30px 80px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.12);
+    --sidebar-w: 248px; --topbar-h: 64px;
+  }
+  [data-theme="dark"] {
+    --bg: #0c0c0c; --surface: #181715; --surface-2: #141312; --surface-3: #232120; --border: #2a2826; --border-strong: #3a3735; --text: #f5f5f4; --text-2: #a8a29e; --text-3: #6b6663;
+    --accent-soft: rgba(45,212,164,.16); --warn-soft: rgba(233,162,59,.18); --danger-soft: rgba(220,38,38,.18); --indigo-soft: rgba(99,102,241,.22);
+    --sh-1: 0 1px 2px rgba(0,0,0,.3); --sh-2: 0 1px 3px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.25); --sh-3: 0 8px 30px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.3); --sh-3m: 0 30px 80px rgba(0,0,0,.6), 0 8px 24px rgba(0,0,0,.4);
+  }
+  [data-theme="dark"] body { background: #050505; } [data-theme="dark"] .brand-mark { background: var(--accent); color: #06120c; } [data-theme="dark"] .nav-item.active { background: var(--surface-3); color: var(--text); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; font-family: var(--font); background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; font-size: 14px; line-height: 1.4; }
+  button { font-family: inherit; cursor: pointer; } input, select { font-family: inherit; } a { color: inherit; text-decoration: none; }
+
+  .app { display: grid; grid-template-columns: var(--sidebar-w) 1fr; min-height: 100vh; }
+  .sidebar { background: var(--surface-2); border-right: 0.5px solid var(--border); padding: 18px 14px; display: flex; flex-direction: column; gap: 4px; position: sticky; top: 0; height: 100vh; z-index: 30; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 6px 10px 14px; }
+  .brand-mark { width: 30px; height: 30px; border-radius: 9px; background: var(--text); color: var(--accent); display: grid; place-items: center; font-weight: 800; font-size: 15px; letter-spacing: -0.5px; }
+  .brand-name { font-size: 15px; font-weight: 700; letter-spacing: -0.3px; } .brand .tag { margin-left: auto; font-size: 10px; font-weight: 700; color: var(--text-3); background: var(--surface-3); padding: 2px 7px; border-radius: 999px; letter-spacing: 0.4px; }
+  .branch { display: flex; align-items: center; gap: 9px; width: 100%; padding: 9px 11px; border-radius: var(--r-sm); border: 0.5px solid var(--border); background: var(--surface); margin-bottom: 8px; text-align: left; } .branch:hover { border-color: var(--border-strong); }
+  .branch-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; } .branch-label { font-weight: 600; font-size: 13.5px; letter-spacing: -0.1px; } .branch-sub { font-size: 11px; color: var(--text-3); margin-top: 1px; } .branch svg { margin-left: auto; color: var(--text-3); flex-shrink: 0; }
+  .nav-section { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-3); padding: 14px 12px 6px; }
+  .nav-item { display: flex; align-items: center; gap: 11px; padding: 8px 11px; border-radius: var(--r-sm); color: var(--text-2); font-size: 13.5px; font-weight: 500; letter-spacing: -0.1px; transition: background .13s, color .13s; } .nav-item:hover { background: var(--surface); color: var(--text); }
+  .nav-item.active { background: var(--text); color: var(--surface); } .nav-item.active .nav-badge { background: var(--accent); color: #06120c; } .nav-item svg { width: 17px; height: 17px; flex-shrink: 0; }
+  .nav-badge { margin-left: auto; font-size: 11px; font-weight: 700; background: var(--surface-3); color: var(--text-2); padding: 1px 7px; border-radius: 999px; font-variant-numeric: tabular-nums; } .nav-badge.accent { background: var(--accent-soft); color: var(--accent-deep); } [data-theme="dark"] .nav-badge.accent { color: var(--accent); }
+  .sidebar-foot { margin-top: auto; padding-top: 10px; } .me { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: var(--r-sm); } .me:hover { background: var(--surface); }
+  .me-avatar { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 12.5px; flex-shrink: 0; } .me-name { font-size: 13px; font-weight: 650; } .me-role { font-size: 11px; color: var(--text-3); }
+  .me-logout { margin-left: auto; border: 0; background: transparent; color: var(--text-3); display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; } .me-logout:hover { background: var(--surface-3); color: var(--text); }
+
+  .main { display: flex; flex-direction: column; min-width: 0; }
+  .topbar { height: var(--topbar-h); flex-shrink: 0; display: flex; align-items: center; gap: 14px; padding: 0 26px; border-bottom: 0.5px solid var(--border); background: color-mix(in oklab, var(--surface) 75%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); position: sticky; top: 0; z-index: 20; }
+  .hamburger { display: none; } .crumbs { font-size: 13px; color: var(--text-2); } .crumbs strong { color: var(--text); font-weight: 650; }
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .icon-btn { width: 36px; height: 36px; border-radius: 50%; border: 0.5px solid var(--border); background: var(--surface); color: var(--text-2); display: grid; place-items: center; transition: background .15s, color .15s; } .icon-btn:hover { background: var(--surface-3); color: var(--text); }
+  .theme-toggle .i-moon { display: none; } [data-theme="dark"] .theme-toggle .i-moon { display: block; } [data-theme="dark"] .theme-toggle .i-sun { display: none; }
+
+  .content { padding: 24px 26px 60px; max-width: 1160px; width: 100%; }
+  .page-head { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+  .page-head h1 { font-size: 23px; font-weight: 700; letter-spacing: -0.5px; margin: 0 0 5px; } .page-head .sub { font-size: 13.5px; color: var(--text-2); }
+  .page-head .ha { margin-left: auto; }
+  .btn { height: 38px; border-radius: var(--r-sm); padding: 0 15px; border: 0; font-size: 13px; font-weight: 600; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 7px; transition: background .15s, transform .04s, border-color .15s, color .15s; } .btn:active { transform: scale(.99); }
+  .btn-primary { background: var(--text); color: var(--bg); } .btn-primary:hover { background: #000; } [data-theme="dark"] .btn-primary { background: var(--accent); color: #06120c; }
+  .btn-ghost { background: var(--surface); border: 0.5px solid var(--border-strong); color: var(--text); } .btn-ghost:hover { background: var(--surface-3); }
+  .btn-danger { background: var(--danger); color: #fff; } .btn-danger:hover { background: #b91c1c; }
+  .btn-sm { height: 32px; padding: 0 11px; font-size: 12.5px; border-radius: 9px; } .btn:disabled { opacity:.45; cursor: not-allowed; }
+
+  .strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+  .strip .s { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--r-md); box-shadow: var(--sh-1); padding: 14px 16px; }
+  .strip .s-l { font-size: 12px; color: var(--text-2); display: flex; align-items: center; gap: 6px; } .strip .s-l svg { color: var(--text-3); }
+  .strip .s-v { font-size: 21px; font-weight: 700; letter-spacing: -0.5px; margin-top: 6px; font-variant-numeric: tabular-nums; } .strip .s-v .u { font-size: 12px; color: var(--text-3); font-weight: 600; }
+  .strip .s-v.danger { color: var(--danger); } .strip .s-v.accent { color: var(--accent-deep); } [data-theme="dark"] .strip .s-v.accent { color: var(--accent); }
+
+  .tabs { display: flex; gap: 3px; background: var(--surface-3); border-radius: 11px; padding: 4px; margin-bottom: 16px; width: fit-content; max-width: 100%; overflow-x: auto; scrollbar-width: none; } .tabs::-webkit-scrollbar { display: none; }
+  .tab { border: 0; background: transparent; color: var(--text-2); font-size: 13px; font-weight: 600; height: 34px; padding: 0 15px; border-radius: 8px; white-space: nowrap; display: inline-flex; align-items: center; gap: 7px; } .tab:hover { color: var(--text); }
+  .tab.active { background: var(--surface); color: var(--text); box-shadow: var(--sh-1); } .tab .tb { font-size: 10.5px; font-weight: 700; background: var(--danger); color: #fff; border-radius: 999px; padding: 0 6px; min-width: 16px; height: 16px; display: inline-grid; place-items: center; }
+  .tabpane { display: none; } .tabpane.active { display: block; }
+
+  .panel { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--sh-2); overflow: hidden; }
+  .toolbar { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 0.5px solid var(--border); background: var(--surface-2); }
+  .search { flex: 1; max-width: 300px; position: relative; display: flex; align-items: center; } .search svg { position: absolute; left: 12px; color: var(--text-3); }
+  .search input { width: 100%; height: 36px; border: 0.5px solid var(--border-strong); border-radius: 9px; background: var(--surface); padding: 0 12px 0 34px; font-size: 13px; color: var(--text); outline: none; } .search input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .filt { height: 36px; border: 0.5px solid var(--border-strong); border-radius: 9px; background: var(--surface); color: var(--text); font-size: 12.5px; font-weight: 600; padding: 0 30px 0 12px; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='11' viewBox='0 0 24 24' fill='none' stroke='%23a8a29e' stroke-width='2.6' stroke-linecap='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 11px center; }
+  .tcount { margin-left: auto; font-size: 12.5px; color: var(--text-2); } .tcount b { color: var(--text); }
+
+  .thead, .trow { display: grid; gap: 14px; align-items: center; padding: 12px 16px; }
+  .reg .thead, .reg .trow { grid-template-columns: 92px 1.5fr 1fr 0.9fr 110px; }
+  .fail .thead, .fail .trow { grid-template-columns: 92px 1.4fr 1.3fr 100px 120px; }
+  .pay .thead, .pay .trow { grid-template-columns: 1.4fr 0.9fr 1fr 1fr 130px; }
+  .thead { border-bottom: 0.5px solid var(--border); font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--text-3); }
+  .trow { border-bottom: 0.5px solid var(--border); cursor: pointer; } .trow:last-child { border-bottom: 0; } .trow:hover { background: var(--surface-2); }
+  .cl { display: flex; align-items: center; gap: 11px; min-width: 0; } .cl-ava { width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center; color: #fff; font-size: 11.5px; font-weight: 700; }
+  .cl-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .cl-sub { font-size: 11.5px; color: var(--text-3); margin-top: 1px; }
+  .t-date { font-size: 12.5px; color: var(--text-2); font-variant-numeric: tabular-nums; } .t-date .tm { color: var(--text-3); font-size: 11px; }
+  .t-method { font-size: 12.5px; color: var(--text-2); }
+  .t-amt { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; } .t-amt.minus { color: var(--danger); }
+  .st { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 5px; }
+  .st.ok { background: var(--accent-soft); color: var(--accent-deep); } [data-theme="dark"] .st.ok { color: var(--accent); }
+  .st.refund { background: var(--surface-3); color: var(--text-2); }
+  .st.pending { background: var(--warn-soft); color: #a36a16; } [data-theme="dark"] .st.pending { color: var(--warn); }
+  .st.fail { background: var(--danger-soft); color: var(--danger); }
+  .st.paid { background: var(--accent-soft); color: var(--accent-deep); } [data-theme="dark"] .st.paid { color: var(--accent); }
+  .t-reason { font-size: 12px; color: var(--danger); }
+  .t-cell-lbl { display: none; }
+  .right { text-align: right; }
+
+  /* modal */
+  .am-overlay { position: fixed; inset: 0; z-index: 100; display: none; align-items: center; justify-content: center; padding: 24px; background: rgba(0,0,0,.4); backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px); }
+  .am-overlay.open { display: flex; }
+  .am-modal { background: var(--surface); border: 0.5px solid var(--border); border-radius: 18px; box-shadow: var(--sh-3m); width: min(480px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); display: none; flex-direction: column; overflow: hidden; animation: pop .24s cubic-bezier(.32,.72,.2,1); } .am-modal.active { display: flex; }
+  @keyframes pop { from { transform: scale(.96) translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .am-modal-head { display: flex; align-items: flex-start; gap: 13px; padding: 18px 22px 14px; }
+  .am-modal-ico { width: 42px; height: 42px; border-radius: 12px; flex-shrink: 0; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-deep); } [data-theme="dark"] .am-modal-ico { color: var(--accent); }
+  .am-modal-ico.danger { background: var(--danger-soft); color: var(--danger); } .am-modal-ico.warn { background: var(--warn-soft); color: #a36a16; } [data-theme="dark"] .am-modal-ico.warn { color: var(--warn); }
+  .am-modal-title { font-size: 16.5px; font-weight: 700; letter-spacing: -0.3px; } .am-modal-sub { font-size: 12px; color: var(--text-3); margin-top: 3px; font-family: var(--mono); }
+  .am-modal-close { width: 32px; height: 32px; border-radius: 50%; border: 0; background: var(--surface-3); color: var(--text-2); display: grid; place-items: center; margin-left: auto; flex-shrink: 0; } .am-modal-close:hover { background: var(--border); color: var(--text); }
+  .am-modal-body { padding: 6px 22px 18px; overflow-y: auto; }
+  .am-modal-foot { padding: 14px 22px; border-top: 0.5px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; background: var(--surface-2); }
+  .drow { display: flex; align-items: center; padding: 10px 0; border-bottom: 0.5px dashed var(--border); font-size: 13px; } .drow:last-child { border-bottom: 0; }
+  .drow .k { color: var(--text-3); } .drow .v { margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .big-amt { font-size: 30px; font-weight: 700; letter-spacing: -0.8px; font-variant-numeric: tabular-nums; margin: 6px 0 2px; }
+  .label { display: block; font-size: 12px; font-weight: 600; color: var(--text-2); margin: 14px 0 7px; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; } .chip { border: 0.5px solid var(--border-strong); background: var(--surface); border-radius: 999px; padding: 9px 14px; font-size: 12.5px; font-weight: 600; color: var(--text); white-space: nowrap; }
+  .chip.on { background: var(--text); color: var(--bg); border-color: var(--text); } [data-theme="dark"] .chip.on { background: var(--accent); color: #06120c; border-color: var(--accent); }
+  .am-select, .am-input { width: 100%; height: 42px; border: 0.5px solid var(--border-strong); background: var(--surface-2); border-radius: 11px; padding: 0 13px; font-size: 14px; color: var(--text); outline: none; }
+  .am-select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a8a29e' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 13px center; padding-right: 34px; }
+  .am-input:focus, .am-select:focus { border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .am-callout { display: flex; gap: 10px; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); border: 0.5px solid var(--border); margin-top: 14px; } .am-callout.danger { background: var(--danger-soft); border-color: transparent; }
+  .am-callout-ico { width: 18px; flex-shrink: 0; color: var(--text-2); margin-top: 1px; } .am-callout.danger .am-callout-ico { color: var(--danger); }
+  .am-callout-text { font-size: 12.5px; color: var(--text-2); line-height: 1.45; } .am-callout-text b { color: var(--text); }
+  .tl { position: relative; padding-left: 26px; margin-top: 6px; } .tl::before { content: ""; position: absolute; left: 7px; top: 4px; bottom: 4px; width: 1.5px; background: var(--border); }
+  .tl-i { position: relative; padding-bottom: 14px; } .tl-i:last-child { padding-bottom: 0; } .tl-d { position: absolute; left: -26px; top: 1px; width: 16px; height: 16px; border-radius: 50%; background: var(--accent-soft); color: var(--accent-deep); display: grid; place-items: center; } [data-theme="dark"] .tl-d { color: var(--accent); }
+  .tl-t { font-size: 12.5px; font-weight: 600; } .tl-m { font-size: 11px; color: var(--text-3); margin-top: 1px; font-variant-numeric: tabular-nums; }
+
+  .toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--text); color: var(--bg); padding: 11px 16px; border-radius: 999px; font-size: 13px; font-weight: 600; box-shadow: var(--sh-3); display: flex; align-items: center; gap: 9px; opacity: 0; pointer-events: none; transition: opacity .22s, transform .22s; z-index: 130; } [data-theme="dark"] .toast { background: var(--accent); color: #06120c; } .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ---- living UI ---- */
+  @keyframes revealUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  @keyframes shimmer { 0% { background-position: -360px 0; } 100% { background-position: 360px 0; } }
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal { opacity: 0; animation: revealUp .5s cubic-bezier(.22,.7,.25,1) forwards; animation-delay: var(--d, 0ms); }
+    .tin { opacity: 0; animation: revealUp .42s cubic-bezier(.22,.7,.25,1) forwards; animation-delay: var(--d, 0ms); }
+  }
+  .strip .s { transition: transform .18s cubic-bezier(.22,.7,.25,1), box-shadow .18s, border-color .18s; }
+  .strip .s:hover { transform: translateY(-2px); box-shadow: var(--sh-2); border-color: var(--border-strong); }
+  .s-v.counting { color: inherit; }
+  .trow { transition: background .13s, transform .12s; }
+  .trow:active { transform: scale(.997); }
+  /* skeleton */
+  .sk { padding: 14px 16px; display: grid; gap: 14px; align-items: center; border-bottom: 0.5px solid var(--border); }
+  .reg .sk { grid-template-columns: 92px 1.5fr 1fr 0.9fr 110px; }
+  .fail .sk { grid-template-columns: 92px 1.4fr 1.3fr 100px 120px; }
+  .pay .sk { grid-template-columns: 1.4fr 0.9fr 1fr 1fr 130px; }
+  .sk-b { height: 11px; border-radius: 6px; background: var(--surface-3); background-image: linear-gradient(90deg, transparent, color-mix(in oklab, var(--border-strong) 55%, transparent), transparent); background-size: 360px 100%; background-repeat: no-repeat; animation: shimmer 1.1s infinite linear; }
+  .sk-cl { display: flex; align-items: center; gap: 11px; } .sk-av { width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; background: var(--surface-3); background-image: linear-gradient(90deg, transparent, color-mix(in oklab, var(--border-strong) 55%, transparent), transparent); background-size: 360px 100%; background-repeat: no-repeat; animation: shimmer 1.1s infinite linear; } .sk-cl .sk-stack { flex: 1; display: grid; gap: 7px; }
+  @media (prefers-reduced-motion: reduce) { .sk-b, .sk-av { animation: none; } }
+  /* button states */
+  .btn .spin { display: none; width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .btn.loading { pointer-events: none; opacity: .85; } .btn.loading .spin { display: inline-block; } .btn.loading .btn-ic, .btn.loading .btn-tx { display: none; }
+  .btn.done { background: var(--accent) !important; color: #06120c !important; border-color: var(--accent) !important; } .btn.done .btn-ic, .btn.done .spin { display: none; }
+
+  .scrim { display: none; }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; } .sidebar { position: fixed; left: 0; top: 0; width: 264px; transform: translateX(-100%); transition: transform .26s cubic-bezier(.32,.72,.2,1); box-shadow: var(--sh-3); } .app.nav-open .sidebar { transform: none; } .hamburger { display: grid; }
+    .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.34); z-index: 25; opacity: 0; visibility: hidden; transition: opacity .22s; } .app.nav-open .scrim { display: block; opacity: 1; visibility: visible; }
+    .strip { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 760px) {
+    .content { padding: 18px 14px 60px; }
+    .thead { display: none; }
+    .reg .sk, .fail .sk, .pay .sk { grid-template-columns: 1fr auto; gap: 8px 10px; border: 0.5px solid var(--border); border-radius: 12px; margin: 10px; padding: 13px; }
+    .reg .sk .sk-cl, .fail .sk .sk-cl, .pay .sk .sk-cl { grid-column: 1 / 3; }
+    .reg .trow, .fail .trow, .pay .trow { grid-template-columns: 1fr auto; gap: 6px 10px; border: 0.5px solid var(--border); border-radius: 12px; margin: 10px; padding: 13px; }
+    .t-date { grid-column: 1/3; } .t-method, .t-reason { grid-column: 1/3; }
+    .t-cell-lbl { display: inline; font-size: 11px; color: var(--text-3); margin-right: 5px; }
+    .am-overlay { align-items: flex-end; padding: 0; } .am-modal { width: 100%; max-width: 100%; border-radius: 22px 22px 0 0; max-height: 92dvh; } .am-modal-foot { flex-direction: column-reverse; } .am-modal-foot .btn { width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app" data-screen-label="Финансы">
+  <div class="scrim" id="scrim"></div>
+  <aside class="sidebar">
+    <div class="brand"><div class="brand-mark">М</div><div class="brand-name">Мой&nbsp;зал</div><span class="tag">ADMIN</span></div>
+    <button class="branch" type="button"><span class="branch-dot"></span><div style="flex:1;min-width:0;"><div class="branch-label">Все филиалы</div><div class="branch-sub">3 филиала · 847 клиентов</div></div><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+    <div class="nav-section">Управление</div>
+    <a class="nav-item" href="Dashboard.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>Дашборд</a>
+    <a class="nav-item" href="Clients.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Клиенты<span class="nav-badge">847</span></a>
+    <a class="nav-item" href="Schedule.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Расписание</a>
+    <a class="nav-item" href="Plans.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>Абонементы</a>
+    <a class="nav-item" href="Trainers.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>Тренеры<span class="nav-badge">12</span></a>
+    <a class="nav-item" href="Cashbox.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M2 8h20"/><path d="M6 21h12"/></svg>Касса</a>
+    <a class="nav-item" href="Messages.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>Сообщения<span class="nav-badge accent">4</span></a>
+    <div class="nav-section">Аналитика</div>
+    <a class="nav-item active" href="Finance.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Финансы</a>
+    <a class="nav-item" href="Reports.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Отчёты</a>
+    <a class="nav-item" href="Attendance.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Посещаемость</a>
+    <div class="nav-section">Система</div>
+    <a class="nav-item" href="Branches.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>Филиалы<span class="nav-badge">3</span></a>
+    <a class="nav-item" href="Settings.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Настройки</a>
+    <div class="sidebar-foot"><div class="me"><div class="me-avatar">АЛ</div><div style="min-width:0;"><div class="me-name">Артём Лебедев</div><div class="me-role">Владелец</div></div><a class="me-logout" href="Login.html#logout" title="Выйти"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></a></div></div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <button class="icon-btn hamburger" id="hamburger" aria-label="Меню"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+      <div class="crumbs">Аналитика &nbsp;·&nbsp; <strong>Финансы</strong></div>
+      <div class="topbar-right"><button class="icon-btn theme-toggle" id="themeToggle" title="Переключить тему" type="button"><svg class="i-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg><svg class="i-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button></div>
+    </header>
+
+    <section class="content">
+      <div class="page-head reveal">
+        <div><h1>Финансы</h1><div class="sub">Все платежи, возвраты и выплаты тренерам · апрель 2026</div></div>
+        <div class="ha"><button class="btn btn-ghost" type="button" data-task="Реестр выгружен в Excel"><span class="spin"></span><span class="btn-ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span><span class="btn-tx">Экспорт</span></button></div>
+      </div>
+
+      <div class="strip">
+        <div class="s reveal" style="--d:40ms"><div class="s-l"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Оборот за месяц</div><div class="s-v" data-count="2248000">0<span class="u"> ₽</span></div></div>
+        <div class="s reveal" style="--d:100ms"><div class="s-l"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Успешных</div><div class="s-v accent" data-count="1284">0</div></div>
+        <div class="s reveal" style="--d:160ms"><div class="s-l"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>Неудачных</div><div class="s-v danger" data-count="18">0</div></div>
+        <div class="s reveal" style="--d:220ms"><div class="s-l"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>К выплате тренерам</div><div class="s-v" data-count="428000">0<span class="u"> ₽</span></div></div>
+      </div>
+
+      <div class="tabs reveal" style="--d:260ms" id="tabs">
+        <button class="tab active" data-tab="reg">Реестр платежей</button>
+        <button class="tab" data-tab="fail">Неудачные <span class="tb">18</span></button>
+        <button class="tab" data-tab="pay">Выплаты тренерам</button>
+      </div>
+
+      <!-- РЕЕСТР -->
+      <div class="tabpane active" data-pane="reg">
+        <div class="panel reg reveal" style="--d:300ms">
+          <div class="toolbar">
+            <div class="search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" placeholder="Поиск по клиенту, ID…" /></div>
+            <select class="filt"><option>Все статусы</option><option>Успешные</option><option>Возвраты</option><option>Ожидание</option></select>
+            <select class="filt"><option>Все способы</option><option>Карта</option><option>СБП</option><option>Наличные</option></select>
+            <span class="tcount">Всего <b>1 302</b></span>
+          </div>
+          <div class="thead"><span>Дата</span><span>Клиент / операция</span><span>Способ</span><span class="right">Сумма</span><span class="right">Статус</span></div>
+          <div id="regRows"></div>
+        </div>
+      </div>
+
+      <!-- НЕУДАЧНЫЕ -->
+      <div class="tabpane" data-pane="fail">
+        <div class="panel fail">
+          <div class="toolbar"><div class="search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" placeholder="Поиск…" /></div><span class="tcount">Требуют внимания · <b>18</b></span></div>
+          <div class="thead"><span>Дата</span><span>Клиент</span><span>Причина</span><span class="right">Сумма</span><span class="right">Действие</span></div>
+          <div id="failRows"></div>
+        </div>
+      </div>
+
+      <!-- ВЫПЛАТЫ -->
+      <div class="tabpane" data-pane="pay">
+        <div class="panel pay">
+          <div class="toolbar"><span style="font-size:13px;font-weight:600;">Период: апрель 2026</span><span class="tcount">К выплате <b>428 000 ₽</b> · 6 тренеров</span></div>
+          <div class="thead"><span>Тренер</span><span class="right">Тренировок</span><span class="right">Начислено</span><span class="right">К выплате</span><span class="right">Статус</span></div>
+          <div id="payRows"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- modals -->
+<div class="am-overlay" id="modal">
+  <!-- ДЕТАЛИ ТРАНЗАКЦИИ -->
+  <section class="am-modal active" data-screen="detail">
+    <div class="am-modal-head"><div class="am-modal-ico" id="dIco"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><div style="min-width:0;"><div class="am-modal-title">Транзакция</div><div class="am-modal-sub" id="dId">#TXN-48201</div></div><button class="am-modal-close" type="button" data-close><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="am-modal-body">
+      <div class="big-amt" id="dAmt">24 000 ₽</div>
+      <div style="margin-bottom:8px;"><span class="st ok" id="dStatus">Успешно</span></div>
+      <div class="drow"><span class="k">Клиент</span><span class="v" id="dClient">Анна Петрова</span></div>
+      <div class="drow"><span class="k">Назначение</span><span class="v" id="dDesc">Абонемент «12 месяцев»</span></div>
+      <div class="drow"><span class="k">Способ</span><span class="v" id="dMethod">Карта •• 4417</span></div>
+      <div class="drow"><span class="k">Комиссия эквайринга</span><span class="v">−480 ₽ (2%)</span></div>
+      <div class="drow"><span class="k">Зачислено</span><span class="v">23 520 ₽</span></div>
+      <div class="drow"><span class="k">Дата</span><span class="v" id="dDate">28 апр 2026, 14:12</span></div>
+      <div class="label">Журнал</div>
+      <div class="tl">
+        <div class="tl-i"><span class="tl-d"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><div class="tl-t">Платёж подтверждён банком</div><div class="tl-m">14:12:08</div></div>
+        <div class="tl-i"><span class="tl-d"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><div class="tl-t">Чек отправлен на email</div><div class="tl-m">14:12:10</div></div>
+      </div>
+    </div>
+    <div class="am-modal-foot"><button class="btn btn-ghost" type="button" data-toast="Чек отправлен повторно">Чек</button><button class="btn btn-ghost" type="button" data-go="refund">Оформить возврат</button></div>
+  </section>
+
+  <!-- ВОЗВРАТ -->
+  <section class="am-modal" data-screen="refund">
+    <div class="am-modal-head"><div class="am-modal-ico warn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg></div><div style="min-width:0;"><div class="am-modal-title">Возврат средств</div><div class="am-modal-sub">#TXN-48201 · 24 000 ₽</div></div><button class="am-modal-close" type="button" data-close><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="am-modal-body">
+      <div class="label" style="margin-top:6px;">Сумма возврата</div>
+      <div class="chips" id="rChips"><button class="chip on" type="button" data-r="full">Полный · 24 000 ₽</button><button class="chip" type="button" data-r="part">Частичный</button></div>
+      <div id="rAmtField" style="display:none;"><div class="label">Сумма</div><input class="am-input" type="text" value="12 000" /></div>
+      <div class="label">Причина</div>
+      <select class="am-select"><option>Клиент отказался от абонемента</option><option>Ошибка при оплате</option><option>Двойное списание</option><option>Другое</option></select>
+      <div class="am-callout danger"><span class="am-callout-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span><div class="am-callout-text">Деньги вернутся на карту •• 4417 за <b>3–5 дней</b>. Абонемент станет неактивным.</div></div>
+    </div>
+    <div class="am-modal-foot"><button class="btn btn-ghost" type="button" data-close>Отмена</button><button class="btn btn-danger" type="button" data-busy data-t="Возврат 24 000 ₽ оформлен" id="rBtn"><span class="spin"></span><span class="btn-tx">Вернуть 24 000 ₽</span></button></div>
+  </section>
+
+  <!-- ВЫПЛАТА ТРЕНЕРУ -->
+  <section class="am-modal" data-screen="payout">
+    <div class="am-modal-head"><div class="am-modal-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><div style="min-width:0;"><div class="am-modal-title">Выплата тренеру</div><div class="am-modal-sub" id="poName">Ольга Власова · апрель 2026</div></div><button class="am-modal-close" type="button" data-close><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="am-modal-body">
+      <div class="drow"><span class="k">Начислено за тренировки</span><span class="v">152 250 ₽</span></div>
+      <div class="drow"><span class="k">Бонус за заполняемость</span><span class="v">7 650 ₽</span></div>
+      <div class="drow"><span class="k">Удержан НДФЛ (6%)</span><span class="v">−8 568 ₽</span></div>
+      <div class="drow"><span class="k">Комиссия зала (30%)</span><span class="v">−45 900 ₽</span></div>
+      <div class="drow" style="border-top:1px solid var(--border);padding-top:11px;"><span class="k" style="font-weight:700;color:var(--text)">К выплате</span><span class="v" style="font-size:18px;" id="poAmt">106 182 ₽</span></div>
+      <div class="label">Способ выплаты</div>
+      <select class="am-select"><option>Карта •• 8842</option><option>СБП по телефону</option><option>Наличные из кассы</option></select>
+    </div>
+    <div class="am-modal-foot"><button class="btn btn-ghost" type="button" data-close>Отмена</button><button class="btn btn-primary" type="button" data-busy data-t="Выплата 106 182 ₽ проведена"><span class="spin"></span><span class="btn-tx">Выплатить</span></button></div>
+  </section>
+</div>
+
+<div class="toast" id="toast"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span id="toastMsg"></span></div>
+
+<script>
+  document.getElementById('themeToggle').addEventListener('click', function () {
+    var d = document.documentElement.getAttribute('data-theme') === 'dark';
+    if (d) { document.documentElement.removeAttribute('data-theme'); localStorage.setItem('admin-theme', 'light'); }
+    else { document.documentElement.setAttribute('data-theme', 'dark'); localStorage.setItem('admin-theme', 'dark'); }
+  });
+  var app = document.getElementById('app');
+  document.getElementById('hamburger').addEventListener('click', function () { app.classList.toggle('nav-open'); });
+  document.getElementById('scrim').addEventListener('click', function () { app.classList.remove('nav-open'); });
+  document.getElementById('tabs').addEventListener('click', function (e) { var t = e.target.closest('.tab'); if (!t) return; document.querySelectorAll('.tab').forEach(function (x) { x.classList.toggle('active', x === t); }); document.querySelectorAll('.tabpane').forEach(function (p) { var on = p.dataset.pane === t.dataset.tab; p.classList.toggle('active', on); if (on) { p.querySelectorAll('.trow').forEach(function (row, i) { row.style.animation = 'none'; void row.offsetWidth; row.style.setProperty('--d', (i * 32) + 'ms'); row.classList.remove('tin'); void row.offsetWidth; row.classList.add('tin'); }); } }); });
+
+  var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* count-up for KPI tiles */
+  function fmt(n) { return Math.round(n).toLocaleString('ru-RU').replace(/,/g, '\u00A0').replace(/\s/g, '\u00A0'); }
+  function animateCount(el) {
+    var target = +el.dataset.count, suffix = el.querySelector('.u'), suf = suffix ? suffix.outerHTML : '';
+    if (reduceMotion) { el.innerHTML = fmt(target) + suf; return; }
+    var dur = 1100, start = performance.now();
+    function tick(now) {
+      var t = Math.min(1, (now - start) / dur), e = 1 - Math.pow(1 - t, 3);
+      el.innerHTML = fmt(target * e) + suf;
+      if (t < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+  setTimeout(function () { document.querySelectorAll('.s-v[data-count]').forEach(animateCount); }, 260);
+
+  /* skeleton placeholder rows */
+  function skRows(type, n) {
+    var bar = '<div class="sk-b"></div>';
+    var cl = '<div class="sk-cl"><div class="sk-av"></div><div class="sk-stack"><div class="sk-b" style="width:70%"></div><div class="sk-b" style="width:45%"></div></div></div>';
+    var html = '';
+    for (var i = 0; i < n; i++) {
+      if (type === 'pay') html += '<div class="sk">' + cl + '<div class="sk-b" style="width:30%;justify-self:end"></div><div class="sk-b" style="width:60%;justify-self:end"></div><div class="sk-b" style="width:60%;justify-self:end"></div><div class="sk-b" style="width:70%;justify-self:end"></div></div>';
+      else html += '<div class="sk"><div class="sk-b" style="width:60%"></div>' + cl + '<div class="sk-b" style="width:80%"></div><div class="sk-b" style="width:55%;justify-self:end"></div><div class="sk-b" style="width:70%;justify-self:end"></div></div>';
+    }
+    return html;
+  }
+  /* render with skeleton -> staggered reveal */
+  function renderTable(id, type, html, n, delay) {
+    var el = document.getElementById(id);
+    if (reduceMotion) { el.innerHTML = html; return; }
+    el.innerHTML = skRows(type, n);
+    setTimeout(function () {
+      el.innerHTML = html;
+      el.querySelectorAll('.trow').forEach(function (row, i) { row.style.setProperty('--d', (i * 38) + 'ms'); row.classList.add('tin'); });
+    }, delay);
+  }
+
+  var REG = [
+    { d:'28 апр', tm:'14:12', ini:'АП', c:'linear-gradient(135deg,#6366f1,#818cf8)', name:'Анна Петрова', desc:'Абонемент «12 месяцев»', m:'Карта •• 4417', amt:'24 000', st:'ok' },
+    { d:'28 апр', tm:'12:55', ini:'МС', c:'linear-gradient(135deg,#10b981,#34d399)', name:'Максим Соколов', desc:'Продление · 3 месяца', m:'СБП', amt:'9 000', st:'ok' },
+    { d:'28 апр', tm:'12:30', ini:'ИК', c:'linear-gradient(135deg,#0ea5e9,#38bdf8)', name:'Игорь Климов', desc:'Возврат · абонемент', m:'Карта •• 1180', amt:'9 000', st:'refund', minus:true },
+    { d:'27 апр', tm:'19:40', ini:'КЛ', c:'linear-gradient(135deg,#f43f5e,#fb7185)', name:'Карина Левчук', desc:'Персональные · 8 занятий', m:'Карта •• 0921', amt:'14 400', st:'ok' },
+    { d:'27 апр', tm:'18:02', ini:'НГ', c:'linear-gradient(135deg,#8b5cf6,#a78bfa)', name:'Нина Громова', desc:'Абонемент «6 месяцев»', m:'Онлайн-ссылка', amt:'16 000', st:'pending' },
+    { d:'27 апр', tm:'11:18', ini:'АМ', c:'linear-gradient(135deg,#f59e0b,#fbbf24)', name:'Алина Маркова', desc:'Абонемент «3 месяца»', m:'СБП', amt:'9 000', st:'ok' }
+  ];
+  var STT = { ok:{c:'ok',t:'Успешно'}, refund:{c:'refund',t:'Возврат'}, pending:{c:'pending',t:'Ожидание'} };
+  function regRow(r) {
+    var s = STT[r.st];
+    return '<div class="trow" data-txn="' + r.name + '|' + r.desc + '|' + r.m + '|' + r.amt + '|' + r.st + '|' + r.d + ' ' + r.tm + '">' +
+      '<div class="t-date">' + r.d + '<div class="tm">' + r.tm + '</div></div>' +
+      '<div class="cl"><div class="cl-ava" style="background:' + r.c + '">' + r.ini + '</div><div style="min-width:0;"><div class="cl-name">' + r.name + '</div><div class="cl-sub">' + r.desc + '</div></div></div>' +
+      '<div class="t-method"><span class="t-cell-lbl">Способ:</span>' + r.m + '</div>' +
+      '<div class="t-amt ' + (r.minus ? 'minus' : '') + '">' + (r.minus ? '−' : '') + r.amt + ' ₽</div>' +
+      '<div class="right"><span class="st ' + s.c + '">' + s.t + '</span></div></div>';
+  }
+  document.getElementById('regRows') && renderTable('regRows', 'reg', REG.map(regRow).join(''), 6, 620);
+
+  var FAIL = [
+    { d:'28 апр', tm:'10:02', ini:'ИК', c:'linear-gradient(135deg,#0ea5e9,#38bdf8)', name:'Игорь Климов', phone:'+7 916 332-09-11', reason:'Карта отклонена банком', amt:'24 000' },
+    { d:'27 апр', tm:'21:15', ini:'ОР', c:'linear-gradient(135deg,#f43f5e,#fb7185)', name:'Олег Романов', phone:'+7 903 209-67-31', reason:'Недостаточно средств', amt:'9 000' },
+    { d:'27 апр', tm:'16:40', ini:'СБ', c:'linear-gradient(135deg,#10b981,#34d399)', name:'Семён Бойко', phone:'+7 925 110-08-44', reason:'Истёк срок действия карты', amt:'16 000' },
+    { d:'26 апр', tm:'13:22', ini:'ВД', c:'linear-gradient(135deg,#f59e0b,#fbbf24)', name:'Вера Дроздова', phone:'+7 909 442-18-77', reason:'Таймаут эквайринга', amt:'3 500' }
+  ];
+  document.getElementById('failRows') && renderTable('failRows', 'fail', FAIL.map(function (f) {
+    return '<div class="trow"><div class="t-date">' + f.d + '<div class="tm">' + f.tm + '</div></div>' +
+      '<div class="cl"><div class="cl-ava" style="background:' + f.c + '">' + f.ini + '</div><div style="min-width:0;"><div class="cl-name">' + f.name + '</div><div class="cl-sub">' + f.phone + '</div></div></div>' +
+      '<div class="t-reason"><span class="t-cell-lbl">Причина:</span>' + f.reason + '</div>' +
+      '<div class="t-amt">' + f.amt + ' ₽</div>' +
+      '<div class="right"><button class="btn btn-ghost btn-sm" type="button" data-retry="Повторный платёж отправлен · ' + f.name + '"><span class="spin"></span><span class="btn-ic"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></span><span class="btn-tx">Повторить</span></button></div></div>';
+  }).join(''), 4, 720);
+
+  var PAY = [
+    { ini:'ОВ', c:'linear-gradient(135deg,#8b5cf6,#ec4899)', name:'Ольга Власова', spec:'Йога · 96 трен.', accr:'159 900', pay:'106 182', st:'pending' },
+    { ini:'АП', c:'linear-gradient(135deg,#6366f1,#818cf8)', name:'Артём Поляков', spec:'Силовые · 88 трен.', accr:'141 200', pay:'93 600', st:'pending' },
+    { ini:'ВД', c:'linear-gradient(135deg,#0ea5e9,#38bdf8)', name:'Вадим Дроздов', spec:'Бокс · 72 трен.', accr:'118 800', pay:'78 700', st:'paid' },
+    { ini:'НЖ', c:'linear-gradient(135deg,#10b981,#34d399)', name:'Наталья Жук', spec:'Стретчинг · 64 трен.', accr:'96 000', pay:'63 200', st:'pending' }
+  ];
+  document.getElementById('payRows') && renderTable('payRows', 'pay', PAY.map(function (p) {
+    var paid = p.st === 'paid';
+    return '<div class="trow">' +
+      '<div class="cl"><div class="cl-ava" style="background:' + p.c + '">' + p.ini + '</div><div style="min-width:0;"><div class="cl-name">' + p.name + '</div><div class="cl-sub">' + p.spec + '</div></div></div>' +
+      '<div class="t-amt" style="text-align:right;color:var(--text-3);font-weight:600;">—</div>' +
+      '<div class="t-amt" style="font-weight:600;">' + p.accr + ' ₽</div>' +
+      '<div class="t-amt">' + p.pay + ' ₽</div>' +
+      '<div class="right">' + (paid ? '<span class="st paid">Выплачено</span>' : '<button class="btn btn-primary btn-sm" type="button" data-payout="' + p.name + '|' + p.pay + '">Выплатить</button>') + '</div></div>';
+  }).join(''), 4, 700);
+
+  // modal
+  var modal = document.getElementById('modal');
+  var modals = modal.querySelectorAll('.am-modal');
+  function show(name) { modals.forEach(function (m) { m.classList.toggle('active', m.dataset.screen === name); }); modal.classList.add('open'); }
+  function closeModal() { modal.classList.remove('open'); }
+  modal.addEventListener('click', function (e) { if (e.target === modal) closeModal(); });
+  document.querySelectorAll('[data-close]').forEach(function (b) { b.addEventListener('click', function () { closeModal(); if (b.dataset.t) showToast(b.dataset.t); }); });
+  document.querySelectorAll('[data-go]').forEach(function (b) { b.addEventListener('click', function () { show(b.dataset.go); }); });
+
+  document.getElementById('regRows').addEventListener('click', function (e) {
+    var row = e.target.closest('[data-txn]'); if (!row) return;
+    var p = row.dataset.txn.split('|');
+    document.getElementById('dClient').textContent = p[0];
+    document.getElementById('dDesc').textContent = p[1];
+    document.getElementById('dMethod').textContent = p[2];
+    document.getElementById('dAmt').textContent = (p[4] === 'refund' ? '−' : '') + p[3] + ' ₽';
+    document.getElementById('dDate').textContent = p[5];
+    var st = STT[p[4]]; var el = document.getElementById('dStatus'); el.className = 'st ' + st.c; el.textContent = st.t;
+    show('detail');
+  });
+  document.querySelectorAll('[data-payout]').forEach(function (b) {
+    b.addEventListener('click', function () { var p = b.dataset.payout.split('|'); document.getElementById('poName').textContent = p[0] + ' · апрель 2026'; document.getElementById('poAmt').textContent = p[1] + ' ₽'; show('payout'); });
+  });
+  document.getElementById('rChips').addEventListener('click', function (e) {
+    var c = e.target.closest('.chip'); if (!c) return; this.querySelectorAll('.chip').forEach(function (x) { x.classList.toggle('on', x === c); });
+    var part = c.dataset.r === 'part'; document.getElementById('rAmtField').style.display = part ? '' : 'none';
+    document.querySelector('#rBtn .btn-tx').textContent = part ? 'Вернуть 12 000 ₽' : 'Вернуть 24 000 ₽';
+    document.getElementById('rBtn').dataset.t = part ? 'Возврат 12 000 ₽ оформлен' : 'Возврат 24 000 ₽ оформлен';
+  });
+
+  var toast = document.getElementById('toast'), toastTimer = null;
+  function showToast(msg) { document.getElementById('toastMsg').textContent = msg; toast.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 2200); }
+  document.querySelectorAll('[data-toast]').forEach(function (b) { b.addEventListener('click', function () { showToast(b.dataset.toast); }); });
+
+  /* button loading -> success states */
+  function btnBusy(b, opts) {
+    if (b.classList.contains('loading') || b.classList.contains('done')) return;
+    var tx = b.querySelector('.btn-tx'), orig = tx ? tx.textContent : '';
+    if (reduceMotion) { if (opts.close) closeModal(); if (opts.toast) showToast(opts.toast); return; }
+    b.classList.add('loading');
+    setTimeout(function () {
+      b.classList.remove('loading');
+      if (opts.close) closeModal();
+      if (opts.toast) showToast(opts.toast);
+      if (opts.done) {
+        b.classList.add('done'); if (tx) tx.textContent = opts.doneText || 'Готово';
+        setTimeout(function () { b.classList.remove('done'); if (tx) tx.textContent = orig; }, 1500);
+      }
+    }, opts.delay || 1000);
+  }
+  document.querySelectorAll('[data-task]').forEach(function (b) { b.addEventListener('click', function () { btnBusy(b, { done: true, doneText: 'Готово', toast: b.dataset.task, delay: 1100 }); }); });
+  document.querySelectorAll('[data-busy]').forEach(function (b) { b.addEventListener('click', function () { btnBusy(b, { close: true, toast: b.dataset.t, delay: 850 }); }); });
+  document.body.addEventListener('click', function (e) { var r = e.target.closest('[data-retry]'); if (!r) return; btnBusy(r, { done: true, doneText: 'Отправлено', toast: r.dataset.retry, delay: 1000 }); });
+  closeModal();
+</script>
+<script>
+/* ============================================================
+   mobile-dock.js — shared Gen-2 mobile quick-action dock
+   Self-contained: injects its own scoped styles (.g2-*), a bottom
+   quick-action dock (≤900px), generic bottom-sheets, and a toast.
+   Relies only on design tokens every screen defines (--text,
+   --surface, --border, --accent, etc.). Safe to drop on any page:
+   inline this IIFE inside a script tag just before the closing body tag.
+   ============================================================ */
+(function () {
+  'use strict';
+  if (window.__g2dock) return;
+  window.__g2dock = true;
+
+  /* ---------- styles ---------- */
+  var css = `
+  .g2-dock { display: none; }
+  @media (max-width: 900px) {
+    .content { padding-bottom: calc(86px + env(safe-area-inset-bottom)) !important; }
+    .g2-dock {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px;
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 95;
+      background: color-mix(in oklab, var(--surface) 92%, transparent);
+      backdrop-filter: blur(16px) saturate(150%); -webkit-backdrop-filter: blur(16px) saturate(150%);
+      border-top: 0.5px solid var(--border);
+      padding: 7px 8px max(8px, env(safe-area-inset-bottom));
+    }
+    .g2-dock-btn {
+      appearance: none; border: 0; background: transparent; cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+      padding: 6px 2px 5px; border-radius: 12px; color: var(--text-2);
+      font-family: inherit; min-height: 56px;
+      transition: background .15s, transform .12s, color .15s;
+    }
+    .g2-dock-btn:active { background: var(--surface-3); transform: scale(.96); }
+    .g2-dock-btn .g2-qd-ico {
+      width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center;
+      background: var(--surface-3); color: var(--text-2);
+      transition: background .15s, color .15s, box-shadow .2s;
+    }
+    .g2-dock-btn.primary .g2-qd-ico { background: var(--text); color: var(--surface); box-shadow: 0 0 0 3px var(--accent-soft); }
+    [data-theme="dark"] .g2-dock-btn.primary .g2-qd-ico { background: var(--accent); color: #06120c; }
+    .g2-dock-btn .g2-qd-lbl { font-size: 10.5px; font-weight: 600; letter-spacing: -.1px; line-height: 1; color: var(--text-3); }
+    .g2-dock-btn.primary .g2-qd-lbl { color: var(--text); }
+  }
+  @media (max-width: 380px) {
+    .g2-dock { padding: 6px 6px max(6px, env(safe-area-inset-bottom)); }
+    .g2-dock-btn { padding: 5px 2px 4px; gap: 3px; min-height: 52px; }
+    .g2-dock-btn .g2-qd-ico { width: 28px; height: 28px; border-radius: 8px; }
+    .g2-dock-btn .g2-qd-lbl { font-size: 10px; }
+  }
+  /* keep page's bottom-anchored chrome (demo state switchers, toasts) above the dock */
+  @media (max-width: 900px) {
+    .state-switcher, .switcher { bottom: calc(96px + env(safe-area-inset-bottom)) !important; top: auto !important; }
+    .toast { bottom: calc(96px + env(safe-area-inset-bottom)) !important; }
+  }
+  /* comfortable touch targets on mobile (≥44px) without distorting icon/round buttons */
+  @media (max-width: 640px) {
+    .btn:not(.btn-sm):not(.icon-btn) { min-height: 44px; }
+  }
+
+  /* bottom-sheet */
+  .g2-sheet-ov {
+    position: fixed; inset: 0; z-index: 140; display: none;
+    align-items: flex-end; justify-content: center;
+    background: rgba(0,0,0,.4); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  }
+  .g2-sheet-ov.open { display: flex; }
+  .g2-sheet {
+    width: 100%; max-width: 520px; background: var(--surface);
+    border-radius: 22px 22px 0 0; box-shadow: 0 -12px 40px rgba(0,0,0,.22);
+    display: flex; flex-direction: column; max-height: 90dvh;
+    transform: translateY(100%); transition: transform .28s cubic-bezier(.32,.72,.2,1);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .g2-sheet-ov.open .g2-sheet { transform: none; }
+  @media (min-width: 560px) { .g2-sheet-ov { align-items: center; } .g2-sheet { border-radius: 20px; margin: 16px; max-height: calc(100dvh - 32px); } }
+  .g2-sheet-grip { width: 36px; height: 4px; border-radius: 999px; background: var(--border-strong); margin: 10px auto 2px; }
+  .g2-sheet-head { display: flex; align-items: flex-start; gap: 12px; padding: 8px 20px 12px; }
+  .g2-sheet-ico { width: 40px; height: 40px; border-radius: 11px; flex-shrink: 0; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-deep); }
+  [data-theme="dark"] .g2-sheet-ico { color: var(--accent); }
+  .g2-sheet-title { font-size: 16.5px; font-weight: 700; letter-spacing: -.3px; }
+  .g2-sheet-sub { font-size: 12.5px; color: var(--text-3); margin-top: 2px; }
+  .g2-sheet-close { margin-left: auto; width: 32px; height: 32px; flex-shrink: 0; border: 0; border-radius: 50%; background: var(--surface-3); color: var(--text-2); display: grid; place-items: center; cursor: pointer; }
+  .g2-sheet-body { padding: 4px 20px 18px; overflow-y: auto; }
+  .g2-lbl { display: block; font-size: 12px; font-weight: 600; color: var(--text-2); margin: 14px 0 7px; }
+  .g2-lbl:first-child { margin-top: 4px; }
+  .g2-inp, .g2-sel {
+    width: 100%; height: 48px; border: 0.5px solid var(--border-strong); background: var(--surface-2);
+    border-radius: 12px; padding: 0 14px; font-size: 16px; color: var(--text); outline: none; font-family: inherit;
+  }
+  .g2-sel { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a8a29e' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; }
+  .g2-inp:focus, .g2-sel:focus { border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .g2-sheet-foot { padding: 12px 20px max(14px, env(safe-area-inset-bottom)); border-top: 0.5px solid var(--border); display: flex; flex-direction: column-reverse; gap: 8px; background: var(--surface-2); }
+  .g2-btn { height: 48px; border-radius: 12px; border: 0; font-size: 15px; font-weight: 650; cursor: pointer; font-family: inherit; width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+  .g2-btn-primary { background: var(--text); color: var(--surface); }
+  [data-theme="dark"] .g2-btn-primary { background: var(--accent); color: #06120c; }
+  .g2-btn-ghost { background: var(--surface); border: 0.5px solid var(--border-strong); color: var(--text); }
+
+  .g2-toast {
+    position: fixed; bottom: calc(96px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--text); color: var(--surface); padding: 12px 18px; border-radius: 999px;
+    font-size: 13.5px; font-weight: 600; box-shadow: 0 12px 32px rgba(0,0,0,.25);
+    display: flex; align-items: center; gap: 9px; opacity: 0; pointer-events: none;
+    transition: opacity .22s, transform .22s; z-index: 160; max-width: calc(100vw - 32px);
+  }
+  [data-theme="dark"] .g2-toast { background: var(--accent); color: #06120c; }
+  .g2-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  @media (min-width: 901px) { .g2-toast { bottom: 24px; } }
+  `;
+  var st = document.createElement('style');
+  st.id = 'g2-dock-styles';
+  st.textContent = css;
+  document.head.appendChild(st);
+
+  /* ---------- icons ---------- */
+  var ICO = {
+    checkin: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>',
+    client: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>',
+    extend: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>',
+    book: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+    close: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+    ok: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+  };
+
+  /* ---------- action sheet content ---------- */
+  var ACTIONS = {
+    checkin: {
+      title: 'Отметить визит', sub: 'Чек-ин клиента на сегодня', ico: ICO.checkin,
+      body: '<label class="g2-lbl">Клиент</label><input class="g2-inp" type="text" placeholder="Имя, телефон или № карты" />' +
+            '<label class="g2-lbl">Направление</label><select class="g2-sel"><option>Тренажёрный зал</option><option>Групповые</option><option>Бассейн</option><option>Персональная</option></select>',
+      cta: 'Отметить визит', toast: 'Визит отмечен'
+    },
+    client: {
+      title: 'Новый клиент', sub: 'Быстрое добавление', ico: ICO.client,
+      body: '<label class="g2-lbl">Имя и фамилия</label><input class="g2-inp" type="text" placeholder="Например, Анна Петрова" />' +
+            '<label class="g2-lbl">Телефон</label><input class="g2-inp" type="tel" inputmode="tel" placeholder="+7" />' +
+            '<label class="g2-lbl">Абонемент</label><select class="g2-sel"><option>Без абонемента</option><option>12 месяцев</option><option>6 месяцев</option><option>Разовое посещение</option></select>',
+      cta: 'Создать клиента', toast: 'Клиент создан'
+    },
+    extend: {
+      title: 'Продлить абонемент', sub: 'Добавить срок действующему', ico: ICO.extend,
+      body: '<label class="g2-lbl">Клиент</label><input class="g2-inp" type="text" placeholder="Имя или телефон" />' +
+            '<label class="g2-lbl">Срок продления</label><select class="g2-sel"><option>1 месяц</option><option>3 месяца</option><option>6 месяцев</option><option>12 месяцев</option></select>',
+      cta: 'Продлить', toast: 'Абонемент продлён'
+    },
+    book: {
+      title: 'Записать на тренировку', sub: 'Бронь слота в расписании', ico: ICO.book,
+      body: '<label class="g2-lbl">Клиент</label><input class="g2-inp" type="text" placeholder="Имя или телефон" />' +
+            '<label class="g2-lbl">Тренировка</label><select class="g2-sel"><option>Йога · сегодня 18:00</option><option>Бокс · сегодня 19:30</option><option>Силовая · завтра 09:00</option><option>Стретчинг · завтра 11:00</option></select>',
+      cta: 'Записать', toast: 'Клиент записан'
+    }
+  };
+
+  /* ---------- dock ---------- */
+  var dock = document.createElement('nav');
+  dock.className = 'g2-dock';
+  dock.setAttribute('aria-label', 'Быстрые действия');
+  dock.innerHTML =
+    '<button class="g2-dock-btn primary" type="button" data-g2-act="checkin"><span class="g2-qd-ico">' + ICO.checkin + '</span><span class="g2-qd-lbl">Чек-ин</span></button>' +
+    '<button class="g2-dock-btn" type="button" data-g2-act="client"><span class="g2-qd-ico">' + ICO.client + '</span><span class="g2-qd-lbl">Клиент</span></button>' +
+    '<button class="g2-dock-btn" type="button" data-g2-act="extend"><span class="g2-qd-ico">' + ICO.extend + '</span><span class="g2-qd-lbl">Продлить</span></button>' +
+    '<button class="g2-dock-btn" type="button" data-g2-act="book"><span class="g2-qd-ico">' + ICO.book + '</span><span class="g2-qd-lbl">Запись</span></button>';
+  document.body.appendChild(dock);
+
+  /* ---------- sheet ---------- */
+  var ov = document.createElement('div');
+  ov.className = 'g2-sheet-ov';
+  ov.innerHTML =
+    '<div class="g2-sheet" role="dialog" aria-modal="true">' +
+      '<div class="g2-sheet-grip"></div>' +
+      '<div class="g2-sheet-head">' +
+        '<div class="g2-sheet-ico" id="g2-ico"></div>' +
+        '<div style="min-width:0;flex:1;"><div class="g2-sheet-title" id="g2-title"></div><div class="g2-sheet-sub" id="g2-sub"></div></div>' +
+        '<button class="g2-sheet-close" type="button" data-g2-close>' + ICO.close + '</button>' +
+      '</div>' +
+      '<div class="g2-sheet-body" id="g2-body"></div>' +
+      '<div class="g2-sheet-foot">' +
+        '<button class="g2-btn g2-btn-primary" type="button" id="g2-cta"></button>' +
+        '<button class="g2-btn g2-btn-ghost" type="button" data-g2-close>Отмена</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(ov);
+
+  /* ---------- toast ---------- */
+  var toast = document.createElement('div');
+  toast.className = 'g2-toast';
+  toast.innerHTML = ICO.ok + '<span id="g2-toast-msg"></span>';
+  document.body.appendChild(toast);
+  var toastTimer = null;
+  function showToast(msg) {
+    document.getElementById('g2-toast-msg').textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 2400);
+  }
+
+  /* ---------- behaviour ---------- */
+  var curAct = null;
+  function openSheet(key) {
+    var a = ACTIONS[key]; if (!a) return;
+    curAct = a;
+    document.getElementById('g2-ico').innerHTML = a.ico;
+    document.getElementById('g2-title').textContent = a.title;
+    document.getElementById('g2-sub').textContent = a.sub;
+    document.getElementById('g2-body').innerHTML = a.body;
+    document.getElementById('g2-cta').textContent = a.cta;
+    ov.classList.add('open');
+  }
+  function closeSheet() { ov.classList.remove('open'); }
+
+  dock.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-g2-act]'); if (!b) return;
+    openSheet(b.getAttribute('data-g2-act'));
+  });
+  ov.addEventListener('click', function (e) {
+    if (e.target === ov || e.target.closest('[data-g2-close]')) closeSheet();
+  });
+  document.getElementById('g2-cta').addEventListener('click', function () {
+    var msg = curAct ? curAct.toast : 'Готово';
+    closeSheet();
+    setTimeout(function () { showToast(msg); }, 180);
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeSheet(); });
+})();
+
+</script>
+</body>
+</html>

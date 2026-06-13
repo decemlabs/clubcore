@@ -1,0 +1,664 @@
+import { toast } from 'sonner';
+import { cn } from '@/lib/cn';
+import { Initials } from '@/components/ui/initials';
+import { useModals } from '@/components/modals/modals-context';
+import {
+  Bell,
+  Check,
+  Code,
+  Download,
+  Gift,
+  Mail,
+  MessageSquare,
+  MoreHorizontal,
+  Send,
+  Smartphone,
+  TriangleAlert,
+  Users,
+} from '@/components/icons';
+import type { Role, SettingsData } from '@/features/settings/types';
+import {
+  Chip,
+  GhostBtn,
+  PrimaryBtn,
+  RadioGroup,
+  SectionCard,
+  SettingRow,
+  TextField,
+  Toggle,
+} from '@/components/settings/controls';
+
+const ID_NOTIF = 'notifications';
+const ID_APP = 'app';
+const ID_TEAM = 'team';
+
+const ROLE_TONE: Record<Role, string> = {
+  owner: 'bg-primary-soft text-primary-deep dark:text-primary',
+  admin: 'bg-lead-soft text-lead',
+  trainer: 'bg-warning-soft text-warning-deep',
+  cashier: 'bg-surface-3 text-fg-muted',
+};
+
+const MATRIX_COLS = 'grid grid-cols-[minmax(0,1fr)_56px_56px_56px_56px] items-center gap-2';
+
+export function NotificationsSection({ data }: { data: SettingsData }) {
+  const headers = [
+    { label: 'Push', Icon: Bell },
+    { label: 'Email', Icon: Mail },
+    { label: 'SMS', Icon: MessageSquare },
+    { label: 'TG-бот', Icon: Send },
+  ];
+  return (
+    <SectionCard
+      id={ID_NOTIF}
+      icon={Bell}
+      title="Уведомления клиенту"
+      desc="Какие триггеры по каким каналам уходят. По умолчанию — push; SMS зарезервированы для важного."
+      action={
+        <span className="inline-flex h-[30px] items-center gap-1.5 rounded-full border-[0.5px] border-border bg-surface-2 px-3 text-[12px] font-semibold text-fg">
+          <Check className="size-3.5" />
+          26 / 28 включены
+        </span>
+      }
+    >
+      <div className="overflow-x-auto pt-2 [scrollbar-width:thin]">
+        <div className="min-w-[540px]">
+          <div className={cn(MATRIX_COLS, 'border-b-[0.5px] border-border pb-2')}>
+            <span />
+            {headers.map(({ label, Icon }) => (
+              <span
+                key={label}
+                className="flex flex-col items-center gap-0.5 text-[10.5px] font-semibold text-fg-muted"
+              >
+                <Icon className="size-3.5" />
+                {label}
+              </span>
+            ))}
+          </div>
+          {data.channels.map((c, i) => (
+            <div
+              key={c.trigger}
+              className={cn(MATRIX_COLS, i > 0 && 'border-t-[0.5px] border-border', 'py-2.5')}
+            >
+              <div className="min-w-0">
+                <div className="text-[13px] font-semibold">{c.trigger}</div>
+                <div className="text-[11px] text-fg-subtle">{c.sub}</div>
+              </div>
+              <div className="flex justify-center">
+                <Toggle defaultChecked={c.push} sectionId={ID_NOTIF} />
+              </div>
+              <div className="flex justify-center">
+                <Toggle defaultChecked={c.email} disabled={c.emailLocked} sectionId={ID_NOTIF} />
+              </div>
+              <div className="flex justify-center">
+                <Toggle defaultChecked={c.sms} sectionId={ID_NOTIF} />
+              </div>
+              <div className="flex justify-center">
+                <Toggle defaultChecked={c.tg} sectionId={ID_NOTIF} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <SettingRow label="Подпись отправителя" hint="Виден в SMS и push.">
+        <TextField defaultValue="MOY ZAL" sectionId={ID_NOTIF} />
+        <div className="mt-1 text-[11px] text-fg-subtle">
+          до 11 латинских символов · зарегистрирован в МТС, МегаФон, Билайн, Т2
+        </div>
+      </SettingRow>
+      <SettingRow label="Тихие часы" hint="В это время push не отправляются, кроме срочных.">
+        <div className="flex flex-wrap items-center gap-2 text-[12px] text-fg-muted">
+          <input
+            defaultValue="22:00"
+            className="h-8 w-[72px] rounded-lg border-[0.5px] border-border-strong bg-surface-2 px-2 text-center text-[12.5px] tabular-nums outline-none focus:border-fg-subtle"
+          />
+          —
+          <input
+            defaultValue="10:00"
+            className="h-8 w-[72px] rounded-lg border-[0.5px] border-border-strong bg-surface-2 px-2 text-center text-[12.5px] tabular-nums outline-none focus:border-fg-subtle"
+          />
+          по часовому поясу клиента
+        </div>
+      </SettingRow>
+    </SectionCard>
+  );
+}
+
+export function AppSection({ data }: { data: SettingsData }) {
+  return (
+    <SectionCard
+      id={ID_APP}
+      icon={Smartphone}
+      title="Приложение клиента"
+      desc="Бренд, тема и фичи мобильного приложения «Мой зал». Изменения видны клиентам в течение 5 минут."
+      action={
+        <span className="inline-flex h-[30px] items-center rounded-full border-[0.5px] border-border bg-surface-2 px-3 text-[12px] font-semibold text-fg">
+          v 4.12.3 · обновлено вчера
+        </span>
+      }
+    >
+      <SettingRow first label="Превью" hint="Так выглядит главный экран приложения сейчас.">
+        <div className="flex flex-wrap items-start gap-5">
+          <div className="w-[150px] shrink-0 rounded-[22px] border-[6px] border-fg/90 bg-bg p-3 dark:border-surface-3">
+            <span className="mx-auto mb-2 block h-1 w-8 rounded-full bg-fg/20" />
+            <span className="grid size-7 place-items-center rounded-lg bg-primary text-[13px] font-bold text-[#06120c]">
+              М
+            </span>
+            <div className="mt-2 text-[13px] font-bold">Привет, Алёна 👋</div>
+            <div className="text-[10px] text-fg-subtle">Тверская · до зала 12 мин</div>
+            <div className="mt-2 rounded-xl bg-fg p-2.5 text-bg">
+              <div className="text-[10px] font-semibold">QR · вход в зал</div>
+              <div className="mt-1 text-[9px] opacity-70">A-31 · до 18.09</div>
+              <div className="text-[9px] opacity-70">31 визит · 7 ПТ осталось</div>
+            </div>
+            <div className="mt-2 rounded-lg bg-primary py-1.5 text-center text-[10px] font-bold text-[#06120c]">
+              Записаться
+            </div>
+          </div>
+          <div className="min-w-0 flex-1 text-[12px] text-fg-muted">
+            <div className="font-semibold text-fg">Что меняется при правках:</div>
+            <ul className="mt-1.5 flex flex-col gap-1">
+              {[
+                'Логотип и заглавный значок (192×192, 512×512)',
+                'Акцентный цвет — кнопки, плашки, активные элементы',
+                'Шрифт и обращение к клиенту («Вы» / «ты»)',
+                'Сплеш-экран и push-иконка',
+              ].map((t) => (
+                <li key={t} className="flex gap-2">
+                  <span className="mt-1.5 size-1 shrink-0 rounded-full bg-fg-subtle" />
+                  {t}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </SettingRow>
+      <SettingRow label="Акцентный цвет">
+        <div className="flex flex-wrap items-center gap-2">
+          {data.swatches.map((s) => (
+            <button
+              key={s.color}
+              type="button"
+              title={s.title}
+              className={cn(
+                'size-8 rounded-full ring-offset-2 ring-offset-surface transition-transform hover:scale-110',
+                s.active && 'ring-2 ring-fg',
+              )}
+              style={{ background: s.color }}
+            />
+          ))}
+          <button
+            type="button"
+            className="grid size-8 place-items-center rounded-full border-[1.5px] border-dashed border-border-strong text-fg-subtle"
+          >
+            +
+          </button>
+        </div>
+        <div className="mt-2 text-[11px] text-fg-subtle">
+          текущий: <span className="font-mono">#2DD4A4</span> · контраст AAA на белом фоне
+        </div>
+      </SettingRow>
+      <SettingRow label="Обращение к клиенту" hint="В пушах, чате и письмах.">
+        <RadioGroup
+          options={['На «ты», по имени', 'На «вы», по имени', 'По имени-отчеству']}
+          defaultValue="На «ты», по имени"
+          sectionId={ID_APP}
+        />
+        <div className="mt-2 text-[11px] text-fg-subtle">
+          пример: «Алёна, через час йога — не забудь воду 💧»
+        </div>
+      </SettingRow>
+      <SettingRow label="Включённые модули" hint="Если выключить — раздел не виден клиентам.">
+        <div className="grid gap-3.5 sm:grid-cols-2">
+          <Toggle
+            defaultChecked
+            sectionId={ID_APP}
+            label="QR-вход"
+            sub="по карточке клиента на турникет"
+          />
+          <Toggle
+            defaultChecked
+            sectionId={ID_APP}
+            label="Запись на групповые"
+            sub="с листом ожидания"
+          />
+          <Toggle
+            defaultChecked
+            sectionId={ID_APP}
+            label="Чат с залом"
+            sub="админ + дежурный тренер"
+          />
+          <Toggle
+            defaultChecked
+            sectionId={ID_APP}
+            label="История тренировок"
+            sub="прогресс, веса, серии"
+          />
+          <Toggle sectionId={ID_APP} label="Дневник питания" sub="бета · только для VIP" />
+          <Toggle
+            defaultChecked
+            sectionId={ID_APP}
+            label="Реферальная программа"
+            sub="−2 000 ₽ другу и тебе"
+          />
+        </div>
+      </SettingRow>
+      <SettingRow label="Контент и партнёры" hint="Дополнительные блоки на главном экране.">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Chip tone="accent">Smoothie Bar · −20% после ПТ</Chip>
+          <Chip tone="accent">Decathlon · промокод</Chip>
+          <Chip>Доставка спортпита</Chip>
+          <GhostBtn>+ Блок</GhostBtn>
+        </div>
+      </SettingRow>
+    </SectionCard>
+  );
+}
+
+const TEAM_COLS =
+  'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 md:grid-cols-[minmax(0,1.6fr)_88px_110px_84px_minmax(0,1fr)_36px]';
+
+export function TeamSection({ data }: { data: SettingsData }) {
+  return (
+    <SectionCard
+      id={ID_TEAM}
+      icon={Users}
+      title="Доступы команды"
+      desc="Кто и как может работать в админке. Тренеры по умолчанию видят только своё расписание и клиентов."
+      action={<PrimaryBtn>+ Пригласить</PrimaryBtn>}
+    >
+      <div className="pt-2">
+        <div
+          className={cn(
+            TEAM_COLS,
+            'border-b-[0.5px] border-border pb-2 text-[10.5px] font-semibold uppercase tracking-[0.3px] text-fg-subtle max-md:hidden',
+          )}
+        >
+          <span>Сотрудник</span>
+          <span>Роль</span>
+          <span>Филиал</span>
+          <span>2FA</span>
+          <span>Последний вход</span>
+          <span />
+        </div>
+        {data.team.map((m) => (
+          <div
+            key={m.name}
+            className={cn(
+              TEAM_COLS,
+              'border-t-[0.5px] border-border py-2.5 first:border-t-0 md:first:border-t-[0.5px]',
+            )}
+          >
+            <div className="flex min-w-0 items-center gap-2.5">
+              <Initials initials={m.initials} color={m.color} className="size-[30px] text-[11px]" />
+              <div className="min-w-0">
+                <div className="truncate text-[13px] font-semibold">{m.name}</div>
+                {m.note ? (
+                  <div className="truncate text-[11px] text-fg-subtle">{m.note}</div>
+                ) : null}
+              </div>
+            </div>
+            <span
+              className={cn(
+                'justify-self-start rounded-full px-2 py-0.5 text-[10.5px] font-bold uppercase',
+                ROLE_TONE[m.role],
+              )}
+            >
+              {m.roleLabel}
+            </span>
+            <span className="text-[12px] text-fg-muted max-md:hidden">{m.branch}</span>
+            <span
+              className={cn(
+                'inline-flex items-center gap-1.5 text-[12px] max-md:hidden',
+                m.twofaOk ? 'text-fg-muted' : 'text-warning-deep',
+              )}
+            >
+              <span
+                className={cn('size-1.5 rounded-full', m.twofaOk ? 'bg-primary' : 'bg-warning')}
+              />
+              {m.twofaLabel}
+            </span>
+            <div className="text-[12px] max-md:hidden">
+              <div className="tabular-nums">{m.last}</div>
+              <div className="text-[10.5px] text-fg-subtle">{m.lastSub}</div>
+            </div>
+            <button
+              type="button"
+              aria-label="Действия с сотрудником"
+              onClick={() => toast(`Действия · ${m.name}`)}
+              className="grid size-7 place-items-center justify-self-end rounded-lg text-fg-subtle transition-colors hover:bg-surface-3 hover:text-fg"
+            >
+              <MoreHorizontal className="size-4" />
+            </button>
+          </div>
+        ))}
+        <div className={cn(TEAM_COLS, 'border-t-[0.5px] border-border py-2.5')}>
+          <div className="flex items-center gap-2.5">
+            <span className="grid size-[30px] place-items-center rounded-full bg-[#94a3b8] text-[10px] font-bold text-white">
+              +8
+            </span>
+            <span className="text-[12.5px] text-fg-muted">…ещё 8 сотрудников</span>
+          </div>
+          <span className="text-[11.5px] text-fg-subtle max-md:hidden md:col-span-4">
+            6 тренеров, 2 администратора смены
+          </span>
+          <button
+            type="button"
+            onClick={() => toast('Все сотрудники')}
+            className="justify-self-end text-[12px] font-semibold text-fg-muted hover:text-fg"
+          >
+            Показать всех →
+          </button>
+        </div>
+      </div>
+
+      <SettingRow label="Политика ролей" hint="Распространяется на новых сотрудников.">
+        <div className="flex flex-col gap-3.5">
+          <Toggle
+            defaultChecked
+            sectionId={ID_TEAM}
+            label="Требовать 2FA для админов и владельцев"
+            sub="У тренеров — опционально. Кассиры — только в зале по PIN."
+          />
+          <Toggle
+            sectionId={ID_TEAM}
+            label="Тренер видит контакты клиента"
+            sub="По умолчанию — только имя и фото. Включает телефон и email."
+          />
+          <Toggle
+            defaultChecked
+            sectionId={ID_TEAM}
+            label="Авто-блок при отсутствии > 30 дней"
+            sub="Сессии завершаются, доступ — по запросу владельца."
+          />
+        </div>
+      </SettingRow>
+    </SectionCard>
+  );
+}
+
+export function IntegrationsSection({ data }: { data: SettingsData }) {
+  return (
+    <SectionCard
+      id="integrations"
+      icon={Code}
+      title="Интеграции и API"
+      desc="Внешние системы, подключённые к «Моему залу». Для каждой — статус и последняя синхронизация."
+      action={<span className="text-[12px] font-semibold text-fg-muted">Все 24 →</span>}
+    >
+      <div className="flex flex-col gap-2 pt-2">
+        {data.integrations.map((it) => (
+          <div
+            key={it.name}
+            className="flex flex-wrap items-center gap-3 rounded-xl border-[0.5px] border-border bg-surface-2 p-3"
+          >
+            <span
+              className="grid size-12 shrink-0 place-items-center rounded-xl text-[12px] font-bold text-white"
+              style={{ background: it.color }}
+            >
+              {it.logo}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className={cn('text-[13px] font-semibold', it.muted && 'text-fg-muted')}>
+                {it.name}
+              </div>
+              <div className="text-[11.5px] text-fg-subtle">{it.desc}</div>
+              {it.meta ? (
+                <div
+                  className={cn(
+                    'mt-0.5 text-[11px]',
+                    it.status === 'warn' ? 'text-warning-deep' : 'text-fg-subtle',
+                  )}
+                >
+                  {it.meta}
+                </div>
+              ) : null}
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {it.chip ? <Chip tone={it.chipTone}>{it.chip}</Chip> : null}
+              <GhostBtn>{it.action}</GhostBtn>
+            </div>
+          </div>
+        ))}
+      </div>
+      <SettingRow label="API-доступ" hint="Для разработчиков и собственных интеграций.">
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            readOnly
+            value="mz_live_••••••••••••••••••••a1B7"
+            className="h-[38px] min-w-[220px] flex-1 rounded-[10px] border-[0.5px] border-border-strong bg-surface-2 px-3 font-mono text-[12.5px] text-fg-muted outline-none"
+          />
+          <GhostBtn>Показать</GhostBtn>
+          <GhostBtn>Ротация</GhostBtn>
+        </div>
+        <div className="mt-1.5 text-[11px] text-fg-subtle">
+          создан 12 фев · использован 142 раза за сутки · последний запрос —{' '}
+          <b className="font-semibold text-fg-muted">POST /v1/bookings</b> · 14 сек назад
+        </div>
+      </SettingRow>
+    </SectionCard>
+  );
+}
+
+export function BillingSection({ data }: { data: SettingsData }) {
+  return (
+    <SectionCard
+      id="billing"
+      icon={Gift}
+      title="Тариф «Мой зал»"
+      desc="Подписка на сервис, лимиты по клиентам, SMS и хранилищу. Платёжный реквизит для счёта."
+    >
+      <div className="grid gap-3 pt-3 lg:grid-cols-[1.25fr_1fr]">
+        <div
+          className="relative overflow-hidden rounded-xl p-5 text-white"
+          style={{ background: 'linear-gradient(160deg,#1c1917,#2a2826)' }}
+        >
+          <span
+            aria-hidden
+            className="pointer-events-none absolute -right-10 -top-10 size-40 rounded-full"
+            style={{
+              background: 'radial-gradient(circle, rgba(45,212,164,0.22), transparent 70%)',
+            }}
+          />
+          <div className="relative text-[10.5px] font-bold uppercase tracking-[0.5px] text-primary">
+            Текущий тариф
+          </div>
+          <div className="relative mt-1 text-[26px] font-bold">Pro · 3 филиала</div>
+          <div className="relative mt-1 text-[12px] text-white/60">
+            19 800 ₽ / мес · <b className="font-semibold text-white">237 600 ₽</b> в год — экономия
+            39 600 ₽
+          </div>
+          <div className="relative mt-4 grid grid-cols-2 gap-2 text-[12px]">
+            {data.planFeatures.map((f) => (
+              <div key={f} className="flex items-center gap-1.5 text-white/80">
+                <Check className="size-3.5 shrink-0 text-primary" strokeWidth={2.6} />
+                {f}
+              </div>
+            ))}
+          </div>
+          <div className="relative mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3 text-[11.5px] text-white/55">
+            Следующее списание: <b className="font-semibold text-white">1 июня 2026</b> · Visa 4287
+            <button
+              type="button"
+              className="rounded-full bg-white/10 px-3 py-1 text-[12px] font-semibold text-white hover:bg-white/20"
+            >
+              Сравнить тарифы →
+            </button>
+          </div>
+        </div>
+
+        <div className="rounded-xl border-[0.5px] border-border bg-surface-2 p-4">
+          <div className="text-[13px] font-bold">Использование за май</div>
+          <div className="mt-3 flex flex-col gap-3">
+            {data.usage.map((u) => (
+              <div key={u.label}>
+                <div className="flex items-center justify-between text-[11.5px]">
+                  <span className="text-fg-muted">{u.label}</span>
+                  <span className="tabular-nums">
+                    {u.used} / <b className="font-semibold text-fg">{u.limit}</b>
+                  </span>
+                </div>
+                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-3">
+                  <div
+                    className={cn(
+                      'h-full rounded-full',
+                      u.tone === 'warn' ? 'bg-warning' : 'bg-primary',
+                    )}
+                    style={{ width: `${u.pct}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 text-[11px] text-fg-subtle">
+            SMS заканчиваются за 4 дня до конца месяца — рекомендуем докупить пакет 1 000 SMS за 1
+            200 ₽.
+          </div>
+        </div>
+      </div>
+
+      <SettingRow label="Платёжный метод">
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border-[0.5px] border-border bg-surface-2 p-3">
+          <span className="grid h-8 w-12 place-items-center rounded-md bg-gradient-to-br from-[#1a4ba8] to-[#2563eb] text-[11px] font-bold text-white">
+            Visa
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="text-[13px] font-semibold">Visa **** 4287 · Сбер</div>
+            <div className="text-[11.5px] text-fg-subtle">
+              истекает 09/27 · оплата автоматически 1-го числа
+            </div>
+          </div>
+          <GhostBtn>Заменить</GhostBtn>
+        </div>
+        <div className="mt-2">
+          <GhostBtn>+ Платить по счёту (ООО)</GhostBtn>
+        </div>
+      </SettingRow>
+
+      <SettingRow label="Платёжные документы" hint="Скачать чек или счёт-фактуру можно за 5 лет.">
+        <div className="flex flex-col">
+          {data.invoices.map((inv, i) => (
+            <div
+              key={inv.num}
+              className={cn(
+                'grid grid-cols-[110px_minmax(0,1fr)_auto_72px_32px] items-center gap-3 py-2.5 text-[12.5px] max-sm:grid-cols-[minmax(0,1fr)_auto]',
+                i > 0 && 'border-t-[0.5px] border-border',
+              )}
+            >
+              <span className="font-mono text-[11.5px] text-fg-muted max-sm:hidden">{inv.num}</span>
+              <div className="min-w-0">
+                <div className="truncate font-semibold">{inv.desc}</div>
+                <div className="truncate text-[11px] text-fg-subtle">{inv.descSub}</div>
+              </div>
+              <span className="text-right font-semibold tabular-nums">{inv.amount}</span>
+              <span className="rounded-full bg-primary-soft px-2 py-0.5 text-center text-[10px] font-bold uppercase text-primary-deep dark:text-primary max-sm:hidden">
+                оплачен
+              </span>
+              <button
+                type="button"
+                aria-label="Скачать"
+                onClick={() => toast.success('Документ скачан', { description: inv.num })}
+                className="grid size-7 place-items-center justify-self-end rounded-lg text-fg-subtle transition-colors hover:bg-surface-3 hover:text-fg max-sm:hidden"
+              >
+                <Download className="size-3.5" />
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => toast('Все документы')}
+            className="mt-2 self-start text-[12px] font-semibold text-fg-muted hover:text-fg"
+          >
+            Все документы · 18 →
+          </button>
+        </div>
+      </SettingRow>
+    </SectionCard>
+  );
+}
+
+const DANGER_ROWS: {
+  label: string;
+  sub: string;
+  btn: string;
+  danger?: boolean;
+  disabled?: boolean;
+  red?: boolean;
+}[] = [
+  {
+    label: 'Перенести филиал в другую сеть',
+    sub: 'Клиенты, абонементы и тренеры мигрируют. Расписание остановится на 1 час.',
+    btn: 'Перенести…',
+  },
+  {
+    label: 'Сбросить настройки филиала',
+    sub: 'Часы, уведомления и тема вернутся к умолчаниям сети. Клиенты и абонементы — без изменений.',
+    btn: 'Сбросить «Тверская»',
+    danger: true,
+  },
+  {
+    label: 'Закрыть филиал',
+    sub: 'Запись остановится сразу. Клиенты получат push с предложением другого зала и возвратом за неиспользованные дни.',
+    btn: 'Закрыть «Тверская»…',
+    danger: true,
+  },
+  {
+    label: 'Удалить аккаунт сети',
+    sub: 'Только владелец. 30 дней «корзина», потом данные удаляются необратимо.',
+    btn: 'Только Виктор Львов',
+    danger: true,
+    disabled: true,
+    red: true,
+  },
+];
+
+export function DangerSection() {
+  const { open } = useModals();
+  return (
+    <SectionCard
+      id="danger"
+      icon={TriangleAlert}
+      title="Опасная зона"
+      desc="Эти действия необратимы или требуют подтверждения владельца сети."
+      danger
+    >
+      {DANGER_ROWS.map((r, i) => (
+        <div
+          key={r.label}
+          className={cn(
+            'flex flex-wrap items-center justify-between gap-3 py-3.5',
+            i > 0 && 'border-t-[0.5px] border-danger/20',
+          )}
+        >
+          <div className="min-w-0">
+            <div className={cn('text-[13px] font-semibold', r.red && 'text-danger')}>{r.label}</div>
+            <div className="mt-0.5 text-[11.5px] text-fg-muted">{r.sub}</div>
+          </div>
+          <GhostBtn
+            danger={r.danger}
+            disabled={r.disabled}
+            onClick={
+              r.danger
+                ? () =>
+                    open('confirm', {
+                      confirm: {
+                        title: `${r.label}?`,
+                        message: r.sub,
+                        tone: 'danger',
+                        confirmLabel: r.btn,
+                        requireText: 'ТВЕРСКАЯ',
+                        onConfirm: () => {
+                          toast.success('Действие выполнено');
+                        },
+                      },
+                    })
+                : () => toast(r.label)
+            }
+          >
+            {r.btn}
+          </GhostBtn>
+        </div>
+      ))}
+    </SectionCard>
+  );
+}

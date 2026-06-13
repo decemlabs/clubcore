@@ -1,0 +1,765 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Админка · Мой зал — Архив тренеров</title>
+<script>
+  (function () { var t = localStorage.getItem('admin-theme') || 'light'; if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); })();
+</script>
+<style>
+  :root {
+    --accent: #2dd4a4; --accent-deep: #0f9b76; --accent-soft: #d6f5ea;
+    --bg: #f5f5f4; --surface: #ffffff; --surface-2: #fafaf9; --surface-3: #f1f0ee;
+    --border: #e7e5e4; --border-strong: #d6d3d1;
+    --text: #1c1917; --text-2: #57534e; --text-3: #a8a29e;
+    --warn: #e9a23b; --warn-soft: #fef3e2; --danger: #dc2626; --danger-soft: #fee2e2;
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", system-ui, sans-serif;
+    --mono: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+    --r-sm: 10px; --r-md: 14px; --r-lg: 18px; --r-pill: 999px;
+    --sh-1: 0 1px 2px rgba(28,25,23,.04);
+    --sh-2: 0 1px 3px rgba(28,25,23,.05), 0 4px 14px rgba(28,25,23,.04);
+    --sh-3: 0 8px 30px rgba(28,25,23,.08), 0 2px 6px rgba(28,25,23,.04);
+    --sidebar-w: 248px; --topbar-h: 64px;
+  }
+  [data-theme="dark"] {
+    --bg: #0c0c0c; --surface: #181715; --surface-2: #141312; --surface-3: #232120;
+    --border: #2a2826; --border-strong: #3a3735;
+    --text: #f5f5f4; --text-2: #a8a29e; --text-3: #6b6663;
+    --accent-soft: rgba(45,212,164,.16); --warn-soft: rgba(233,162,59,.18); --danger-soft: rgba(220,38,38,.18);
+    --sh-1: 0 1px 2px rgba(0,0,0,.3); --sh-2: 0 1px 3px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.25); --sh-3: 0 8px 30px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.3);
+  }
+  [data-theme="dark"] body { background: #050505; }
+  [data-theme="dark"] .brand-mark { background: var(--accent); color: #06120c; }
+  [data-theme="dark"] .nav-item.active { background: var(--surface-3); color: var(--text); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; font-family: var(--font); background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; font-size: 14px; line-height: 1.4; }
+  button { font-family: inherit; cursor: pointer; }
+  input { font-family: inherit; }
+  a { color: inherit; text-decoration: none; }
+
+  .app { display: grid; grid-template-columns: var(--sidebar-w) 1fr; min-height: 100vh; }
+
+  /* sidebar */
+  .sidebar { background: var(--surface-2); border-right: 0.5px solid var(--border); padding: 18px 14px; display: flex; flex-direction: column; gap: 4px; position: sticky; top: 0; height: 100vh; z-index: 30; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 6px 10px 14px; }
+  .brand-mark { width: 30px; height: 30px; border-radius: 9px; background: var(--text); color: var(--accent); display: grid; place-items: center; font-weight: 800; font-size: 15px; letter-spacing: -0.5px; }
+  .brand-name { font-size: 15px; font-weight: 700; letter-spacing: -0.3px; }
+  .brand .tag { margin-left: auto; font-size: 10px; font-weight: 700; color: var(--text-3); background: var(--surface-3); padding: 2px 7px; border-radius: 999px; letter-spacing: 0.4px; }
+  .branch { display: flex; align-items: center; gap: 9px; width: 100%; padding: 9px 11px; border-radius: var(--r-sm); border: 0.5px solid var(--border); background: var(--surface); margin-bottom: 8px; text-align: left; }
+  .branch:hover { border-color: var(--border-strong); }
+  .branch-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+  .branch-label { font-weight: 600; font-size: 13.5px; letter-spacing: -0.1px; }
+  .branch-sub { font-size: 11px; color: var(--text-3); margin-top: 1px; }
+  .branch svg { margin-left: auto; color: var(--text-3); flex-shrink: 0; }
+  .nav-section { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-3); padding: 14px 12px 6px; }
+  .nav-item { display: flex; align-items: center; gap: 11px; padding: 8px 11px; border-radius: var(--r-sm); color: var(--text-2); font-size: 13.5px; font-weight: 500; letter-spacing: -0.1px; transition: background .13s, color .13s; }
+  .nav-item:hover { background: var(--surface); color: var(--text); }
+  .nav-item.active { background: var(--text); color: var(--surface); }
+  .nav-item.active .nav-badge { background: var(--accent); color: #06120c; }
+  .nav-item svg { width: 17px; height: 17px; flex-shrink: 0; }
+  .nav-badge { margin-left: auto; font-size: 11px; font-weight: 700; background: var(--surface-3); color: var(--text-2); padding: 1px 7px; border-radius: 999px; font-variant-numeric: tabular-nums; }
+  .nav-badge.accent { background: var(--accent-soft); color: var(--accent-deep); }
+  [data-theme="dark"] .nav-badge.accent { color: var(--accent); }
+  .sidebar-foot { margin-top: auto; padding-top: 10px; }
+  .me { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: var(--r-sm); }
+  .me:hover { background: var(--surface); }
+  .me-avatar { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 12.5px; flex-shrink: 0; }
+  .me-name { font-size: 13px; font-weight: 650; letter-spacing: -0.1px; }
+  .me-role { font-size: 11px; color: var(--text-3); }
+  .me-logout { margin-left: auto; border: 0; background: transparent; color: var(--text-3); display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; }
+  .me-logout:hover { background: var(--surface-3); color: var(--text); }
+
+  /* main */
+  .main { display: flex; flex-direction: column; min-width: 0; }
+  .topbar { height: var(--topbar-h); flex-shrink: 0; display: flex; align-items: center; gap: 14px; padding: 0 26px; border-bottom: 0.5px solid var(--border); background: color-mix(in oklab, var(--surface) 75%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); position: sticky; top: 0; z-index: 20; }
+  .hamburger { display: none; }
+  .crumbs { font-size: 13px; color: var(--text-2); }
+  .crumbs a:hover { color: var(--text); }
+  .crumbs strong { color: var(--text); font-weight: 650; }
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .icon-btn { width: 36px; height: 36px; border-radius: 50%; border: 0.5px solid var(--border); background: var(--surface); color: var(--text-2); display: grid; place-items: center; transition: background .15s, color .15s; }
+  .icon-btn:hover { background: var(--surface-3); color: var(--text); }
+  .theme-toggle .i-moon { display: none; }
+  [data-theme="dark"] .theme-toggle .i-moon { display: block; }
+  [data-theme="dark"] .theme-toggle .i-sun { display: none; }
+
+  .content { padding: 26px 26px 96px; max-width: 1180px; width: 100%; }
+  .page-head { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
+  .page-head h1 { font-size: 23px; font-weight: 700; letter-spacing: -0.5px; margin: 0 0 5px; }
+  .page-head .sub { font-size: 13.5px; color: var(--text-2); max-width: 560px; line-height: 1.5; }
+  .page-head .ha { margin-left: auto; display: flex; gap: 9px; }
+
+  .btn { height: 40px; border-radius: var(--r-sm); padding: 0 16px; border: 0; font-size: 13.5px; font-weight: 600; letter-spacing: -0.1px; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 7px; transition: background .15s, transform .04s, border-color .15s, color .15s; }
+  .btn:active { transform: scale(.99); }
+  .btn-primary { background: var(--text); color: var(--bg); }
+  .btn-primary:hover { background: #000; }
+  [data-theme="dark"] .btn-primary { background: var(--accent); color: #06120c; }
+  .btn-ghost { background: var(--surface); border: 0.5px solid var(--border-strong); color: var(--text); }
+  .btn-ghost:hover { background: var(--surface-3); }
+  .btn-ghost.danger { color: var(--danger); border-color: color-mix(in oklab, var(--danger) 35%, var(--border-strong)); }
+  .btn-ghost.danger:hover { background: var(--danger-soft); }
+  .btn-sm { height: 34px; padding: 0 13px; font-size: 12.5px; border-radius: 9px; }
+
+  /* filter tabs */
+  .tabs { display: flex; gap: 6px; margin-bottom: 14px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; border-radius: 999px; border: 0.5px solid var(--border); background: var(--surface); color: var(--text-2); font-size: 13px; font-weight: 600; white-space: nowrap; transition: background .14s, color .14s, border-color .14s; }
+  .tab:hover { border-color: var(--border-strong); color: var(--text); }
+  .tab.active { background: var(--text); color: var(--bg); border-color: var(--text); }
+  [data-theme="dark"] .tab.active { background: var(--surface-3); color: var(--text); border-color: var(--border-strong); }
+  .tab .cnt { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: var(--surface-3); color: var(--text-2); font-variant-numeric: tabular-nums; }
+  .tab.active .cnt { background: rgba(255,255,255,.18); color: inherit; }
+  [data-theme="dark"] .tab.active .cnt { background: var(--surface); }
+
+  /* card panel */
+  .panel { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--sh-2); overflow: hidden; }
+
+  /* toolbar */
+  .arc-toolbar { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 0.5px solid var(--border); background: var(--surface-2); }
+  .arc-search { flex: 1; max-width: 320px; position: relative; display: flex; align-items: center; }
+  .arc-search svg { position: absolute; left: 12px; color: var(--text-3); }
+  .arc-search input { width: 100%; height: 36px; border: 0.5px solid var(--border-strong); border-radius: 9px; background: var(--surface); padding: 0 12px 0 34px; font-size: 13px; color: var(--text); outline: none; }
+  .arc-search input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .arc-count { margin-left: auto; font-size: 12.5px; color: var(--text-2); }
+  .arc-count b { color: var(--text); }
+
+  /* bulk bar */
+  .bulk-bar { display: none; align-items: center; gap: 12px; padding: 11px 16px; border-bottom: 0.5px solid var(--border); background: var(--accent-soft); }
+  .bulk-bar.show { display: flex; }
+  [data-theme="dark"] .bulk-bar { background: rgba(45,212,164,.12); }
+  .bulk-bar .bb-txt { font-size: 13px; font-weight: 600; color: var(--accent-deep); }
+  [data-theme="dark"] .bulk-bar .bb-txt { color: var(--accent); }
+  .bulk-bar .bb-actions { margin-left: auto; display: flex; gap: 8px; }
+
+  /* table */
+  .arc-table { width: 100%; }
+  .arc-head, .arc-row { display: grid; grid-template-columns: 40px 1.7fr 1.1fr 0.9fr 150px; gap: 14px; align-items: center; padding: 12px 16px; }
+  .arc-head { border-bottom: 0.5px solid var(--border); font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-3); }
+  .arc-row { border-bottom: 0.5px solid var(--border); }
+  .arc-row:last-child { border-bottom: 0; }
+  .arc-row:hover { background: var(--surface-2); }
+  .arc-row.hidden { display: none; }
+
+  .ck { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--border-strong); background: var(--surface); display: grid; place-items: center; color: transparent; flex-shrink: 0; transition: background .14s, border-color .14s, color .14s; }
+  .ck.on { background: var(--text); border-color: var(--text); color: var(--bg); }
+  [data-theme="dark"] .ck.on { background: var(--accent); border-color: var(--accent); color: #06120c; }
+
+  .cl { display: flex; align-items: center; gap: 11px; min-width: 0; }
+  .cl-ava { width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center; color: #fff; font-size: 13px; font-weight: 700; letter-spacing: -0.3px; filter: grayscale(.35); }
+  .cl-name { font-size: 13.5px; font-weight: 650; letter-spacing: -0.2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cl-sub { font-size: 11.5px; color: var(--text-3); margin-top: 1px; font-variant-numeric: tabular-nums; }
+  .reason { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: var(--surface-3); color: var(--text-2); }
+  .reason.expired { background: var(--warn-soft); color: #a36a16; }
+  [data-theme="dark"] .reason.expired { color: var(--warn); }
+  .reason.inactive { background: var(--surface-3); color: var(--text-2); }
+  .reason.deleted { background: var(--danger-soft); color: var(--danger); }
+  .arc-date { font-size: 12.5px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+  .arc-date .ago { font-size: 11px; color: var(--text-3); margin-top: 1px; }
+  .arc-acts { display: flex; gap: 6px; justify-content: flex-end; }
+  .arc-cell-lbl { display: none; }
+
+  /* mobile cards */
+  @media (max-width: 860px) {
+    .arc-head { display: none; }
+    .arc-row { grid-template-columns: 1fr; gap: 10px; border: 0.5px solid var(--border); border-radius: var(--r-md); margin: 10px; padding: 14px; position: relative; }
+    .arc-row:last-child { border-bottom: 0.5px solid var(--border); }
+    .arc-table { padding: 2px 0; }
+    .arc-row .ck-cell { position: absolute; top: 14px; right: 14px; }
+    .arc-cell-lbl { display: inline; font-size: 11px; color: var(--text-3); margin-right: 6px; }
+    .arc-acts { justify-content: stretch; }
+    .arc-acts .btn { flex: 1; }
+    .cl { padding-right: 28px; }
+  }
+
+  /* states */
+  .skel { position: relative; overflow: hidden; background: var(--surface-3); border-radius: 8px; }
+  .skel::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--surface) 65%, transparent), transparent); animation: shimmer 1.3s infinite; }
+  @keyframes shimmer { 100% { transform: translateX(100%); } }
+  .state-msg { padding: 64px 24px; text-align: center; display: none; }
+  .state-msg.show { display: block; }
+  .state-ico { width: 56px; height: 56px; border-radius: 16px; margin: 0 auto 16px; display: grid; place-items: center; background: var(--surface-3); color: var(--text-3); }
+  .state-ico.err { background: var(--danger-soft); color: var(--danger); }
+  .state-ico.ok { background: var(--accent-soft); color: var(--accent-deep); }
+  [data-theme="dark"] .state-ico.ok { color: var(--accent); }
+  .state-title { font-size: 16px; font-weight: 700; letter-spacing: -0.3px; }
+  .state-sub { font-size: 13px; color: var(--text-2); margin: 6px auto 0; line-height: 1.5; max-width: 340px; }
+  .state-msg .btn { margin-top: 18px; }
+
+  /* modal */
+  .am-overlay { position: fixed; inset: 0; z-index: 100; display: none; align-items: center; justify-content: center; padding: 24px; background: rgba(0,0,0,.34); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  .am-overlay.open { display: flex; }
+  .am-modal { background: var(--surface); border: 0.5px solid var(--border); border-radius: 18px; box-shadow: var(--sh-3); width: min(440px, calc(100vw - 32px)); display: flex; flex-direction: column; overflow: hidden; animation: pop .24s cubic-bezier(.32,.72,.2,1); }
+  @keyframes pop { from { transform: scale(.96) translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .am-modal-head { display: flex; align-items: flex-start; gap: 14px; padding: 20px 22px 14px; }
+  .am-modal-ico { width: 42px; height: 42px; border-radius: 12px; flex-shrink: 0; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-deep); }
+  [data-theme="dark"] .am-modal-ico { color: var(--accent); }
+  .am-modal-title { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; }
+  .am-modal-sub { font-size: 12.5px; color: var(--text-2); margin-top: 4px; line-height: 1.45; }
+  .am-modal-close { width: 32px; height: 32px; border-radius: 50%; border: 0; background: var(--surface-3); color: var(--text-2); display: grid; place-items: center; margin-left: auto; flex-shrink: 0; }
+  .am-modal-close:hover { background: var(--border); color: var(--text); }
+  .am-modal-body { padding: 4px 22px 18px; }
+  .am-modal-foot { padding: 14px 22px; border-top: 0.5px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; background: var(--surface-2); }
+  .am-callout { display: flex; gap: 10px; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); border: 0.5px solid var(--border); }
+  .am-callout-ico { width: 18px; flex-shrink: 0; color: var(--text-2); margin-top: 1px; }
+  .am-callout-text { font-size: 12.5px; color: var(--text-2); line-height: 1.45; }
+  .am-callout-text b { color: var(--text); font-weight: 650; }
+  .restore-list { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; max-height: 180px; overflow-y: auto; }
+  .restore-list .rl-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; background: var(--surface-2); }
+  .restore-list .cl-ava { width: 30px; height: 30px; font-size: 11px; }
+
+  /* toast */
+  .toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--text); color: var(--bg); padding: 11px 16px; border-radius: 999px; font-size: 13px; font-weight: 600; box-shadow: var(--sh-3); display: flex; align-items: center; gap: 10px; opacity: 0; pointer-events: none; transition: opacity .22s, transform .22s; z-index: 120; }
+  [data-theme="dark"] .toast { background: var(--accent); color: #06120c; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast .undo { background: rgba(255,255,255,.16); border: 0; color: inherit; font-family: inherit; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; }
+  [data-theme="dark"] .toast .undo { background: rgba(0,0,0,.14); }
+
+  /* state switcher */
+  .state-switcher { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 90; display: flex; align-items: center; gap: 3px; background: color-mix(in oklab, var(--surface) 88%, transparent); backdrop-filter: blur(14px) saturate(140%); -webkit-backdrop-filter: blur(14px) saturate(140%); border: 0.5px solid var(--border); border-radius: 999px; padding: 5px; box-shadow: var(--sh-3); max-width: calc(100vw - 24px); overflow-x: auto; scrollbar-width: none; }
+  .state-switcher::-webkit-scrollbar { display: none; }
+  .state-switcher .sw-lbl { font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-3); padding: 0 8px 0 6px; white-space: nowrap; }
+  .state-switcher button { border: 0; background: transparent; color: var(--text-2); font-size: 12.5px; font-weight: 600; padding: 7px 13px; border-radius: 999px; white-space: nowrap; }
+  .state-switcher button:hover { color: var(--text); }
+  .state-switcher button.active { background: var(--text); color: var(--bg); }
+  [data-theme="dark"] .state-switcher button.active { background: var(--accent); color: #06120c; }
+
+  .scrim { display: none; }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    .sidebar { position: fixed; left: 0; top: 0; width: 264px; transform: translateX(-100%); transition: transform .26s cubic-bezier(.32,.72,.2,1); box-shadow: var(--sh-3); }
+    .app.nav-open .sidebar { transform: none; }
+    .hamburger { display: grid; }
+    .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.34); z-index: 25; opacity: 0; visibility: hidden; transition: opacity .22s; }
+    .app.nav-open .scrim { display: block; opacity: 1; visibility: visible; }
+  }
+  @media (max-width: 720px) {
+    .content { padding: 18px 14px 96px; }
+    .page-head .ha { margin-left: 0; width: 100%; }
+    .page-head .ha .btn { flex: 1; }
+  }
+  /* g2 bottom-sheet */
+  @media (max-width: 640px) {
+    .am-overlay { align-items: flex-end; padding: 0; }
+    .am-modal { width: 100%; max-width: 100%; border-radius: 22px 22px 0 0; max-height: 92dvh; }
+    .am-modal-body { overflow-y: auto; }
+    .am-modal-foot { flex-direction: column-reverse; align-items: stretch; padding-bottom: max(14px, env(safe-area-inset-bottom)); }
+    .am-modal-foot .btn { width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app" data-screen-label="Архив тренеров">
+  <div class="scrim" id="scrim"></div>
+
+  <aside class="sidebar">
+    <div class="brand"><div class="brand-mark">М</div><div class="brand-name">Мой&nbsp;зал</div><span class="tag">ADMIN</span></div>
+    <button class="branch" type="button"><span class="branch-dot"></span><div style="flex:1;min-width:0;"><div class="branch-label">Все филиалы</div><div class="branch-sub">3 филиала · 847 клиентов</div></div><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+    <div class="nav-section">Управление</div>
+    <a class="nav-item" href="Dashboard.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>Дашборд</a>
+    <a class="nav-item" href="Clients.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Клиенты<span class="nav-badge">847</span></a>
+    <a class="nav-item" href="Schedule.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Расписание</a>
+    <a class="nav-item" href="Plans.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>Абонементы</a>
+    <a class="nav-item active" href="Trainers.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>Тренеры<span class="nav-badge">12</span></a>
+    <a class="nav-item" href="Cashbox.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M2 8h20"/><path d="M6 21h12"/></svg>Касса</a>
+    <a class="nav-item" href="Messages.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>Сообщения<span class="nav-badge accent">4</span></a>
+    <div class="nav-section">Аналитика</div>
+    <a class="nav-item" href="Reports.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Отчёты</a>
+    <a class="nav-item" href="Attendance.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Посещаемость</a>
+    <a class="nav-item" href="Load.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Загруженность</a>
+    <div class="nav-section">Система</div>
+    <a class="nav-item" href="Settings.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Настройки</a>
+    <div class="sidebar-foot"><div class="me"><div class="me-avatar">МК</div><div style="min-width:0;"><div class="me-name">Маша Костина</div><div class="me-role">Администратор</div></div><a class="me-logout" href="Login.html#logout" title="Выйти"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></a></div></div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <button class="icon-btn hamburger" id="hamburger" aria-label="Меню"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+      <div class="crumbs"><a href="Trainers.html">Тренеры</a> &nbsp;·&nbsp; <strong>Архив</strong></div>
+      <div class="topbar-right">
+        <button class="icon-btn theme-toggle" id="themeToggle" title="Переключить тему" type="button">
+          <svg class="i-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+          <svg class="i-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <section class="content">
+      <div class="page-head">
+        <div>
+          <h1>Архив тренеров</h1>
+          <div class="sub">Тренеры, выбывшие из команды: уволенные, на паузе и отклонённые заявки. Их можно вернуть в команду или удалить окончательно.</div>
+        </div>
+        <div class="ha">
+          <a class="btn btn-ghost" href="Trainers.html"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>Вся команда</a>
+          <button class="btn btn-ghost danger" type="button" id="purgeBtn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>Очистить корзину</button>
+        </div>
+      </div>
+
+      <div class="tabs" id="tabs">
+        <button class="tab active" data-filter="all">Все <span class="cnt">14</span></button>
+        <button class="tab" data-filter="left">Уволены <span class="cnt">7</span></button>
+        <button class="tab" data-filter="pause">На паузе <span class="cnt">4</span></button>
+        <button class="tab" data-filter="rejected">Отклонённые заявки <span class="cnt">3</span></button>
+      </div>
+
+      <div class="panel">
+        <div class="arc-toolbar">
+          <div class="arc-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="search" placeholder="Поиск по имени или специализации…" /></div>
+          <div class="arc-count" id="count"></div>
+        </div>
+
+        <div class="bulk-bar" id="bulkBar">
+          <span class="bb-txt" id="bulkTxt">Выбрано 0</span>
+          <div class="bb-actions">
+            <button class="btn btn-ghost btn-sm" type="button" id="bulkClear">Снять выбор</button>
+            <button class="btn btn-primary btn-sm" type="button" id="bulkRestore"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg>Восстановить</button>
+          </div>
+        </div>
+
+        <div class="arc-table" id="table">
+          <div class="arc-head">
+            <button class="ck" id="ckAll" type="button" aria-label="Выбрать все"></button>
+            <span>Тренер</span><span>Причина</span><span>В архиве</span><span style="text-align:right">Действия</span>
+          </div>
+          <div id="rows"></div>
+        </div>
+
+        <div class="state-msg" id="stEmpty">
+          <div class="state-ico"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg></div>
+          <div class="state-title">В архиве пусто</div>
+          <div class="state-sub">Здесь появятся тренеры, которых вы заархивируете. Активная команда — на странице «Тренеры».</div>
+          <a class="btn btn-ghost" href="Trainers.html">К команде</a>
+        </div>
+        <div class="state-msg" id="stError">
+          <div class="state-ico err"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+          <div class="state-title">Не удалось загрузить архив</div>
+          <div class="state-sub">Проверьте соединение и попробуйте снова.</div>
+          <button class="btn btn-primary" type="button" id="retryBtn">Повторить</button>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Restore confirm -->
+<div class="am-overlay" id="restoreModal">
+  <div class="am-modal">
+    <div class="am-modal-head">
+      <div class="am-modal-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg></div>
+      <div style="min-width:0;"><div class="am-modal-title" id="rsTitle">Восстановить клиента?</div><div class="am-modal-sub" id="rsSub">Клиент вернётся в активный список.</div></div>
+      <button class="am-modal-close" type="button" data-close><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="am-modal-body">
+      <div class="am-callout"><span class="am-callout-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><div class="am-callout-text">Расписание и история выплат сохранены. Тренер <b>не назначается на тренировки автоматически</b> — добавьте в расписание вручную.</div></div>
+      <div class="restore-list" id="rsList"></div>
+    </div>
+    <div class="am-modal-foot">
+      <button class="btn btn-ghost" type="button" data-close>Отмена</button>
+      <button class="btn btn-primary" type="button" id="rsConfirm">Восстановить</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span id="toastMsg"></span><button class="undo" id="toastUndo" type="button" style="display:none">Отменить</button></div>
+
+<div class="state-switcher" id="stateSwitcher">
+  <span class="sw-lbl">Состояние</span>
+  <button data-state-btn="data" class="active">Данные</button>
+  <button data-state-btn="loading">Загрузка</button>
+  <button data-state-btn="empty">Пусто</button>
+  <button data-state-btn="error">Ошибка</button>
+</div>
+
+<script>
+  document.getElementById('themeToggle').addEventListener('click', function () {
+    var d = document.documentElement.getAttribute('data-theme') === 'dark';
+    if (d) { document.documentElement.removeAttribute('data-theme'); localStorage.setItem('admin-theme', 'light'); }
+    else { document.documentElement.setAttribute('data-theme', 'dark'); localStorage.setItem('admin-theme', 'dark'); }
+  });
+  var app = document.getElementById('app');
+  document.getElementById('hamburger').addEventListener('click', function () { app.classList.toggle('nav-open'); });
+  document.getElementById('scrim').addEventListener('click', function () { app.classList.remove('nav-open'); });
+
+  var CLIENTS = [
+    { id:1, name:'Кирилл Шварц', phone:'Функционал · 6 лет', reason:'rejected', date:'18 мар 2026', ago:'заявка отклонена', c:'linear-gradient(135deg,#6366f1,#818cf8)', ini:'КШ' },
+    { id:2, name:'Наталья Жук', phone:'Йога · 4 года', reason:'left', date:'02 мар 2026', ago:'уволена по собств.', c:'linear-gradient(135deg,#f59e0b,#fbbf24)', ini:'НЖ' },
+    { id:3, name:'Сергей Гордеев', phone:'Бокс · 9 лет', reason:'pause', date:'21 фев 2026', ago:'в отпуске с фев', c:'linear-gradient(135deg,#10b981,#34d399)', ini:'СГ' },
+    { id:4, name:'Ирина Соловьёва', phone:'Пилатес · 5 лет', reason:'left', date:'12 фев 2026', ago:'уволена', c:'linear-gradient(135deg,#f43f5e,#fb7185)', ini:'ИС' },
+    { id:5, name:'Денис Котов', phone:'Кроссфит · 3 года', reason:'rejected', date:'04 фев 2026', ago:'нет сертификатов', c:'linear-gradient(135deg,#8b5cf6,#a78bfa)', ini:'ДК' },
+    { id:6, name:'Алина Маркова', phone:'Стретчинг · 2 года', reason:'pause', date:'28 янв 2026', ago:'в декрете', c:'linear-gradient(135deg,#0ea5e9,#38bdf8)', ini:'АМ' }
+  ];
+  var REASON = { left:{cls:'deleted',t:'Уволен'}, pause:{cls:'expired',t:'На паузе'}, rejected:{cls:'inactive',t:'Заявка отклонена'} };
+
+  var selected = new Set();
+  var filter = 'all';
+  var pageState = 'data';
+  var rows = document.getElementById('rows');
+
+  function visible() {
+    var q = (document.getElementById('search').value || '').trim().toLowerCase();
+    return CLIENTS.filter(function (c) {
+      var f = filter === 'all' || c.reason === filter;
+      var s = !q || c.name.toLowerCase().indexOf(q) > -1 || c.phone.indexOf(q) > -1;
+      return f && s;
+    });
+  }
+
+  function render() {
+    var table = document.getElementById('table');
+    var stEmpty = document.getElementById('stEmpty'), stError = document.getElementById('stError');
+    [stEmpty, stError].forEach(function (e) { e.classList.remove('show'); });
+    table.style.display = '';
+
+    if (pageState === 'error') { table.style.display = 'none'; stError.classList.add('show'); return; }
+    if (pageState === 'loading') { rows.innerHTML = skel(); document.getElementById('count').textContent = ''; updateBulk(); return; }
+
+    var list = visible();
+    if (pageState === 'empty' || list.length === 0) {
+      rows.innerHTML = '';
+      table.querySelector('.arc-head').style.display = (pageState === 'empty') ? 'none' : '';
+      if (pageState === 'empty') { table.style.display = 'none'; stEmpty.classList.add('show'); document.getElementById('count').textContent=''; updateBulk(); return; }
+      // empty due to filter/search
+      rows.innerHTML = '<div class="state-msg show" style="padding:48px 24px;"><div class="state-ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div><div class="state-title">Никого не нашли</div><div class="state-sub">Попробуйте изменить фильтр или запрос.</div></div>';
+      document.getElementById('count').textContent = '';
+      updateBulk(); return;
+    }
+
+    table.querySelector('.arc-head').style.display = '';
+    rows.innerHTML = list.map(function (c) {
+      var r = REASON[c.reason];
+      var on = selected.has(c.id);
+      return '<div class="arc-row" data-id="' + c.id + '">' +
+        '<div class="ck-cell"><button class="ck' + (on?' on':'') + '" type="button" data-ck="' + c.id + '"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button></div>' +
+        '<div class="cl"><div class="cl-ava" style="background:' + c.c + '">' + c.ini + '</div><div style="min-width:0;"><div class="cl-name">' + c.name + '</div><div class="cl-sub">' + c.phone + '</div></div></div>' +
+        '<div><span class="reason ' + r.cls + '">' + r.t + '</span></div>' +
+        '<div class="arc-date"><span class="arc-cell-lbl">В архиве:</span>' + c.date + '<div class="ago">' + c.ago + '</div></div>' +
+        '<div class="arc-acts"><button class="btn btn-ghost btn-sm" type="button" data-restore="' + c.id + '"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg>Вернуть</button></div>' +
+        '</div>';
+    }).join('');
+    document.getElementById('count').innerHTML = 'Показано <b>' + list.length + '</b> из 14';
+
+    rows.querySelectorAll('[data-ck]').forEach(function (b) { b.addEventListener('click', function () { toggle(parseInt(b.dataset.ck, 10)); }); });
+    rows.querySelectorAll('[data-restore]').forEach(function (b) { b.addEventListener('click', function () { openRestore([parseInt(b.dataset.restore, 10)]); }); });
+    updateBulk();
+  }
+
+  function skel() {
+    var s = '';
+    for (var i = 0; i < 6; i++) s += '<div class="arc-row"><div class="skel" style="width:18px;height:18px;border-radius:5px;"></div><div class="cl"><div class="skel" style="width:38px;height:38px;border-radius:50%;"></div><div style="flex:1;"><div class="skel" style="height:11px;width:55%;"></div><div class="skel" style="height:10px;width:35%;margin-top:7px;"></div></div></div><div class="skel" style="height:22px;width:110px;border-radius:999px;"></div><div class="skel" style="height:11px;width:80px;"></div><div class="skel" style="height:34px;border-radius:9px;"></div></div>';
+    return s;
+  }
+
+  function toggle(id) { if (selected.has(id)) selected.delete(id); else selected.add(id); render(); }
+  function updateBulk() {
+    var bar = document.getElementById('bulkBar');
+    bar.classList.toggle('show', selected.size > 0);
+    document.getElementById('bulkTxt').textContent = 'Выбрано ' + selected.size;
+    var all = visible();
+    var ckAll = document.getElementById('ckAll');
+    ckAll.classList.toggle('on', all.length > 0 && all.every(function (c) { return selected.has(c.id); }));
+  }
+  document.getElementById('ckAll').addEventListener('click', function () {
+    var all = visible();
+    var allOn = all.length > 0 && all.every(function (c) { return selected.has(c.id); });
+    all.forEach(function (c) { if (allOn) selected.delete(c.id); else selected.add(c.id); });
+    render();
+  });
+  document.getElementById('bulkClear').addEventListener('click', function () { selected.clear(); render(); });
+  document.getElementById('bulkRestore').addEventListener('click', function () { openRestore(Array.from(selected)); });
+
+  document.getElementById('search').addEventListener('input', render);
+  document.getElementById('tabs').addEventListener('click', function (e) {
+    var t = e.target.closest('.tab'); if (!t) return;
+    filter = t.dataset.filter;
+    document.querySelectorAll('.tab').forEach(function (x) { x.classList.toggle('active', x === t); });
+    render();
+  });
+
+  // restore modal
+  var pending = [];
+  function openRestore(ids) {
+    pending = ids.slice();
+    var modal = document.getElementById('restoreModal');
+    var single = ids.length === 1;
+    document.getElementById('rsTitle').textContent = single ? 'Вернуть тренера в команду?' : 'Вернуть ' + ids.length + ' ' + plural(ids.length, 'тренера', 'тренеров', 'тренеров') + '?';
+    document.getElementById('rsSub').textContent = single ? 'Тренер снова появится в команде.' : 'Все выбранные вернутся в команду.';
+    document.getElementById('rsConfirm').textContent = single ? 'Вернуть' : 'Вернуть ' + ids.length;
+    document.getElementById('rsList').innerHTML = ids.map(function (id) {
+      var c = CLIENTS.find(function (x) { return x.id === id; });
+      return '<div class="rl-item"><div class="cl-ava" style="background:' + c.c + '">' + c.ini + '</div><div><div class="cl-name">' + c.name + '</div><div class="cl-sub">' + c.phone + '</div></div></div>';
+    }).join('');
+    modal.classList.add('open');
+  }
+  function closeModal() { document.getElementById('restoreModal').classList.remove('open'); }
+  document.querySelectorAll('[data-close]').forEach(function (b) { b.addEventListener('click', closeModal); });
+  document.getElementById('restoreModal').addEventListener('click', function (e) { if (e.target === this) closeModal(); });
+
+  document.getElementById('rsConfirm').addEventListener('click', function () {
+    var ids = pending.slice();
+    ids.forEach(function (id) { var i = CLIENTS.findIndex(function (c) { return c.id === id; }); if (i > -1) CLIENTS.splice(i, 1); });
+    selected.clear();
+    closeModal();
+    render();
+    var n = ids.length;
+    showToast((n === 1 ? 'Тренер возвращён в команду' : n + ' ' + plural(n, 'тренер', 'тренера', 'тренеров') + ' возвращено'), true);
+  });
+
+  function plural(n, one, few, many) { var m10 = n % 10, m100 = n % 100; if (m10 === 1 && m100 !== 11) return one; if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few; return many; }
+
+  var toast = document.getElementById('toast'), toastTimer = null;
+  function showToast(msg, undo) {
+    document.getElementById('toastMsg').textContent = msg;
+    document.getElementById('toastUndo').style.display = undo ? '' : 'none';
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 3200);
+  }
+  document.getElementById('toastUndo').addEventListener('click', function () { toast.classList.remove('show'); showToast('Действие отменено'); });
+
+  document.getElementById('purgeBtn').addEventListener('click', function () { showToast('Корзина очищена'); });
+
+  // state switcher
+  document.querySelectorAll('[data-state-btn]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      pageState = b.dataset.stateBtn;
+      document.querySelectorAll('[data-state-btn]').forEach(function (x) { x.classList.toggle('active', x === b); });
+      render();
+    });
+  });
+  document.getElementById('retryBtn').addEventListener('click', function () {
+    pageState = 'loading'; document.querySelectorAll('[data-state-btn]').forEach(function (x) { x.classList.toggle('active', x.dataset.stateBtn === 'loading'); }); render();
+    setTimeout(function () { pageState = 'data'; document.querySelectorAll('[data-state-btn]').forEach(function (x) { x.classList.toggle('active', x.dataset.stateBtn === 'data'); }); render(); }, 1100);
+  });
+
+  render();
+</script>
+<script>
+/* ============================================================
+   mobile-dock.js — shared Gen-2 mobile quick-action dock
+   Self-contained: injects its own scoped styles (.g2-*), a bottom
+   quick-action dock (≤900px), generic bottom-sheets, and a toast.
+   Relies only on design tokens every screen defines (--text,
+   --surface, --border, --accent, etc.). Safe to drop on any page:
+   inline this IIFE inside a script tag just before the closing body tag.
+   ============================================================ */
+(function () {
+  'use strict';
+  if (window.__g2dock) return;
+  window.__g2dock = true;
+
+  /* ---------- styles ---------- */
+  var css = `
+  .g2-dock { display: none; }
+  @media (max-width: 900px) {
+    .content { padding-bottom: calc(86px + env(safe-area-inset-bottom)) !important; }
+    .g2-dock {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px;
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 95;
+      background: color-mix(in oklab, var(--surface) 92%, transparent);
+      backdrop-filter: blur(16px) saturate(150%); -webkit-backdrop-filter: blur(16px) saturate(150%);
+      border-top: 0.5px solid var(--border);
+      padding: 7px 8px max(8px, env(safe-area-inset-bottom));
+    }
+    .g2-dock-btn {
+      appearance: none; border: 0; background: transparent; cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+      padding: 6px 2px 5px; border-radius: 12px; color: var(--text-2);
+      font-family: inherit; min-height: 56px;
+      transition: background .15s, transform .12s, color .15s;
+    }
+    .g2-dock-btn:active { background: var(--surface-3); transform: scale(.96); }
+    .g2-dock-btn .g2-qd-ico {
+      width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center;
+      background: var(--surface-3); color: var(--text-2);
+      transition: background .15s, color .15s, box-shadow .2s;
+    }
+    .g2-dock-btn.primary .g2-qd-ico { background: var(--text); color: var(--surface); box-shadow: 0 0 0 3px var(--accent-soft); }
+    [data-theme="dark"] .g2-dock-btn.primary .g2-qd-ico { background: var(--accent); color: #06120c; }
+    .g2-dock-btn .g2-qd-lbl { font-size: 10.5px; font-weight: 600; letter-spacing: -.1px; line-height: 1; color: var(--text-3); }
+    .g2-dock-btn.primary .g2-qd-lbl { color: var(--text); }
+  }
+  @media (max-width: 380px) {
+    .g2-dock { padding: 6px 6px max(6px, env(safe-area-inset-bottom)); }
+    .g2-dock-btn { padding: 5px 2px 4px; gap: 3px; min-height: 52px; }
+    .g2-dock-btn .g2-qd-ico { width: 28px; height: 28px; border-radius: 8px; }
+    .g2-dock-btn .g2-qd-lbl { font-size: 10px; }
+  }
+  /* keep page's bottom-anchored chrome (demo state switchers, toasts) above the dock */
+  @media (max-width: 900px) {
+    .state-switcher, .switcher { bottom: calc(96px + env(safe-area-inset-bottom)) !important; top: auto !important; }
+    .toast { bottom: calc(96px + env(safe-area-inset-bottom)) !important; }
+  }
+  /* comfortable touch targets on mobile (≥44px) without distorting icon/round buttons */
+  @media (max-width: 640px) {
+    .btn:not(.btn-sm):not(.icon-btn) { min-height: 44px; }
+  }
+
+  /* bottom-sheet */
+  .g2-sheet-ov {
+    position: fixed; inset: 0; z-index: 140; display: none;
+    align-items: flex-end; justify-content: center;
+    background: rgba(0,0,0,.4); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  }
+  .g2-sheet-ov.open { display: flex; }
+  .g2-sheet {
+    width: 100%; max-width: 520px; background: var(--surface);
+    border-radius: 22px 22px 0 0; box-shadow: 0 -12px 40px rgba(0,0,0,.22);
+    display: flex; flex-direction: column; max-height: 90dvh;
+    transform: translateY(100%); transition: transform .28s cubic-bezier(.32,.72,.2,1);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .g2-sheet-ov.open .g2-sheet { transform: none; }
+  @media (min-width: 560px) { .g2-sheet-ov { align-items: center; } .g2-sheet { border-radius: 20px; margin: 16px; max-height: calc(100dvh - 32px); } }
+  .g2-sheet-grip { width: 36px; height: 4px; border-radius: 999px; background: var(--border-strong); margin: 10px auto 2px; }
+  .g2-sheet-head { display: flex; align-items: flex-start; gap: 12px; padding: 8px 20px 12px; }
+  .g2-sheet-ico { width: 40px; height: 40px; border-radius: 11px; flex-shrink: 0; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-deep); }
+  [data-theme="dark"] .g2-sheet-ico { color: var(--accent); }
+  .g2-sheet-title { font-size: 16.5px; font-weight: 700; letter-spacing: -.3px; }
+  .g2-sheet-sub { font-size: 12.5px; color: var(--text-3); margin-top: 2px; }
+  .g2-sheet-close { margin-left: auto; width: 32px; height: 32px; flex-shrink: 0; border: 0; border-radius: 50%; background: var(--surface-3); color: var(--text-2); display: grid; place-items: center; cursor: pointer; }
+  .g2-sheet-body { padding: 4px 20px 18px; overflow-y: auto; }
+  .g2-lbl { display: block; font-size: 12px; font-weight: 600; color: var(--text-2); margin: 14px 0 7px; }
+  .g2-lbl:first-child { margin-top: 4px; }
+  .g2-inp, .g2-sel {
+    width: 100%; height: 48px; border: 0.5px solid var(--border-strong); background: var(--surface-2);
+    border-radius: 12px; padding: 0 14px; font-size: 16px; color: var(--text); outline: none; font-family: inherit;
+  }
+  .g2-sel { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a8a29e' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; }
+  .g2-inp:focus, .g2-sel:focus { border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .g2-sheet-foot { padding: 12px 20px max(14px, env(safe-area-inset-bottom)); border-top: 0.5px solid var(--border); display: flex; flex-direction: column-reverse; gap: 8px; background: var(--surface-2); }
+  .g2-btn { height: 48px; border-radius: 12px; border: 0; font-size: 15px; font-weight: 650; cursor: pointer; font-family: inherit; width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+  .g2-btn-primary { background: var(--text); color: var(--surface); }
+  [data-theme="dark"] .g2-btn-primary { background: var(--accent); color: #06120c; }
+  .g2-btn-ghost { background: var(--surface); border: 0.5px solid var(--border-strong); color: var(--text); }
+
+  .g2-toast {
+    position: fixed; bottom: calc(96px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--text); color: var(--surface); padding: 12px 18px; border-radius: 999px;
+    font-size: 13.5px; font-weight: 600; box-shadow: 0 12px 32px rgba(0,0,0,.25);
+    display: flex; align-items: center; gap: 9px; opacity: 0; pointer-events: none;
+    transition: opacity .22s, transform .22s; z-index: 160; max-width: calc(100vw - 32px);
+  }
+  [data-theme="dark"] .g2-toast { background: var(--accent); color: #06120c; }
+  .g2-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  @media (min-width: 901px) { .g2-toast { bottom: 24px; } }
+  `;
+  var st = document.createElement('style');
+  st.id = 'g2-dock-styles';
+  st.textContent = css;
+  document.head.appendChild(st);
+
+  /* ---------- icons ---------- */
+  var ICO = {
+    checkin: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>',
+    client: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>',
+    extend: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>',
+    book: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+    close: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+    ok: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+  };
+
+  /* ---------- action sheet content ---------- */
+  var ACTIONS = {
+    checkin: {
+      title: 'Отметить визит', sub: 'Чек-ин клиента на сегодня', ico: ICO.checkin,
+      body: '<label class="g2-lbl">Клиент</label><input class="g2-inp" type="text" placeholder="Имя, телефон или № карты" />' +
+            '<label class="g2-lbl">Направление</label><select class="g2-sel"><option>Тренажёрный зал</option><option>Групповые</option><option>Бассейн</option><option>Персональная</option></select>',
+      cta: 'Отметить визит', toast: 'Визит отмечен'
+    },
+    client: {
+      title: 'Новый клиент', sub: 'Быстрое добавление', ico: ICO.client,
+      body: '<label class="g2-lbl">Имя и фамилия</label><input class="g2-inp" type="text" placeholder="Например, Анна Петрова" />' +
+            '<label class="g2-lbl">Телефон</label><input class="g2-inp" type="tel" inputmode="tel" placeholder="+7" />' +
+            '<label class="g2-lbl">Абонемент</label><select class="g2-sel"><option>Без абонемента</option><option>12 месяцев</option><option>6 месяцев</option><option>Разовое посещение</option></select>',
+      cta: 'Создать клиента', toast: 'Клиент создан'
+    },
+    extend: {
+      title: 'Продлить абонемент', sub: 'Добавить срок действующему', ico: ICO.extend,
+      body: '<label class="g2-lbl">Клиент</label><input class="g2-inp" type="text" placeholder="Имя или телефон" />' +
+            '<label class="g2-lbl">Срок продления</label><select class="g2-sel"><option>1 месяц</option><option>3 месяца</option><option>6 месяцев</option><option>12 месяцев</option></select>',
+      cta: 'Продлить', toast: 'Абонемент продлён'
+    },
+    book: {
+      title: 'Записать на тренировку', sub: 'Бронь слота в расписании', ico: ICO.book,
+      body: '<label class="g2-lbl">Клиент</label><input class="g2-inp" type="text" placeholder="Имя или телефон" />' +
+            '<label class="g2-lbl">Тренировка</label><select class="g2-sel"><option>Йога · сегодня 18:00</option><option>Бокс · сегодня 19:30</option><option>Силовая · завтра 09:00</option><option>Стретчинг · завтра 11:00</option></select>',
+      cta: 'Записать', toast: 'Клиент записан'
+    }
+  };
+
+  /* ---------- dock ---------- */
+  var dock = document.createElement('nav');
+  dock.className = 'g2-dock';
+  dock.setAttribute('aria-label', 'Быстрые действия');
+  dock.innerHTML =
+    '<button class="g2-dock-btn primary" type="button" data-g2-act="checkin"><span class="g2-qd-ico">' + ICO.checkin + '</span><span class="g2-qd-lbl">Чек-ин</span></button>' +
+    '<button class="g2-dock-btn" type="button" data-g2-act="client"><span class="g2-qd-ico">' + ICO.client + '</span><span class="g2-qd-lbl">Клиент</span></button>' +
+    '<button class="g2-dock-btn" type="button" data-g2-act="extend"><span class="g2-qd-ico">' + ICO.extend + '</span><span class="g2-qd-lbl">Продлить</span></button>' +
+    '<button class="g2-dock-btn" type="button" data-g2-act="book"><span class="g2-qd-ico">' + ICO.book + '</span><span class="g2-qd-lbl">Запись</span></button>';
+  document.body.appendChild(dock);
+
+  /* ---------- sheet ---------- */
+  var ov = document.createElement('div');
+  ov.className = 'g2-sheet-ov';
+  ov.innerHTML =
+    '<div class="g2-sheet" role="dialog" aria-modal="true">' +
+      '<div class="g2-sheet-grip"></div>' +
+      '<div class="g2-sheet-head">' +
+        '<div class="g2-sheet-ico" id="g2-ico"></div>' +
+        '<div style="min-width:0;flex:1;"><div class="g2-sheet-title" id="g2-title"></div><div class="g2-sheet-sub" id="g2-sub"></div></div>' +
+        '<button class="g2-sheet-close" type="button" data-g2-close>' + ICO.close + '</button>' +
+      '</div>' +
+      '<div class="g2-sheet-body" id="g2-body"></div>' +
+      '<div class="g2-sheet-foot">' +
+        '<button class="g2-btn g2-btn-primary" type="button" id="g2-cta"></button>' +
+        '<button class="g2-btn g2-btn-ghost" type="button" data-g2-close>Отмена</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(ov);
+
+  /* ---------- toast ---------- */
+  var toast = document.createElement('div');
+  toast.className = 'g2-toast';
+  toast.innerHTML = ICO.ok + '<span id="g2-toast-msg"></span>';
+  document.body.appendChild(toast);
+  var toastTimer = null;
+  function showToast(msg) {
+    document.getElementById('g2-toast-msg').textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 2400);
+  }
+
+  /* ---------- behaviour ---------- */
+  var curAct = null;
+  function openSheet(key) {
+    var a = ACTIONS[key]; if (!a) return;
+    curAct = a;
+    document.getElementById('g2-ico').innerHTML = a.ico;
+    document.getElementById('g2-title').textContent = a.title;
+    document.getElementById('g2-sub').textContent = a.sub;
+    document.getElementById('g2-body').innerHTML = a.body;
+    document.getElementById('g2-cta').textContent = a.cta;
+    ov.classList.add('open');
+  }
+  function closeSheet() { ov.classList.remove('open'); }
+
+  dock.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-g2-act]'); if (!b) return;
+    openSheet(b.getAttribute('data-g2-act'));
+  });
+  ov.addEventListener('click', function (e) {
+    if (e.target === ov || e.target.closest('[data-g2-close]')) closeSheet();
+  });
+  document.getElementById('g2-cta').addEventListener('click', function () {
+    var msg = curAct ? curAct.toast : 'Готово';
+    closeSheet();
+    setTimeout(function () { showToast(msg); }, 180);
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeSheet(); });
+})();
+
+</script>
+</body>
+</html>

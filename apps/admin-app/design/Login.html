@@ -1,0 +1,702 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Админка · Мой зал — Вход</title>
+<script>
+  (function () {
+    var t = localStorage.getItem('admin-theme') || 'light';
+    if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+  })();
+</script>
+<style>
+  :root {
+    --accent: #2dd4a4;
+    --accent-deep: #0f9b76;
+    --accent-soft: #d6f5ea;
+    --bg: #f5f5f4;
+    --surface: #ffffff;
+    --surface-2: #fafaf9;
+    --surface-3: #f1f0ee;
+    --border: #e7e5e4;
+    --border-strong: #d6d3d1;
+    --text: #1c1917;
+    --text-2: #57534e;
+    --text-3: #a8a29e;
+    --warn: #e9a23b;
+    --warn-soft: #fef3e2;
+    --danger: #dc2626;
+    --danger-soft: #fee2e2;
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", system-ui, sans-serif;
+    --mono: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+    --r-sm: 10px; --r-md: 14px; --r-lg: 18px; --r-pill: 999px;
+    --sh-2: 0 1px 3px rgba(28,25,23,.05), 0 4px 14px rgba(28,25,23,.04);
+    --sh-3: 0 18px 48px rgba(28,25,23,.10), 0 4px 12px rgba(28,25,23,.05);
+  }
+  [data-theme="dark"] {
+    --bg: #0c0c0c; --surface: #181715; --surface-2: #141312; --surface-3: #232120;
+    --border: #2a2826; --border-strong: #3a3735;
+    --text: #f5f5f4; --text-2: #a8a29e; --text-3: #6b6663;
+    --accent-soft: rgba(45,212,164,.16); --warn-soft: rgba(233,162,59,.18); --danger-soft: rgba(220,38,38,.18);
+    --sh-2: 0 1px 3px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.25);
+    --sh-3: 0 18px 48px rgba(0,0,0,.5), 0 4px 12px rgba(0,0,0,.3);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; font-family: var(--font);
+    background: var(--bg); color: var(--text);
+    -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    font-size: 14px; line-height: 1.45; min-height: 100vh;
+  }
+  button { font-family: inherit; cursor: pointer; }
+  input { font-family: inherit; }
+  a { color: inherit; text-decoration: none; }
+
+  /* ============ Layout ============ */
+  .auth {
+    display: grid;
+    grid-template-columns: 1.05fr 1fr;
+    min-height: 100vh;
+  }
+
+  /* ----- Brand panel ----- */
+  .brand-panel {
+    position: relative;
+    background: #131110;
+    color: #f5f5f4;
+    padding: 48px 56px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  [data-theme="dark"] .brand-panel { background: #050505; border-right: 0.5px solid var(--border); }
+  .brand-panel::before {
+    content: "";
+    position: absolute;
+    top: -180px; right: -160px;
+    width: 460px; height: 460px;
+    border-radius: 50%;
+    background: radial-gradient(circle, color-mix(in oklab, var(--accent) 26%, transparent), transparent 68%);
+    pointer-events: none;
+  }
+  .bp-brand { display: flex; align-items: center; gap: 11px; position: relative; }
+  .bp-mark {
+    width: 34px; height: 34px; border-radius: 10px;
+    background: var(--accent); color: #06120c;
+    display: grid; place-items: center;
+    font-weight: 800; font-size: 17px; letter-spacing: -0.5px;
+  }
+  .bp-name { font-size: 16px; font-weight: 700; letter-spacing: -0.3px; }
+  .bp-tag {
+    margin-left: auto; font-size: 10px; font-weight: 700; letter-spacing: 0.5px;
+    color: rgba(245,245,244,.55); background: rgba(255,255,255,.07);
+    padding: 3px 9px; border-radius: 999px;
+  }
+  .bp-mid { margin: auto 0; position: relative; max-width: 420px; }
+  .bp-head {
+    font-size: 34px; line-height: 1.12; font-weight: 700;
+    letter-spacing: -0.8px; margin: 0 0 16px;
+    text-wrap: balance;
+  }
+  .bp-head .hl { color: var(--accent); }
+  .bp-sub { font-size: 14.5px; line-height: 1.6; color: rgba(245,245,244,.62); margin: 0; }
+  .bp-feats { list-style: none; margin: 30px 0 0; padding: 0; display: flex; flex-direction: column; gap: 13px; }
+  .bp-feats li { display: flex; align-items: center; gap: 12px; font-size: 13.5px; color: rgba(245,245,244,.82); }
+  .bp-feats .fi {
+    width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+    background: rgba(45,212,164,.14); color: var(--accent);
+    display: grid; place-items: center;
+  }
+  .bp-foot { position: relative; display: flex; align-items: center; gap: 16px; font-size: 12px; color: rgba(245,245,244,.42); }
+  .bp-foot span { display: inline-flex; align-items: center; gap: 6px; }
+
+  /* ----- Form side ----- */
+  .auth-main {
+    position: relative;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 40px 24px;
+  }
+  .auth-topbar {
+    position: absolute; top: 20px; right: 24px;
+    display: flex; gap: 8px; align-items: center;
+  }
+  .icon-btn {
+    width: 36px; height: 36px; border-radius: 50%;
+    border: 0.5px solid var(--border); background: var(--surface);
+    color: var(--text-2); display: grid; place-items: center;
+    transition: background .15s, color .15s;
+  }
+  .icon-btn:hover { background: var(--surface-3); color: var(--text); }
+  .theme-toggle .i-moon { display: none; }
+  [data-theme="dark"] .theme-toggle .i-moon { display: block; }
+  [data-theme="dark"] .theme-toggle .i-sun { display: none; }
+
+  .card {
+    width: 100%; max-width: 380px;
+  }
+  .card-mobile-brand { display: none; }
+
+  .scr-icon {
+    width: 52px; height: 52px; border-radius: 15px;
+    display: grid; place-items: center; margin-bottom: 22px;
+    background: var(--accent-soft); color: var(--accent-deep);
+  }
+  [data-theme="dark"] .scr-icon { color: var(--accent); }
+  .scr-icon.warn { background: var(--warn-soft); color: #a36a16; }
+  [data-theme="dark"] .scr-icon.warn { color: var(--warn); }
+  .scr-icon.danger { background: var(--danger-soft); color: var(--danger); }
+
+  h1.scr-title {
+    font-size: 25px; font-weight: 700; letter-spacing: -0.6px;
+    margin: 0 0 8px; line-height: 1.18;
+  }
+  .scr-sub { font-size: 14px; color: var(--text-2); margin: 0 0 26px; line-height: 1.55; }
+  .scr-sub b { color: var(--text); font-weight: 650; }
+
+  /* ----- Form fields ----- */
+  .field { margin-bottom: 15px; }
+  .field-label {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 12.5px; font-weight: 600; color: var(--text-2);
+    margin-bottom: 7px; letter-spacing: -0.1px;
+  }
+  .field-label a { color: var(--accent-deep); font-weight: 600; }
+  [data-theme="dark"] .field-label a { color: var(--accent); }
+  .field-label a:hover { text-decoration: underline; }
+  .inp-wrap { position: relative; display: flex; align-items: center; }
+  .inp-wrap > .lead {
+    position: absolute; left: 13px; color: var(--text-3);
+    pointer-events: none; display: grid; place-items: center;
+  }
+  .inp {
+    width: 100%; height: 46px; border-radius: var(--r-sm);
+    border: 1px solid var(--border-strong); background: var(--surface);
+    padding: 0 14px 0 40px; font-size: 14.5px; color: var(--text);
+    outline: none; transition: border-color .15s, box-shadow .15s;
+  }
+  .inp.no-lead { padding-left: 14px; }
+  .inp::placeholder { color: var(--text-3); }
+  .inp:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .inp-eye {
+    position: absolute; right: 8px; width: 32px; height: 32px;
+    border: 0; background: transparent; color: var(--text-3);
+    border-radius: 8px; display: grid; place-items: center;
+  }
+  .inp-eye:hover { color: var(--text-2); background: var(--surface-3); }
+  .field.err .inp { border-color: var(--danger); }
+  .field.err .inp:focus { box-shadow: 0 0 0 3px var(--danger-soft); }
+  .field-msg {
+    display: none; margin-top: 7px; font-size: 12px; color: var(--danger);
+    align-items: center; gap: 6px;
+  }
+  .field.err .field-msg { display: flex; }
+
+  /* checkbox row */
+  .row-between { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 22px; }
+  .check {
+    display: inline-flex; align-items: center; gap: 9px;
+    font-size: 13px; color: var(--text-2); cursor: pointer; user-select: none;
+  }
+  .check input { position: absolute; opacity: 0; pointer-events: none; }
+  .check .box {
+    width: 18px; height: 18px; border-radius: 5px;
+    border: 1.5px solid var(--border-strong); background: var(--surface);
+    display: grid; place-items: center; color: transparent;
+    transition: background .15s, border-color .15s, color .15s;
+  }
+  .check input:checked + .box { background: var(--text); border-color: var(--text); color: var(--bg); }
+  [data-theme="dark"] .check input:checked + .box { background: var(--accent); border-color: var(--accent); color: #06120c; }
+  .link-accent { font-size: 13px; font-weight: 600; color: var(--accent-deep); }
+  [data-theme="dark"] .link-accent { color: var(--accent); }
+  .link-accent:hover { text-decoration: underline; }
+
+  /* ----- Buttons ----- */
+  .btn {
+    width: 100%; height: 46px; border-radius: var(--r-sm);
+    border: 0; font-size: 14.5px; font-weight: 650; letter-spacing: -0.2px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    transition: background .15s, transform .04s, border-color .15s, color .15s;
+  }
+  .btn:active { transform: scale(.99); }
+  .btn-primary { background: var(--text); color: var(--bg); }
+  .btn-primary:hover { background: #000; }
+  [data-theme="dark"] .btn-primary { background: var(--accent); color: #06120c; }
+  [data-theme="dark"] .btn-primary:hover { background: #5ee9b8; }
+  .btn-ghost { background: var(--surface); border: 1px solid var(--border-strong); color: var(--text); }
+  .btn-ghost:hover { background: var(--surface-3); }
+  .btn-sm { height: 42px; }
+
+  .divider { display: flex; align-items: center; gap: 14px; margin: 22px 0; color: var(--text-3); font-size: 12px; }
+  .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+
+  .sso { display: flex; flex-direction: column; gap: 9px; }
+  .sso-btn {
+    height: 44px; border-radius: var(--r-sm); border: 1px solid var(--border-strong);
+    background: var(--surface); color: var(--text); font-size: 13.5px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    transition: background .15s;
+  }
+  .sso-btn:hover { background: var(--surface-3); }
+
+  .scr-foot { margin-top: 26px; text-align: center; font-size: 13px; color: var(--text-2); }
+  .scr-foot a { color: var(--accent-deep); font-weight: 600; }
+  [data-theme="dark"] .scr-foot a { color: var(--accent); }
+  .scr-foot a:hover { text-decoration: underline; }
+
+  .back-link {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 13px; font-weight: 600; color: var(--text-2);
+    margin-bottom: 26px; transition: color .15s;
+  }
+  .back-link:hover { color: var(--text); }
+
+  /* ----- 2FA code input ----- */
+  .otp { display: flex; gap: 10px; margin-bottom: 8px; }
+  .otp input {
+    flex: 1; height: 56px; min-width: 0;
+    text-align: center; font-size: 23px; font-weight: 700;
+    font-variant-numeric: tabular-nums; color: var(--text);
+    border: 1px solid var(--border-strong); border-radius: var(--r-sm);
+    background: var(--surface); outline: none;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .otp input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .otp input.filled { border-color: var(--text); }
+  [data-theme="dark"] .otp input.filled { border-color: var(--accent); }
+  .otp-meta {
+    display: flex; align-items: center; justify-content: space-between;
+    margin: 14px 0 24px; font-size: 13px; color: var(--text-2);
+  }
+  .otp-timer b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .otp-resend { color: var(--accent-deep); font-weight: 600; background: 0; border: 0; padding: 0; font-size: 13px; }
+  [data-theme="dark"] .otp-resend { color: var(--accent); }
+  .otp-resend:disabled { color: var(--text-3); cursor: default; }
+  .otp-resend:not(:disabled):hover { text-decoration: underline; }
+
+  /* ----- Password strength + requirements ----- */
+  .pw-meter { display: flex; gap: 5px; margin: 9px 0 4px; }
+  .pw-meter span {
+    flex: 1; height: 4px; border-radius: 999px; background: var(--surface-3);
+    transition: background .2s;
+  }
+  .pw-meter[data-score="1"] span:nth-child(-n+1) { background: var(--danger); }
+  .pw-meter[data-score="2"] span:nth-child(-n+2) { background: var(--warn); }
+  .pw-meter[data-score="3"] span:nth-child(-n+3) { background: var(--warn); }
+  .pw-meter[data-score="4"] span:nth-child(-n+4) { background: var(--accent-deep); }
+  .pw-hint { font-size: 12px; color: var(--text-3); margin: 0 0 16px; }
+  .pw-reqs { list-style: none; margin: 0 0 22px; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; }
+  .pw-reqs li { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-3); transition: color .15s; }
+  .pw-reqs li .rc {
+    width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0;
+    border: 1.5px solid var(--border-strong); display: grid; place-items: center;
+    color: transparent; transition: all .15s;
+  }
+  .pw-reqs li.ok { color: var(--text-2); }
+  .pw-reqs li.ok .rc { background: var(--accent); border-color: var(--accent); color: #06120c; }
+
+  /* ----- Callout ----- */
+  .callout {
+    display: flex; gap: 11px; padding: 13px 15px; border-radius: var(--r-sm);
+    background: var(--surface-2); border: 0.5px solid var(--border);
+    font-size: 12.5px; color: var(--text-2); line-height: 1.5; margin-bottom: 22px;
+  }
+  .callout.warn { background: var(--warn-soft); border-color: transparent; color: #8a5a13; }
+  [data-theme="dark"] .callout.warn { color: var(--warn); }
+  .callout .ci { flex-shrink: 0; margin-top: 1px; }
+  .callout b { font-weight: 650; color: var(--text); }
+  [data-theme="dark"] .callout.warn b { color: var(--warn); }
+
+  /* ----- Sent / success block ----- */
+  .sent-to {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--surface-3); border-radius: 999px;
+    padding: 7px 14px 7px 11px; font-size: 13px; font-weight: 600;
+    color: var(--text); margin-bottom: 22px;
+  }
+  .sent-to .d { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+
+  /* ============ Screens ============ */
+  .screen { display: none; animation: scr .32s cubic-bezier(.32,.72,.2,1); }
+  .screen.active { display: block; }
+  @keyframes scr { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+  /* ============ State switcher (review tool) ============ */
+  .switcher {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+    z-index: 50; display: flex; align-items: center; gap: 3px;
+    background: color-mix(in oklab, var(--surface) 86%, transparent);
+    backdrop-filter: blur(14px) saturate(140%); -webkit-backdrop-filter: blur(14px) saturate(140%);
+    border: 0.5px solid var(--border); border-radius: 999px;
+    padding: 5px; box-shadow: var(--sh-3); max-width: calc(100vw - 24px);
+    overflow-x: auto; scrollbar-width: none;
+  }
+  .switcher::-webkit-scrollbar { display: none; }
+  .switcher .sw-lbl {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
+    color: var(--text-3); padding: 0 8px 0 6px; white-space: nowrap;
+  }
+  .switcher button {
+    border: 0; background: transparent; color: var(--text-2);
+    font-size: 12.5px; font-weight: 600; padding: 7px 13px;
+    border-radius: 999px; white-space: nowrap; transition: background .15s, color .15s;
+  }
+  .switcher button:hover { color: var(--text); }
+  .switcher button.active { background: var(--text); color: var(--bg); }
+  [data-theme="dark"] .switcher button.active { background: var(--accent); color: #06120c; }
+
+  /* ============ Responsive ============ */
+  @media (max-width: 860px) {
+    .auth { grid-template-columns: 1fr; }
+    .brand-panel { display: none; }
+    .card-mobile-brand {
+      display: flex; align-items: center; gap: 10px; justify-content: center;
+      margin-bottom: 30px;
+    }
+    .cmb-mark {
+      width: 30px; height: 30px; border-radius: 9px; background: var(--text); color: var(--accent);
+      display: grid; place-items: center; font-weight: 800; font-size: 15px; letter-spacing: -0.5px;
+    }
+    [data-theme="dark"] .cmb-mark { background: var(--accent); color: #06120c; }
+    .cmb-name { font-size: 15px; font-weight: 700; letter-spacing: -0.3px; }
+  }
+  @media (max-width: 420px) {
+    .auth-main { padding: 28px 18px 90px; }
+    h1.scr-title { font-size: 22px; }
+    .pw-reqs { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="auth" data-screen-label="Auth">
+
+  <!-- ============ BRAND PANEL ============ -->
+  <aside class="brand-panel">
+    <div class="bp-brand">
+      <div class="bp-mark">М</div>
+      <div class="bp-name">Мой&nbsp;зал</div>
+      <span class="bp-tag">ADMIN</span>
+    </div>
+
+    <div class="bp-mid">
+      <h2 class="bp-head">Управляйте залом <span class="hl">из одного окна.</span></h2>
+      <p class="bp-sub">Клиенты, абонементы, расписание и касса — всё под рукой. Войдите, чтобы продолжить работу.</p>
+      <ul class="bp-feats">
+        <li>
+          <span class="fi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+          Шифрованное соединение и двухфакторная защита
+        </li>
+        <li>
+          <span class="fi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5z"/></svg></span>
+          Гибкие роли и права доступа для сотрудников
+        </li>
+        <li>
+          <span class="fi"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>
+          Журнал входов и активность по филиалам
+        </li>
+      </ul>
+    </div>
+
+    <div class="bp-foot">
+      <span>© 2026 «Мой зал»</span>
+      <span>·</span>
+      <span>Тверская · Сокольники · Новокосино</span>
+    </div>
+  </aside>
+
+  <!-- ============ FORM SIDE ============ -->
+  <main class="auth-main">
+    <div class="auth-topbar">
+      <button class="icon-btn theme-toggle" id="themeToggle" title="Переключить тему" type="button">
+        <svg class="i-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+        <svg class="i-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+    </div>
+
+    <!-- ===== LOGIN ===== -->
+    <section class="card screen active" data-screen="login" data-screen-label="Login">
+      <div class="card-mobile-brand"><div class="cmb-mark">М</div><div class="cmb-name">Мой&nbsp;зал</div></div>
+      <h1 class="scr-title">С возвращением</h1>
+      <p class="scr-sub">Войдите в админ-панель, чтобы управлять залом.</p>
+
+      <div class="field">
+        <div class="field-label">Эл. почта</div>
+        <div class="inp-wrap">
+          <span class="lead"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/></svg></span>
+          <input class="inp" type="email" placeholder="you@moizal.ru" value="m.kostina@moizal.ru" autocomplete="username" />
+        </div>
+      </div>
+
+      <div class="field" id="loginPwField">
+        <div class="field-label">
+          <span>Пароль</span>
+          <a href="#" data-go="forgot">Забыли пароль?</a>
+        </div>
+        <div class="inp-wrap">
+          <span class="lead"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+          <input class="inp" type="password" placeholder="Введите пароль" value="••••••••••" autocomplete="current-password" data-pw />
+          <button class="inp-eye" type="button" data-eye aria-label="Показать пароль">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+        <div class="field-msg"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Неверная почта или пароль</div>
+      </div>
+
+      <div class="row-between">
+        <label class="check">
+          <input type="checkbox" checked />
+          <span class="box"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+          Запомнить меня
+        </label>
+      </div>
+
+      <button class="btn btn-primary" type="button" data-go="twofa">
+        Войти
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </button>
+
+      <div class="divider">или</div>
+      <div class="sso">
+        <button class="sso-btn" type="button">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M21.35 11.1h-9.17v2.92h5.27c-.23 1.37-1.6 4.02-5.27 4.02-3.17 0-5.76-2.62-5.76-5.85s2.59-5.85 5.76-5.85c1.81 0 3.02.77 3.71 1.43l2.52-2.43C17.06 3.58 14.86 2.6 12.18 2.6 6.92 2.6 2.66 6.86 2.66 12.12s4.26 9.52 9.52 9.52c5.49 0 9.13-3.86 9.13-9.29 0-.62-.07-1.1-.16-1.25z"/></svg>
+          Войти через Google Workspace
+        </button>
+      </div>
+
+      <p class="scr-foot">Нет доступа? <a href="#" data-go="permission-hint">Запросить у администратора</a></p>
+    </section>
+
+    <!-- ===== FORGOT PASSWORD ===== -->
+    <section class="card screen" data-screen="forgot" data-screen-label="Forgot password">
+      <a class="back-link" href="#" data-go="login"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>Назад ко входу</a>
+      <div class="scr-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/></svg></div>
+      <h1 class="scr-title">Восстановление пароля</h1>
+      <p class="scr-sub">Укажите почту, привязанную к аккаунту — мы вышлем ссылку для сброса пароля.</p>
+
+      <div class="field">
+        <div class="field-label">Эл. почта</div>
+        <div class="inp-wrap">
+          <span class="lead"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/></svg></span>
+          <input class="inp" type="email" placeholder="you@moizal.ru" autocomplete="username" />
+        </div>
+      </div>
+      <button class="btn btn-primary" type="button" style="margin-top:8px" data-go="forgot-sent">Отправить ссылку</button>
+      <p class="scr-foot">Вспомнили пароль? <a href="#" data-go="login">Войти</a></p>
+    </section>
+
+    <!-- ===== FORGOT — SENT ===== -->
+    <section class="card screen" data-screen="forgot-sent" data-screen-label="Reset link sent">
+      <div class="scr-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+      <h1 class="scr-title">Проверьте почту</h1>
+      <p class="scr-sub">Мы отправили ссылку для сброса пароля. Откройте письмо и следуйте инструкции — ссылка действует <b>30 минут</b>.</p>
+      <div class="sent-to"><span class="d"></span>m.kostina@moizal.ru</div>
+      <button class="btn btn-primary" type="button" data-go="reset">Открыть ссылку из письма</button>
+      <button class="btn btn-ghost btn-sm" type="button" style="margin-top:10px" data-go="forgot">Отправить ещё раз</button>
+      <p class="scr-foot">Письмо не пришло? Проверьте «Спам» или <a href="#" data-go="login">вернитесь ко входу</a>.</p>
+    </section>
+
+    <!-- ===== RESET PASSWORD ===== -->
+    <section class="card screen" data-screen="reset" data-screen-label="Reset password">
+      <div class="scr-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg></div>
+      <h1 class="scr-title">Новый пароль</h1>
+      <p class="scr-sub">Придумайте надёжный пароль. Он будет действовать для всех филиалов.</p>
+
+      <div class="field">
+        <div class="field-label">Новый пароль</div>
+        <div class="inp-wrap">
+          <span class="lead"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+          <input class="inp" type="password" placeholder="Минимум 8 символов" id="resetPw" autocomplete="new-password" />
+          <button class="inp-eye" type="button" data-eye aria-label="Показать пароль">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
+        <div class="pw-meter" id="pwMeter" data-score="0"><span></span><span></span><span></span><span></span></div>
+        <p class="pw-hint" id="pwHint">Используйте буквы, цифры и символы.</p>
+        <ul class="pw-reqs" id="pwReqs">
+          <li data-req="len"><span class="rc"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>8+ символов</li>
+          <li data-req="case"><span class="rc"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>Буквы разного регистра</li>
+          <li data-req="num"><span class="rc"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>Хотя бы одна цифра</li>
+          <li data-req="sym"><span class="rc"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>Символ (!@#$…)</li>
+        </ul>
+      </div>
+
+      <div class="field">
+        <div class="field-label">Повторите пароль</div>
+        <div class="inp-wrap">
+          <span class="lead"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+          <input class="inp" type="password" placeholder="Ещё раз" autocomplete="new-password" />
+        </div>
+      </div>
+      <button class="btn btn-primary" type="button" style="margin-top:8px" data-go="login">Сохранить и войти</button>
+    </section>
+
+    <!-- ===== 2FA ===== -->
+    <section class="card screen" data-screen="twofa" data-screen-label="2FA verification">
+      <a class="back-link" href="#" data-go="login"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>Назад</a>
+      <div class="scr-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5z"/><path d="m9 12 2 2 4-4"/></svg></div>
+      <h1 class="scr-title">Подтверждение входа</h1>
+      <p class="scr-sub">Введите 6-значный код из приложения-аутентификатора для аккаунта <b>m.kostina@moizal.ru</b>.</p>
+
+      <div class="otp" id="otp">
+        <input inputmode="numeric" maxlength="1" aria-label="Цифра 1" />
+        <input inputmode="numeric" maxlength="1" aria-label="Цифра 2" />
+        <input inputmode="numeric" maxlength="1" aria-label="Цифра 3" />
+        <input inputmode="numeric" maxlength="1" aria-label="Цифра 4" />
+        <input inputmode="numeric" maxlength="1" aria-label="Цифра 5" />
+        <input inputmode="numeric" maxlength="1" aria-label="Цифра 6" />
+      </div>
+      <div class="otp-meta">
+        <span class="otp-timer">Новый код через <b id="otpTimer">0:28</b></span>
+        <button class="otp-resend" id="otpResend" type="button" disabled>Отправить снова</button>
+      </div>
+      <button class="btn btn-primary" type="button" data-go="dashboard">Подтвердить</button>
+      <p class="scr-foot">Нет доступа к приложению? <a href="#" data-go="login">Ввести резервный код</a></p>
+    </section>
+
+    <!-- ===== SESSION EXPIRED ===== -->
+    <section class="card screen" data-screen="expired" data-screen-label="Session expired">
+      <div class="scr-icon warn"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></div>
+      <h1 class="scr-title">Сессия истекла</h1>
+      <p class="scr-sub">Вы были неактивны более <b>30 минут</b>. В целях безопасности мы завершили сессию. Войдите снова, чтобы продолжить.</p>
+      <div class="callout warn">
+        <span class="ci"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+        <div>Несохранённые изменения в открытых формах могли быть потеряны.</div>
+      </div>
+      <button class="btn btn-primary" type="button" data-go="login">Войти снова</button>
+    </section>
+
+    <!-- ===== LOGOUT ===== -->
+    <section class="card screen" data-screen="logout" data-screen-label="Logged out" style="text-align:center">
+      <div class="scr-icon" style="margin-left:auto;margin-right:auto"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></div>
+      <h1 class="scr-title">Вы вышли из системы</h1>
+      <p class="scr-sub">Сессия безопасно завершена. До скорой встречи, Маша!</p>
+      <button class="btn btn-primary" type="button" data-go="login">Войти снова</button>
+      <p class="scr-foot">Закончили работу на сегодня? Можно просто закрыть вкладку.</p>
+    </section>
+
+  </main>
+</div>
+
+<!-- ============ State switcher ============ -->
+<div class="switcher" id="switcher">
+  <span class="sw-lbl">Состояния</span>
+  <button data-screen-btn="login" class="active">Вход</button>
+  <button data-screen-btn="forgot">Забыли пароль</button>
+  <button data-screen-btn="forgot-sent">Письмо</button>
+  <button data-screen-btn="reset">Сброс</button>
+  <button data-screen-btn="twofa">2FA</button>
+  <button data-screen-btn="expired">Сессия истекла</button>
+  <button data-screen-btn="logout">Выход</button>
+</div>
+
+<script>
+  // Theme toggle
+  document.getElementById('themeToggle').addEventListener('click', function () {
+    var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    if (dark) { document.documentElement.removeAttribute('data-theme'); localStorage.setItem('admin-theme', 'light'); }
+    else { document.documentElement.setAttribute('data-theme', 'dark'); localStorage.setItem('admin-theme', 'dark'); }
+  });
+
+  // ---- Screen routing ----
+  var screens = document.querySelectorAll('.screen');
+  var swBtns = document.querySelectorAll('[data-screen-btn]');
+  function show(name) {
+    if (name === 'dashboard') { window.location.href = 'Dashboard.html'; return; }
+    if (name === 'permission-hint') { window.location.href = 'Errors.html#permission'; return; }
+    var found = false;
+    screens.forEach(function (s) { var on = s.dataset.screen === name; s.classList.toggle('active', on); if (on) found = true; });
+    if (!found) return;
+    swBtns.forEach(function (b) { b.classList.toggle('active', b.dataset.screenBtn === name); });
+    document.querySelector('.auth-main').scrollTop = 0;
+    if (name === 'twofa') { setTimeout(startOtp, 60); var f = document.querySelector('#otp input'); if (f) setTimeout(function(){ f.focus(); }, 120); }
+  }
+  document.querySelectorAll('[data-go]').forEach(function (el) {
+    el.addEventListener('click', function (e) { e.preventDefault(); show(el.dataset.go); });
+  });
+  swBtns.forEach(function (b) { b.addEventListener('click', function () { show(b.dataset.screenBtn); }); });
+
+  // ---- Password show/hide ----
+  document.querySelectorAll('[data-eye]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var inp = btn.parentElement.querySelector('input');
+      inp.type = inp.type === 'password' ? 'text' : 'password';
+    });
+  });
+
+  // ---- Login: demo inline error if password cleared ----
+  // (kept simple — primary button always advances to 2FA)
+
+  // ---- Reset password strength ----
+  var resetPw = document.getElementById('resetPw');
+  if (resetPw) {
+    var meter = document.getElementById('pwMeter');
+    var hint = document.getElementById('pwHint');
+    var reqs = document.getElementById('pwReqs');
+    resetPw.addEventListener('input', function () {
+      var v = resetPw.value;
+      var checks = {
+        len: v.length >= 8,
+        case: /[a-zа-я]/.test(v) && /[A-ZА-Я]/.test(v),
+        num: /\d/.test(v),
+        sym: /[^\w\s]/.test(v)
+      };
+      var score = 0;
+      Object.keys(checks).forEach(function (k) {
+        var li = reqs.querySelector('[data-req="' + k + '"]');
+        li.classList.toggle('ok', checks[k]);
+        if (checks[k]) score++;
+      });
+      meter.setAttribute('data-score', String(score));
+      hint.textContent = ['Используйте буквы, цифры и символы.', 'Слабый пароль', 'Средний пароль', 'Хороший пароль', 'Надёжный пароль'][score];
+    });
+  }
+
+  // ---- OTP inputs ----
+  var otp = document.getElementById('otp');
+  if (otp) {
+    var inputs = otp.querySelectorAll('input');
+    inputs.forEach(function (inp, i) {
+      inp.addEventListener('input', function () {
+        inp.value = inp.value.replace(/\D/g, '').slice(0, 1);
+        inp.classList.toggle('filled', !!inp.value);
+        if (inp.value && i < inputs.length - 1) inputs[i + 1].focus();
+      });
+      inp.addEventListener('keydown', function (e) {
+        if (e.key === 'Backspace' && !inp.value && i > 0) inputs[i - 1].focus();
+      });
+      inp.addEventListener('paste', function (e) {
+        e.preventDefault();
+        var d = (e.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, 6).split('');
+        d.forEach(function (ch, k) { if (inputs[k]) { inputs[k].value = ch; inputs[k].classList.add('filled'); } });
+        if (inputs[Math.min(d.length, 5)]) inputs[Math.min(d.length, 5)].focus();
+      });
+    });
+  }
+
+  // ---- OTP resend timer ----
+  var otpInterval = null;
+  function startOtp() {
+    var t = 28;
+    var timerEl = document.getElementById('otpTimer');
+    var resendEl = document.getElementById('otpResend');
+    if (!timerEl) return;
+    resendEl.disabled = true;
+    if (otpInterval) clearInterval(otpInterval);
+    function render() { timerEl.textContent = '0:' + String(t).padStart(2, '0'); }
+    render();
+    otpInterval = setInterval(function () {
+      t--;
+      if (t <= 0) { clearInterval(otpInterval); timerEl.parentElement.style.visibility = 'hidden'; resendEl.disabled = false; return; }
+      render();
+    }, 1000);
+  }
+  var resend = document.getElementById('otpResend');
+  if (resend) resend.addEventListener('click', function () { document.getElementById('otpTimer').parentElement.style.visibility = 'visible'; startOtp(); });
+
+  // ---- Deep-link via hash (e.g. Login.html#expired) ----
+  var hash = (location.hash || '').replace('#', '');
+  if (hash && document.querySelector('[data-screen="' + hash + '"]')) show(hash);
+</script>
+</body>
+</html>

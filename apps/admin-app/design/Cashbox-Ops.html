@@ -1,0 +1,629 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Админка · Мой зал — Касса</title>
+<script>
+  (function () { var t = localStorage.getItem('admin-theme') || 'light'; if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); })();
+</script>
+<style>
+  :root {
+    --accent: #2dd4a4; --accent-deep: #0f9b76; --accent-soft: #d6f5ea;
+    --bg: #f5f5f4; --surface: #ffffff; --surface-2: #fafaf9; --surface-3: #f1f0ee;
+    --border: #e7e5e4; --border-strong: #d6d3d1;
+    --text: #1c1917; --text-2: #57534e; --text-3: #a8a29e;
+    --warn: #e9a23b; --warn-soft: #fef3e2; --danger: #dc2626; --danger-soft: #fee2e2;
+    --indigo: #6366f1; --indigo-soft: rgba(99,102,241,.13);
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", system-ui, sans-serif;
+    --mono: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+    --r-sm: 10px; --r-md: 14px; --r-lg: 18px;
+    --sh-1: 0 1px 2px rgba(28,25,23,.04); --sh-2: 0 1px 3px rgba(28,25,23,.05), 0 4px 14px rgba(28,25,23,.04); --sh-3: 0 8px 30px rgba(28,25,23,.08), 0 2px 6px rgba(28,25,23,.04); --sh-3m: 0 30px 80px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.12);
+    --sidebar-w: 248px; --topbar-h: 64px;
+  }
+  [data-theme="dark"] {
+    --bg: #0c0c0c; --surface: #181715; --surface-2: #141312; --surface-3: #232120;
+    --border: #2a2826; --border-strong: #3a3735; --text: #f5f5f4; --text-2: #a8a29e; --text-3: #6b6663;
+    --accent-soft: rgba(45,212,164,.16); --warn-soft: rgba(233,162,59,.18); --danger-soft: rgba(220,38,38,.18); --indigo-soft: rgba(99,102,241,.22);
+    --sh-1: 0 1px 2px rgba(0,0,0,.3); --sh-2: 0 1px 3px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.25); --sh-3: 0 8px 30px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.3); --sh-3m: 0 30px 80px rgba(0,0,0,.6), 0 8px 24px rgba(0,0,0,.4);
+  }
+  [data-theme="dark"] body { background: #050505; }
+  [data-theme="dark"] .brand-mark { background: var(--accent); color: #06120c; }
+  [data-theme="dark"] .nav-item.active { background: var(--surface-3); color: var(--text); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; font-family: var(--font); background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; font-size: 14px; line-height: 1.4; }
+  button { font-family: inherit; cursor: pointer; } input, select, textarea { font-family: inherit; } a { color: inherit; text-decoration: none; }
+
+  .app { display: grid; grid-template-columns: var(--sidebar-w) 1fr; min-height: 100vh; }
+  .sidebar { background: var(--surface-2); border-right: 0.5px solid var(--border); padding: 18px 14px; display: flex; flex-direction: column; gap: 4px; position: sticky; top: 0; height: 100vh; z-index: 30; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 6px 10px 14px; }
+  .brand-mark { width: 30px; height: 30px; border-radius: 9px; background: var(--text); color: var(--accent); display: grid; place-items: center; font-weight: 800; font-size: 15px; letter-spacing: -0.5px; }
+  .brand-name { font-size: 15px; font-weight: 700; letter-spacing: -0.3px; }
+  .brand .tag { margin-left: auto; font-size: 10px; font-weight: 700; color: var(--text-3); background: var(--surface-3); padding: 2px 7px; border-radius: 999px; letter-spacing: 0.4px; }
+  .branch { display: flex; align-items: center; gap: 9px; width: 100%; padding: 9px 11px; border-radius: var(--r-sm); border: 0.5px solid var(--border); background: var(--surface); margin-bottom: 8px; text-align: left; }
+  .branch:hover { border-color: var(--border-strong); }
+  .branch-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+  .branch-label { font-weight: 600; font-size: 13.5px; letter-spacing: -0.1px; } .branch-sub { font-size: 11px; color: var(--text-3); margin-top: 1px; }
+  .branch svg { margin-left: auto; color: var(--text-3); flex-shrink: 0; }
+  .nav-section { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-3); padding: 14px 12px 6px; }
+  .nav-item { display: flex; align-items: center; gap: 11px; padding: 8px 11px; border-radius: var(--r-sm); color: var(--text-2); font-size: 13.5px; font-weight: 500; letter-spacing: -0.1px; transition: background .13s, color .13s; }
+  .nav-item:hover { background: var(--surface); color: var(--text); }
+  .nav-item.active { background: var(--text); color: var(--surface); }
+  .nav-item.active .nav-badge { background: var(--accent); color: #06120c; }
+  .nav-item svg { width: 17px; height: 17px; flex-shrink: 0; }
+  .nav-badge { margin-left: auto; font-size: 11px; font-weight: 700; background: var(--surface-3); color: var(--text-2); padding: 1px 7px; border-radius: 999px; font-variant-numeric: tabular-nums; }
+  .nav-badge.accent { background: var(--accent-soft); color: var(--accent-deep); } [data-theme="dark"] .nav-badge.accent { color: var(--accent); }
+  .sidebar-foot { margin-top: auto; padding-top: 10px; }
+  .me { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: var(--r-sm); } .me:hover { background: var(--surface); }
+  .me-avatar { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 12.5px; flex-shrink: 0; }
+  .me-name { font-size: 13px; font-weight: 650; } .me-role { font-size: 11px; color: var(--text-3); }
+  .me-logout { margin-left: auto; border: 0; background: transparent; color: var(--text-3); display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; } .me-logout:hover { background: var(--surface-3); color: var(--text); }
+
+  .main { display: flex; flex-direction: column; min-width: 0; }
+  .topbar { height: var(--topbar-h); flex-shrink: 0; display: flex; align-items: center; gap: 14px; padding: 0 26px; border-bottom: 0.5px solid var(--border); background: color-mix(in oklab, var(--surface) 75%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); position: sticky; top: 0; z-index: 20; }
+  .hamburger { display: none; }
+  .crumbs { font-size: 13px; color: var(--text-2); } .crumbs strong { color: var(--text); font-weight: 650; }
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .icon-btn { width: 36px; height: 36px; border-radius: 50%; border: 0.5px solid var(--border); background: var(--surface); color: var(--text-2); display: grid; place-items: center; transition: background .15s, color .15s; } .icon-btn:hover { background: var(--surface-3); color: var(--text); }
+  .theme-toggle .i-moon { display: none; } [data-theme="dark"] .theme-toggle .i-moon { display: block; } [data-theme="dark"] .theme-toggle .i-sun { display: none; }
+
+  .content { padding: 24px 26px 60px; max-width: 1120px; width: 100%; }
+  .page-head { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
+  .page-head h1 { font-size: 23px; font-weight: 700; letter-spacing: -0.5px; margin: 0 0 5px; } .page-head .sub { font-size: 13.5px; color: var(--text-2); }
+  .btn { height: 38px; border-radius: var(--r-sm); padding: 0 15px; border: 0; font-size: 13px; font-weight: 600; letter-spacing: -0.1px; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 7px; transition: background .15s, transform .04s, border-color .15s, color .15s; }
+  .btn:active { transform: scale(.99); }
+  .btn-primary { background: var(--text); color: var(--bg); } .btn-primary:hover { background: #000; } [data-theme="dark"] .btn-primary { background: var(--accent); color: #06120c; }
+  .btn-ghost { background: var(--surface); border: 0.5px solid var(--border-strong); color: var(--text); } .btn-ghost:hover { background: var(--surface-3); }
+  .btn-danger { background: var(--danger); color: #fff; } .btn-danger:hover { background: #b91c1c; }
+  .btn-sm { height: 34px; padding: 0 12px; font-size: 12.5px; border-radius: 9px; }
+  .btn:disabled { opacity:.45; cursor: not-allowed; }
+
+  /* shift card */
+  .shift { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--sh-2); overflow: hidden; margin-bottom: 16px; }
+  .shift-top { display: flex; align-items: center; gap: 14px; padding: 18px; flex-wrap: wrap; }
+  .shift-badge { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 700; padding: 6px 13px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-deep); }
+  [data-theme="dark"] .shift-badge { color: var(--accent); }
+  .shift-badge .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 30%, transparent); }
+  .shift-info { font-size: 13px; color: var(--text-2); } .shift-info b { color: var(--text); }
+  .shift-acts { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+  .shift-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--border); border-top: 0.5px solid var(--border); }
+  .sk { background: var(--surface); padding: 14px 18px; }
+  .sk-l { font-size: 11.5px; color: var(--text-3); } .sk-v { font-size: 19px; font-weight: 700; letter-spacing: -0.4px; margin-top: 4px; font-variant-numeric: tabular-nums; } .sk-v .u { font-size: 12px; color: var(--text-3); font-weight: 600; }
+
+  .panel { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--sh-2); overflow: hidden; }
+  .panel-head { display: flex; align-items: center; gap: 10px; padding: 13px 18px; border-bottom: 0.5px solid var(--border); }
+  .panel-head h2 { font-size: 14px; font-weight: 700; margin: 0; } .panel-head .ph { margin-left: auto; display: flex; gap: 8px; }
+
+  .op-head, .op-row { display: grid; grid-template-columns: 70px 1.6fr 1fr 110px 1fr; gap: 14px; align-items: center; padding: 11px 18px; }
+  .op-head { border-bottom: 0.5px solid var(--border); font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--text-3); }
+  .op-row { border-bottom: 0.5px solid var(--border); } .op-row:last-child { border-bottom: 0; }
+  .op-time { font-size: 12.5px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+  .op-desc { font-size: 13px; font-weight: 600; } .op-sub { font-size: 11.5px; color: var(--text-3); margin-top: 1px; }
+  .op-type { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; flex-shrink: 0; }
+  .op-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .op-type.in { background: var(--accent-soft); color: var(--accent-deep); } [data-theme="dark"] .op-type.in { color: var(--accent); }
+  .op-type.out { background: var(--danger-soft); color: var(--danger); }
+  .op-type.sale { background: var(--indigo-soft); color: var(--indigo); } [data-theme="dark"] .op-type.sale { color: #a5b4fc; }
+  .op-method { font-size: 12px; color: var(--text-2); }
+  .op-amt { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+  .op-amt.plus { color: var(--accent-deep); } [data-theme="dark"] .op-amt.plus { color: var(--accent); }
+  .op-amt.minus { color: var(--danger); }
+  .op-who { font-size: 12px; color: var(--text-2); }
+  .op-cell-lbl { display: none; }
+
+  /* modal */
+  .am-overlay { position: fixed; inset: 0; z-index: 100; display: none; align-items: center; justify-content: center; padding: 24px; background: rgba(0,0,0,.4); backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px); }
+  .am-overlay.open { display: flex; }
+  .am-modal { background: var(--surface); border: 0.5px solid var(--border); border-radius: 18px; box-shadow: var(--sh-3m); width: min(460px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); display: none; flex-direction: column; overflow: hidden; animation: pop .24s cubic-bezier(.32,.72,.2,1); }
+  .am-modal.active { display: flex; }
+  @keyframes pop { from { transform: scale(.96) translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .am-modal-head { display: flex; align-items: flex-start; gap: 13px; padding: 18px 22px 14px; }
+  .am-modal-ico { width: 42px; height: 42px; border-radius: 12px; flex-shrink: 0; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-deep); } [data-theme="dark"] .am-modal-ico { color: var(--accent); }
+  .am-modal-ico.danger { background: var(--danger-soft); color: var(--danger); }
+  .am-modal-ico.indigo { background: var(--indigo-soft); color: var(--indigo); } [data-theme="dark"] .am-modal-ico.indigo { color: #a5b4fc; }
+  .am-modal-title { font-size: 16.5px; font-weight: 700; letter-spacing: -0.3px; } .am-modal-sub { font-size: 12px; color: var(--text-3); margin-top: 3px; }
+  .am-modal-close { width: 32px; height: 32px; border-radius: 50%; border: 0; background: var(--surface-3); color: var(--text-2); display: grid; place-items: center; margin-left: auto; flex-shrink: 0; } .am-modal-close:hover { background: var(--border); color: var(--text); }
+  .am-modal-body { padding: 4px 22px 18px; overflow-y: auto; }
+  .am-modal-foot { padding: 14px 22px; border-top: 0.5px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; background: var(--surface-2); }
+  .field { margin-bottom: 12px; } .field:first-child { margin-top: 8px; } .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .label { display: block; font-size: 12px; font-weight: 600; color: var(--text-2); margin-bottom: 7px; }
+  .am-input, .am-select { width: 100%; height: 44px; border: 0.5px solid var(--border-strong); background: var(--surface-2); border-radius: 11px; padding: 0 13px; font-size: 15px; color: var(--text); outline: none; transition: border-color .15s, background .15s, box-shadow .15s; }
+  .am-input.big { height: 56px; font-size: 24px; font-weight: 700; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
+  .am-select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a8a29e' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 13px center; padding-right: 34px; }
+  .am-input:focus, .am-select:focus { border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .money { position: relative; } .money .cur { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--text-3); font-size: 15px; pointer-events: none; }
+  .sumrows { background: var(--surface-2); border: 0.5px solid var(--border); border-radius: 13px; padding: 6px 14px; margin-top: 8px; }
+  .sumrow { display: flex; align-items: center; padding: 8px 0; font-size: 13px; border-bottom: 0.5px dashed var(--border); } .sumrow:last-child { border-bottom: 0; }
+  .sumrow .k { color: var(--text-2); } .sumrow .v { margin-left: auto; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .sumrow.total { font-weight: 700; } .sumrow.total .v { font-size: 17px; }
+  .sumrow.diff .v { color: var(--accent-deep); } [data-theme="dark"] .sumrow.diff .v { color: var(--accent); }
+  .sumrow.diff.bad .v { color: var(--danger); }
+  .am-callout { display: flex; gap: 10px; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); border: 0.5px solid var(--border); margin-top: 14px; }
+  .am-callout.warn { background: var(--warn-soft); border-color: transparent; }
+  .am-callout-ico { width: 18px; flex-shrink: 0; color: var(--text-2); margin-top: 1px; } .am-callout.warn .am-callout-ico { color: #a36a16; }
+  .am-callout-text { font-size: 12.5px; color: var(--text-2); line-height: 1.45; } .am-callout-text b { color: var(--text); }
+
+  .toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--text); color: var(--bg); padding: 11px 16px; border-radius: 999px; font-size: 13px; font-weight: 600; box-shadow: var(--sh-3); display: flex; align-items: center; gap: 9px; opacity: 0; pointer-events: none; transition: opacity .22s, transform .22s; z-index: 130; }
+  [data-theme="dark"] .toast { background: var(--accent); color: #06120c; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .switcher { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 110; display: flex; align-items: center; gap: 3px; background: color-mix(in oklab, var(--surface) 88%, transparent); backdrop-filter: blur(14px) saturate(140%); -webkit-backdrop-filter: blur(14px) saturate(140%); border: 0.5px solid var(--border); border-radius: 999px; padding: 5px; box-shadow: var(--sh-3); max-width: calc(100vw - 24px); overflow-x: auto; scrollbar-width: none; }
+  .switcher::-webkit-scrollbar { display: none; }
+  .switcher .sw-lbl { font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-3); padding: 0 8px 0 6px; white-space: nowrap; }
+  .switcher button { border: 0; background: transparent; color: var(--text-2); font-size: 12.5px; font-weight: 600; padding: 7px 12px; border-radius: 999px; white-space: nowrap; } .switcher button:hover { color: var(--text); }
+  .switcher button.active { background: var(--text); color: var(--bg); } [data-theme="dark"] .switcher button.active { background: var(--accent); color: #06120c; }
+
+  .scrim { display: none; }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    .sidebar { position: fixed; left: 0; top: 0; width: 264px; transform: translateX(-100%); transition: transform .26s cubic-bezier(.32,.72,.2,1); box-shadow: var(--sh-3); }
+    .app.nav-open .sidebar { transform: none; } .hamburger { display: grid; }
+    .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.34); z-index: 25; opacity: 0; visibility: hidden; transition: opacity .22s; } .app.nav-open .scrim { display: block; opacity: 1; visibility: visible; }
+    .shift-kpis { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 720px) {
+    .content { padding: 18px 14px 90px; }
+    .op-head { display: none; }
+    .op-row { grid-template-columns: 1fr auto; gap: 6px 10px; border: 0.5px solid var(--border); border-radius: 12px; margin: 10px; padding: 12px; }
+    .op-row .op-time { grid-column: 1/3; } .op-method, .op-who { display: none; }
+    .am-overlay { align-items: flex-end; padding: 0; } .am-modal { width: 100%; max-width: 100%; border-radius: 22px 22px 0 0; max-height: 92dvh; }
+    .am-modal-foot { flex-direction: column-reverse; } .am-modal-foot .btn { width: 100%; }
+    .field-row { grid-template-columns: 1fr; gap: 0; }
+    .switcher { top: 12px; bottom: auto; }
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app" data-screen-label="Касса">
+  <div class="scrim" id="scrim"></div>
+
+  <aside class="sidebar">
+    <div class="brand"><div class="brand-mark">М</div><div class="brand-name">Мой&nbsp;зал</div><span class="tag">ADMIN</span></div>
+    <button class="branch" type="button"><span class="branch-dot"></span><div style="flex:1;min-width:0;"><div class="branch-label">Тверская</div><div class="branch-sub">Касса · смена №142</div></div><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+    <div class="nav-section">Управление</div>
+    <a class="nav-item" href="Dashboard.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>Дашборд</a>
+    <a class="nav-item" href="Clients.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Клиенты<span class="nav-badge">847</span></a>
+    <a class="nav-item" href="Schedule.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Расписание</a>
+    <a class="nav-item" href="Plans.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>Абонементы</a>
+    <a class="nav-item" href="Trainers.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>Тренеры<span class="nav-badge">12</span></a>
+    <a class="nav-item active" href="Cashbox.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M2 8h20"/><path d="M6 21h12"/></svg>Касса</a>
+    <a class="nav-item" href="Messages.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>Сообщения<span class="nav-badge accent">4</span></a>
+    <div class="nav-section">Аналитика</div>
+    <a class="nav-item" href="Reports.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Отчёты</a>
+    <a class="nav-item" href="Attendance.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Посещаемость</a>
+    <a class="nav-item" href="Load.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Загруженность</a>
+    <div class="nav-section">Система</div>
+    <a class="nav-item" href="Branches.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>Филиалы<span class="nav-badge">3</span></a>
+    <a class="nav-item" href="Settings.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Настройки</a>
+    <div class="sidebar-foot"><div class="me"><div class="me-avatar">МК</div><div style="min-width:0;"><div class="me-name">Маша Костина</div><div class="me-role">Кассир · Тверская</div></div><a class="me-logout" href="Login.html#logout" title="Выйти"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></a></div></div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <button class="icon-btn hamburger" id="hamburger" aria-label="Меню"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+      <div class="crumbs">Тверская &nbsp;·&nbsp; <strong>Касса · смена №142</strong></div>
+      <div class="topbar-right">
+        <button class="icon-btn theme-toggle" id="themeToggle" title="Переключить тему" type="button">
+          <svg class="i-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+          <svg class="i-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <section class="content">
+      <div class="page-head">
+        <div><h1>Касса</h1><div class="sub">Смена, операции прихода и расхода, сверка и Z-отчёт.</div></div>
+      </div>
+
+      <div class="shift">
+        <div class="shift-top">
+          <span class="shift-badge"><span class="pulse"></span>Смена открыта</span>
+          <div class="shift-info">с <b>09:02</b> · кассир <b>Маша Костина</b> · открыто <b>5 ч 12 мин</b> назад</div>
+          <div class="shift-acts">
+            <button class="btn btn-ghost" type="button" data-open="in"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Приход</button>
+            <button class="btn btn-ghost" type="button" data-open="out"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>Расход</button>
+            <button class="btn btn-ghost" type="button" data-open="recon">Сверка</button>
+            <button class="btn btn-ghost" type="button" data-open="zreport">Z-отчёт</button>
+            <button class="btn btn-primary" type="button" data-open="close">Закрыть смену</button>
+          </div>
+        </div>
+        <div class="shift-kpis">
+          <div class="sk"><div class="sk-l">Наличные в кассе</div><div class="sk-v">42 800<span class="u"> ₽</span></div></div>
+          <div class="sk"><div class="sk-l">Безнал за смену</div><div class="sk-v">156 200<span class="u"> ₽</span></div></div>
+          <div class="sk"><div class="sk-l">Операций</div><div class="sk-v">23</div></div>
+          <div class="sk"><div class="sk-l">Выручка за смену</div><div class="sk-v">199 000<span class="u"> ₽</span></div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>История операций · смена №142</h2><div class="ph"><button class="btn btn-ghost btn-sm" type="button" data-toast="Экспорт операций">Экспорт</button></div></div>
+        <div class="op-head"><span>Время</span><span>Операция</span><span>Способ</span><span style="text-align:right">Сумма</span><span>Кассир</span></div>
+        <div id="ops"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="am-overlay" id="modal">
+  <!-- ПРИХОД -->
+  <section class="am-modal active" data-screen="in">
+    <div class="am-modal-head"><div class="am-modal-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></div><div><div class="am-modal-title">Приход в кассу</div><div class="am-modal-sub">Внесение наличных</div></div><button class="am-modal-close" type="button" data-close><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="am-modal-body">
+      <div class="field"><label class="label">Сумма</label><div class="money"><input class="am-input big" type="text" value="5 000" /><span class="cur">₽</span></div></div>
+      <div class="field"><label class="label">Категория</label><select class="am-select"><option>Внесение разменных</option><option>Возврат подотчётных</option><option>Прочий приход</option></select></div>
+      <div class="field"><label class="label">Комментарий</label><input class="am-input" type="text" placeholder="Необязательно" /></div>
+    </div>
+    <div class="am-modal-foot"><button class="btn btn-ghost" type="button" data-close>Отмена</button><button class="btn btn-primary" type="button" data-close data-t="Приход 5 000 ₽ проведён">Провести приход</button></div>
+  </section>
+
+  <!-- РАСХОД -->
+  <section class="am-modal" data-screen="out">
+    <div class="am-modal-head"><div class="am-modal-ico danger"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg></div><div><div class="am-modal-title">Расход из кассы</div><div class="am-modal-sub">Выдача наличных</div></div><button class="am-modal-close" type="button" data-close><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="am-modal-body">
+      <div class="field"><label class="label">Сумма</label><div class="money"><input class="am-input big" type="text" value="12 000" /><span class="cur">₽</span></div></div>
+      <div class="field"><label class="label">Категория</label><select class="am-select"><option>Инкассация</option><option>Хозяйственные нужды</option><option>Зарплата / аванс</option><option>Возврат клиенту</option></select></div>
+      <div class="field"><label class="label">Комментарий</label><input class="am-input" type="text" placeholder="Основание расхода" /></div>
+      <div class="am-callout warn"><span class="am-callout-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span><div class="am-callout-text">В кассе сейчас <b>42 800 ₽</b>. После расхода останется <b>30 800 ₽</b>.</div></div>
+    </div>
+    <div class="am-modal-foot"><button class="btn btn-ghost" type="button" data-close>Отмена</button><button class="btn btn-danger" type="button" data-close data-t="Расход 12 000 ₽ проведён">Провести расход</button></div>
+  </section>
+
+  <!-- СВЕРКА -->
+  <section class="am-modal" data-screen="recon">
+    <div class="am-modal-head"><div class="am-modal-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div><div><div class="am-modal-title">Сверка кассы</div><div class="am-modal-sub">Пересчёт наличных</div></div><button class="am-modal-close" type="button" data-close><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="am-modal-body">
+      <div class="field"><label class="label">Фактически в кассе</label><div class="money"><input class="am-input big" type="text" id="reconFact" value="42 800" /><span class="cur">₽</span></div></div>
+      <div class="sumrows">
+        <div class="sumrow"><span class="k">Ожидается по системе</span><span class="v">42 800 ₽</span></div>
+        <div class="sumrow"><span class="k">Внесено фактически</span><span class="v" id="reconFactV">42 800 ₽</span></div>
+        <div class="sumrow diff" id="reconDiff"><span class="k">Расхождение</span><span class="v">0 ₽</span></div>
+      </div>
+    </div>
+    <div class="am-modal-foot"><button class="btn btn-ghost" type="button" data-close>Отмена</button><button class="btn btn-primary" type="button" data-close data-t="Сверка сохранена">Сохранить сверку</button></div>
+  </section>
+
+  <!-- Z-ОТЧЁТ -->
+  <section class="am-modal" data-screen="zreport">
+    <div class="am-modal-head"><div class="am-modal-ico indigo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div><div><div class="am-modal-title">Z-отчёт · смена №142</div><div class="am-modal-sub">Тверская · 30 апр 2026</div></div><button class="am-modal-close" type="button" data-close><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="am-modal-body">
+      <div class="sumrows">
+        <div class="sumrow"><span class="k">Продажи (23 чека)</span><span class="v">199 000 ₽</span></div>
+        <div class="sumrow"><span class="k">— наличными</span><span class="v">42 800 ₽</span></div>
+        <div class="sumrow"><span class="k">— картой / СБП</span><span class="v">156 200 ₽</span></div>
+        <div class="sumrow"><span class="k">Возвраты (1)</span><span class="v">−9 000 ₽</span></div>
+        <div class="sumrow"><span class="k">Приход / расход наличных</span><span class="v">+5 000 / −12 000 ₽</span></div>
+        <div class="sumrow total"><span class="k">Итого выручка</span><span class="v">190 000 ₽</span></div>
+      </div>
+      <div class="am-callout"><span class="am-callout-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><div class="am-callout-text">Z-отчёт фиксирует выручку и обнуляет смену в фискальном регистраторе.</div></div>
+    </div>
+    <div class="am-modal-foot"><button class="btn btn-ghost" type="button" data-close>Закрыть</button><button class="btn btn-primary" type="button" data-close data-t="Z-отчёт сформирован и распечатан"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Печать Z-отчёта</button></div>
+  </section>
+
+  <!-- ЗАКРЫТИЕ СМЕНЫ -->
+  <section class="am-modal" data-screen="close">
+    <div class="am-modal-head"><div class="am-modal-ico danger"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64A9 9 0 1 1 5.64 6.64"/><line x1="12" y1="2" x2="12" y2="12"/></svg></div><div><div class="am-modal-title">Закрыть смену №142?</div><div class="am-modal-sub">Будет сформирован Z-отчёт</div></div><button class="am-modal-close" type="button" data-close><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="am-modal-body">
+      <div class="field"><label class="label">Фактический остаток наличных</label><div class="money"><input class="am-input big" id="closeFact" type="text" value="42 800" /><span class="cur">₽</span></div></div>
+      <div class="sumrows">
+        <div class="sumrow"><span class="k">Ожидается в кассе</span><span class="v">42 800 ₽</span></div>
+        <div class="sumrow diff" id="closeDiff"><span class="k">Расхождение</span><span class="v">0 ₽</span></div>
+        <div class="sumrow total"><span class="k">Выручка за смену</span><span class="v">190 000 ₽</span></div>
+      </div>
+      <div class="am-callout warn"><span class="am-callout-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span><div class="am-callout-text">После закрытия смену нельзя изменить. Новые операции — только в новой смене.</div></div>
+    </div>
+    <div class="am-modal-foot"><button class="btn btn-ghost" type="button" data-close>Отмена</button><button class="btn btn-danger" type="button" data-close data-t="Смена №142 закрыта · Z-отчёт сформирован">Закрыть смену</button></div>
+  </section>
+
+  <!-- ОТКРЫТИЕ СМЕНЫ -->
+  <section class="am-modal" data-screen="openshift">
+    <div class="am-modal-head"><div class="am-modal-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div><div class="am-modal-title">Открыть смену</div><div class="am-modal-sub">Касса · Тверская · смена №143</div></div><button class="am-modal-close" type="button" data-close><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="am-modal-body">
+      <div class="field"><label class="label">Разменные на начало</label><div class="money"><input class="am-input big" type="text" value="5 000" /><span class="cur">₽</span></div></div>
+      <div class="field"><label class="label">Кассир</label><select class="am-select"><option>Маша Костина</option><option>Дарья Сомова</option><option>Иван Петров</option></select></div>
+      <div class="am-callout"><span class="am-callout-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span><div class="am-callout-text">Предыдущая смена №142 закрыта в 21:30. Касса готова к работе.</div></div>
+    </div>
+    <div class="am-modal-foot"><button class="btn btn-ghost" type="button" data-close>Отмена</button><button class="btn btn-primary" type="button" data-close data-t="Смена №143 открыта">Открыть смену</button></div>
+  </section>
+</div>
+
+<div class="toast" id="toast"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span id="toastMsg"></span></div>
+
+<div class="switcher" id="switcher">
+  <span class="sw-lbl">Операции</span>
+  <button data-screen-btn="openshift">Открытие</button>
+  <button data-screen-btn="in" class="active">Приход</button>
+  <button data-screen-btn="out">Расход</button>
+  <button data-screen-btn="recon">Сверка</button>
+  <button data-screen-btn="zreport">Z-отчёт</button>
+  <button data-screen-btn="close">Закрытие</button>
+</div>
+
+<script>
+  document.getElementById('themeToggle').addEventListener('click', function () {
+    var d = document.documentElement.getAttribute('data-theme') === 'dark';
+    if (d) { document.documentElement.removeAttribute('data-theme'); localStorage.setItem('admin-theme', 'light'); }
+    else { document.documentElement.setAttribute('data-theme', 'dark'); localStorage.setItem('admin-theme', 'dark'); }
+  });
+  var app = document.getElementById('app');
+  document.getElementById('hamburger').addEventListener('click', function () { app.classList.toggle('nav-open'); });
+  document.getElementById('scrim').addEventListener('click', function () { app.classList.remove('nav-open'); });
+
+  var OPS = [
+    { time:'14:12', type:'sale', t:'Абонемент «12 месяцев»', s:'Анна Петрова', m:'Карта •• 4417', amt:'+24 000', sign:'plus', who:'Маша К.' },
+    { time:'13:48', type:'sale', t:'Разовое посещение', s:'Гость', m:'Наличные', amt:'+800', sign:'plus', who:'Маша К.' },
+    { time:'13:20', type:'out', t:'Расход · хоз. нужды', s:'Вода, стаканчики', m:'Наличные', amt:'−1 400', sign:'minus', who:'Маша К.' },
+    { time:'12:55', type:'sale', t:'Продление · 3 месяца', s:'Максим Соколов', m:'СБП', amt:'+9 000', sign:'plus', who:'Маша К.' },
+    { time:'12:30', type:'out', t:'Возврат клиенту', s:'Игорь Климов · отказ', m:'Карта', amt:'−9 000', sign:'minus', who:'Маша К.' },
+    { time:'11:40', type:'in', t:'Приход · размен', s:'Внесение разменных', m:'Наличные', amt:'+5 000', sign:'plus', who:'Маша К.' },
+    { time:'10:15', type:'sale', t:'Персональные · 8 занятий', s:'Карина Левчук', m:'Карта •• 0921', amt:'+14 400', sign:'plus', who:'Маша К.' },
+    { time:'09:30', type:'sale', t:'Абонемент «Год»', s:'Новый клиент', m:'СБП', amt:'+24 000', sign:'plus', who:'Маша К.' }
+  ];
+  var TYPE = { sale:{c:'sale',ico:'<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>'}, in:{c:'in',ico:'<line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>'}, out:{c:'out',ico:'<line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>'} };
+  document.getElementById('ops').innerHTML = OPS.map(function (o) {
+    var ty = TYPE[o.type];
+    return '<div class="op-row"><div class="op-time">' + o.time + '</div>' +
+      '<div class="op-main"><span class="op-type ' + ty.c + '"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + ty.ico + '</svg></span><div style="min-width:0;"><div class="op-desc">' + o.t + '</div><div class="op-sub">' + o.s + '</div></div></div>' +
+      '<div class="op-method">' + o.m + '</div>' +
+      '<div class="op-amt ' + o.sign + '">' + o.amt + ' ₽</div>' +
+      '<div class="op-who">' + o.who + '</div></div>';
+  }).join('');
+
+  // modal switching
+  var modal = document.getElementById('modal');
+  var modals = modal.querySelectorAll('.am-modal');
+  var swBtns = document.querySelectorAll('[data-screen-btn]');
+  function show(name) {
+    var found = false;
+    modals.forEach(function (m) { var on = m.dataset.screen === name; m.classList.toggle('active', on); if (on) found = true; });
+    if (!found) return;
+    modal.classList.add('open');
+    swBtns.forEach(function (b) { b.classList.toggle('active', b.dataset.screenBtn === name); });
+  }
+  document.querySelectorAll('[data-open]').forEach(function (b) { b.addEventListener('click', function () { show(b.dataset.open); }); });
+  swBtns.forEach(function (b) { b.addEventListener('click', function () { show(b.dataset.screenBtn); }); });
+  modal.addEventListener('click', function (e) { if (e.target === modal) modal.classList.remove('open'); });
+  document.querySelectorAll('[data-close]').forEach(function (b) { b.addEventListener('click', function () { modal.classList.remove('open'); if (b.dataset.t) showToast(b.dataset.t); }); });
+
+  // recon diff
+  function num(v) { return parseInt((v || '').replace(/\D/g, ''), 10) || 0; }
+  function rub(n) { return (n < 0 ? '−' : '') + Math.abs(n).toLocaleString('ru-RU').replace(/,/g, ' ') + ' ₽'; }
+  var rf = document.getElementById('reconFact');
+  rf.addEventListener('input', function () { var f = num(rf.value); var d = f - 42800; document.getElementById('reconFactV').textContent = rub(f); var el = document.getElementById('reconDiff'); el.querySelector('.v').textContent = (d > 0 ? '+' : '') + rub(d); el.classList.toggle('bad', d !== 0); });
+  var cf = document.getElementById('closeFact');
+  cf.addEventListener('input', function () { var d = num(cf.value) - 42800; var el = document.getElementById('closeDiff'); el.querySelector('.v').textContent = (d > 0 ? '+' : '') + rub(d); el.classList.toggle('bad', d !== 0); });
+
+  var toast = document.getElementById('toast'), toastTimer = null;
+  function showToast(msg) { document.getElementById('toastMsg').textContent = msg; toast.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 2200); }
+  document.querySelectorAll('[data-toast]').forEach(function (b) { b.addEventListener('click', function () { showToast(b.dataset.toast); }); });
+
+  var hash = (location.hash || '').replace('#', '');
+  if (hash && modal.querySelector('[data-screen="' + hash + '"]')) show(hash);
+</script>
+<script>
+/* ============================================================
+   mobile-dock.js — shared Gen-2 mobile quick-action dock
+   Self-contained: injects its own scoped styles (.g2-*), a bottom
+   quick-action dock (≤900px), generic bottom-sheets, and a toast.
+   Relies only on design tokens every screen defines (--text,
+   --surface, --border, --accent, etc.). Safe to drop on any page:
+   inline this IIFE inside a script tag just before the closing body tag.
+   ============================================================ */
+(function () {
+  'use strict';
+  if (window.__g2dock) return;
+  window.__g2dock = true;
+
+  /* ---------- styles ---------- */
+  var css = `
+  .g2-dock { display: none; }
+  @media (max-width: 900px) {
+    .content { padding-bottom: calc(86px + env(safe-area-inset-bottom)) !important; }
+    .g2-dock {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px;
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 95;
+      background: color-mix(in oklab, var(--surface) 92%, transparent);
+      backdrop-filter: blur(16px) saturate(150%); -webkit-backdrop-filter: blur(16px) saturate(150%);
+      border-top: 0.5px solid var(--border);
+      padding: 7px 8px max(8px, env(safe-area-inset-bottom));
+    }
+    .g2-dock-btn {
+      appearance: none; border: 0; background: transparent; cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+      padding: 6px 2px 5px; border-radius: 12px; color: var(--text-2);
+      font-family: inherit; min-height: 56px;
+      transition: background .15s, transform .12s, color .15s;
+    }
+    .g2-dock-btn:active { background: var(--surface-3); transform: scale(.96); }
+    .g2-dock-btn .g2-qd-ico {
+      width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center;
+      background: var(--surface-3); color: var(--text-2);
+      transition: background .15s, color .15s, box-shadow .2s;
+    }
+    .g2-dock-btn.primary .g2-qd-ico { background: var(--text); color: var(--surface); box-shadow: 0 0 0 3px var(--accent-soft); }
+    [data-theme="dark"] .g2-dock-btn.primary .g2-qd-ico { background: var(--accent); color: #06120c; }
+    .g2-dock-btn .g2-qd-lbl { font-size: 10.5px; font-weight: 600; letter-spacing: -.1px; line-height: 1; color: var(--text-3); }
+    .g2-dock-btn.primary .g2-qd-lbl { color: var(--text); }
+  }
+  @media (max-width: 380px) {
+    .g2-dock { padding: 6px 6px max(6px, env(safe-area-inset-bottom)); }
+    .g2-dock-btn { padding: 5px 2px 4px; gap: 3px; min-height: 52px; }
+    .g2-dock-btn .g2-qd-ico { width: 28px; height: 28px; border-radius: 8px; }
+    .g2-dock-btn .g2-qd-lbl { font-size: 10px; }
+  }
+  /* keep page's bottom-anchored chrome (demo state switchers, toasts) above the dock */
+  @media (max-width: 900px) {
+    .state-switcher, .switcher { bottom: calc(96px + env(safe-area-inset-bottom)) !important; top: auto !important; }
+    .toast { bottom: calc(96px + env(safe-area-inset-bottom)) !important; }
+  }
+  /* comfortable touch targets on mobile (≥44px) without distorting icon/round buttons */
+  @media (max-width: 640px) {
+    .btn:not(.btn-sm):not(.icon-btn) { min-height: 44px; }
+  }
+
+  /* bottom-sheet */
+  .g2-sheet-ov {
+    position: fixed; inset: 0; z-index: 140; display: none;
+    align-items: flex-end; justify-content: center;
+    background: rgba(0,0,0,.4); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  }
+  .g2-sheet-ov.open { display: flex; }
+  .g2-sheet {
+    width: 100%; max-width: 520px; background: var(--surface);
+    border-radius: 22px 22px 0 0; box-shadow: 0 -12px 40px rgba(0,0,0,.22);
+    display: flex; flex-direction: column; max-height: 90dvh;
+    transform: translateY(100%); transition: transform .28s cubic-bezier(.32,.72,.2,1);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .g2-sheet-ov.open .g2-sheet { transform: none; }
+  @media (min-width: 560px) { .g2-sheet-ov { align-items: center; } .g2-sheet { border-radius: 20px; margin: 16px; max-height: calc(100dvh - 32px); } }
+  .g2-sheet-grip { width: 36px; height: 4px; border-radius: 999px; background: var(--border-strong); margin: 10px auto 2px; }
+  .g2-sheet-head { display: flex; align-items: flex-start; gap: 12px; padding: 8px 20px 12px; }
+  .g2-sheet-ico { width: 40px; height: 40px; border-radius: 11px; flex-shrink: 0; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-deep); }
+  [data-theme="dark"] .g2-sheet-ico { color: var(--accent); }
+  .g2-sheet-title { font-size: 16.5px; font-weight: 700; letter-spacing: -.3px; }
+  .g2-sheet-sub { font-size: 12.5px; color: var(--text-3); margin-top: 2px; }
+  .g2-sheet-close { margin-left: auto; width: 32px; height: 32px; flex-shrink: 0; border: 0; border-radius: 50%; background: var(--surface-3); color: var(--text-2); display: grid; place-items: center; cursor: pointer; }
+  .g2-sheet-body { padding: 4px 20px 18px; overflow-y: auto; }
+  .g2-lbl { display: block; font-size: 12px; font-weight: 600; color: var(--text-2); margin: 14px 0 7px; }
+  .g2-lbl:first-child { margin-top: 4px; }
+  .g2-inp, .g2-sel {
+    width: 100%; height: 48px; border: 0.5px solid var(--border-strong); background: var(--surface-2);
+    border-radius: 12px; padding: 0 14px; font-size: 16px; color: var(--text); outline: none; font-family: inherit;
+  }
+  .g2-sel { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a8a29e' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; }
+  .g2-inp:focus, .g2-sel:focus { border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .g2-sheet-foot { padding: 12px 20px max(14px, env(safe-area-inset-bottom)); border-top: 0.5px solid var(--border); display: flex; flex-direction: column-reverse; gap: 8px; background: var(--surface-2); }
+  .g2-btn { height: 48px; border-radius: 12px; border: 0; font-size: 15px; font-weight: 650; cursor: pointer; font-family: inherit; width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+  .g2-btn-primary { background: var(--text); color: var(--surface); }
+  [data-theme="dark"] .g2-btn-primary { background: var(--accent); color: #06120c; }
+  .g2-btn-ghost { background: var(--surface); border: 0.5px solid var(--border-strong); color: var(--text); }
+
+  .g2-toast {
+    position: fixed; bottom: calc(96px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--text); color: var(--surface); padding: 12px 18px; border-radius: 999px;
+    font-size: 13.5px; font-weight: 600; box-shadow: 0 12px 32px rgba(0,0,0,.25);
+    display: flex; align-items: center; gap: 9px; opacity: 0; pointer-events: none;
+    transition: opacity .22s, transform .22s; z-index: 160; max-width: calc(100vw - 32px);
+  }
+  [data-theme="dark"] .g2-toast { background: var(--accent); color: #06120c; }
+  .g2-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  @media (min-width: 901px) { .g2-toast { bottom: 24px; } }
+  `;
+  var st = document.createElement('style');
+  st.id = 'g2-dock-styles';
+  st.textContent = css;
+  document.head.appendChild(st);
+
+  /* ---------- icons ---------- */
+  var ICO = {
+    checkin: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>',
+    client: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>',
+    extend: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>',
+    book: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+    close: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+    ok: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+  };
+
+  /* ---------- action sheet content ---------- */
+  var ACTIONS = {
+    checkin: {
+      title: 'Отметить визит', sub: 'Чек-ин клиента на сегодня', ico: ICO.checkin,
+      body: '<label class="g2-lbl">Клиент</label><input class="g2-inp" type="text" placeholder="Имя, телефон или № карты" />' +
+            '<label class="g2-lbl">Направление</label><select class="g2-sel"><option>Тренажёрный зал</option><option>Групповые</option><option>Бассейн</option><option>Персональная</option></select>',
+      cta: 'Отметить визит', toast: 'Визит отмечен'
+    },
+    client: {
+      title: 'Новый клиент', sub: 'Быстрое добавление', ico: ICO.client,
+      body: '<label class="g2-lbl">Имя и фамилия</label><input class="g2-inp" type="text" placeholder="Например, Анна Петрова" />' +
+            '<label class="g2-lbl">Телефон</label><input class="g2-inp" type="tel" inputmode="tel" placeholder="+7" />' +
+            '<label class="g2-lbl">Абонемент</label><select class="g2-sel"><option>Без абонемента</option><option>12 месяцев</option><option>6 месяцев</option><option>Разовое посещение</option></select>',
+      cta: 'Создать клиента', toast: 'Клиент создан'
+    },
+    extend: {
+      title: 'Продлить абонемент', sub: 'Добавить срок действующему', ico: ICO.extend,
+      body: '<label class="g2-lbl">Клиент</label><input class="g2-inp" type="text" placeholder="Имя или телефон" />' +
+            '<label class="g2-lbl">Срок продления</label><select class="g2-sel"><option>1 месяц</option><option>3 месяца</option><option>6 месяцев</option><option>12 месяцев</option></select>',
+      cta: 'Продлить', toast: 'Абонемент продлён'
+    },
+    book: {
+      title: 'Записать на тренировку', sub: 'Бронь слота в расписании', ico: ICO.book,
+      body: '<label class="g2-lbl">Клиент</label><input class="g2-inp" type="text" placeholder="Имя или телефон" />' +
+            '<label class="g2-lbl">Тренировка</label><select class="g2-sel"><option>Йога · сегодня 18:00</option><option>Бокс · сегодня 19:30</option><option>Силовая · завтра 09:00</option><option>Стретчинг · завтра 11:00</option></select>',
+      cta: 'Записать', toast: 'Клиент записан'
+    }
+  };
+
+  /* ---------- dock ---------- */
+  var dock = document.createElement('nav');
+  dock.className = 'g2-dock';
+  dock.setAttribute('aria-label', 'Быстрые действия');
+  dock.innerHTML =
+    '<button class="g2-dock-btn primary" type="button" data-g2-act="checkin"><span class="g2-qd-ico">' + ICO.checkin + '</span><span class="g2-qd-lbl">Чек-ин</span></button>' +
+    '<button class="g2-dock-btn" type="button" data-g2-act="client"><span class="g2-qd-ico">' + ICO.client + '</span><span class="g2-qd-lbl">Клиент</span></button>' +
+    '<button class="g2-dock-btn" type="button" data-g2-act="extend"><span class="g2-qd-ico">' + ICO.extend + '</span><span class="g2-qd-lbl">Продлить</span></button>' +
+    '<button class="g2-dock-btn" type="button" data-g2-act="book"><span class="g2-qd-ico">' + ICO.book + '</span><span class="g2-qd-lbl">Запись</span></button>';
+  document.body.appendChild(dock);
+
+  /* ---------- sheet ---------- */
+  var ov = document.createElement('div');
+  ov.className = 'g2-sheet-ov';
+  ov.innerHTML =
+    '<div class="g2-sheet" role="dialog" aria-modal="true">' +
+      '<div class="g2-sheet-grip"></div>' +
+      '<div class="g2-sheet-head">' +
+        '<div class="g2-sheet-ico" id="g2-ico"></div>' +
+        '<div style="min-width:0;flex:1;"><div class="g2-sheet-title" id="g2-title"></div><div class="g2-sheet-sub" id="g2-sub"></div></div>' +
+        '<button class="g2-sheet-close" type="button" data-g2-close>' + ICO.close + '</button>' +
+      '</div>' +
+      '<div class="g2-sheet-body" id="g2-body"></div>' +
+      '<div class="g2-sheet-foot">' +
+        '<button class="g2-btn g2-btn-primary" type="button" id="g2-cta"></button>' +
+        '<button class="g2-btn g2-btn-ghost" type="button" data-g2-close>Отмена</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(ov);
+
+  /* ---------- toast ---------- */
+  var toast = document.createElement('div');
+  toast.className = 'g2-toast';
+  toast.innerHTML = ICO.ok + '<span id="g2-toast-msg"></span>';
+  document.body.appendChild(toast);
+  var toastTimer = null;
+  function showToast(msg) {
+    document.getElementById('g2-toast-msg').textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 2400);
+  }
+
+  /* ---------- behaviour ---------- */
+  var curAct = null;
+  function openSheet(key) {
+    var a = ACTIONS[key]; if (!a) return;
+    curAct = a;
+    document.getElementById('g2-ico').innerHTML = a.ico;
+    document.getElementById('g2-title').textContent = a.title;
+    document.getElementById('g2-sub').textContent = a.sub;
+    document.getElementById('g2-body').innerHTML = a.body;
+    document.getElementById('g2-cta').textContent = a.cta;
+    ov.classList.add('open');
+  }
+  function closeSheet() { ov.classList.remove('open'); }
+
+  dock.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-g2-act]'); if (!b) return;
+    openSheet(b.getAttribute('data-g2-act'));
+  });
+  ov.addEventListener('click', function (e) {
+    if (e.target === ov || e.target.closest('[data-g2-close]')) closeSheet();
+  });
+  document.getElementById('g2-cta').addEventListener('click', function () {
+    var msg = curAct ? curAct.toast : 'Готово';
+    closeSheet();
+    setTimeout(function () { showToast(msg); }, 180);
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeSheet(); });
+})();
+
+</script>
+</body>
+</html>

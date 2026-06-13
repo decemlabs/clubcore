@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Админка · Мой зал — Ошибка</title>
+<script>
+  (function () {
+    var t = localStorage.getItem('admin-theme') || 'light';
+    if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+  })();
+</script>
+<style>
+  :root {
+    --accent: #2dd4a4; --accent-deep: #0f9b76; --accent-soft: #d6f5ea;
+    --bg: #f5f5f4; --surface: #ffffff; --surface-2: #fafaf9; --surface-3: #f1f0ee;
+    --border: #e7e5e4; --border-strong: #d6d3d1;
+    --text: #1c1917; --text-2: #57534e; --text-3: #a8a29e;
+    --warn: #e9a23b; --warn-soft: #fef3e2; --danger: #dc2626; --danger-soft: #fee2e2;
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", system-ui, sans-serif;
+    --mono: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+    --r-sm: 10px; --r-md: 14px; --r-lg: 18px; --r-pill: 999px;
+    --sh-2: 0 1px 3px rgba(28,25,23,.05), 0 4px 14px rgba(28,25,23,.04);
+    --sh-3: 0 18px 48px rgba(28,25,23,.10), 0 4px 12px rgba(28,25,23,.05);
+  }
+  [data-theme="dark"] {
+    --bg: #0c0c0c; --surface: #181715; --surface-2: #141312; --surface-3: #232120;
+    --border: #2a2826; --border-strong: #3a3735;
+    --text: #f5f5f4; --text-2: #a8a29e; --text-3: #6b6663;
+    --accent-soft: rgba(45,212,164,.16); --warn-soft: rgba(233,162,59,.18); --danger-soft: rgba(220,38,38,.18);
+    --sh-2: 0 1px 3px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.25);
+    --sh-3: 0 18px 48px rgba(0,0,0,.5), 0 4px 12px rgba(0,0,0,.3);
+  }
+  [data-theme="dark"] body { background: #050505; }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; font-family: var(--font);
+    background: var(--bg); color: var(--text);
+    -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    font-size: 14px; line-height: 1.45; min-height: 100vh;
+  }
+  button { font-family: inherit; cursor: pointer; }
+  a { color: inherit; text-decoration: none; }
+
+  .wrap { min-height: 100vh; display: flex; flex-direction: column; }
+
+  /* ---- Slim top bar ---- */
+  .topbar {
+    height: 60px; flex-shrink: 0; display: flex; align-items: center;
+    padding: 0 26px; border-bottom: 0.5px solid var(--border);
+    background: color-mix(in oklab, var(--surface) 70%, transparent);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-mark {
+    width: 30px; height: 30px; border-radius: 9px; background: var(--text); color: var(--accent);
+    display: grid; place-items: center; font-weight: 800; font-size: 15px; letter-spacing: -0.5px;
+  }
+  [data-theme="dark"] .brand-mark { background: var(--accent); color: #06120c; }
+  .brand-name { font-size: 15px; font-weight: 700; letter-spacing: -0.3px; }
+  .brand-tag {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.4px; color: var(--text-3);
+    background: var(--surface-3); padding: 2px 7px; border-radius: 999px;
+  }
+  .icon-btn {
+    width: 36px; height: 36px; border-radius: 50%;
+    border: 0.5px solid var(--border); background: var(--surface);
+    color: var(--text-2); display: grid; place-items: center; margin-left: auto;
+    transition: background .15s, color .15s;
+  }
+  .icon-btn:hover { background: var(--surface-3); color: var(--text); }
+  .theme-toggle .i-moon { display: none; }
+  [data-theme="dark"] .theme-toggle .i-moon { display: block; }
+  [data-theme="dark"] .theme-toggle .i-sun { display: none; }
+
+  /* ---- Center stage ---- */
+  .stage { flex: 1; display: grid; place-items: center; padding: 40px 24px 110px; position: relative; overflow: hidden; }
+  .stage::before {
+    content: ""; position: absolute; top: -10%; left: 50%; transform: translateX(-50%);
+    width: 620px; height: 620px; border-radius: 50%; pointer-events: none;
+    background: radial-gradient(circle, color-mix(in oklab, var(--accent) 9%, transparent), transparent 66%);
+  }
+
+  .panel { width: 100%; max-width: 480px; text-align: center; position: relative; }
+
+  /* big code numeral */
+  .err-code {
+    font-size: 116px; line-height: 1.05; font-weight: 800; letter-spacing: -5px;
+    color: var(--text); position: relative; display: block; white-space: nowrap;
+    margin: 10px 0 6px;
+  }
+  .err-code .glyph {
+    width: 92px; height: 92px; margin: 0 -4px; border-radius: 26px;
+    display: inline-grid; place-items: center; vertical-align: -22px;
+    background: var(--surface); border: 0.5px solid var(--border); box-shadow: var(--sh-2);
+  }
+  .err-code .glyph.accent { background: var(--accent-soft); border-color: transparent; color: var(--accent-deep); }
+  [data-theme="dark"] .err-code .glyph.accent { color: var(--accent); }
+  .err-code .glyph.warn { background: var(--warn-soft); border-color: transparent; color: #a36a16; }
+  [data-theme="dark"] .err-code .glyph.warn { color: var(--warn); }
+  .err-code .glyph.danger { background: var(--danger-soft); border-color: transparent; color: var(--danger); }
+
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 11.5px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
+    color: var(--text-3); margin-bottom: 18px;
+  }
+  .eyebrow .d { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .eyebrow.warn .d { background: var(--warn); }
+  .eyebrow.danger .d { background: var(--danger); }
+
+  h1 { font-size: 27px; font-weight: 700; letter-spacing: -0.7px; margin: 22px 0 10px; line-height: 1.18; text-wrap: balance; }
+  .lead { font-size: 15px; color: var(--text-2); line-height: 1.6; margin: 0 auto 26px; max-width: 400px; }
+  .lead b { color: var(--text); font-weight: 650; }
+
+  .actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    height: 44px; border-radius: var(--r-sm); padding: 0 20px;
+    border: 0; font-size: 14px; font-weight: 650; letter-spacing: -0.2px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    transition: background .15s, transform .04s, color .15s;
+  }
+  .btn:active { transform: scale(.99); }
+  .btn-primary { background: var(--text); color: var(--bg); }
+  .btn-primary:hover { background: #000; }
+  [data-theme="dark"] .btn-primary { background: var(--accent); color: #06120c; }
+  [data-theme="dark"] .btn-primary:hover { background: #5ee9b8; }
+  .btn-ghost { background: var(--surface); border: 1px solid var(--border-strong); color: var(--text); }
+  .btn-ghost:hover { background: var(--surface-3); }
+
+  /* meta / detail block */
+  .detail {
+    margin-top: 26px; display: inline-flex; align-items: center; gap: 10px;
+    background: var(--surface); border: 0.5px solid var(--border); box-shadow: var(--sh-2);
+    border-radius: var(--r-md); padding: 11px 15px; font-size: 12.5px; color: var(--text-2);
+    text-align: left; max-width: 100%;
+  }
+  .detail .di {
+    width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+    background: var(--surface-3); color: var(--text-2); display: grid; place-items: center;
+  }
+  .detail .dk { font-size: 11px; color: var(--text-3); }
+  .detail .dv { font-weight: 600; color: var(--text); font-family: var(--mono); font-size: 12px; }
+
+  /* request-access card for permission denied */
+  .req-card {
+    margin-top: 24px; text-align: left;
+    background: var(--surface); border: 0.5px solid var(--border); box-shadow: var(--sh-2);
+    border-radius: var(--r-lg); padding: 18px 20px;
+  }
+  .req-row { display: flex; align-items: center; gap: 12px; }
+  .req-ava {
+    width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff;
+    display: grid; place-items: center; font-weight: 700; font-size: 14px; letter-spacing: -0.3px;
+  }
+  .req-name { font-size: 14px; font-weight: 650; letter-spacing: -0.2px; }
+  .req-sub { font-size: 12.5px; color: var(--text-3); margin-top: 1px; }
+  .req-act { margin-left: auto; }
+  .req-btn {
+    height: 38px; border-radius: 999px; padding: 0 16px; border: 0;
+    background: var(--text); color: var(--bg); font-size: 13px; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 7px; transition: background .15s;
+  }
+  .req-btn:hover { background: #000; }
+  [data-theme="dark"] .req-btn { background: var(--accent); color: #06120c; }
+  .req-note {
+    margin-top: 14px; padding-top: 14px; border-top: 0.5px solid var(--border);
+    font-size: 12.5px; color: var(--text-2); line-height: 1.5; display: flex; gap: 9px;
+  }
+  .req-note .ni { color: var(--accent-deep); flex-shrink: 0; margin-top: 1px; }
+  [data-theme="dark"] .req-note .ni { color: var(--accent); }
+
+  .helplinks { margin-top: 28px; font-size: 13px; color: var(--text-3); }
+  .helplinks a { color: var(--accent-deep); font-weight: 600; }
+  [data-theme="dark"] .helplinks a { color: var(--accent); }
+  .helplinks a:hover { text-decoration: underline; }
+  .helplinks .sep { margin: 0 8px; opacity: 0.5; }
+
+  .screen { display: none; animation: scr .32s cubic-bezier(.32,.72,.2,1); }
+  .screen.active { display: block; }
+  @keyframes scr { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+  /* state switcher */
+  .switcher {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+    z-index: 50; display: flex; align-items: center; gap: 3px;
+    background: color-mix(in oklab, var(--surface) 86%, transparent);
+    backdrop-filter: blur(14px) saturate(140%); -webkit-backdrop-filter: blur(14px) saturate(140%);
+    border: 0.5px solid var(--border); border-radius: 999px;
+    padding: 5px; box-shadow: var(--sh-3); max-width: calc(100vw - 24px);
+    overflow-x: auto; scrollbar-width: none;
+  }
+  .switcher::-webkit-scrollbar { display: none; }
+  .switcher .sw-lbl {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
+    color: var(--text-3); padding: 0 8px 0 6px; white-space: nowrap;
+  }
+  .switcher button {
+    border: 0; background: transparent; color: var(--text-2);
+    font-size: 12.5px; font-weight: 600; padding: 7px 13px;
+    border-radius: 999px; white-space: nowrap; transition: background .15s, color .15s;
+  }
+  .switcher button:hover { color: var(--text); }
+  .switcher button.active { background: var(--text); color: var(--bg); }
+  [data-theme="dark"] .switcher button.active { background: var(--accent); color: #06120c; }
+
+  @media (max-width: 520px) {
+    .err-code { font-size: 92px; letter-spacing: -3px; }
+    .err-code .glyph { width: 72px; height: 72px; border-radius: 22px; }
+    h1 { font-size: 23px; }
+    .req-act { margin-left: 0; width: 100%; margin-top: 12px; }
+    .req-row { flex-wrap: wrap; }
+    .req-btn { width: 100%; justify-content: center; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap" data-screen-label="System error">
+
+  <header class="topbar">
+    <a class="brand" href="Dashboard.html">
+      <div class="brand-mark">М</div>
+      <div class="brand-name">Мой&nbsp;зал</div>
+      <span class="brand-tag">ADMIN</span>
+    </a>
+    <button class="icon-btn theme-toggle" id="themeToggle" title="Переключить тему" type="button">
+      <svg class="i-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+      <svg class="i-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    </button>
+  </header>
+
+  <main class="stage">
+
+    <!-- ===== 404 ===== -->
+    <section class="panel screen active" data-screen="404" data-screen-label="404 Not found">
+      <div class="eyebrow"><span class="d"></span>Страница не найдена</div>
+      <div class="err-code">4<span class="glyph accent"><svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>4</div>
+      <h1>Такой страницы нет</h1>
+      <p class="lead">Ссылка устарела или была перемещена. Проверьте адрес или вернитесь на дашборд.</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="Dashboard.html"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>На дашборд</a>
+        <button class="btn btn-ghost" type="button" onclick="history.back()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>Назад</button>
+      </div>
+      <div class="detail">
+        <span class="di"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
+        <div><div class="dk">Запрошенный адрес</div><div class="dv">/clients/847/abonement/edit</div></div>
+      </div>
+      <div class="helplinks">Часто ищут: <a href="Clients.html">Клиенты</a><span class="sep">·</span><a href="Schedule.html">Расписание</a><span class="sep">·</span><a href="Reports.html">Отчёты</a></div>
+    </section>
+
+    <!-- ===== 403 ===== -->
+    <section class="panel screen" data-screen="403" data-screen-label="403 Forbidden">
+      <div class="eyebrow warn"><span class="d"></span>Доступ запрещён</div>
+      <div class="err-code">4<span class="glyph warn"><svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>3</div>
+      <h1>Доступ к разделу закрыт</h1>
+      <p class="lead">У вашей роли <b>«Ресепшн»</b> нет прав на просмотр этой страницы. Если доступ нужен для работы — запросите его у администратора.</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="Dashboard.html">Вернуться на дашборд</a>
+        <a class="btn btn-ghost" href="#" data-go="permission">Запросить доступ</a>
+      </div>
+      <div class="detail">
+        <span class="di"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5z"/></svg></span>
+        <div><div class="dk">Требуется право</div><div class="dv">reports.view · role: manager+</div></div>
+      </div>
+    </section>
+
+    <!-- ===== 500 ===== -->
+    <section class="panel screen" data-screen="500" data-screen-label="500 Server error">
+      <div class="eyebrow danger"><span class="d"></span>Ошибка сервера</div>
+      <div class="err-code">5<span class="glyph danger"><svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>0</div>
+      <h1>Что-то пошло не так</h1>
+      <p class="lead">На нашей стороне произошёл сбой. Мы уже получили уведомление и работаем над этим. Попробуйте обновить страницу через минуту.</p>
+      <div class="actions">
+        <button class="btn btn-primary" type="button" onclick="location.reload()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>Обновить страницу</button>
+        <a class="btn btn-ghost" href="Dashboard.html">На дашборд</a>
+      </div>
+      <div class="detail">
+        <span class="di"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>
+        <div><div class="dk">Код инцидента — сообщите в поддержку</div><div class="dv">ERR-50031-A7F2</div></div>
+      </div>
+      <div class="helplinks">Проблема не уходит? <a href="#">Написать в поддержку</a></div>
+    </section>
+
+    <!-- ===== PERMISSION DENIED (in-app, contextual) ===== -->
+    <section class="panel screen" data-screen="permission" data-screen-label="Permission denied">
+      <div class="eyebrow warn"><span class="d"></span>Нет прав доступа</div>
+      <h1 style="margin-top:6px">Недостаточно прав</h1>
+      <p class="lead">Раздел <b>«Касса»</b> доступен только ролям с правом управления финансами. Запросите доступ — администратор рассмотрит заявку.</p>
+
+      <div class="req-card">
+        <div class="req-row">
+          <div class="req-ava">МК</div>
+          <div>
+            <div class="req-name">Маша Костина</div>
+            <div class="req-sub">Ресепшн · Тверская</div>
+          </div>
+          <div class="req-act">
+            <button class="req-btn" type="button" id="reqBtn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Запросить доступ
+            </button>
+          </div>
+        </div>
+        <div class="req-note">
+          <span class="ni"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
+          <div>Заявка уйдёт владельцу аккаунта <b>Артёму Лебедеву</b>. Обычно ответ приходит в течение рабочего дня.</div>
+        </div>
+      </div>
+      <div class="actions" style="margin-top:22px">
+        <a class="btn btn-ghost" href="Dashboard.html"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>Вернуться назад</a>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div class="switcher" id="switcher">
+  <span class="sw-lbl">Состояния</span>
+  <button data-screen-btn="404" class="active">404</button>
+  <button data-screen-btn="403">403</button>
+  <button data-screen-btn="500">500</button>
+  <button data-screen-btn="permission">Нет доступа</button>
+</div>
+
+<script>
+  document.getElementById('themeToggle').addEventListener('click', function () {
+    var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    if (dark) { document.documentElement.removeAttribute('data-theme'); localStorage.setItem('admin-theme', 'light'); }
+    else { document.documentElement.setAttribute('data-theme', 'dark'); localStorage.setItem('admin-theme', 'dark'); }
+  });
+
+  var screens = document.querySelectorAll('.screen');
+  var swBtns = document.querySelectorAll('[data-screen-btn]');
+  function show(name) {
+    var found = false;
+    screens.forEach(function (s) { var on = s.dataset.screen === name; s.classList.toggle('active', on); if (on) found = true; });
+    if (!found) return;
+    swBtns.forEach(function (b) { b.classList.toggle('active', b.dataset.screenBtn === name); });
+  }
+  document.querySelectorAll('[data-go]').forEach(function (el) {
+    el.addEventListener('click', function (e) { e.preventDefault(); show(el.dataset.go); });
+  });
+  swBtns.forEach(function (b) { b.addEventListener('click', function () { show(b.dataset.screenBtn); }); });
+
+  // request access feedback
+  var reqBtn = document.getElementById('reqBtn');
+  if (reqBtn) reqBtn.addEventListener('click', function () {
+    reqBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Заявка отправлена';
+    reqBtn.disabled = true; reqBtn.style.opacity = '0.7'; reqBtn.style.cursor = 'default';
+  });
+
+  var hash = (location.hash || '').replace('#', '');
+  if (hash && document.querySelector('[data-screen="' + hash + '"]')) show(hash);
+</script>
+</body>
+</html>

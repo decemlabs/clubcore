@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Админка · Мой зал — Подтверждения</title>
+<script>
+  (function () {
+    var t = localStorage.getItem('admin-theme') || 'light';
+    if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+  })();
+</script>
+<style>
+  :root {
+    --accent: #2dd4a4; --accent-deep: #0f9b76; --accent-soft: #d6f5ea;
+    --bg: #f5f5f4; --surface: #ffffff; --surface-2: #fafaf9; --surface-3: #f1f0ee;
+    --border: #e7e5e4; --border-strong: #d6d3d1;
+    --text: #1c1917; --text-2: #57534e; --text-3: #a8a29e;
+    --warn: #e9a23b; --warn-soft: #fef3e2; --danger: #dc2626; --danger-soft: #fee2e2;
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", system-ui, sans-serif;
+    --mono: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+    --sh-2: 0 1px 3px rgba(28,25,23,.05), 0 4px 14px rgba(28,25,23,.04);
+    --sh-3: 0 30px 80px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.12);
+  }
+  [data-theme="dark"] {
+    --bg: #0c0c0c; --surface: #181715; --surface-2: #141312; --surface-3: #232120;
+    --border: #2a2826; --border-strong: #3a3735;
+    --text: #f5f5f4; --text-2: #a8a29e; --text-3: #6b6663;
+    --accent-soft: rgba(45,212,164,.16); --warn-soft: rgba(233,162,59,.18); --danger-soft: rgba(220,38,38,.18);
+    --sh-2: 0 1px 3px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.25);
+    --sh-3: 0 30px 80px rgba(0,0,0,.6), 0 8px 24px rgba(0,0,0,.4);
+  }
+  [data-theme="dark"] body { background: #050505; }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; font-family: var(--font);
+    background: var(--bg); color: var(--text);
+    -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    font-size: 14px; line-height: 1.4; min-height: 100vh;
+  }
+  button { font-family: inherit; cursor: pointer; }
+  input, select, textarea { font-family: inherit; }
+
+  /* faux app backdrop */
+  .backdrop {
+    position: fixed; inset: 0; overflow: hidden;
+    background:
+      radial-gradient(900px 500px at 80% -10%, color-mix(in oklab, var(--accent) 12%, transparent), transparent 60%),
+      var(--bg);
+  }
+  .bd-bar { height: 60px; border-bottom: 0.5px solid var(--border); display: flex; align-items: center; padding: 0 24px; gap: 10px; background: var(--surface-2); opacity: .9; }
+  .bd-mark { width: 28px; height: 28px; border-radius: 8px; background: var(--text); color: var(--accent); display: grid; place-items: center; font-weight: 800; font-size: 14px; }
+  [data-theme="dark"] .bd-mark { background: var(--accent); color: #06120c; }
+  .bd-name { font-size: 14px; font-weight: 700; letter-spacing: -0.3px; }
+  .bd-skel { height: 11px; border-radius: 6px; background: var(--surface-3); }
+  .bd-grid { padding: 28px 24px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; max-width: 1100px; }
+  .bd-card { height: 92px; border-radius: 16px; background: var(--surface); border: 0.5px solid var(--border); }
+  .bd-row { height: 240px; border-radius: 16px; background: var(--surface); border: 0.5px solid var(--border); grid-column: span 4; margin-top: 4px; }
+
+  /* overlay */
+  .am-overlay {
+    position: fixed; inset: 0; z-index: 100; display: flex;
+    align-items: center; justify-content: center; padding: 24px;
+    background: rgba(0,0,0,.34); backdrop-filter: blur(6px) saturate(120%); -webkit-backdrop-filter: blur(6px) saturate(120%);
+  }
+
+  .am-modal {
+    background: var(--surface); border: 0.5px solid var(--border); border-radius: 18px;
+    box-shadow: var(--sh-3); width: min(460px, calc(100vw - 32px));
+    max-height: calc(100dvh - 48px); display: none; flex-direction: column; overflow: hidden;
+    animation: pop .24s cubic-bezier(.32,.72,.2,1);
+  }
+  .am-modal.active { display: flex; }
+  .am-modal.wide { width: min(540px, calc(100vw - 32px)); }
+  @keyframes pop { from { transform: scale(.96) translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+  .am-modal-head { display: flex; align-items: flex-start; gap: 14px; padding: 20px 22px 14px; }
+  .am-modal-ico { width: 42px; height: 42px; border-radius: 12px; flex-shrink: 0; display: grid; place-items: center; background: var(--surface-3); color: var(--text-2); }
+  .am-modal-ico.danger { background: var(--danger-soft); color: var(--danger); }
+  .am-modal-ico.warn { background: var(--warn-soft); color: #a36a16; }
+  [data-theme="dark"] .am-modal-ico.warn { color: var(--warn); }
+  .am-modal-ico.accent { background: var(--accent-soft); color: var(--accent-deep); }
+  [data-theme="dark"] .am-modal-ico.accent { color: var(--accent); }
+  .am-modal-head-text { min-width: 0; flex: 1; }
+  .am-modal-title { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; line-height: 1.2; }
+  .am-modal-sub { font-size: 12.5px; color: var(--text-2); margin-top: 4px; line-height: 1.45; }
+  .am-modal-close {
+    width: 32px; height: 32px; border-radius: 50%; border: 0; background: var(--surface-3);
+    color: var(--text-2); display: grid; place-items: center; flex-shrink: 0; transition: background .15s, color .15s;
+  }
+  .am-modal-close:hover { background: var(--border); color: var(--text); }
+
+  .am-modal-body { padding: 4px 22px 18px; overflow-y: auto; }
+
+  .am-modal-foot {
+    padding: 14px 22px; border-top: 0.5px solid var(--border); display: flex; gap: 8px;
+    justify-content: flex-end; align-items: center; background: var(--surface-2);
+  }
+  .am-modal-foot.spread { justify-content: space-between; }
+
+  /* buttons */
+  .am-btn {
+    height: 40px; border-radius: 999px; padding: 0 20px; font-size: 13.5px; font-weight: 600;
+    border: 0; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    letter-spacing: -0.1px; transition: background .15s, border-color .15s, color .15s, transform .05s;
+  }
+  .am-btn:active { transform: scale(.98); }
+  .am-btn-primary { background: var(--text); color: var(--bg); }
+  .am-btn-primary:hover { background: #000; }
+  [data-theme="dark"] .am-btn-primary { background: var(--accent); color: #06120c; }
+  [data-theme="dark"] .am-btn-primary:hover { background: #5ee9b8; }
+  .am-btn-ghost { background: var(--surface); border: 0.5px solid var(--border-strong); color: var(--text); }
+  .am-btn-ghost:hover { background: var(--surface-2); }
+  .am-btn-danger { background: var(--danger); color: #fff; }
+  .am-btn-danger:hover { background: #b91c1c; }
+  .am-btn-text { background: transparent; color: var(--danger); padding: 0 12px; }
+  .am-btn-text:hover { background: var(--danger-soft); }
+  .am-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+  /* callout */
+  .am-callout { display: flex; gap: 10px; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); border: 0.5px solid var(--border); margin-top: 14px; }
+  .am-callout.accent { background: var(--accent-soft); border-color: transparent; }
+  .am-callout.warn { background: var(--warn-soft); border-color: transparent; }
+  .am-callout.danger { background: var(--danger-soft); border-color: transparent; }
+  .am-callout-ico { width: 18px; flex-shrink: 0; color: var(--text-2); margin-top: 1px; }
+  .am-callout.accent .am-callout-ico { color: var(--accent-deep); }
+  .am-callout.warn .am-callout-ico { color: #a36a16; }
+  .am-callout.danger .am-callout-ico { color: var(--danger); }
+  .am-callout-text { font-size: 12.5px; color: var(--text-2); line-height: 1.45; }
+  .am-callout-text b { color: var(--text); font-weight: 650; }
+  .am-callout.danger .am-callout-text { color: #8a1c1c; }
+  [data-theme="dark"] .am-callout.danger .am-callout-text { color: #fca5a5; }
+
+  /* entity card */
+  .cf-entity { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 13px; background: var(--surface-2); border: 0.5px solid var(--border); margin-top: 2px; }
+  .cf-ava { width: 42px; height: 42px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center; color: #fff; font-size: 14px; font-weight: 700; letter-spacing: -0.3px; }
+  .cf-sq { width: 42px; height: 42px; border-radius: 11px; flex-shrink: 0; display: grid; place-items: center; background: var(--surface-3); color: var(--text-2); }
+  .cf-en-name { font-size: 14px; font-weight: 650; letter-spacing: -0.2px; }
+  .cf-en-sub { font-size: 12px; color: var(--text-3); margin-top: 2px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .cf-pill { font-size: 10.5px; font-weight: 700; padding: 1.5px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-deep); letter-spacing: 0.2px; }
+  [data-theme="dark"] .cf-pill { color: var(--accent); }
+  .cf-amt { margin-left: auto; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.3px; flex-shrink: 0; }
+
+  /* fields */
+  .cf-label { display: block; font-size: 12px; font-weight: 600; color: var(--text-2); margin: 16px 0 7px; }
+  .am-input, .am-select {
+    width: 100%; height: 42px; border: 0.5px solid var(--border); background: var(--surface-2);
+    border-radius: 12px; padding: 0 14px; font-size: 14px; color: var(--text); outline: none;
+    transition: border-color .15s, background .15s, box-shadow .15s;
+  }
+  .am-select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a8a29e' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; }
+  .am-input:focus, .am-select:focus { border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .am-input-money { position: relative; }
+  .am-input-money .cur { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--text-3); font-size: 13px; pointer-events: none; }
+
+  /* chips */
+  .cf-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .cf-chip {
+    border: 0.5px solid var(--border); background: var(--surface); border-radius: 999px;
+    padding: 9px 15px; font-size: 13px; font-weight: 600; color: var(--text);
+    display: inline-flex; align-items: center; gap: 6px; transition: background .15s, border-color .15s, color .15s;
+  }
+  .cf-chip:hover { border-color: var(--border-strong); }
+  .cf-chip.active { background: var(--text); color: var(--bg); border-color: var(--text); }
+  [data-theme="dark"] .cf-chip.active { background: var(--accent); color: #06120c; border-color: var(--accent); }
+
+  /* stat box */
+  .cf-stat { display: flex; align-items: center; gap: 10px; margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); border: 0.5px solid var(--border); }
+  .cf-stat-l { font-size: 12px; color: var(--text-2); }
+  .cf-stat-v { margin-left: auto; font-size: 15px; font-weight: 700; letter-spacing: -0.3px; font-variant-numeric: tabular-nums; }
+  .cf-stat-v.accent { color: var(--accent-deep); }
+  [data-theme="dark"] .cf-stat-v.accent { color: var(--accent); }
+
+  /* checkbox row */
+  .cf-check { display: flex; align-items: flex-start; gap: 11px; margin-top: 14px; padding: 12px 14px; border-radius: 12px; border: 0.5px solid var(--border); cursor: pointer; transition: border-color .15s, background .15s; user-select: none; }
+  .cf-check:hover { background: var(--surface-2); }
+  .cf-check.on { border-color: var(--text); background: var(--surface-2); }
+  [data-theme="dark"] .cf-check.on { border-color: var(--accent); }
+  .cf-check input { position: absolute; opacity: 0; pointer-events: none; }
+  .cf-box { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--border-strong); flex-shrink: 0; margin-top: 1px; display: grid; place-items: center; color: transparent; transition: background .15s, border-color .15s, color .15s; }
+  .cf-check.on .cf-box { background: var(--text); border-color: var(--text); color: var(--bg); }
+  [data-theme="dark"] .cf-check.on .cf-box { background: var(--accent); border-color: var(--accent); color: #06120c; }
+  .cf-check-text { font-size: 12.5px; color: var(--text-2); line-height: 1.4; }
+  .cf-check-text b { color: var(--text); font-weight: 650; }
+
+  /* toggle row */
+  .cf-toggle { display: flex; align-items: center; gap: 12px; margin-top: 14px; padding: 11px 14px; border-radius: 12px; background: var(--surface-2); border: 0.5px solid var(--border); }
+  .cf-toggle-text { flex: 1; min-width: 0; }
+  .cf-toggle-t { font-size: 13px; font-weight: 600; }
+  .cf-toggle-s { font-size: 11.5px; color: var(--text-3); margin-top: 1px; }
+  .sw { width: 40px; height: 24px; border-radius: 999px; background: var(--border-strong); position: relative; flex-shrink: 0; transition: background .18s; border: 0; }
+  .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .18s; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+  .sw.on { background: var(--accent); }
+  .sw.on::after { transform: translateX(16px); }
+
+  /* avatar stack for bulk */
+  .cf-stack { display: flex; align-items: center; margin-top: 4px; }
+  .cf-stack .cf-ava { width: 34px; height: 34px; margin-left: -9px; border: 2px solid var(--surface); font-size: 12px; }
+  .cf-stack .cf-ava:first-child { margin-left: 0; }
+  .cf-stack .more { background: var(--surface-3); color: var(--text-2); }
+
+  /* switcher */
+  .switcher {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+    z-index: 200; display: flex; align-items: center; gap: 3px;
+    background: color-mix(in oklab, var(--surface) 88%, transparent);
+    backdrop-filter: blur(14px) saturate(140%); -webkit-backdrop-filter: blur(14px) saturate(140%);
+    border: 0.5px solid var(--border); border-radius: 999px;
+    padding: 5px; box-shadow: var(--sh-3); max-width: calc(100vw - 24px); overflow-x: auto; scrollbar-width: none;
+  }
+  .switcher::-webkit-scrollbar { display: none; }
+  .switcher .sw-lbl { font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-3); padding: 0 8px 0 6px; white-space: nowrap; }
+  .switcher button { border: 0; background: transparent; color: var(--text-2); font-size: 12.5px; font-weight: 600; padding: 7px 13px; border-radius: 999px; white-space: nowrap; transition: background .15s, color .15s; }
+  .switcher button:hover { color: var(--text); }
+  .switcher button.active { background: var(--text); color: var(--bg); }
+  [data-theme="dark"] .switcher button.active { background: var(--accent); color: #06120c; }
+
+  @media (max-width: 640px) {
+    .am-overlay { align-items: flex-end; padding: 0; }
+    .am-modal, .am-modal.wide { width: 100%; max-width: 100%; border-radius: 22px 22px 0 0; }
+    .am-modal-body { max-height: 56vh; }
+    .am-modal-foot { flex-direction: column-reverse; align-items: stretch; padding-bottom: max(14px, env(safe-area-inset-bottom)); }
+    .am-modal-foot .am-btn { width: 100%; }
+    .am-modal-foot.spread { flex-direction: column-reverse; align-items: stretch; }
+    .am-modal-foot.spread > div { display: flex; flex-direction: column-reverse; gap: 8px; }
+    .am-modal-foot.spread > div .am-btn { width: 100%; }
+    .bd-grid { grid-template-columns: repeat(2, 1fr); }
+    .switcher { top: 12px; bottom: auto; }
+  }
+</style>
+</head>
+<body data-screen-label="Confirmations">
+
+  <!-- faux app backdrop -->
+  <div class="backdrop" aria-hidden="true">
+    <div class="bd-bar"><div class="bd-mark">М</div><div class="bd-name">Мой&nbsp;зал</div><div class="bd-skel" style="width:120px;margin-left:18px;"></div><div class="bd-skel" style="width:80px;margin-left:auto;"></div></div>
+    <div class="bd-grid">
+      <div class="bd-card"></div><div class="bd-card"></div><div class="bd-card"></div><div class="bd-card"></div>
+      <div class="bd-row"></div>
+    </div>
+  </div>
+
+  <div class="am-overlay">
+
+    <!-- ===== УДАЛЕНИЕ ===== -->
+    <section class="am-modal active" data-screen="delete" data-screen-label="Delete">
+      <div class="am-modal-head">
+        <div class="am-modal-ico danger"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></div>
+        <div class="am-modal-head-text">
+          <div class="am-modal-title">Удалить клиента?</div>
+          <div class="am-modal-sub">Это действие необратимо.</div>
+        </div>
+        <button class="am-modal-close" type="button" data-close><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="am-modal-body">
+        <div class="cf-entity">
+          <div class="cf-ava" style="background:linear-gradient(135deg,#6366f1,#818cf8)">АП</div>
+          <div style="min-width:0;">
+            <div class="cf-en-name">Анна Петрова</div>
+            <div class="cf-en-sub">+7 916 224-18-03 · 12 визитов</div>
+          </div>
+        </div>
+        <div class="am-callout danger">
+          <span class="am-callout-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+          <div class="am-callout-text">История визитов, платежей и активный абонемент будут <b>удалены безвозвратно</b>.</div>
+        </div>
+        <label class="cf-check" data-check>
+          <input type="checkbox" />
+          <span class="cf-box"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+          <span class="cf-check-text">Понимаю, что отменить удаление будет нельзя.</span>
+        </label>
+      </div>
+      <div class="am-modal-foot">
+        <button class="am-btn am-btn-ghost" type="button" data-close>Отмена</button>
+        <button class="am-btn am-btn-danger" type="button" data-needcheck disabled>Удалить клиента</button>
+      </div>
+    </section>
+
+    <!-- ===== АРХИВАЦИЯ ===== -->
+    <section class="am-modal" data-screen="archive" data-screen-label="Archive">
+      <div class="am-modal-head">
+        <div class="am-modal-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg></div>
+        <div class="am-modal-head-text">
+          <div class="am-modal-title">Архивировать клиента?</div>
+          <div class="am-modal-sub">Можно восстановить в любой момент.</div>
+        </div>
+        <button class="am-modal-close" type="button" data-close><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="am-modal-body">
+        <div class="cf-entity">
+          <div class="cf-ava" style="background:linear-gradient(135deg,#0ea5e9,#22d3ee)">ИК</div>
+          <div style="min-width:0;">
+            <div class="cf-en-name">Игорь Климов</div>
+            <div class="cf-en-sub">Не посещал 64 дня <span class="cf-pill" style="background:var(--surface-3);color:var(--text-2)">неактивен</span></div>
+          </div>
+        </div>
+        <div class="am-callout">
+          <span class="am-callout-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
+          <div class="am-callout-text">Клиент пропадёт из активных списков и отчётов, но <b>история сохранится</b>. Вернуть можно из раздела «Архив».</div>
+        </div>
+      </div>
+      <div class="am-modal-foot">
+        <button class="am-btn am-btn-ghost" type="button" data-close>Отмена</button>
+        <button class="am-btn am-btn-primary" type="button" data-close><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/></svg>В архив</button>
+      </div>
+    </section>
+
+    <!-- ===== ОТМЕНА ЗАПИСИ ===== -->
+    <section class="am-modal" data-screen="cancel" data-screen-label="Cancel booking">
+      <div class="am-modal-head">
+        <div class="am-modal-ico warn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9.5" y1="15.5" x2="14.5" y2="20.5"/><line x1="14.5" y1="15.5" x2="9.5" y2="20.5"/></svg></div>
+        <div class="am-modal-head-text">
+          <div class="am-modal-title">Отменить запись?</div>
+          <div class="am-modal-sub">Слот освободится для других клиентов.</div>
+        </div>
+        <button class="am-modal-close" type="button" data-close><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="am-modal-body">
+        <div class="cf-entity">
+          <div class="cf-sq"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.42 4.58a5.4 5.4 0 0 0-7.65 0l-.77.78-.77-.78a5.4 5.4 0 0 0-7.65 7.65l8.42 8.42 8.42-8.42a5.4 5.4 0 0 0 0-7.65z"/></svg></div>
+          <div style="min-width:0;">
+            <div class="cf-en-name">Йога · персональная</div>
+            <div class="cf-en-sub">Анна Петрова · с Ольгой В. · сегодня 18:00 · зал 2</div>
+          </div>
+        </div>
+        <div class="cf-toggle">
+          <div class="cf-toggle-text">
+            <div class="cf-toggle-t">Уведомить клиента</div>
+            <div class="cf-toggle-s">SMS и push об отмене записи</div>
+          </div>
+          <button class="sw on" type="button" data-sw></button>
+        </div>
+        <div class="am-callout warn">
+          <span class="am-callout-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></span>
+          <div class="am-callout-text">До тренировки менее <b>2 часов</b> — по правилам зала с абонемента спишется визит.</div>
+        </div>
+      </div>
+      <div class="am-modal-foot">
+        <button class="am-btn am-btn-ghost" type="button" data-close>Не отменять</button>
+        <button class="am-btn am-btn-danger" type="button" data-close>Отменить запись</button>
+      </div>
+    </section>
+
+    <!-- ===== ВОЗВРАТ ПЛАТЕЖА ===== -->
+    <section class="am-modal wide" data-screen="refund" data-screen-label="Refund">
+      <div class="am-modal-head">
+        <div class="am-modal-ico warn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg></div>
+        <div class="am-modal-head-text">
+          <div class="am-modal-title">Вернуть платёж?</div>
+          <div class="am-modal-sub">Средства вернутся тем же способом оплаты.</div>
+        </div>
+        <button class="am-modal-close" type="button" data-close><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="am-modal-body">
+        <div class="cf-entity">
+          <div class="cf-sq"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></div>
+          <div style="min-width:0;">
+            <div class="cf-en-name">Абонемент «12 месяцев»</div>
+            <div class="cf-en-sub">Анна Петрова · 12 апр · карта •• 4417</div>
+          </div>
+          <div class="cf-amt">24 000&nbsp;₽</div>
+        </div>
+
+        <div class="cf-label">Сумма возврата</div>
+        <div class="cf-chips" id="refundChips">
+          <button class="cf-chip active" type="button" data-refund="full">Полный · 24 000 ₽</button>
+          <button class="cf-chip" type="button" data-refund="part">Частичный</button>
+        </div>
+        <div id="refundAmount" style="display:none;">
+          <div class="cf-label">Укажите сумму</div>
+          <div class="am-input-money"><input class="am-input" type="text" value="12 000" /><span class="cur">₽</span></div>
+        </div>
+
+        <div class="cf-label">Причина возврата</div>
+        <select class="am-select">
+          <option>Клиент отказался от абонемента</option>
+          <option>Ошибка при оплате</option>
+          <option>Двойное списание</option>
+          <option>Перенос на другой филиал</option>
+          <option>Другое</option>
+        </select>
+
+        <div class="am-callout">
+          <span class="am-callout-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
+          <div class="am-callout-text">Деньги поступят на карту клиента в течение <b>3–5 рабочих дней</b>. Абонемент станет неактивным.</div>
+        </div>
+      </div>
+      <div class="am-modal-foot">
+        <button class="am-btn am-btn-ghost" type="button" data-close>Отмена</button>
+        <button class="am-btn am-btn-danger" type="button" data-close id="refundBtn">Вернуть 24 000 ₽</button>
+      </div>
+    </section>
+
+    <!-- ===== ЗАМОРОЗКА АБОНЕМЕНТА ===== -->
+    <section class="am-modal" data-screen="freeze" data-screen-label="Freeze">
+      <div class="am-modal-head">
+        <div class="am-modal-ico accent"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="4.9" y1="4.9" x2="19.1" y2="19.1"/><line x1="19.1" y1="4.9" x2="4.9" y2="19.1"/></svg></div>
+        <div class="am-modal-head-text">
+          <div class="am-modal-title">Заморозить абонемент?</div>
+          <div class="am-modal-sub">Срок действия продлится на дни заморозки.</div>
+        </div>
+        <button class="am-modal-close" type="button" data-close><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="am-modal-body">
+        <div class="cf-entity">
+          <div class="cf-ava" style="background:linear-gradient(135deg,#10b981,#34d399)">МС</div>
+          <div style="min-width:0;">
+            <div class="cf-en-name">Максим Соколов</div>
+            <div class="cf-en-sub">«12 месяцев» · действует до 14 фев 2027</div>
+          </div>
+        </div>
+        <div class="cf-label">Срок заморозки</div>
+        <div class="cf-chips" id="freezeChips">
+          <button class="cf-chip" type="button" data-days="7">7 дней</button>
+          <button class="cf-chip active" type="button" data-days="14">14 дней</button>
+          <button class="cf-chip" type="button" data-days="30">30 дней</button>
+        </div>
+        <div class="cf-stat">
+          <span class="cf-stat-l">Новая дата окончания</span>
+          <span class="cf-stat-v accent" id="freezeDate">28 фев 2027</span>
+        </div>
+        <div class="am-callout accent">
+          <span class="am-callout-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+          <div class="am-callout-text">Доступно <b>21 из 30 дней</b> заморозки в этом году. Разморозить можно досрочно.</div>
+        </div>
+      </div>
+      <div class="am-modal-foot">
+        <button class="am-btn am-btn-ghost" type="button" data-close>Отмена</button>
+        <button class="am-btn am-btn-primary" type="button" data-close>Заморозить на <span id="freezeDays" style="margin-left:4px">14 дней</span></button>
+      </div>
+    </section>
+
+    <!-- ===== МАССОВЫЕ ДЕЙСТВИЯ ===== -->
+    <section class="am-modal wide" data-screen="bulk" data-screen-label="Bulk actions">
+      <div class="am-modal-head">
+        <div class="am-modal-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
+        <div class="am-modal-head-text">
+          <div class="am-modal-title">Массовое действие</div>
+          <div class="am-modal-sub">Выбрано <b style="color:var(--text)">23 клиента</b> с истекающим абонементом.</div>
+        </div>
+        <button class="am-modal-close" type="button" data-close><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="am-modal-body">
+        <div class="cf-stack">
+          <div class="cf-ava" style="background:linear-gradient(135deg,#6366f1,#818cf8)">АП</div>
+          <div class="cf-ava" style="background:linear-gradient(135deg,#f59e0b,#fbbf24)">ВД</div>
+          <div class="cf-ava" style="background:linear-gradient(135deg,#0ea5e9,#38bdf8)">ИК</div>
+          <div class="cf-ava" style="background:linear-gradient(135deg,#f43f5e,#fb7185)">ЛТ</div>
+          <div class="cf-ava" style="background:linear-gradient(135deg,#10b981,#34d399)">МС</div>
+          <div class="cf-ava more">+18</div>
+        </div>
+
+        <div class="cf-label">Что сделать</div>
+        <select class="am-select" id="bulkAction">
+          <option value="msg">Отправить сообщение о продлении</option>
+          <option value="ext">Продлить абонемент на 1 месяц</option>
+          <option value="freeze">Заморозить абонементы</option>
+          <option value="archive">Перенести в архив</option>
+          <option value="export">Выгрузить в CSV</option>
+        </select>
+
+        <div class="am-callout warn" id="bulkWarn">
+          <span class="am-callout-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+          <div class="am-callout-text" id="bulkWarnText">Сообщение уйдёт <b>сразу всем 23 клиентам</b>. Отменить отправку будет нельзя.</div>
+        </div>
+      </div>
+      <div class="am-modal-foot spread">
+        <span style="font-size:12.5px;color:var(--text-2)">Применится к <b style="color:var(--text)">23</b> записям</span>
+        <div style="display:flex;gap:8px;">
+          <button class="am-btn am-btn-ghost" type="button" data-close>Отмена</button>
+          <button class="am-btn am-btn-primary" type="button" data-close id="bulkBtn">Применить к 23</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== UNSAVED CHANGES ===== -->
+    <section class="am-modal" data-screen="unsaved" data-screen-label="Unsaved changes">
+      <div class="am-modal-head">
+        <div class="am-modal-ico warn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></div>
+        <div class="am-modal-head-text">
+          <div class="am-modal-title">Сохранить изменения?</div>
+          <div class="am-modal-sub">В карточке клиента есть несохранённые правки.</div>
+        </div>
+        <button class="am-modal-close" type="button" data-close><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="am-modal-body">
+        <div class="am-callout warn">
+          <span class="am-callout-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span>
+          <div class="am-callout-text">Изменено: <b>телефон</b>, <b>тариф абонемента</b>, <b>тренер</b>. Если выйти сейчас — правки пропадут.</div>
+        </div>
+      </div>
+      <div class="am-modal-foot spread">
+        <button class="am-btn am-btn-text" type="button" data-close>Не сохранять</button>
+        <div style="display:flex;gap:8px;">
+          <button class="am-btn am-btn-ghost" type="button" data-close>Продолжить</button>
+          <button class="am-btn am-btn-primary" type="button" data-close><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Сохранить</button>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <div class="switcher" id="switcher">
+    <span class="sw-lbl">Диалоги</span>
+    <button data-screen-btn="delete" class="active">Удаление</button>
+    <button data-screen-btn="archive">Архивация</button>
+    <button data-screen-btn="cancel">Отмена записи</button>
+    <button data-screen-btn="refund">Возврат</button>
+    <button data-screen-btn="freeze">Заморозка</button>
+    <button data-screen-btn="bulk">Массовые</button>
+    <button data-screen-btn="unsaved">Unsaved</button>
+  </div>
+
+<script>
+  // theme — backdrop has no toggle; honor stored theme only
+  var modals = document.querySelectorAll('.am-modal');
+  var swBtns = document.querySelectorAll('[data-screen-btn]');
+  function show(name) {
+    var found = false;
+    modals.forEach(function (m) { var on = m.dataset.screen === name; m.classList.toggle('active', on); if (on) found = true; });
+    if (!found) return;
+    swBtns.forEach(function (b) { b.classList.toggle('active', b.dataset.screenBtn === name); });
+  }
+  swBtns.forEach(function (b) { b.addEventListener('click', function () { show(b.dataset.screenBtn); }); });
+
+  // close re-opens... but here "close" should just flash; for a prototype, closing hides then we re-show same after brief — instead, closing keeps the dialog (review tool). We simply ignore real close to keep something on screen.
+  document.querySelectorAll('[data-close]').forEach(function (el) {
+    el.addEventListener('click', function () {
+      var modal = el.closest('.am-modal');
+      modal.style.transition = 'opacity .18s, transform .18s';
+      modal.style.opacity = '0';
+      modal.style.transform = 'scale(.97) translateY(6px)';
+      setTimeout(function () { modal.style.opacity = ''; modal.style.transform = ''; modal.style.transition = ''; }, 220);
+    });
+  });
+
+  // delete: enable danger button only when checkbox ticked
+  document.querySelectorAll('[data-check]').forEach(function (lbl) {
+    lbl.addEventListener('click', function (e) {
+      var input = lbl.querySelector('input');
+      // toggle handled by label/native; sync class + button on next tick
+      setTimeout(function () {
+        lbl.classList.toggle('on', input.checked);
+        var modal = lbl.closest('.am-modal');
+        var btn = modal.querySelector('[data-needcheck]');
+        if (btn) btn.disabled = !input.checked;
+      }, 0);
+    });
+  });
+
+  // toggles
+  document.querySelectorAll('[data-sw]').forEach(function (s) { s.addEventListener('click', function () { s.classList.toggle('on'); }); });
+
+  // refund chips
+  var refundFull = true;
+  document.querySelectorAll('#refundChips .cf-chip').forEach(function (c) {
+    c.addEventListener('click', function () {
+      document.querySelectorAll('#refundChips .cf-chip').forEach(function (x) { x.classList.toggle('active', x === c); });
+      var part = c.dataset.refund === 'part';
+      document.getElementById('refundAmount').style.display = part ? '' : 'none';
+      document.getElementById('refundBtn').textContent = part ? 'Вернуть 12 000 ₽' : 'Вернуть 24 000 ₽';
+    });
+  });
+
+  // freeze chips
+  var endDates = { '7': '21 фев 2027', '14': '28 фев 2027', '30': '16 мар 2027' };
+  document.querySelectorAll('#freezeChips .cf-chip').forEach(function (c) {
+    c.addEventListener('click', function () {
+      document.querySelectorAll('#freezeChips .cf-chip').forEach(function (x) { x.classList.toggle('active', x === c); });
+      var d = c.dataset.days;
+      document.getElementById('freezeDate').textContent = endDates[d];
+      document.getElementById('freezeDays').textContent = d + (d === '30' ? ' дней' : (d === '7' ? ' дней' : ' дней'));
+    });
+  });
+
+  // bulk action — adapt warning + buttons
+  var bulkCopy = {
+    msg:   { t: 'Сообщение уйдёт <b>сразу всем 23 клиентам</b>. Отменить отправку будет нельзя.', warn: 'warn', btn: 'Отправить 23' },
+    ext:   { t: 'Абонементы <b>23 клиентов</b> продлятся на 1 месяц. Платёж не списывается.', warn: '', btn: 'Продлить 23' },
+    freeze:{ t: 'Заморозка применится к <b>23 абонементам</b> на стандартный срок 14 дней.', warn: '', btn: 'Заморозить 23' },
+    archive:{ t: '<b>23 клиента</b> переедут в архив и пропадут из активных списков. Можно вернуть.', warn: 'warn', btn: 'В архив · 23' },
+    export:{ t: 'Будет сформирован CSV-файл по <b>23 клиентам</b> и скачан на устройство.', warn: '', btn: 'Выгрузить 23' }
+  };
+  var bulkSel = document.getElementById('bulkAction');
+  bulkSel.addEventListener('change', function () {
+    var c = bulkCopy[bulkSel.value];
+    var warn = document.getElementById('bulkWarn');
+    warn.className = 'am-callout ' + (c.warn || '');
+    document.getElementById('bulkWarnText').innerHTML = c.t;
+    document.getElementById('bulkBtn').textContent = c.btn;
+  });
+</script>
+</body>
+</html>

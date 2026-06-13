@@ -1,0 +1,750 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Админка · Мой зал — Уведомления</title>
+<script>
+  (function () { var t = localStorage.getItem('admin-theme') || 'light'; if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); })();
+</script>
+<style>
+  :root {
+    --accent: #2dd4a4; --accent-deep: #0f9b76; --accent-soft: #d6f5ea;
+    --bg: #f5f5f4; --surface: #ffffff; --surface-2: #fafaf9; --surface-3: #f1f0ee;
+    --border: #e7e5e4; --border-strong: #d6d3d1;
+    --text: #1c1917; --text-2: #57534e; --text-3: #a8a29e;
+    --warn: #e9a23b; --warn-soft: #fef3e2; --danger: #dc2626; --danger-soft: #fee2e2;
+    --indigo: #6366f1; --indigo-soft: rgba(99,102,241,.13);
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", system-ui, sans-serif;
+    --mono: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+    --r-sm: 10px; --r-md: 14px; --r-lg: 18px;
+    --sh-1: 0 1px 2px rgba(28,25,23,.04);
+    --sh-2: 0 1px 3px rgba(28,25,23,.05), 0 4px 14px rgba(28,25,23,.04);
+    --sh-3: 0 8px 30px rgba(28,25,23,.08), 0 2px 6px rgba(28,25,23,.04);
+    --sidebar-w: 248px; --topbar-h: 64px;
+  }
+  [data-theme="dark"] {
+    --bg: #0c0c0c; --surface: #181715; --surface-2: #141312; --surface-3: #232120;
+    --border: #2a2826; --border-strong: #3a3735;
+    --text: #f5f5f4; --text-2: #a8a29e; --text-3: #6b6663;
+    --accent-soft: rgba(45,212,164,.16); --warn-soft: rgba(233,162,59,.18); --danger-soft: rgba(220,38,38,.18); --indigo-soft: rgba(99,102,241,.22);
+    --sh-1: 0 1px 2px rgba(0,0,0,.3); --sh-2: 0 1px 3px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.25); --sh-3: 0 8px 30px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.3);
+  }
+  [data-theme="dark"] body { background: #050505; }
+  [data-theme="dark"] .brand-mark { background: var(--accent); color: #06120c; }
+  [data-theme="dark"] .nav-item.active { background: var(--surface-3); color: var(--text); }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; font-family: var(--font); background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; font-size: 14px; line-height: 1.4; }
+  button { font-family: inherit; cursor: pointer; }
+  input, select, textarea { font-family: inherit; }
+  a { color: inherit; text-decoration: none; }
+
+  .app { display: grid; grid-template-columns: var(--sidebar-w) 1fr; min-height: 100vh; }
+  .sidebar { background: var(--surface-2); border-right: 0.5px solid var(--border); padding: 18px 14px; display: flex; flex-direction: column; gap: 4px; position: sticky; top: 0; height: 100vh; z-index: 30; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 6px 10px 14px; }
+  .brand-mark { width: 30px; height: 30px; border-radius: 9px; background: var(--text); color: var(--accent); display: grid; place-items: center; font-weight: 800; font-size: 15px; letter-spacing: -0.5px; }
+  .brand-name { font-size: 15px; font-weight: 700; letter-spacing: -0.3px; }
+  .brand .tag { margin-left: auto; font-size: 10px; font-weight: 700; color: var(--text-3); background: var(--surface-3); padding: 2px 7px; border-radius: 999px; letter-spacing: 0.4px; }
+  .branch { display: flex; align-items: center; gap: 9px; width: 100%; padding: 9px 11px; border-radius: var(--r-sm); border: 0.5px solid var(--border); background: var(--surface); margin-bottom: 8px; text-align: left; }
+  .branch:hover { border-color: var(--border-strong); }
+  .branch-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+  .branch-label { font-weight: 600; font-size: 13.5px; letter-spacing: -0.1px; }
+  .branch-sub { font-size: 11px; color: var(--text-3); margin-top: 1px; }
+  .branch svg { margin-left: auto; color: var(--text-3); flex-shrink: 0; }
+  .nav-section { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-3); padding: 14px 12px 6px; }
+  .nav-item { display: flex; align-items: center; gap: 11px; padding: 8px 11px; border-radius: var(--r-sm); color: var(--text-2); font-size: 13.5px; font-weight: 500; letter-spacing: -0.1px; transition: background .13s, color .13s; }
+  .nav-item:hover { background: var(--surface); color: var(--text); }
+  .nav-item.active { background: var(--text); color: var(--surface); }
+  .nav-item.active .nav-badge { background: var(--accent); color: #06120c; }
+  .nav-item svg { width: 17px; height: 17px; flex-shrink: 0; }
+  .nav-badge { margin-left: auto; font-size: 11px; font-weight: 700; background: var(--surface-3); color: var(--text-2); padding: 1px 7px; border-radius: 999px; font-variant-numeric: tabular-nums; }
+  .nav-badge.accent { background: var(--accent-soft); color: var(--accent-deep); } [data-theme="dark"] .nav-badge.accent { color: var(--accent); }
+  .sidebar-foot { margin-top: auto; padding-top: 10px; }
+  .me { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: var(--r-sm); }
+  .me:hover { background: var(--surface); }
+  .me-avatar { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 12.5px; flex-shrink: 0; }
+  .me-name { font-size: 13px; font-weight: 650; } .me-role { font-size: 11px; color: var(--text-3); }
+  .me-logout { margin-left: auto; border: 0; background: transparent; color: var(--text-3); display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; }
+  .me-logout:hover { background: var(--surface-3); color: var(--text); }
+
+  .main { display: flex; flex-direction: column; min-width: 0; }
+  .topbar { height: var(--topbar-h); flex-shrink: 0; display: flex; align-items: center; gap: 14px; padding: 0 26px; border-bottom: 0.5px solid var(--border); background: color-mix(in oklab, var(--surface) 75%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); position: sticky; top: 0; z-index: 20; }
+  .hamburger { display: none; }
+  .crumbs { font-size: 13px; color: var(--text-2); } .crumbs strong { color: var(--text); font-weight: 650; }
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .icon-btn { width: 36px; height: 36px; border-radius: 50%; border: 0.5px solid var(--border); background: var(--surface); color: var(--text-2); display: grid; place-items: center; transition: background .15s, color .15s; }
+  .icon-btn:hover { background: var(--surface-3); color: var(--text); }
+  .theme-toggle .i-moon { display: none; } [data-theme="dark"] .theme-toggle .i-moon { display: block; } [data-theme="dark"] .theme-toggle .i-sun { display: none; }
+
+  .content { padding: 24px 26px 60px; max-width: 1080px; width: 100%; }
+  .page-head { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
+  .page-head h1 { font-size: 23px; font-weight: 700; letter-spacing: -0.5px; margin: 0 0 5px; }
+  .page-head .sub { font-size: 13.5px; color: var(--text-2); max-width: 560px; line-height: 1.5; }
+  .page-head .ha { margin-left: auto; display: flex; gap: 9px; }
+
+  .btn { height: 38px; border-radius: var(--r-sm); padding: 0 15px; border: 0; font-size: 13px; font-weight: 600; letter-spacing: -0.1px; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 7px; transition: background .15s, transform .04s, border-color .15s, color .15s; }
+  .btn:active { transform: scale(.99); }
+  .btn-primary { background: var(--text); color: var(--bg); } .btn-primary:hover { background: #000; }
+  [data-theme="dark"] .btn-primary { background: var(--accent); color: #06120c; }
+  .btn-ghost { background: var(--surface); border: 0.5px solid var(--border-strong); color: var(--text); } .btn-ghost:hover { background: var(--surface-3); }
+  .btn-sm { height: 32px; padding: 0 11px; font-size: 12px; border-radius: 9px; }
+  .btn:disabled { opacity:.45; cursor: not-allowed; }
+
+  .tabs { display: flex; gap: 3px; background: var(--surface-3); border-radius: 11px; padding: 4px; margin-bottom: 18px; width: fit-content; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { border: 0; background: transparent; color: var(--text-2); font-size: 13px; font-weight: 600; height: 34px; padding: 0 15px; border-radius: 8px; white-space: nowrap; display: inline-flex; align-items: center; gap: 7px; transition: background .14s, color .14s, box-shadow .14s; }
+  .tab:hover { color: var(--text); }
+  .tab.active { background: var(--surface); color: var(--text); box-shadow: var(--sh-1); }
+  .tab .tb { font-size: 10.5px; font-weight: 700; background: var(--accent); color: #06120c; border-radius: 999px; padding: 0 6px; min-width: 16px; height: 16px; display: inline-grid; place-items: center; }
+  .tabpane { display: none; } .tabpane.active { display: block; }
+
+  .panel { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--sh-2); overflow: hidden; }
+  .panel-head { display: flex; align-items: center; gap: 10px; padding: 13px 18px; border-bottom: 0.5px solid var(--border); }
+  .panel-head h2 { font-size: 14px; font-weight: 700; letter-spacing: -0.2px; margin: 0; }
+  .panel-head .ph { margin-left: auto; display: flex; gap: 8px; }
+
+  /* notification feed */
+  .chips { display: flex; gap: 6px; padding: 12px 18px; border-bottom: 0.5px solid var(--border); overflow-x: auto; scrollbar-width: none; }
+  .chips::-webkit-scrollbar { display: none; }
+  .fchip { border: 0.5px solid var(--border); background: var(--surface); color: var(--text-2); border-radius: 999px; padding: 6px 13px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+  .fchip.on { background: var(--text); color: var(--bg); border-color: var(--text); } [data-theme="dark"] .fchip.on { background: var(--surface-3); color: var(--text); border-color: var(--border-strong); }
+  .day-lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-3); padding: 14px 18px 6px; }
+  .nrow { display: flex; gap: 13px; padding: 13px 18px; border-bottom: 0.5px solid var(--border); position: relative; }
+  .nrow:last-child { border-bottom: 0; }
+  .nrow.unread { background: color-mix(in oklab, var(--accent-soft) 30%, transparent); }
+  [data-theme="dark"] .nrow.unread { background: rgba(45,212,164,.06); }
+  .nrow.unread::before { content: ""; position: absolute; left: 7px; top: 50%; transform: translateY(-50%); width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .n-ico { width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0; display: grid; place-items: center; background: var(--surface-3); color: var(--text-2); }
+  .n-ico.success { background: var(--accent-soft); color: var(--accent-deep); } [data-theme="dark"] .n-ico.success { color: var(--accent); }
+  .n-ico.warn { background: var(--warn-soft); color: #a36a16; } [data-theme="dark"] .n-ico.warn { color: var(--warn); }
+  .n-ico.danger { background: var(--danger-soft); color: var(--danger); }
+  .n-ico.info { background: var(--indigo-soft); color: var(--indigo); } [data-theme="dark"] .n-ico.info { color: #a5b4fc; }
+  .n-t { font-size: 13.5px; font-weight: 600; letter-spacing: -0.1px; } .n-t b { font-weight: 700; }
+  .n-s { font-size: 12px; color: var(--text-3); margin-top: 2px; line-height: 1.4; }
+  .n-time { font-size: 11.5px; color: var(--text-3); white-space: nowrap; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+  .empty { padding: 56px 24px; text-align: center; display: none; }
+  .empty.show { display: block; }
+  .empty-ico { width: 52px; height: 52px; border-radius: 15px; background: var(--accent-soft); color: var(--accent-deep); display: grid; place-items: center; margin: 0 auto 14px; } [data-theme="dark"] .empty-ico { color: var(--accent); }
+  .empty-t { font-size: 15px; font-weight: 700; } .empty-s { font-size: 12.5px; color: var(--text-3); margin-top: 5px; }
+
+  /* history table */
+  .htable-head, .hrow { display: grid; grid-template-columns: 1.6fr 0.9fr 0.8fr 1.1fr 110px; gap: 14px; align-items: center; padding: 12px 18px; }
+  .htable-head { border-bottom: 0.5px solid var(--border); font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-3); }
+  .hrow { border-bottom: 0.5px solid var(--border); } .hrow:last-child { border-bottom: 0; } .hrow:hover { background: var(--surface-2); cursor: pointer; }
+  .h-name { font-size: 13.5px; font-weight: 600; } .h-sub { font-size: 11.5px; color: var(--text-3); margin-top: 1px; }
+  .ch { font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+  .ch.sms { background: var(--accent-soft); color: var(--accent-deep); } [data-theme="dark"] .ch.sms { color: var(--accent); }
+  .ch.push { background: var(--indigo-soft); color: var(--indigo); } [data-theme="dark"] .ch.push { color: #a5b4fc; }
+  .ch.email { background: var(--warn-soft); color: #a36a16; } [data-theme="dark"] .ch.email { color: var(--warn); }
+  .h-num { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 13px; } .h-date { font-size: 12.5px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+  .h-stat { display: flex; align-items: center; gap: 7px; }
+  .h-bar { flex: 1; height: 6px; border-radius: 999px; background: var(--surface-3); overflow: hidden; min-width: 40px; }
+  .h-bar-f { height: 100%; background: var(--accent); border-radius: 999px; }
+  .h-pct { font-size: 11.5px; font-weight: 650; color: var(--text-2); font-variant-numeric: tabular-nums; }
+  .h-cell-lbl { display: none; }
+
+  /* templates */
+  .tgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 16px 18px; }
+  .tpl { border: 0.5px solid var(--border); border-radius: var(--r-md); padding: 14px; background: var(--surface-2); display: flex; flex-direction: column; }
+  .tpl-top { display: flex; align-items: center; gap: 9px; }
+  .tpl-name { font-size: 13.5px; font-weight: 650; } .tpl-trig { font-size: 11px; color: var(--text-3); margin-top: 1px; }
+  .tpl-body { font-size: 12.5px; color: var(--text-2); line-height: 1.5; margin: 11px 0; background: var(--surface); border: 0.5px solid var(--border); border-radius: 10px; padding: 10px 12px; flex: 1; }
+  .tpl-body .var { color: var(--accent-deep); font-weight: 600; } [data-theme="dark"] .tpl-body .var { color: var(--accent); }
+  .tpl-foot { display: flex; align-items: center; gap: 8px; }
+  .tpl-foot .btn { margin-left: auto; }
+  .sw { width: 38px; height: 22px; border-radius: 999px; background: var(--border-strong); position: relative; flex-shrink: 0; transition: background .18s; border: 0; }
+  .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .18s; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+  .sw.on { background: var(--accent); } .sw.on::after { transform: translateX(16px); }
+  .tpl-st { font-size: 11.5px; font-weight: 600; color: var(--text-3); }
+
+  /* broadcast composer */
+  .compose { display: grid; grid-template-columns: 1fr 300px; gap: 18px; padding: 18px; }
+  .field { margin-bottom: 13px; } .label { display: block; font-size: 12px; font-weight: 600; color: var(--text-2); margin-bottom: 7px; }
+  .am-input, .am-select, .am-textarea { width: 100%; height: 42px; border: 0.5px solid var(--border-strong); background: var(--surface-2); border-radius: 11px; padding: 0 13px; font-size: 14px; color: var(--text); outline: none; transition: border-color .15s, background .15s, box-shadow .15s; }
+  .am-textarea { height: auto; min-height: 110px; padding: 11px 13px; line-height: 1.5; resize: vertical; }
+  .am-select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a8a29e' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 13px center; padding-right: 34px; }
+  .am-input:focus, .am-select:focus, .am-textarea:focus { border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .seg { display: inline-grid; grid-auto-flow: column; gap: 3px; background: var(--surface-3); border-radius: 10px; padding: 3px; width: 100%; }
+  .seg button { border: 0; background: transparent; color: var(--text-2); font-size: 12.5px; font-weight: 600; height: 34px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: background .14s, color .14s, box-shadow .14s; }
+  .seg button.on { background: var(--surface); color: var(--text); box-shadow: var(--sh-1); }
+  .varbar { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .varbtn { border: 0.5px solid var(--border-strong); background: var(--surface); color: var(--text-2); border-radius: 999px; padding: 5px 11px; font-size: 11.5px; font-weight: 600; font-family: var(--mono); }
+  .varbtn:hover { border-color: var(--text-3); color: var(--text); }
+  .aud-row { display: flex; align-items: center; gap: 10px; padding: 11px 13px; border-radius: 11px; background: var(--accent-soft); margin-top: 4px; }
+  [data-theme="dark"] .aud-row { background: rgba(45,212,164,.1); }
+  .aud-row .ar-t { font-size: 13px; font-weight: 650; color: var(--accent-deep); } [data-theme="dark"] .aud-row .ar-t { color: var(--accent); }
+  .aud-row .ar-n { margin-left: auto; font-size: 16px; font-weight: 700; color: var(--accent-deep); font-variant-numeric: tabular-nums; } [data-theme="dark"] .aud-row .ar-n { color: var(--accent); }
+  /* phone preview */
+  .preview { position: sticky; top: 90px; }
+  .phone { background: var(--surface-2); border: 0.5px solid var(--border); border-radius: 20px; padding: 16px 14px; min-height: 240px; }
+  .phone-lbl { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-3); margin-bottom: 12px; text-align: center; }
+  .bubble { background: var(--surface); border: 0.5px solid var(--border); border-radius: 14px 14px 14px 4px; padding: 11px 13px; font-size: 13px; line-height: 1.45; box-shadow: var(--sh-1); }
+  .bubble-app { display: flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700; color: var(--text-2); margin-bottom: 6px; }
+  .bubble-app .d { width: 16px; height: 16px; border-radius: 5px; background: var(--text); color: var(--accent); display: grid; place-items: center; font-size: 9px; font-weight: 800; }
+  [data-theme="dark"] .bubble-app .d { background: var(--accent); color: #06120c; }
+  .bubble .var { color: var(--accent-deep); font-weight: 600; } [data-theme="dark"] .bubble .var { color: var(--accent); }
+  .pv-meta { font-size: 11px; color: var(--text-3); margin-top: 10px; text-align: center; }
+
+  /* delivery report */
+  .dl-head { padding: 16px 18px; border-bottom: 0.5px solid var(--border); }
+  .dl-name { font-size: 15px; font-weight: 700; letter-spacing: -0.2px; } .dl-meta { font-size: 12px; color: var(--text-3); margin-top: 3px; }
+  .dl-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--border); }
+  .dst { background: var(--surface); padding: 15px 16px; }
+  .dst-l { font-size: 11.5px; color: var(--text-2); display: flex; align-items: center; gap: 6px; }
+  .dst-v { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; margin-top: 5px; font-variant-numeric: tabular-nums; }
+  .dst-p { font-size: 11.5px; color: var(--text-3); margin-top: 1px; }
+  .dst-dot { width: 7px; height: 7px; border-radius: 50%; }
+  .dst-dot.s { background: var(--accent); } .dst-dot.r { background: var(--indigo); } .dst-dot.f { background: var(--danger); } .dst-dot.t { background: var(--text-3); }
+  .drow { display: flex; align-items: center; gap: 12px; padding: 11px 18px; border-bottom: 0.5px solid var(--border); }
+  .drow:last-child { border-bottom: 0; }
+  .d-ava { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+  .d-name { font-size: 13px; font-weight: 600; } .d-sub { font-size: 11px; color: var(--text-3); }
+  .d-status { margin-left: auto; font-size: 11.5px; font-weight: 650; padding: 3px 10px; border-radius: 999px; display: inline-flex; align-items: center; gap: 6px; }
+  .d-status.read { background: var(--indigo-soft); color: var(--indigo); } [data-theme="dark"] .d-status.read { color: #a5b4fc; }
+  .d-status.deliv { background: var(--accent-soft); color: var(--accent-deep); } [data-theme="dark"] .d-status.deliv { color: var(--accent); }
+  .d-status.fail { background: var(--danger-soft); color: var(--danger); }
+
+  .toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--text); color: var(--bg); padding: 11px 16px; border-radius: 999px; font-size: 13px; font-weight: 600; box-shadow: var(--sh-3); display: flex; align-items: center; gap: 9px; opacity: 0; pointer-events: none; transition: opacity .22s, transform .22s; z-index: 120; }
+  [data-theme="dark"] .toast { background: var(--accent); color: #06120c; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .scrim { display: none; }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    .sidebar { position: fixed; left: 0; top: 0; width: 264px; transform: translateX(-100%); transition: transform .26s cubic-bezier(.32,.72,.2,1); box-shadow: var(--sh-3); }
+    .app.nav-open .sidebar { transform: none; }
+    .hamburger { display: grid; }
+    .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.34); z-index: 25; opacity: 0; visibility: hidden; transition: opacity .22s; }
+    .app.nav-open .scrim { display: block; opacity: 1; visibility: visible; }
+    .compose { grid-template-columns: 1fr; }
+    .preview { position: relative; top: 0; }
+    .dl-stats { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 720px) {
+    .content { padding: 18px 14px 60px; }
+    .page-head .ha { margin-left: 0; width: 100%; } .page-head .ha .btn { flex: 1; }
+    .tgrid { grid-template-columns: 1fr; }
+    .htable-head { display: none; }
+    .hrow { grid-template-columns: 1fr; gap: 8px; border: 0.5px solid var(--border); border-radius: 12px; margin: 10px; padding: 13px; }
+    .hrow:last-child { border-bottom: 0.5px solid var(--border); }
+    .h-cell-lbl { display: inline; font-size: 11px; color: var(--text-3); margin-right: 6px; }
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app" data-screen-label="Уведомления">
+  <div class="scrim" id="scrim"></div>
+
+  <aside class="sidebar">
+    <div class="brand"><div class="brand-mark">М</div><div class="brand-name">Мой&nbsp;зал</div><span class="tag">ADMIN</span></div>
+    <button class="branch" type="button"><span class="branch-dot"></span><div style="flex:1;min-width:0;"><div class="branch-label">Все филиалы</div><div class="branch-sub">3 филиала · 847 клиентов</div></div><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
+    <div class="nav-section">Управление</div>
+    <a class="nav-item" href="Dashboard.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>Дашборд</a>
+    <a class="nav-item" href="Clients.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Клиенты<span class="nav-badge">847</span></a>
+    <a class="nav-item" href="Schedule.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Расписание</a>
+    <a class="nav-item" href="Plans.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>Абонементы</a>
+    <a class="nav-item" href="Trainers.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>Тренеры<span class="nav-badge">12</span></a>
+    <a class="nav-item" href="Cashbox.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M2 8h20"/><path d="M6 21h12"/></svg>Касса</a>
+    <a class="nav-item" href="Messages.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>Сообщения<span class="nav-badge accent">4</span></a>
+    <a class="nav-item active" href="Notifications.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>Уведомления<span class="nav-badge accent">5</span></a>
+    <div class="nav-section">Аналитика</div>
+    <a class="nav-item" href="Reports.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Отчёты</a>
+    <a class="nav-item" href="Attendance.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Посещаемость</a>
+    <a class="nav-item" href="Load.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Загруженность</a>
+    <div class="nav-section">Система</div>
+    <a class="nav-item" href="Branches.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>Филиалы<span class="nav-badge">3</span></a>
+    <a class="nav-item" href="Settings.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Настройки</a>
+    <div class="sidebar-foot"><div class="me"><div class="me-avatar">МК</div><div style="min-width:0;"><div class="me-name">Маша Костина</div><div class="me-role">Администратор</div></div><a class="me-logout" href="Login.html#logout" title="Выйти"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></a></div></div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <button class="icon-btn hamburger" id="hamburger" aria-label="Меню"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+      <div class="crumbs">Система &nbsp;·&nbsp; <strong>Уведомления</strong></div>
+      <div class="topbar-right">
+        <button class="icon-btn theme-toggle" id="themeToggle" title="Переключить тему" type="button">
+          <svg class="i-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+          <svg class="i-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <section class="content">
+      <div class="page-head">
+        <div>
+          <h1>Уведомления и сообщения</h1>
+          <div class="sub">Системные оповещения, рассылки клиентам, шаблоны и отчёты по доставке.</div>
+        </div>
+        <div class="ha"><button class="btn btn-primary" type="button" id="newBroadcast"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Новая рассылка</button></div>
+      </div>
+
+      <div class="tabs" id="tabs">
+        <button class="tab active" data-tab="center">Центр уведомлений <span class="tb">5</span></button>
+        <button class="tab" data-tab="history">История</button>
+        <button class="tab" data-tab="templates">Шаблоны</button>
+        <button class="tab" data-tab="broadcast">Рассылка</button>
+        <button class="tab" data-tab="delivery">Доставка</button>
+      </div>
+
+      <!-- ЦЕНТР УВЕДОМЛЕНИЙ -->
+      <div class="tabpane active" data-pane="center">
+        <div class="panel">
+          <div class="panel-head"><h2>Центр уведомлений</h2><div class="ph"><button class="btn btn-ghost btn-sm" type="button" id="markAll"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Прочитать все</button></div></div>
+          <div class="chips" id="nchips">
+            <button class="fchip on" data-f="all" type="button">Все</button>
+            <button class="fchip" data-f="unread" type="button">Непрочитанные</button>
+            <button class="fchip" data-f="finance" type="button">Финансы</button>
+            <button class="fchip" data-f="clients" type="button">Клиенты</button>
+            <button class="fchip" data-f="system" type="button">Система</button>
+          </div>
+          <div id="nfeed"></div>
+          <div class="empty" id="nEmpty"><div class="empty-ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div><div class="empty-t">Всё прочитано</div><div class="empty-s">Новых уведомлений по этому фильтру нет.</div></div>
+        </div>
+      </div>
+
+      <!-- ИСТОРИЯ -->
+      <div class="tabpane" data-pane="history">
+        <div class="panel">
+          <div class="panel-head"><h2>История сообщений</h2><div class="ph"><button class="btn btn-ghost btn-sm" type="button" data-toast="Экспорт в CSV">Экспорт</button></div></div>
+          <div class="htable-head"><span>Рассылка</span><span>Канал</span><span>Аудитория</span><span>Отправлено</span><span style="text-align:right">Доставка</span></div>
+          <div id="hrows"></div>
+        </div>
+      </div>
+
+      <!-- ШАБЛОНЫ -->
+      <div class="tabpane" data-pane="templates">
+        <div class="panel">
+          <div class="panel-head"><h2>Шаблоны сообщений</h2><div class="ph"><button class="btn btn-ghost btn-sm" type="button" data-toast="Новый шаблон"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Шаблон</button></div></div>
+          <div class="tgrid" id="tgrid"></div>
+        </div>
+      </div>
+
+      <!-- РАССЫЛКА -->
+      <div class="tabpane" data-pane="broadcast">
+        <div class="panel">
+          <div class="panel-head"><h2>Массовая рассылка</h2></div>
+          <div class="compose">
+            <div>
+              <div class="field"><label class="label">Аудитория</label>
+                <select class="am-select" id="audSel">
+                  <option data-n="847">Все клиенты</option>
+                  <option data-n="23" selected>Истекает абонемент (7 дней)</option>
+                  <option data-n="64">Неактивные 30+ дней</option>
+                  <option data-n="312">Филиал «Сокольники»</option>
+                  <option data-n="128">С абонементом «Год»</option>
+                </select>
+                <div class="aud-row"><span class="ar-t">Получателей</span><span class="ar-n" id="audN">23</span></div>
+              </div>
+              <div class="field"><label class="label">Канал</label>
+                <div class="seg" id="chanSeg">
+                  <button type="button" class="on" data-c="sms">SMS</button>
+                  <button type="button" data-c="push">Push</button>
+                  <button type="button" data-c="email">Email</button>
+                </div>
+              </div>
+              <div class="field" id="subjField" style="display:none;"><label class="label">Тема письма</label><input class="am-input" type="text" value="Ваш абонемент скоро закончится" /></div>
+              <div class="field"><label class="label">Сообщение</label>
+                <textarea class="am-textarea" id="msgText">Привет, {имя}! Ваш абонемент «{абонемент}» заканчивается {дата}. Продлите со скидкой 10% до конца недели 💪</textarea>
+                <div class="varbar">
+                  <button class="varbtn" type="button" data-var="{имя}">{имя}</button>
+                  <button class="varbtn" type="button" data-var="{абонемент}">{абонемент}</button>
+                  <button class="varbtn" type="button" data-var="{дата}">{дата}</button>
+                  <button class="varbtn" type="button" data-var="{филиал}">{филиал}</button>
+                </div>
+              </div>
+              <div class="field"><label class="label">Время отправки</label>
+                <div class="seg" id="whenSeg"><button type="button" class="on" data-w="now">Сейчас</button><button type="button" data-w="sched">Запланировать</button></div>
+              </div>
+            </div>
+            <div class="preview">
+              <div class="phone">
+                <div class="phone-lbl">Предпросмотр</div>
+                <div class="bubble"><div class="bubble-app"><span class="d">М</span>Мой зал</div><span id="pvText"></span></div>
+                <div class="pv-meta">SMS · ~67 символов · 1 сегмент</div>
+              </div>
+              <button class="btn btn-primary" type="button" id="sendBtn" style="width:100%;margin-top:12px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Отправить 23 клиентам</button>
+              <button class="btn btn-ghost" type="button" style="width:100%;margin-top:8px;" data-toast="Сохранено в черновики">В черновики</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ДОСТАВКА -->
+      <div class="tabpane" data-pane="delivery">
+        <div class="panel">
+          <div class="dl-head"><div class="dl-name">Продление · истекающие абонементы</div><div class="dl-meta">SMS · отправлено 28 апр, 12:04 · 312 получателей</div></div>
+          <div class="dl-stats">
+            <div class="dst"><div class="dst-l"><span class="dst-dot s"></span>Отправлено</div><div class="dst-v">312</div><div class="dst-p">100%</div></div>
+            <div class="dst"><div class="dst-l"><span class="dst-dot t"></span>Доставлено</div><div class="dst-v">298</div><div class="dst-p">95.5%</div></div>
+            <div class="dst"><div class="dst-l"><span class="dst-dot r"></span>Прочитано</div><div class="dst-v">214</div><div class="dst-p">68.6%</div></div>
+            <div class="dst"><div class="dst-l"><span class="dst-dot f"></span>Ошибка</div><div class="dst-v">14</div><div class="dst-p">4.5%</div></div>
+          </div>
+          <div class="panel-head" style="border-top:0.5px solid var(--border);"><h2 style="font-size:13px;">Получатели</h2><div class="ph"><select class="btn btn-ghost btn-sm" style="appearance:none;padding-right:26px;background-image:url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23a8a29e' stroke-width='2.6' stroke-linecap='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E&quot;);background-repeat:no-repeat;background-position:right 9px center;"><option>Все</option><option>Прочитано</option><option>Доставлено</option><option>Ошибка</option></select></div></div>
+          <div id="drows"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span id="toastMsg"></span></div>
+
+<script>
+  document.getElementById('themeToggle').addEventListener('click', function () {
+    var d = document.documentElement.getAttribute('data-theme') === 'dark';
+    if (d) { document.documentElement.removeAttribute('data-theme'); localStorage.setItem('admin-theme', 'light'); }
+    else { document.documentElement.setAttribute('data-theme', 'dark'); localStorage.setItem('admin-theme', 'dark'); }
+  });
+  var app = document.getElementById('app');
+  document.getElementById('hamburger').addEventListener('click', function () { app.classList.toggle('nav-open'); });
+  document.getElementById('scrim').addEventListener('click', function () { app.classList.remove('nav-open'); });
+
+  // tabs
+  document.getElementById('tabs').addEventListener('click', function (e) {
+    var t = e.target.closest('.tab'); if (!t) return;
+    document.querySelectorAll('.tab').forEach(function (x) { x.classList.toggle('active', x === t); });
+    document.querySelectorAll('.tabpane').forEach(function (p) { p.classList.toggle('active', p.dataset.pane === t.dataset.tab); });
+  });
+  document.getElementById('newBroadcast').addEventListener('click', function () { document.querySelector('[data-tab="broadcast"]').click(); });
+
+  // ===== notifications =====
+  var NOTIF = [
+    { day:'today', cat:'finance', type:'danger', unread:true, t:'Платёж не прошёл · <b>Игорь Климов</b>', s:'Автосписание за абонемент отклонено банком', time:'12:40', ico:'<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>' },
+    { day:'today', cat:'clients', type:'success', unread:true, t:'Новый клиент · <b>Алина Маркова</b>', s:'Оформила абонемент «3 месяца» онлайн', time:'11:18', ico:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/>' },
+    { day:'today', cat:'system', type:'warn', unread:true, t:'Низкая заполняемость · <b>Новокосино</b>', s:'Сегодня 54% — ниже целевых 70%', time:'10:05', ico:'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>' },
+    { day:'today', cat:'clients', type:'warn', unread:true, t:'23 абонемента истекают на неделе', s:'Запустите рассылку о продлении', time:'09:30', ico:'<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>' },
+    { day:'today', cat:'system', type:'info', unread:true, t:'Расписание · 3 конфликта', s:'Пересечения по залам на этой неделе', time:'09:12', ico:'<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>' },
+    { day:'earlier', cat:'finance', type:'success', unread:false, t:'Выручка за апрель · <b>2 248 000 ₽</b>', s:'+12% к марту по всем филиалам', time:'Вчера', ico:'<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>' },
+    { day:'earlier', cat:'clients', type:'info', unread:false, t:'Отзыв 5★ · <b>Карина Левчук</b>', s:'«Лучший зал на Тверской, спасибо!»', time:'Вчера', ico:'<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>' },
+    { day:'earlier', cat:'system', type:'success', unread:false, t:'Резервная копия создана', s:'Ежедневный бэкап базы выполнен', time:'Вчера', ico:'<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>' }
+  ];
+  var nfilter = 'all';
+  function renderNotif() {
+    var feed = document.getElementById('nfeed');
+    var list = NOTIF.filter(function (n) { return nfilter === 'all' ? true : (nfilter === 'unread' ? n.unread : n.cat === nfilter); });
+    document.getElementById('nEmpty').classList.toggle('show', list.length === 0);
+    var html = '', lastDay = '';
+    list.forEach(function (n) {
+      if (n.day !== lastDay) { html += '<div class="day-lbl">' + (n.day === 'today' ? 'Сегодня' : 'Ранее') + '</div>'; lastDay = n.day; }
+      html += '<div class="nrow' + (n.unread ? ' unread' : '') + '"><div class="n-ico ' + n.type + '"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + n.ico + '</svg></div><div style="flex:1;min-width:0;"><div class="n-t">' + n.t + '</div><div class="n-s">' + n.s + '</div></div><div class="n-time">' + n.time + '</div></div>';
+    });
+    feed.innerHTML = html;
+  }
+  document.getElementById('nchips').addEventListener('click', function (e) {
+    var c = e.target.closest('.fchip'); if (!c) return;
+    nfilter = c.dataset.f; this.querySelectorAll('.fchip').forEach(function (x) { x.classList.toggle('on', x === c); });
+    renderNotif();
+  });
+  document.getElementById('markAll').addEventListener('click', function () { NOTIF.forEach(function (n) { n.unread = false; }); document.querySelector('[data-tab="center"] .tb') && (document.querySelector('.tab[data-tab="center"] .tb').style.display = 'none'); renderNotif(); showToast('Все уведомления прочитаны'); });
+
+  // ===== history =====
+  var HIST = [
+    { name:'Продление · истекающие', sub:'Скидка 10%', ch:'sms', aud:'312 клиентов', n:'312', date:'28 апр · 12:04', pct:95 },
+    { name:'Майские праздники · график', sub:'Изменения в расписании', ch:'push', aud:'847 клиентов', n:'847', date:'25 апр · 18:00', pct:88 },
+    { name:'Возвращайся! · неактивные', sub:'Бесплатная тренировка', ch:'email', aud:'64 клиента', n:'64', date:'20 апр · 10:30', pct:72 },
+    { name:'Новый тренер · йога', sub:'Анонс направления', ch:'push', aud:'312 клиентов', n:'312', date:'14 апр · 14:15', pct:91 },
+    { name:'День рождения · апрель', sub:'Подарок к ДР', ch:'sms', aud:'38 клиентов', n:'38', date:'01 апр · 09:00', pct:97 }
+  ];
+  var CHN = { sms:'SMS', push:'Push', email:'Email' };
+  document.getElementById('hrows').innerHTML = HIST.map(function (h) {
+    return '<div class="hrow" data-toast="Открыт отчёт: ' + h.name + '"><div><div class="h-name">' + h.name + '</div><div class="h-sub">' + h.sub + '</div></div>' +
+      '<div><span class="ch ' + h.ch + '">' + CHN[h.ch] + '</span></div>' +
+      '<div class="h-date"><span class="h-cell-lbl">Аудитория:</span>' + h.aud + '</div>' +
+      '<div class="h-date"><span class="h-cell-lbl">Отправлено:</span>' + h.date + '</div>' +
+      '<div class="h-stat"><div class="h-bar"><div class="h-bar-f" style="width:' + h.pct + '%"></div></div><span class="h-pct">' + h.pct + '%</span></div></div>';
+  }).join('');
+
+  // ===== templates =====
+  var TPL = [
+    { name:'Напоминание о тренировке', trig:'За 2 часа до начала', ch:'push', on:true, body:'Привет, <span class="var">{имя}</span>! Напоминаем: <span class="var">{направление}</span> сегодня в <span class="var">{время}</span>, <span class="var">{зал}</span>.' },
+    { name:'Абонемент истекает', trig:'За 7 дней до окончания', ch:'sms', on:true, body:'<span class="var">{имя}</span>, ваш «<span class="var">{абонемент}</span>» заканчивается <span class="var">{дата}</span>. Продлите со скидкой 10%.' },
+    { name:'Добро пожаловать', trig:'При оформлении абонемента', ch:'email', on:true, body:'Рады видеть вас в «Мой зал», <span class="var">{имя}</span>! Ваш абонемент активен до <span class="var">{дата}</span>.' },
+    { name:'С днём рождения', trig:'В день рождения клиента', ch:'sms', on:false, body:'С днём рождения, <span class="var">{имя}</span>! 🎉 Дарим бесплатную персональную тренировку.' }
+  ];
+  document.getElementById('tgrid').innerHTML = TPL.map(function (t, i) {
+    return '<div class="tpl"><div class="tpl-top"><span class="ch ' + t.ch + '">' + CHN[t.ch] + '</span><div style="min-width:0;"><div class="tpl-name">' + t.name + '</div><div class="tpl-trig">' + t.trig + '</div></div></div>' +
+      '<div class="tpl-body">' + t.body + '</div>' +
+      '<div class="tpl-foot"><button class="sw ' + (t.on ? 'on' : '') + '" type="button" data-tpl="' + i + '"></button><span class="tpl-st">' + (t.on ? 'Включён' : 'Выключен') + '</span><button class="btn btn-ghost btn-sm" type="button" data-toast="Редактирование шаблона">Изменить</button></div></div>';
+  }).join('');
+  document.querySelectorAll('[data-tpl]').forEach(function (s) {
+    s.addEventListener('click', function () { s.classList.toggle('on'); s.nextElementSibling.textContent = s.classList.contains('on') ? 'Включён' : 'Выключен'; });
+  });
+
+  // ===== broadcast composer =====
+  function renderPreview() {
+    var txt = document.getElementById('msgText').value;
+    var html = txt.replace(/\{([^}]+)\}/g, '<span class="var">{$1}</span>');
+    document.getElementById('pvText').innerHTML = html;
+  }
+  document.getElementById('msgText').addEventListener('input', renderPreview);
+  document.querySelectorAll('[data-var]').forEach(function (b) {
+    b.addEventListener('click', function () { var ta = document.getElementById('msgText'); ta.value += (ta.value.endsWith(' ') ? '' : ' ') + b.dataset.var; renderPreview(); ta.focus(); });
+  });
+  document.getElementById('audSel').addEventListener('change', function () {
+    var n = this.options[this.selectedIndex].dataset.n;
+    document.getElementById('audN').textContent = n;
+    document.getElementById('sendBtn').innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Отправить ' + n + ' клиентам';
+  });
+  document.getElementById('chanSeg').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    this.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); });
+    document.getElementById('subjField').style.display = (b.dataset.c === 'email') ? '' : 'none';
+  });
+  document.getElementById('whenSeg').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    this.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); });
+  });
+  document.getElementById('sendBtn').addEventListener('click', function () { showToast('Рассылка запущена · ' + document.getElementById('audN').textContent + ' получателей'); });
+  renderPreview();
+
+  // ===== delivery list =====
+  var DLV = [
+    { ini:'АП', c:'linear-gradient(135deg,#6366f1,#818cf8)', name:'Анна Петрова', phone:'+7 916 224-18-03', st:'read', t:'прочитано 12:09' },
+    { ini:'МС', c:'linear-gradient(135deg,#10b981,#34d399)', name:'Максим Соколов', phone:'+7 903 552-10-44', st:'read', t:'прочитано 12:11' },
+    { ini:'ИК', c:'linear-gradient(135deg,#0ea5e9,#38bdf8)', name:'Игорь Климов', phone:'+7 916 332-09-11', st:'deliv', t:'доставлено 12:05' },
+    { ini:'СО', c:'linear-gradient(135deg,#f59e0b,#fbbf24)', name:'Светлана Орлова', phone:'+7 905 118-44-20', st:'deliv', t:'доставлено 12:05' },
+    { ini:'ОР', c:'linear-gradient(135deg,#f43f5e,#fb7185)', name:'Олег Романов', phone:'+7 903 209-67-31', st:'fail', t:'номер недоступен' }
+  ];
+  var DST = { read:{c:'read',t:'Прочитано'}, deliv:{c:'deliv',t:'Доставлено'}, fail:{c:'fail',t:'Ошибка'} };
+  document.getElementById('drows').innerHTML = DLV.map(function (d) {
+    var s = DST[d.st];
+    return '<div class="drow"><div class="d-ava" style="background:' + d.c + '">' + d.ini + '</div><div style="flex:1;min-width:0;"><div class="d-name">' + d.name + '</div><div class="d-sub">' + d.phone + '</div></div><span class="d-status ' + s.c + '">' + s.t + '</span></div>';
+  }).join('');
+
+  var toast = document.getElementById('toast'), toastTimer = null;
+  function showToast(msg) { document.getElementById('toastMsg').textContent = msg; toast.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 2200); }
+  document.querySelectorAll('[data-toast]').forEach(function (b) { b.addEventListener('click', function () { showToast(b.dataset.toast); }); });
+  document.addEventListener('click', function (e) { var r = e.target.closest('[data-toast]'); });
+
+  renderNotif();
+  if (location.hash === '#broadcast') document.querySelector('[data-tab="broadcast"]').click();
+</script>
+<script>
+/* ============================================================
+   mobile-dock.js — shared Gen-2 mobile quick-action dock
+   Self-contained: injects its own scoped styles (.g2-*), a bottom
+   quick-action dock (≤900px), generic bottom-sheets, and a toast.
+   Relies only on design tokens every screen defines (--text,
+   --surface, --border, --accent, etc.). Safe to drop on any page:
+   inline this IIFE inside a script tag just before the closing body tag.
+   ============================================================ */
+(function () {
+  'use strict';
+  if (window.__g2dock) return;
+  window.__g2dock = true;
+
+  /* ---------- styles ---------- */
+  var css = `
+  .g2-dock { display: none; }
+  @media (max-width: 900px) {
+    .content { padding-bottom: calc(86px + env(safe-area-inset-bottom)) !important; }
+    .g2-dock {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px;
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 95;
+      background: color-mix(in oklab, var(--surface) 92%, transparent);
+      backdrop-filter: blur(16px) saturate(150%); -webkit-backdrop-filter: blur(16px) saturate(150%);
+      border-top: 0.5px solid var(--border);
+      padding: 7px 8px max(8px, env(safe-area-inset-bottom));
+    }
+    .g2-dock-btn {
+      appearance: none; border: 0; background: transparent; cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+      padding: 6px 2px 5px; border-radius: 12px; color: var(--text-2);
+      font-family: inherit; min-height: 56px;
+      transition: background .15s, transform .12s, color .15s;
+    }
+    .g2-dock-btn:active { background: var(--surface-3); transform: scale(.96); }
+    .g2-dock-btn .g2-qd-ico {
+      width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center;
+      background: var(--surface-3); color: var(--text-2);
+      transition: background .15s, color .15s, box-shadow .2s;
+    }
+    .g2-dock-btn.primary .g2-qd-ico { background: var(--text); color: var(--surface); box-shadow: 0 0 0 3px var(--accent-soft); }
+    [data-theme="dark"] .g2-dock-btn.primary .g2-qd-ico { background: var(--accent); color: #06120c; }
+    .g2-dock-btn .g2-qd-lbl { font-size: 10.5px; font-weight: 600; letter-spacing: -.1px; line-height: 1; color: var(--text-3); }
+    .g2-dock-btn.primary .g2-qd-lbl { color: var(--text); }
+  }
+  @media (max-width: 380px) {
+    .g2-dock { padding: 6px 6px max(6px, env(safe-area-inset-bottom)); }
+    .g2-dock-btn { padding: 5px 2px 4px; gap: 3px; min-height: 52px; }
+    .g2-dock-btn .g2-qd-ico { width: 28px; height: 28px; border-radius: 8px; }
+    .g2-dock-btn .g2-qd-lbl { font-size: 10px; }
+  }
+  /* keep page's bottom-anchored chrome (demo state switchers, toasts) above the dock */
+  @media (max-width: 900px) {
+    .state-switcher, .switcher { bottom: calc(96px + env(safe-area-inset-bottom)) !important; top: auto !important; }
+    .toast { bottom: calc(96px + env(safe-area-inset-bottom)) !important; }
+  }
+  /* comfortable touch targets on mobile (≥44px) without distorting icon/round buttons */
+  @media (max-width: 640px) {
+    .btn:not(.btn-sm):not(.icon-btn) { min-height: 44px; }
+  }
+
+  /* bottom-sheet */
+  .g2-sheet-ov {
+    position: fixed; inset: 0; z-index: 140; display: none;
+    align-items: flex-end; justify-content: center;
+    background: rgba(0,0,0,.4); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  }
+  .g2-sheet-ov.open { display: flex; }
+  .g2-sheet {
+    width: 100%; max-width: 520px; background: var(--surface);
+    border-radius: 22px 22px 0 0; box-shadow: 0 -12px 40px rgba(0,0,0,.22);
+    display: flex; flex-direction: column; max-height: 90dvh;
+    transform: translateY(100%); transition: transform .28s cubic-bezier(.32,.72,.2,1);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .g2-sheet-ov.open .g2-sheet { transform: none; }
+  @media (min-width: 560px) { .g2-sheet-ov { align-items: center; } .g2-sheet { border-radius: 20px; margin: 16px; max-height: calc(100dvh - 32px); } }
+  .g2-sheet-grip { width: 36px; height: 4px; border-radius: 999px; background: var(--border-strong); margin: 10px auto 2px; }
+  .g2-sheet-head { display: flex; align-items: flex-start; gap: 12px; padding: 8px 20px 12px; }
+  .g2-sheet-ico { width: 40px; height: 40px; border-radius: 11px; flex-shrink: 0; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-deep); }
+  [data-theme="dark"] .g2-sheet-ico { color: var(--accent); }
+  .g2-sheet-title { font-size: 16.5px; font-weight: 700; letter-spacing: -.3px; }
+  .g2-sheet-sub { font-size: 12.5px; color: var(--text-3); margin-top: 2px; }
+  .g2-sheet-close { margin-left: auto; width: 32px; height: 32px; flex-shrink: 0; border: 0; border-radius: 50%; background: var(--surface-3); color: var(--text-2); display: grid; place-items: center; cursor: pointer; }
+  .g2-sheet-body { padding: 4px 20px 18px; overflow-y: auto; }
+  .g2-lbl { display: block; font-size: 12px; font-weight: 600; color: var(--text-2); margin: 14px 0 7px; }
+  .g2-lbl:first-child { margin-top: 4px; }
+  .g2-inp, .g2-sel {
+    width: 100%; height: 48px; border: 0.5px solid var(--border-strong); background: var(--surface-2);
+    border-radius: 12px; padding: 0 14px; font-size: 16px; color: var(--text); outline: none; font-family: inherit;
+  }
+  .g2-sel { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a8a29e' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; }
+  .g2-inp:focus, .g2-sel:focus { border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .g2-sheet-foot { padding: 12px 20px max(14px, env(safe-area-inset-bottom)); border-top: 0.5px solid var(--border); display: flex; flex-direction: column-reverse; gap: 8px; background: var(--surface-2); }
+  .g2-btn { height: 48px; border-radius: 12px; border: 0; font-size: 15px; font-weight: 650; cursor: pointer; font-family: inherit; width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+  .g2-btn-primary { background: var(--text); color: var(--surface); }
+  [data-theme="dark"] .g2-btn-primary { background: var(--accent); color: #06120c; }
+  .g2-btn-ghost { background: var(--surface); border: 0.5px solid var(--border-strong); color: var(--text); }
+
+  .g2-toast {
+    position: fixed; bottom: calc(96px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--text); color: var(--surface); padding: 12px 18px; border-radius: 999px;
+    font-size: 13.5px; font-weight: 600; box-shadow: 0 12px 32px rgba(0,0,0,.25);
+    display: flex; align-items: center; gap: 9px; opacity: 0; pointer-events: none;
+    transition: opacity .22s, transform .22s; z-index: 160; max-width: calc(100vw - 32px);
+  }
+  [data-theme="dark"] .g2-toast { background: var(--accent); color: #06120c; }
+  .g2-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  @media (min-width: 901px) { .g2-toast { bottom: 24px; } }
+  `;
+  var st = document.createElement('style');
+  st.id = 'g2-dock-styles';
+  st.textContent = css;
+  document.head.appendChild(st);
+
+  /* ---------- icons ---------- */
+  var ICO = {
+    checkin: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>',
+    client: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>',
+    extend: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>',
+    book: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+    close: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+    ok: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+  };
+
+  /* ---------- action sheet content ---------- */
+  var ACTIONS = {
+    checkin: {
+      title: 'Отметить визит', sub: 'Чек-ин клиента на сегодня', ico: ICO.checkin,
+      body: '<label class="g2-lbl">Клиент</label><input class="g2-inp" type="text" placeholder="Имя, телефон или № карты" />' +
+            '<label class="g2-lbl">Направление</label><select class="g2-sel"><option>Тренажёрный зал</option><option>Групповые</option><option>Бассейн</option><option>Персональная</option></select>',
+      cta: 'Отметить визит', toast: 'Визит отмечен'
+    },
+    client: {
+      title: 'Новый клиент', sub: 'Быстрое добавление', ico: ICO.client,
+      body: '<label class="g2-lbl">Имя и фамилия</label><input class="g2-inp" type="text" placeholder="Например, Анна Петрова" />' +
+            '<label class="g2-lbl">Телефон</label><input class="g2-inp" type="tel" inputmode="tel" placeholder="+7" />' +
+            '<label class="g2-lbl">Абонемент</label><select class="g2-sel"><option>Без абонемента</option><option>12 месяцев</option><option>6 месяцев</option><option>Разовое посещение</option></select>',
+      cta: 'Создать клиента', toast: 'Клиент создан'
+    },
+    extend: {
+      title: 'Продлить абонемент', sub: 'Добавить срок действующему', ico: ICO.extend,
+      body: '<label class="g2-lbl">Клиент</label><input class="g2-inp" type="text" placeholder="Имя или телефон" />' +
+            '<label class="g2-lbl">Срок продления</label><select class="g2-sel"><option>1 месяц</option><option>3 месяца</option><option>6 месяцев</option><option>12 месяцев</option></select>',
+      cta: 'Продлить', toast: 'Абонемент продлён'
+    },
+    book: {
+      title: 'Записать на тренировку', sub: 'Бронь слота в расписании', ico: ICO.book,
+      body: '<label class="g2-lbl">Клиент</label><input class="g2-inp" type="text" placeholder="Имя или телефон" />' +
+            '<label class="g2-lbl">Тренировка</label><select class="g2-sel"><option>Йога · сегодня 18:00</option><option>Бокс · сегодня 19:30</option><option>Силовая · завтра 09:00</option><option>Стретчинг · завтра 11:00</option></select>',
+      cta: 'Записать', toast: 'Клиент записан'
+    }
+  };
+
+  /* ---------- dock ---------- */
+  var dock = document.createElement('nav');
+  dock.className = 'g2-dock';
+  dock.setAttribute('aria-label', 'Быстрые действия');
+  dock.innerHTML =
+    '<button class="g2-dock-btn primary" type="button" data-g2-act="checkin"><span class="g2-qd-ico">' + ICO.checkin + '</span><span class="g2-qd-lbl">Чек-ин</span></button>' +
+    '<button class="g2-dock-btn" type="button" data-g2-act="client"><span class="g2-qd-ico">' + ICO.client + '</span><span class="g2-qd-lbl">Клиент</span></button>' +
+    '<button class="g2-dock-btn" type="button" data-g2-act="extend"><span class="g2-qd-ico">' + ICO.extend + '</span><span class="g2-qd-lbl">Продлить</span></button>' +
+    '<button class="g2-dock-btn" type="button" data-g2-act="book"><span class="g2-qd-ico">' + ICO.book + '</span><span class="g2-qd-lbl">Запись</span></button>';
+  document.body.appendChild(dock);
+
+  /* ---------- sheet ---------- */
+  var ov = document.createElement('div');
+  ov.className = 'g2-sheet-ov';
+  ov.innerHTML =
+    '<div class="g2-sheet" role="dialog" aria-modal="true">' +
+      '<div class="g2-sheet-grip"></div>' +
+      '<div class="g2-sheet-head">' +
+        '<div class="g2-sheet-ico" id="g2-ico"></div>' +
+        '<div style="min-width:0;flex:1;"><div class="g2-sheet-title" id="g2-title"></div><div class="g2-sheet-sub" id="g2-sub"></div></div>' +
+        '<button class="g2-sheet-close" type="button" data-g2-close>' + ICO.close + '</button>' +
+      '</div>' +
+      '<div class="g2-sheet-body" id="g2-body"></div>' +
+      '<div class="g2-sheet-foot">' +
+        '<button class="g2-btn g2-btn-primary" type="button" id="g2-cta"></button>' +
+        '<button class="g2-btn g2-btn-ghost" type="button" data-g2-close>Отмена</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(ov);
+
+  /* ---------- toast ---------- */
+  var toast = document.createElement('div');
+  toast.className = 'g2-toast';
+  toast.innerHTML = ICO.ok + '<span id="g2-toast-msg"></span>';
+  document.body.appendChild(toast);
+  var toastTimer = null;
+  function showToast(msg) {
+    document.getElementById('g2-toast-msg').textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 2400);
+  }
+
+  /* ---------- behaviour ---------- */
+  var curAct = null;
+  function openSheet(key) {
+    var a = ACTIONS[key]; if (!a) return;
+    curAct = a;
+    document.getElementById('g2-ico').innerHTML = a.ico;
+    document.getElementById('g2-title').textContent = a.title;
+    document.getElementById('g2-sub').textContent = a.sub;
+    document.getElementById('g2-body').innerHTML = a.body;
+    document.getElementById('g2-cta').textContent = a.cta;
+    ov.classList.add('open');
+  }
+  function closeSheet() { ov.classList.remove('open'); }
+
+  dock.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-g2-act]'); if (!b) return;
+    openSheet(b.getAttribute('data-g2-act'));
+  });
+  ov.addEventListener('click', function (e) {
+    if (e.target === ov || e.target.closest('[data-g2-close]')) closeSheet();
+  });
+  document.getElementById('g2-cta').addEventListener('click', function () {
+    var msg = curAct ? curAct.toast : 'Готово';
+    closeSheet();
+    setTimeout(function () { showToast(msg); }, 180);
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeSheet(); });
+})();
+
+</script>
+</body>
+</html>

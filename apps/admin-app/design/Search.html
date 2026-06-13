@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Админка · Мой зал — Поиск</title>
+<script>(function(){var t=localStorage.getItem('admin-theme')||'light';if(t==='dark')document.documentElement.setAttribute('data-theme','dark');})();</script>
+<style>
+  :root{--accent:#2dd4a4;--accent-deep:#0f9b76;--accent-soft:#d6f5ea;--bg:#f5f5f4;--surface:#fff;--surface-2:#fafaf9;--surface-3:#f1f0ee;--border:#e7e5e4;--border-strong:#d6d3d1;--text:#1c1917;--text-2:#57534e;--text-3:#a8a29e;--warn:#e9a23b;--warn-soft:#fef3e2;--danger:#dc2626;--indigo:#6366f1;--indigo-soft:rgba(99,102,241,.13);--font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter",system-ui,sans-serif;--mono:"SF Mono",ui-monospace,Menlo,monospace;--sh-2:0 1px 3px rgba(28,25,23,.05),0 4px 14px rgba(28,25,23,.04);--sh-3:0 30px 80px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.12);}
+  [data-theme="dark"]{--bg:#0c0c0c;--surface:#181715;--surface-2:#141312;--surface-3:#232120;--border:#2a2826;--border-strong:#3a3735;--text:#f5f5f4;--text-2:#a8a29e;--text-3:#6b6663;--accent-soft:rgba(45,212,164,.16);--indigo-soft:rgba(99,102,241,.22);--sh-3:0 30px 80px rgba(0,0,0,.6),0 8px 24px rgba(0,0,0,.4);}
+  [data-theme="dark"] body{background:#050505;}
+  *{box-sizing:border-box;}html,body{margin:0;padding:0;font-family:var(--font);background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.4;min-height:100vh;}
+  button{font-family:inherit;cursor:pointer;}input{font-family:inherit;}
+  .backdrop{position:fixed;inset:0;overflow:hidden;background:var(--bg);}
+  .bd-bar{height:60px;border-bottom:.5px solid var(--border);display:flex;align-items:center;padding:0 24px;gap:10px;background:var(--surface-2);}
+  .bd-mark{width:28px;height:28px;border-radius:8px;background:var(--text);color:var(--accent);display:grid;place-items:center;font-weight:800;font-size:14px;}[data-theme="dark"] .bd-mark{background:var(--accent);color:#06120c;}.bd-name{font-size:14px;font-weight:700;letter-spacing:-.3px;}
+  .bd-fakesearch{margin-left:18px;display:flex;align-items:center;gap:8px;height:36px;width:300px;max-width:40vw;border:.5px solid var(--border);border-radius:9px;background:var(--surface);padding:0 12px;color:var(--text-3);font-size:13px;}
+  .bd-kbd{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--text-3);}
+  .bd-grid{padding:28px 24px;display:grid;grid-template-columns:repeat(4,1fr);gap:14px;max-width:1000px;}.bd-card{height:92px;border-radius:16px;background:var(--surface);border:.5px solid var(--border);}
+
+  .overlay{position:fixed;inset:0;z-index:100;display:flex;align-items:flex-start;justify-content:center;padding:80px 24px 24px;background:rgba(0,0,0,.4);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);}
+  .palette{width:min(620px,calc(100vw - 32px));max-height:calc(100vh - 120px);background:var(--surface);border:.5px solid var(--border);border-radius:18px;box-shadow:var(--sh-3);display:flex;flex-direction:column;overflow:hidden;animation:pop .24s cubic-bezier(.32,.72,.2,1);}
+  @keyframes pop{from{transform:scale(.97) translateY(-8px);opacity:0;}to{transform:none;opacity:1;}}
+  .p-search{display:flex;align-items:center;gap:12px;padding:16px 18px;border-bottom:.5px solid var(--border);}
+  .p-search svg{color:var(--text-3);flex-shrink:0;}.p-search input{flex:1;border:0;background:transparent;outline:none;font-size:17px;color:var(--text);font-family:inherit;}
+  .p-esc{font-family:var(--mono);font-size:11px;color:var(--text-3);border:.5px solid var(--border);border-radius:6px;padding:2px 7px;}
+  .p-body{overflow-y:auto;padding:8px;}
+  .chips{display:flex;gap:6px;padding:10px 10px 4px;flex-wrap:wrap;}
+  .fchip{border:.5px solid var(--border);background:var(--surface);color:var(--text-2);border-radius:999px;padding:5px 12px;font-size:12px;font-weight:600;}.fchip.on{background:var(--text);color:var(--bg);border-color:var(--text);}[data-theme="dark"] .fchip.on{background:var(--surface-3);color:var(--text);border-color:var(--border-strong);}
+  .grp{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);padding:12px 12px 4px;}
+  .res{display:flex;align-items:center;gap:12px;padding:9px 12px;border-radius:10px;cursor:pointer;}.res:hover,.res.sel{background:var(--surface-2);}.res.sel{box-shadow:inset 0 0 0 1px var(--border);}
+  .res-ico{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;flex-shrink:0;color:#fff;font-size:12px;font-weight:700;}
+  .res-ico.sq{background:var(--surface-3);color:var(--text-2);}
+  .res-t{font-size:13.5px;font-weight:600;}.res-t .hl{background:var(--accent-soft);color:var(--accent-deep);border-radius:3px;padding:0 2px;}[data-theme="dark"] .res-t .hl{color:var(--accent);}
+  .res-s{font-size:11.5px;color:var(--text-3);margin-top:1px;}
+  .res-meta{margin-left:auto;font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:8px;}
+  .res-tag{font-size:10px;font-weight:700;padding:1px 7px;border-radius:999px;background:var(--surface-3);color:var(--text-2);text-transform:uppercase;letter-spacing:.3px;}
+  .p-foot{display:flex;align-items:center;gap:16px;padding:10px 16px;border-top:.5px solid var(--border);background:var(--surface-2);font-size:11.5px;color:var(--text-3);}
+  .p-foot .k{font-family:var(--mono);border:.5px solid var(--border);border-radius:5px;padding:1px 6px;margin-right:4px;}
+  .saved{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;cursor:pointer;}.saved:hover{background:var(--surface-2);}
+  .saved-ico{width:30px;height:30px;border-radius:8px;background:var(--indigo-soft);color:var(--indigo);display:grid;place-items:center;flex-shrink:0;}[data-theme="dark"] .saved-ico{color:#a5b4fc;}
+  .saved-t{font-size:13px;font-weight:600;}.saved-s{font-size:11px;color:var(--text-3);margin-top:1px;}
+  .saved-n{margin-left:auto;font-size:11px;font-weight:700;color:var(--text-2);background:var(--surface-3);border-radius:999px;padding:1px 8px;}
+  .empty{padding:48px 24px;text-align:center;}
+  .empty-ico{width:54px;height:54px;border-radius:15px;background:var(--surface-3);color:var(--text-3);display:grid;place-items:center;margin:0 auto 14px;}
+  .empty-t{font-size:15px;font-weight:700;}.empty-s{font-size:12.5px;color:var(--text-3);margin-top:5px;max-width:320px;margin-left:auto;margin-right:auto;line-height:1.5;}.empty .b{margin-top:16px;}
+  .btn{height:36px;border-radius:10px;padding:0 14px;border:0;font-size:12.5px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface);border:.5px solid var(--border-strong);color:var(--text);}.btn:hover{background:var(--surface-3);}
+  .pane{display:none;}.pane.active{display:block;}
+
+  .switcher{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:200;display:flex;align-items:center;gap:3px;background:color-mix(in oklab,var(--surface) 88%,transparent);backdrop-filter:blur(14px) saturate(140%);border:.5px solid var(--border);border-radius:999px;padding:5px;box-shadow:var(--sh-3);max-width:calc(100vw - 24px);overflow-x:auto;scrollbar-width:none;}.switcher::-webkit-scrollbar{display:none;}
+  .switcher .sw-lbl{font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--text-3);padding:0 8px 0 6px;white-space:nowrap;}
+  .switcher button{border:0;background:transparent;color:var(--text-2);font-size:12.5px;font-weight:600;padding:7px 13px;border-radius:999px;white-space:nowrap;}.switcher button:hover{color:var(--text);}.switcher button.active{background:var(--text);color:var(--bg);}[data-theme="dark"] .switcher button.active{background:var(--accent);color:#06120c;}
+  @media(max-width:640px){.overlay{padding:0;align-items:stretch;}.palette{width:100%;max-width:100%;max-height:100vh;border-radius:0;}.bd-grid{grid-template-columns:1fr 1fr;}.switcher{top:auto;bottom:12px;}}
+</style>
+</head>
+<body data-screen-label="Глобальный поиск">
+  <div class="backdrop" aria-hidden="true">
+    <div class="bd-bar"><div class="bd-mark">М</div><div class="bd-name">Мой&nbsp;зал</div><div class="bd-fakesearch"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Поиск…<span class="bd-kbd">⌘K</span></div></div>
+    <div class="bd-grid"><div class="bd-card"></div><div class="bd-card"></div><div class="bd-card"></div><div class="bd-card"></div></div>
+  </div>
+
+  <div class="overlay">
+    <div class="palette">
+      <div class="p-search">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="q" type="text" placeholder="Клиенты, тренеры, абонементы, действия…" />
+        <span class="p-esc">ESC</span>
+      </div>
+      <div class="chips">
+        <button class="fchip on" data-f="all" type="button">Везде</button>
+        <button class="fchip" data-f="clients" type="button">Клиенты</button>
+        <button class="fchip" data-f="trainers" type="button">Тренеры</button>
+        <button class="fchip" data-f="plans" type="button">Абонементы</button>
+        <button class="fchip" data-f="actions" type="button">Действия</button>
+      </div>
+      <div class="p-body">
+        <!-- РЕЗУЛЬТАТЫ -->
+        <div class="pane active" data-pane="results">
+          <div class="grp">Клиенты</div>
+          <div class="res sel"><div class="res-ico" style="background:linear-gradient(135deg,#6366f1,#818cf8)">АП</div><div style="flex:1;min-width:0;"><div class="res-t"><span class="hl">Анна</span> Петрова</div><div class="res-s">+7 916 224-18-03 · «12 месяцев» · активен</div></div><div class="res-meta"><span class="res-tag">Клиент</span></div></div>
+          <div class="res"><div class="res-ico" style="background:linear-gradient(135deg,#f59e0b,#fbbf24)">АМ</div><div style="flex:1;min-width:0;"><div class="res-t"><span class="hl">Ан</span>тон Морозов</div><div class="res-s">+7 905 771-22-019 · «3 месяца»</div></div><div class="res-meta"><span class="res-tag">Клиент</span></div></div>
+          <div class="grp">Тренеры</div>
+          <div class="res"><div class="res-ico" style="background:linear-gradient(135deg,#8b5cf6,#ec4899)">ОВ</div><div style="flex:1;min-width:0;"><div class="res-t">Ольга Власова</div><div class="res-s">Йога · Тверская · 28 клиентов</div></div><div class="res-meta"><span class="res-tag">Тренер</span></div></div>
+          <div class="grp">Абонементы</div>
+          <div class="res"><div class="res-ico sq"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></div><div style="flex:1;min-width:0;"><div class="res-t">«12 месяцев» · безлимит</div><div class="res-s">24 000 ₽ · 312 активных</div></div><div class="res-meta"><span class="res-tag">Тариф</span></div></div>
+          <div class="grp">Быстрые действия</div>
+          <div class="res"><div class="res-ico sq"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div><div style="flex:1;min-width:0;"><div class="res-t">Добавить клиента</div></div><div class="res-meta"><span class="p-esc">⌘N</span></div></div>
+          <div class="res"><div class="res-ico sq"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="17" y="17" width="4" height="4"/></svg></div><div style="flex:1;min-width:0;"><div class="res-t">Чек-ин по QR</div></div><div class="res-meta"><span class="res-tag">Действие</span></div></div>
+        </div>
+
+        <!-- ПУСТО (нет запроса) -->
+        <div class="pane" data-pane="recent">
+          <div class="grp">Недавние</div>
+          <div class="res"><div class="res-ico sq"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div style="flex:1;min-width:0;"><div class="res-t">Карина Левчук</div></div><div class="res-meta"><button class="btn" style="height:28px;padding:0 8px;" type="button">✕</button></div></div>
+          <div class="res"><div class="res-ico sq"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div style="flex:1;min-width:0;"><div class="res-t">истекающие абонементы</div></div></div>
+          <div class="grp">Сохранённые фильтры</div>
+          <div class="saved"><div class="saved-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></div><div style="flex:1;min-width:0;"><div class="saved-t">Истекают на этой неделе</div><div class="saved-s">Клиенты · абонемент истекает ≤ 7 дней</div></div><span class="saved-n">23</span></div>
+          <div class="saved"><div class="saved-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></div><div style="flex:1;min-width:0;"><div class="saved-t">Неактивные 30+ дней</div><div class="saved-s">Клиенты · нет визитов более 30 дней</div></div><span class="saved-n">64</span></div>
+          <div class="saved"><div class="saved-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></div><div style="flex:1;min-width:0;"><div class="saved-t">VIP · годовой абонемент</div><div class="saved-s">Клиенты · тариф «Год» · филиал любой</div></div><span class="saved-n">128</span></div>
+        </div>
+
+        <!-- НИЧЕГО НЕ НАЙДЕНО -->
+        <div class="pane" data-pane="empty">
+          <div class="empty">
+            <div class="empty-ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg></div>
+            <div class="empty-t">Ничего не найдено</div>
+            <div class="empty-s">По запросу «<b id="emptyQ">кроссфит марс</b>» ничего нет. Проверьте написание или поищите по телефону.</div>
+            <button class="btn b" type="button">Сбросить поиск</button>
+          </div>
+        </div>
+      </div>
+      <div class="p-foot"><span><span class="k">↑↓</span>навигация</span><span><span class="k">↵</span>открыть</span><span><span class="k">esc</span>закрыть</span><span style="margin-left:auto;">Поиск по 847 клиентам · 12 тренерам</span></div>
+    </div>
+  </div>
+
+  <div class="switcher" id="switcher">
+    <span class="sw-lbl">Состояние</span>
+    <button data-go="results" class="active">Результаты</button>
+    <button data-go="recent">Недавнее + фильтры</button>
+    <button data-go="empty">Ничего не найдено</button>
+  </div>
+
+<script>
+  var Q = { results: 'анна', recent: '', empty: 'кроссфит марс' };
+  function go(name) {
+    document.querySelectorAll('.pane').forEach(function (p) { p.classList.toggle('active', p.dataset.pane === name); });
+    document.querySelectorAll('[data-go]').forEach(function (b) { b.classList.toggle('active', b.dataset.go === name); });
+    document.getElementById('q').value = Q[name] || '';
+    if (name === 'empty') document.getElementById('emptyQ').textContent = Q.empty;
+  }
+  document.querySelectorAll('[data-go]').forEach(function (b) { b.addEventListener('click', function () { go(b.dataset.go); }); });
+  document.querySelectorAll('.fchip').forEach(function (c) { c.addEventListener('click', function () { document.querySelectorAll('.fchip').forEach(function (x) { x.classList.toggle('on', x === c); }); }); });
+  // live: empty input -> recent, nonsense -> empty, else results
+  document.getElementById('q').addEventListener('input', function () {
+    var v = this.value.trim().toLowerCase();
+    var pane = !v ? 'recent' : (v.indexOf('март') > -1 || v.indexOf('кроссфит марс') > -1 || v.length > 14 ? 'empty' : 'results');
+    document.querySelectorAll('.pane').forEach(function (p) { p.classList.toggle('active', p.dataset.pane === pane); });
+    document.querySelectorAll('[data-go]').forEach(function (b) { b.classList.toggle('active', b.dataset.go === pane); });
+    if (pane === 'empty') document.getElementById('emptyQ').textContent = this.value;
+  });
+  go('results');
+</script>
+</body>
+</html>

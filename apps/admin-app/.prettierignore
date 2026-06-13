@@ -1,0 +1,20 @@
+# build output / deps
+node_modules
+dist
+*.tsbuildinfo
+
+# package manager lockfile
+bun.lock
+
+# design reference templates — raw HTML, not maintained as source (some have invalid markup)
+design
+
+# vendored skill / agent docs — not project source, maintained verbatim
+.claude
+.agents
+
+# planning docs — hand-authored prose, not prettier-managed
+plans
+
+# project prose docs
+*.md

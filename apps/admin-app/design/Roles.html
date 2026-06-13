@@ -1,0 +1,1032 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Админка · Мой зал — Роли и права</title>
+<script>
+  (function () {
+    var t = localStorage.getItem('admin-theme') || 'light';
+    if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+  })();
+</script>
+<style>
+  :root {
+    --accent: #2dd4a4; --accent-deep: #0f9b76; --accent-soft: #d6f5ea;
+    --bg: #f5f5f4; --surface: #ffffff; --surface-2: #fafaf9; --surface-3: #f1f0ee;
+    --border: #e7e5e4; --border-strong: #d6d3d1;
+    --text: #1c1917; --text-2: #57534e; --text-3: #a8a29e;
+    --warn: #e9a23b; --warn-soft: #fef3e2; --danger: #dc2626; --danger-soft: #fee2e2;
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", system-ui, sans-serif;
+    --mono: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+    --r-sm: 10px; --r-md: 14px; --r-lg: 18px; --r-pill: 999px;
+    --sh-1: 0 1px 2px rgba(28,25,23,.04);
+    --sh-2: 0 1px 3px rgba(28,25,23,.05), 0 4px 14px rgba(28,25,23,.04);
+    --sh-3: 0 8px 30px rgba(28,25,23,.08), 0 2px 6px rgba(28,25,23,.04);
+    --sidebar-w: 248px; --topbar-h: 64px;
+  }
+  [data-theme="dark"] {
+    --bg: #0c0c0c; --surface: #181715; --surface-2: #141312; --surface-3: #232120;
+    --border: #2a2826; --border-strong: #3a3735;
+    --text: #f5f5f4; --text-2: #a8a29e; --text-3: #6b6663;
+    --accent-soft: rgba(45,212,164,.16); --warn-soft: rgba(233,162,59,.18); --danger-soft: rgba(220,38,38,.18);
+    --sh-1: 0 1px 2px rgba(0,0,0,.3);
+    --sh-2: 0 1px 3px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.25);
+    --sh-3: 0 8px 30px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.3);
+  }
+  [data-theme="dark"] body { background: #050505; }
+  [data-theme="dark"] .brand-mark { background: var(--accent); color: #06120c; }
+  [data-theme="dark"] .nav-item.active { background: var(--surface-3); color: var(--text); }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; font-family: var(--font);
+    background: var(--bg); color: var(--text);
+    -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility; font-size: 14px; line-height: 1.4;
+  }
+  button { font-family: inherit; cursor: pointer; }
+  input { font-family: inherit; }
+  a { color: inherit; text-decoration: none; }
+
+  .app { display: grid; grid-template-columns: var(--sidebar-w) 1fr; min-height: 100vh; }
+
+  /* ---------- Sidebar ---------- */
+  .sidebar {
+    background: var(--surface-2); border-right: 0.5px solid var(--border);
+    padding: 18px 14px; display: flex; flex-direction: column; gap: 4px;
+    position: sticky; top: 0; height: 100vh; z-index: 30;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 6px 10px 14px; }
+  .brand-mark {
+    width: 30px; height: 30px; border-radius: 9px; background: var(--text); color: var(--accent);
+    display: grid; place-items: center; font-weight: 800; font-size: 15px; letter-spacing: -0.5px;
+  }
+  .brand-name { font-size: 15px; font-weight: 700; letter-spacing: -0.3px; }
+  .brand .tag {
+    margin-left: auto; font-size: 10px; font-weight: 700; color: var(--text-3);
+    background: var(--surface-3); padding: 2px 7px; border-radius: 999px; letter-spacing: 0.4px;
+  }
+
+  .branch {
+    display: flex; align-items: center; gap: 9px; width: 100%;
+    padding: 9px 11px; border-radius: var(--r-sm); border: 0.5px solid var(--border);
+    background: var(--surface); margin-bottom: 8px; text-align: left;
+  }
+  .branch:hover { border-color: var(--border-strong); }
+  .branch-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+  .branch-label { font-weight: 600; font-size: 13.5px; letter-spacing: -0.1px; }
+  .branch-sub { font-size: 11px; color: var(--text-3); margin-top: 1px; }
+  .branch svg { margin-left: auto; color: var(--text-3); flex-shrink: 0; }
+
+  .nav-section { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-3); padding: 14px 12px 6px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 11px; padding: 8px 11px;
+    border-radius: var(--r-sm); color: var(--text-2); font-size: 13.5px; font-weight: 500;
+    letter-spacing: -0.1px; transition: background .13s, color .13s;
+  }
+  .nav-item:hover { background: var(--surface); color: var(--text); }
+  .nav-item.active { background: var(--text); color: var(--surface); }
+  .nav-item.active .nav-badge { background: var(--accent); color: #06120c; }
+  .nav-item svg { width: 17px; height: 17px; flex-shrink: 0; }
+  .nav-badge {
+    margin-left: auto; font-size: 11px; font-weight: 700; background: var(--surface-3);
+    color: var(--text-2); padding: 1px 7px; border-radius: 999px; font-variant-numeric: tabular-nums;
+  }
+  .nav-badge.accent { background: var(--accent-soft); color: var(--accent-deep); }
+  [data-theme="dark"] .nav-badge.accent { color: var(--accent); }
+
+  .sidebar-foot { margin-top: auto; padding-top: 10px; }
+  .me { display: flex; align-items: center; gap: 10px; padding: 8px 8px; border-radius: var(--r-sm); }
+  .me:hover { background: var(--surface); }
+  .me-avatar { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 12.5px; flex-shrink: 0; }
+  .me-name { font-size: 13px; font-weight: 650; letter-spacing: -0.1px; }
+  .me-role { font-size: 11px; color: var(--text-3); }
+  .me-logout { margin-left: auto; border: 0; background: transparent; color: var(--text-3); display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; }
+  .me-logout:hover { background: var(--surface-3); color: var(--text); }
+
+  /* ---------- Main ---------- */
+  .main { display: flex; flex-direction: column; min-width: 0; }
+  .topbar {
+    height: var(--topbar-h); flex-shrink: 0; display: flex; align-items: center; gap: 14px;
+    padding: 0 26px; border-bottom: 0.5px solid var(--border);
+    background: color-mix(in oklab, var(--surface) 75%, transparent);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    position: sticky; top: 0; z-index: 20;
+  }
+  .hamburger { display: none; }
+  .crumbs { font-size: 13px; color: var(--text-2); }
+  .crumbs strong { color: var(--text); font-weight: 650; }
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .icon-btn {
+    width: 36px; height: 36px; border-radius: 50%;
+    border: 0.5px solid var(--border); background: var(--surface);
+    color: var(--text-2); display: grid; place-items: center;
+    transition: background .15s, color .15s;
+  }
+  .icon-btn:hover { background: var(--surface-3); color: var(--text); }
+  .theme-toggle .i-moon { display: none; }
+  [data-theme="dark"] .theme-toggle .i-moon { display: block; }
+  [data-theme="dark"] .theme-toggle .i-sun { display: none; }
+
+  .content { padding: 26px 26px 60px; max-width: 1280px; width: 100%; }
+
+  /* page head */
+  .page-head { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 22px; flex-wrap: wrap; }
+  .page-head h1 { font-size: 23px; font-weight: 700; letter-spacing: -0.5px; margin: 0 0 5px; }
+  .page-head .sub { font-size: 13.5px; color: var(--text-2); max-width: 560px; line-height: 1.5; }
+  .page-head .ha { margin-left: auto; display: flex; gap: 9px; }
+
+  .btn {
+    height: 40px; border-radius: var(--r-sm); padding: 0 16px; border: 0;
+    font-size: 13.5px; font-weight: 600; letter-spacing: -0.1px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    transition: background .15s, transform .04s, border-color .15s, color .15s;
+  }
+  .btn:active { transform: scale(.99); }
+  .btn-primary { background: var(--text); color: var(--bg); }
+  .btn-primary:hover { background: #000; }
+  [data-theme="dark"] .btn-primary { background: var(--accent); color: #06120c; }
+  [data-theme="dark"] .btn-primary:hover { background: #5ee9b8; }
+  .btn-ghost { background: var(--surface); border: 0.5px solid var(--border-strong); color: var(--text); }
+  .btn-ghost:hover { background: var(--surface-3); }
+
+  /* settings layout */
+  .settings-layout { display: block; }
+  .settings-nav { position: sticky; top: calc(var(--topbar-h) + 16px); display: flex; flex-direction: column; gap: 1px; padding: 6px 4px; }
+  .settings-nav .sn-section { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-3); padding: 14px 12px 4px; }
+  .settings-nav .sn-section:first-child { padding-top: 2px; }
+  .settings-nav a { display: flex; align-items: center; gap: 10px; padding: 7px 11px; border-radius: 9px; color: var(--text-2); font-size: 13px; font-weight: 500; letter-spacing: -0.1px; }
+  .settings-nav a:hover { background: var(--surface); color: var(--text); }
+  .settings-nav a.active { background: var(--text); color: var(--bg); font-weight: 600; }
+  [data-theme="dark"] .settings-nav a.active { background: var(--surface-3); color: var(--text); }
+  .settings-nav a svg { width: 14px; height: 14px; opacity: 0.85; flex-shrink: 0; }
+  .settings-nav a .nh-pill { margin-left: auto; font-size: 10px; font-weight: 700; background: var(--accent-soft); color: var(--accent-deep); padding: 1px 6px; border-radius: 999px; }
+  [data-theme="dark"] .settings-nav a .nh-pill { color: var(--accent); }
+  .settings-nav a.active .nh-pill { background: var(--accent); color: #06120c; }
+
+  /* ---- Roles editor ---- */
+  .roles-grid { display: grid; grid-template-columns: 320px 1fr; gap: 18px; align-items: start; min-width: 0; }
+
+  .panel-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--sh-2); overflow: hidden; }
+  .pc-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 0.5px solid var(--border); }
+  .pc-head h2 { font-size: 14px; font-weight: 700; letter-spacing: -0.2px; margin: 0; }
+  .pc-head .ct { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--text-3); background: var(--surface-3); padding: 2px 8px; border-radius: 999px; }
+
+  /* role list */
+  .role-list { padding: 6px; display: flex; flex-direction: column; gap: 2px; }
+  .role-item {
+    display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+    padding: 11px 12px; border-radius: var(--r-md); border: 1px solid transparent; background: transparent;
+    transition: background .13s, border-color .13s;
+  }
+  .role-item:hover { background: var(--surface-2); }
+  .role-item.active { background: var(--surface-2); border-color: var(--border); box-shadow: var(--sh-1); }
+  .role-item.active::after {
+    content: ""; position: absolute;
+  }
+  .role-item { position: relative; }
+  .role-item.active::before {
+    content: ""; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px;
+    border-radius: 0 3px 3px 0; background: var(--text);
+  }
+  [data-theme="dark"] .role-item.active::before { background: var(--accent); }
+  .ri-ico {
+    width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
+    display: grid; place-items: center; background: var(--surface-3); color: var(--text-2);
+  }
+  .ri-ico.owner { background: #1c1917; color: var(--accent); }
+  [data-theme="dark"] .ri-ico.owner { background: var(--accent); color: #06120c; }
+  .ri-ico.admin { background: var(--accent-soft); color: var(--accent-deep); }
+  [data-theme="dark"] .ri-ico.admin { color: var(--accent); }
+  .ri-ico.purple { background: rgba(99,102,241,.13); color: #4f46e5; }
+  [data-theme="dark"] .ri-ico.purple { background: rgba(99,102,241,.22); color: #a5b4fc; }
+  .ri-ico.amber { background: var(--warn-soft); color: #a36a16; }
+  [data-theme="dark"] .ri-ico.amber { color: var(--warn); }
+  .ri-text { min-width: 0; flex: 1; }
+  .ri-name { font-size: 13.5px; font-weight: 650; letter-spacing: -0.2px; display: flex; align-items: center; gap: 6px; }
+  .ri-lock { color: var(--text-3); }
+  .ri-sub { font-size: 11.5px; color: var(--text-3); margin-top: 2px; }
+  .ri-count { font-size: 12px; font-weight: 700; color: var(--text-2); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+  .role-add {
+    display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
+    padding: 11px; margin: 4px 6px 8px; width: calc(100% - 12px);
+    border: 1px dashed var(--border-strong); border-radius: var(--r-md);
+    background: transparent; color: var(--text-2); font-size: 13px; font-weight: 600;
+    transition: background .13s, color .13s, border-color .13s;
+  }
+  .role-add:hover { background: var(--surface-2); color: var(--text); border-color: var(--text-3); }
+
+  /* role detail */
+  .rd-head { display: flex; align-items: flex-start; gap: 14px; padding: 18px 20px; border-bottom: 0.5px solid var(--border); }
+  .rd-ico { width: 46px; height: 46px; border-radius: 13px; flex-shrink: 0; display: grid; place-items: center; }
+  .rd-title { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; display: flex; align-items: center; gap: 9px; }
+  .rd-badge { font-size: 10px; font-weight: 700; letter-spacing: 0.3px; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; background: var(--surface-3); color: var(--text-2); }
+  .rd-badge.sys { background: var(--accent-soft); color: var(--accent-deep); }
+  [data-theme="dark"] .rd-badge.sys { color: var(--accent); }
+  .rd-desc { font-size: 13px; color: var(--text-2); margin-top: 5px; line-height: 1.5; max-width: 520px; }
+  .rd-members { margin-left: auto; text-align: right; flex-shrink: 0; }
+  .rd-ava-row { display: flex; justify-content: flex-end; margin-bottom: 6px; }
+  .rd-ava {
+    width: 30px; height: 30px; border-radius: 50%; margin-left: -8px;
+    border: 2px solid var(--surface); display: grid; place-items: center;
+    font-size: 11px; font-weight: 700; color: #fff;
+  }
+  .rd-ava:first-child { margin-left: 0; }
+  .rd-ava.more { background: var(--surface-3); color: var(--text-2); }
+  .rd-members-lbl { font-size: 11.5px; color: var(--text-3); }
+  .rd-members-lbl b { color: var(--text); }
+
+  /* perms toolbar */
+  .perm-toolbar { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-bottom: 0.5px solid var(--border); background: var(--surface-2); }
+  .perm-search { flex: 1; max-width: 280px; position: relative; display: flex; align-items: center; }
+  .perm-search svg { position: absolute; left: 11px; color: var(--text-3); }
+  .perm-search input {
+    width: 100%; height: 34px; border: 0.5px solid var(--border-strong); border-radius: 8px;
+    background: var(--surface); padding: 0 12px 0 32px; font-size: 12.5px; color: var(--text); outline: none;
+  }
+  .perm-search input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .perm-summary { margin-left: auto; font-size: 12px; color: var(--text-2); }
+  .perm-summary b { color: var(--text); font-variant-numeric: tabular-nums; }
+
+  /* perm table */
+  .perm-colhead {
+    display: grid; grid-template-columns: 1fr 312px; gap: 16px;
+    padding: 10px 20px; border-bottom: 0.5px solid var(--border);
+    font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-3);
+  }
+  .perm-colhead .levels { display: grid; grid-template-columns: repeat(3, 1fr); text-align: center; gap: 4px; }
+  .perm-rows { padding: 4px 0; }
+  .perm-row {
+    display: grid; grid-template-columns: 1fr 312px; gap: 16px; align-items: center;
+    padding: 11px 20px; border-bottom: 0.5px solid var(--border);
+  }
+  .perm-row:last-child { border-bottom: 0; }
+  .perm-row.hidden { display: none; }
+  .pr-mod { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .pr-mod > div { min-width: 0; }
+  .pr-ico { width: 32px; height: 32px; border-radius: 9px; background: var(--surface-3); color: var(--text-2); display: grid; place-items: center; flex-shrink: 0; }
+  .pr-name { font-size: 13.5px; font-weight: 600; letter-spacing: -0.1px; }
+  .pr-sub { font-size: 11.5px; color: var(--text-3); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* segmented level control */
+  .seg {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px;
+    background: var(--surface-3); border-radius: 9px; padding: 3px;
+  }
+  .seg button {
+    border: 0; background: transparent; color: var(--text-2);
+    font-size: 12px; font-weight: 600; letter-spacing: -0.1px;
+    height: 30px; border-radius: 7px; display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+    transition: background .14s, color .14s, box-shadow .14s;
+  }
+  .seg button:hover:not(.on) { color: var(--text); }
+  .seg button.on { background: var(--surface); color: var(--text); box-shadow: var(--sh-1); }
+  .seg button.on[data-lvl="2"] { color: var(--accent-deep); }
+  [data-theme="dark"] .seg button.on[data-lvl="2"] { color: var(--accent); }
+  .seg button.on[data-lvl="0"] { color: var(--text-3); }
+  .seg button svg { width: 13px; height: 13px; }
+
+  /* locked role state */
+  .perm-row.locked .seg { opacity: 0.6; pointer-events: none; }
+  .lock-note {
+    display: flex; align-items: center; gap: 9px; margin: 0 20px 4px; margin-top: 14px;
+    padding: 11px 14px; border-radius: var(--r-sm); background: var(--surface-2);
+    border: 0.5px solid var(--border); font-size: 12.5px; color: var(--text-2); line-height: 1.45;
+  }
+  .lock-note .li { color: var(--text-3); flex-shrink: 0; }
+  .lock-note b { color: var(--text); }
+  .lock-note.hidden { display: none; }
+
+  /* footer save bar */
+  .perm-foot {
+    display: flex; align-items: center; gap: 12px; padding: 14px 20px;
+    border-top: 0.5px solid var(--border); background: var(--surface-2);
+  }
+  .perm-foot .pf-info { font-size: 12.5px; color: var(--text-2); }
+  .perm-foot .pf-info b { color: var(--text); }
+  .perm-foot .pf-actions { margin-left: auto; display: flex; gap: 9px; }
+  .perm-foot.locked .pf-actions { display: none; }
+
+  /* toast */
+  .toast {
+    position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--text); color: var(--bg); padding: 11px 18px; border-radius: 999px;
+    font-size: 13px; font-weight: 600; box-shadow: var(--sh-3); display: flex; align-items: center; gap: 9px;
+    opacity: 0; pointer-events: none; transition: opacity .22s, transform .22s; z-index: 80;
+  }
+  [data-theme="dark"] .toast { background: var(--accent); color: #06120c; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* skeleton / states */
+  .skel { position: relative; overflow: hidden; background: var(--surface-3); border-radius: 8px; }
+  .skel::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--surface) 65%, transparent), transparent); animation: shimmer 1.3s infinite; }
+  @keyframes shimmer { 100% { transform: translateX(100%); } }
+  .skel-row { display: flex; align-items: center; gap: 12px; padding: 11px 12px; }
+  .skel-line { height: 11px; }
+  .state-msg { padding: 48px 24px; text-align: center; }
+  .state-ico { width: 54px; height: 54px; border-radius: 16px; margin: 0 auto 16px; display: grid; place-items: center; background: var(--surface-3); color: var(--text-3); }
+  .state-ico.err { background: var(--danger-soft); color: var(--danger); }
+  .state-title { font-size: 16px; font-weight: 700; letter-spacing: -0.3px; }
+  .state-sub { font-size: 13px; color: var(--text-2); margin: 6px auto 0; line-height: 1.5; max-width: 320px; }
+  .state-msg .btn { margin-top: 18px; }
+
+  /* state switcher */
+  .state-switcher {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 90;
+    display: flex; align-items: center; gap: 3px;
+    background: color-mix(in oklab, var(--surface) 88%, transparent);
+    backdrop-filter: blur(14px) saturate(140%); -webkit-backdrop-filter: blur(14px) saturate(140%);
+    border: 0.5px solid var(--border); border-radius: 999px; padding: 5px; box-shadow: var(--sh-3);
+    max-width: calc(100vw - 24px); overflow-x: auto; scrollbar-width: none;
+  }
+  .state-switcher::-webkit-scrollbar { display: none; }
+  .state-switcher .sw-lbl { font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-3); padding: 0 8px 0 6px; white-space: nowrap; }
+  .state-switcher button { border: 0; background: transparent; color: var(--text-2); font-size: 12.5px; font-weight: 600; padding: 7px 13px; border-radius: 999px; white-space: nowrap; transition: background .15s, color .15s; }
+  .state-switcher button:hover { color: var(--text); }
+  .state-switcher button.active { background: var(--text); color: var(--bg); }
+  [data-theme="dark"] .state-switcher button.active { background: var(--accent); color: #06120c; }
+
+  .scrim { display: none; }
+
+  @media (max-width: 1080px) {
+    .roles-grid { grid-template-columns: 1fr; }
+    .perm-row, .perm-colhead { grid-template-columns: 1fr 280px; }
+  }
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; }
+    .sidebar {
+      position: fixed; left: 0; top: 0; width: 264px; transform: translateX(-100%);
+      transition: transform .26s cubic-bezier(.32,.72,.2,1); box-shadow: var(--sh-3);
+    }
+    .app.nav-open .sidebar { transform: none; }
+    .hamburger { display: grid; }
+    .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.34); z-index: 25; opacity: 0; visibility: hidden; transition: opacity .22s; }
+    .app.nav-open .scrim { display: block; opacity: 1; visibility: visible; }
+    .settings-layout { grid-template-columns: 1fr; gap: 14px; }
+    .settings-nav { position: relative; top: 0; flex-direction: row; overflow-x: auto; padding: 4px 0 8px; gap: 4px; scrollbar-width: none; }
+    .settings-nav::-webkit-scrollbar { display: none; }
+    .settings-nav .sn-section { display: none; }
+    .settings-nav a { white-space: nowrap; padding: 7px 13px; background: var(--surface); border: 0.5px solid var(--border); }
+    .settings-nav a svg { display: none; }
+  }
+  @media (max-width: 720px) {
+    .content { padding: 18px 16px 96px; }
+    .perm-colhead { display: none; }
+    .perm-rows { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; }
+    .perm-row, .perm-row.locked { grid-template-columns: 1fr; gap: 12px; padding: 14px; border: 0.5px solid var(--border); border-radius: 14px; }
+    .perm-row:last-child { border-bottom: 0.5px solid var(--border); }
+    .pr-sub { white-space: normal; }
+    .seg { width: 100%; }
+    .lock-note { margin: 14px 16px 0; }
+    .rd-head { flex-wrap: wrap; }
+    .rd-members { margin-left: 0; text-align: left; }
+    .rd-ava-row { justify-content: flex-start; }
+    .page-head .ha { margin-left: 0; width: 100%; }
+    .page-head .ha .btn { flex: 1; }
+    .perm-foot { flex-direction: column-reverse; align-items: stretch; gap: 10px; }
+    .perm-foot .pf-actions { width: 100%; }
+    .perm-foot .pf-actions .btn { flex: 1; }
+  }
+  @media (max-width: 420px) {
+    .seg button { font-size: 11px; gap: 3px; }
+    .seg button svg { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app" data-screen-label="Roles & permissions">
+  <div class="scrim" id="scrim"></div>
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">М</div>
+      <div class="brand-name">Мой&nbsp;зал</div>
+      <span class="tag">ADMIN</span>
+    </div>
+
+    <button class="branch" type="button">
+      <span class="branch-dot"></span>
+      <div style="flex:1;min-width:0;">
+        <div class="branch-label">Все филиалы</div>
+        <div class="branch-sub">3 филиала · 847 клиентов</div>
+      </div>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+
+    <div class="nav-section">Управление</div>
+    <a class="nav-item" href="Dashboard.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>Дашборд</a>
+    <a class="nav-item" href="Clients.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Клиенты<span class="nav-badge">847</span></a>
+    <a class="nav-item" href="Schedule.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>Расписание</a>
+    <a class="nav-item" href="Plans.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>Абонементы</a>
+    <a class="nav-item" href="Trainers.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>Тренеры<span class="nav-badge">12</span></a>
+    <a class="nav-item" href="Cashbox.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M2 8h20"/><path d="M6 21h12"/></svg>Касса</a>
+    <a class="nav-item" href="Messages.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>Сообщения<span class="nav-badge accent">4</span></a>
+
+    <div class="nav-section">Аналитика</div>
+    <a class="nav-item" href="Reports.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Отчёты</a>
+    <a class="nav-item" href="Attendance.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Посещаемость</a>
+    <a class="nav-item" href="Load.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Загруженность</a>
+
+    <div class="nav-section">Система</div>
+    <a class="nav-item active" href="Settings.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Настройки</a>
+
+    <div class="sidebar-foot">
+      <div class="me">
+        <div class="me-avatar">АЛ</div>
+        <div style="min-width:0;">
+          <div class="me-name">Артём Лебедев</div>
+          <div class="me-role">Владелец</div>
+        </div>
+        <a class="me-logout" href="Login.html#logout" title="Выйти">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </a>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="main">
+    <header class="topbar">
+      <button class="icon-btn hamburger" id="hamburger" aria-label="Меню">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <div class="crumbs">Настройки &nbsp;·&nbsp; <strong>Роли и права доступа</strong></div>
+      <div class="topbar-right">
+        <button class="icon-btn theme-toggle" id="themeToggle" title="Переключить тему" type="button">
+          <svg class="i-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+          <svg class="i-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <section class="content">
+      <div class="page-head">
+        <div>
+          <h1>Роли и права доступа</h1>
+          <div class="sub">Настройте, что видят и могут делать сотрудники. Системные роли изменять нельзя — создавайте собственные под задачи зала.</div>
+        </div>
+        <div class="ha">
+          <a class="btn btn-ghost" href="#"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/></svg>Журнал доступа</a>
+          <button class="btn btn-primary" type="button" id="newRoleBtn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Создать роль</button>
+        </div>
+      </div>
+
+      <div class="settings-layout">
+        <div class="roles-grid">
+          <!-- ROLE LIST -->
+          <div class="panel-card">
+            <div class="pc-head">
+              <h2>Роли</h2>
+              <span class="ct" id="roleCount">6</span>
+            </div>
+            <div class="role-list" id="roleList"></div>
+            <button class="role-add" type="button" id="addRoleInline">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Новая роль
+            </button>
+          </div>
+
+          <!-- ROLE DETAIL -->
+          <div class="panel-card">
+            <div class="rd-head">
+              <div class="rd-ico" id="rdIco"></div>
+              <div style="min-width:0;">
+                <div class="rd-title"><span id="rdName"></span><span class="rd-badge" id="rdBadge"></span></div>
+                <div class="rd-desc" id="rdDesc"></div>
+              </div>
+              <div class="rd-members">
+                <div class="rd-ava-row" id="rdAvas"></div>
+                <div class="rd-members-lbl" id="rdMembers"></div>
+              </div>
+            </div>
+
+            <div class="state-msg err-block" id="detailError" style="display:none;">
+              <div class="state-ico err"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+              <div class="state-title">Не удалось загрузить права</div>
+              <div class="state-sub">Проверьте соединение и попробуйте снова. Если ошибка повторяется — обновите страницу.</div>
+              <button class="btn btn-primary" type="button" id="retryBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>Повторить</button>
+            </div>
+
+            <div id="detailBody">
+            <div class="perm-toolbar">
+              <div class="perm-search">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="permSearch" placeholder="Найти раздел…" />
+              </div>
+              <div class="perm-summary" id="permSummary"></div>
+            </div>
+
+            <div class="perm-colhead">
+              <span>Раздел</span>
+              <div class="levels"><span>Нет</span><span>Просмотр</span><span>Управление</span></div>
+            </div>
+
+            <div class="lock-note hidden" id="lockNote">
+              <span class="li"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+              <div><b>Системная роль.</b> Права заданы платформой и не редактируются. Чтобы настроить доступ под себя — создайте копию роли.</div>
+            </div>
+
+            <div class="perm-rows" id="permRows"></div>
+            <div class="state-msg" id="permEmpty" style="display:none;padding:40px 24px;">
+              <div class="state-ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
+              <div class="state-title">Ничего не найдено</div>
+              <div class="state-sub">Не нашли раздел по этому запросу. Попробуйте другое слово.</div>
+            </div>
+
+            <div class="perm-foot" id="permFoot">
+              <div class="pf-info" id="pfInfo">Все изменения сохраняются автоматически.</div>
+              <div class="pf-actions">
+                <button class="btn btn-ghost" type="button" id="resetBtn">Сбросить</button>
+                <button class="btn btn-primary" type="button" id="saveBtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Сохранить</button>
+              </div>
+            </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span id="toastMsg">Изменения сохранены</span></div>
+
+<div class="state-switcher" id="stateSwitcher">
+  <span class="sw-lbl">Состояние</span>
+  <button data-state-btn="normal" class="active">Данные</button>
+  <button data-state-btn="loading">Загрузка</button>
+  <button data-state-btn="error">Ошибка</button>
+</div>
+
+<script>
+  // theme + nav
+  document.getElementById('themeToggle').addEventListener('click', function () {
+    var d = document.documentElement.getAttribute('data-theme') === 'dark';
+    if (d) { document.documentElement.removeAttribute('data-theme'); localStorage.setItem('admin-theme', 'light'); }
+    else { document.documentElement.setAttribute('data-theme', 'dark'); localStorage.setItem('admin-theme', 'dark'); }
+  });
+  var app = document.getElementById('app');
+  document.getElementById('hamburger').addEventListener('click', function () { app.classList.toggle('nav-open'); });
+  document.getElementById('scrim').addEventListener('click', function () { app.classList.remove('nav-open'); });
+
+  // ---- modules ----
+  var MODULES = [
+    { id: 'dashboard', name: 'Дашборд', sub: 'Сводка и метрики зала', ico: '<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>' },
+    { id: 'clients', name: 'Клиенты', sub: 'Карточки, абонементы, заморозки', ico: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/>' },
+    { id: 'schedule', name: 'Расписание', sub: 'Запись на тренировки и залы', ico: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>' },
+    { id: 'plans', name: 'Абонементы', sub: 'Тарифы, цены и продления', ico: '<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>' },
+    { id: 'trainers', name: 'Тренеры', sub: 'Профили, ставки и нагрузка', ico: '<circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/>' },
+    { id: 'cashbox', name: 'Касса', sub: 'Платежи, возвраты, смены', ico: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M2 8h20"/><path d="M6 21h12"/>' },
+    { id: 'messages', name: 'Сообщения', sub: 'Переписка и рассылки', ico: '<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>' },
+    { id: 'reports', name: 'Отчёты', sub: 'Финансы и аналитика', ico: '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>' },
+    { id: 'attendance', name: 'Посещаемость', sub: 'Чек-ины и журнал визитов', ico: '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>' },
+    { id: 'settings', name: 'Настройки', sub: 'Конфигурация и интеграции', ico: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>' }
+  ];
+
+  // ---- roles ----
+  // perms: 0 none, 1 view, 2 manage
+  function P(d,c,sc,p,t,cb,m,r,a,st){ return {dashboard:d,clients:c,schedule:sc,plans:p,trainers:t,cashbox:cb,messages:m,reports:r,attendance:a,settings:st}; }
+  var ROLES = [
+    { id:'owner', name:'Владелец', sys:true, locked:true, icoClass:'owner', icoSvg:'<path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5z"/>',
+      desc:'Полный доступ ко всем разделам и филиалам, управление биллингом и удаление аккаунта.', count:1,
+      avas:[{i:'АЛ',c:'linear-gradient(135deg,#6366f1,#8b5cf6)'}],
+      perms:P(2,2,2,2,2,2,2,2,2,2) },
+    { id:'admin', name:'Администратор', sys:true, locked:true, icoClass:'admin', icoSvg:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+      desc:'Управление залом и сотрудниками. Доступ ко всем рабочим разделам, кроме биллинга.', count:3,
+      avas:[{i:'МК',c:'linear-gradient(135deg,#0ea5e9,#22d3ee)'},{i:'ДС',c:'linear-gradient(135deg,#f59e0b,#ef4444)'},{i:'ИП',c:'linear-gradient(135deg,#10b981,#34d399)'}],
+      perms:P(2,2,2,2,2,2,2,2,2,1) },
+    { id:'manager', name:'Управляющий', sys:false, locked:false, icoClass:'purple', icoSvg:'<path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/>',
+      desc:'Руководит филиалом: клиенты, расписание, тренеры и посещаемость. Финансы — только просмотр.', count:3,
+      avas:[{i:'ОВ',c:'linear-gradient(135deg,#8b5cf6,#ec4899)'},{i:'РК',c:'linear-gradient(135deg,#06b6d4,#3b82f6)'},{i:'+1',c:''}],
+      perms:P(2,2,2,2,2,1,2,1,2,0) },
+    { id:'reception', name:'Ресепшн', sys:false, locked:false, icoClass:'amber', icoSvg:'<path d="M4 22h16"/><path d="M4 22V8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14"/><path d="M9 22v-4h6v4"/>',
+      desc:'Встречает клиентов: чек-ины, запись на тренировки, оформление и продление абонементов.', count:5,
+      avas:[{i:'ЛТ',c:'linear-gradient(135deg,#f43f5e,#fb7185)'},{i:'НГ',c:'linear-gradient(135deg,#14b8a6,#2dd4bf)'},{i:'+3',c:''}],
+      perms:P(1,2,2,1,0,1,2,0,2,0) },
+    { id:'trainer', name:'Тренер', sys:false, locked:false, icoClass:'purple', icoSvg:'<circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/>',
+      desc:'Видит своё расписание и клиентов на тренировках, отмечает посещения. Без доступа к финансам.', count:12,
+      avas:[{i:'АП',c:'linear-gradient(135deg,#6366f1,#818cf8)'},{i:'ВД',c:'linear-gradient(135deg,#f59e0b,#fbbf24)'},{i:'+10',c:''}],
+      perms:P(1,1,2,0,0,0,1,0,1,0) },
+    { id:'accountant', name:'Бухгалтер', sys:false, locked:false, icoClass:'amber', icoSvg:'<rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="12" y2="14"/>',
+      desc:'Работает с деньгами: касса, возвраты, финансовые отчёты. Операционные разделы — только чтение.', count:1,
+      avas:[{i:'СБ',c:'linear-gradient(135deg,#0ea5e9,#38bdf8)'}],
+      perms:P(1,1,0,1,0,2,0,2,0,0) }
+  ];
+
+  var state = {}; // working copy of current role's perms
+  var currentRole = null;
+
+  var roleList = document.getElementById('roleList');
+  function renderRoleList() {
+    roleList.innerHTML = '';
+    ROLES.forEach(function (r) {
+      var b = document.createElement('button');
+      b.className = 'role-item' + (currentRole && currentRole.id === r.id ? ' active' : '');
+      b.type = 'button';
+      b.innerHTML =
+        '<span class="ri-ico ' + r.icoClass + '"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + r.icoSvg + '</svg></span>' +
+        '<span class="ri-text"><span class="ri-name">' + r.name + (r.locked ? '<span class="ri-lock"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>' : '') + '</span><span class="ri-sub">' + (r.sys ? 'Системная' : 'Пользовательская') + ' роль</span></span>' +
+        '<span class="ri-count">' + r.count + '</span>';
+      b.addEventListener('click', function () { selectRole(r.id); if (window.innerWidth <= 1080) document.querySelector('.roles-grid').scrollIntoView ? null : null; });
+      roleList.appendChild(b);
+    });
+    document.getElementById('roleCount').textContent = ROLES.length;
+  }
+
+  var LEVELS = [
+    { v:0, label:'Нет', svg:'<line x1="5" y1="12" x2="19" y2="12"/>' },
+    { v:1, label:'Просмотр', svg:'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>' },
+    { v:2, label:'Управление', svg:'<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>' }
+  ];
+
+  var permRows = document.getElementById('permRows');
+  function renderPerms() {
+    permRows.innerHTML = '';
+    var locked = currentRole.locked;
+    MODULES.forEach(function (m) {
+      var row = document.createElement('div');
+      row.className = 'perm-row' + (locked ? ' locked' : '');
+      row.dataset.mod = m.id;
+      var seg = LEVELS.map(function (lv) {
+        var on = state[m.id] === lv.v;
+        return '<button type="button" data-lvl="' + lv.v + '" class="' + (on ? 'on' : '') + '"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' + lv.svg + '</svg>' + lv.label + '</button>';
+      }).join('');
+      row.innerHTML =
+        '<div class="pr-mod"><span class="pr-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' + m.ico + '</svg></span>' +
+        '<div><div class="pr-name">' + m.name + '</div><div class="pr-sub">' + m.sub + '</div></div></div>' +
+        '<div class="seg">' + seg + '</div>';
+      if (!locked) {
+        row.querySelectorAll('.seg button').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            state[m.id] = parseInt(btn.dataset.lvl, 10);
+            row.querySelectorAll('.seg button').forEach(function (b2) { b2.classList.toggle('on', b2 === btn); });
+            updateSummary();
+            markDirty();
+          });
+        });
+      }
+      permRows.appendChild(row);
+    });
+    applySearch();
+  }
+
+  function updateSummary() {
+    var manage = 0, view = 0, none = 0;
+    MODULES.forEach(function (m) { var v = state[m.id]; if (v === 2) manage++; else if (v === 1) view++; else none++; });
+    document.getElementById('permSummary').innerHTML = '<b>' + manage + '</b> управление · <b>' + view + '</b> просмотр · <b>' + none + '</b> закрыто';
+  }
+
+  var dirty = false;
+  function markDirty() {
+    dirty = true;
+    document.getElementById('pfInfo').innerHTML = '<b>Есть несохранённые изменения.</b>';
+  }
+
+  function selectRole(id) {
+    var de = document.getElementById('detailError'), db = document.getElementById('detailBody');
+    if (de) de.style.display = 'none'; if (db) db.style.display = '';
+    document.querySelectorAll('[data-state-btn]').forEach(function (b) { b.classList.toggle('active', b.dataset.stateBtn === 'normal'); });
+    pageState = 'normal';
+    currentRole = ROLES.find(function (r) { return r.id === id; });
+    state = Object.assign({}, currentRole.perms);
+    dirty = false;
+    renderRoleList();
+
+    document.getElementById('rdName').textContent = currentRole.name;
+    var ico = document.getElementById('rdIco');
+    ico.className = 'rd-ico ri-ico ' + currentRole.icoClass;
+    ico.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + currentRole.icoSvg + '</svg>';
+    var badge = document.getElementById('rdBadge');
+    badge.textContent = currentRole.sys ? 'Системная' : 'Своя роль';
+    badge.className = 'rd-badge' + (currentRole.sys ? ' sys' : '');
+    badge.style.display = '';
+    document.getElementById('rdDesc').textContent = currentRole.desc;
+
+    var avas = document.getElementById('rdAvas');
+    avas.innerHTML = currentRole.avas.map(function (a) {
+      return '<span class="rd-ava ' + (a.c ? '' : 'more') + '" style="' + (a.c ? 'background:' + a.c : '') + '">' + a.i + '</span>';
+    }).join('');
+    document.getElementById('rdMembers').innerHTML = '<b>' + currentRole.count + '</b> ' + plural(currentRole.count, 'сотрудник', 'сотрудника', 'сотрудников');
+
+    document.getElementById('lockNote').classList.toggle('hidden', !currentRole.locked);
+    document.getElementById('permFoot').classList.toggle('locked', currentRole.locked);
+
+    renderPerms();
+    updateSummary();
+    document.getElementById('pfInfo').innerHTML = currentRole.locked ? 'Системная роль — только просмотр.' : 'Все изменения сохраняются автоматически.';
+  }
+
+  function plural(n, one, few, many) {
+    var m10 = n % 10, m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return one;
+    if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
+    return many;
+  }
+
+  // search filter
+  var permSearch = document.getElementById('permSearch');
+  function applySearch() {
+    var q = (permSearch.value || '').trim().toLowerCase();
+    var shown = 0;
+    permRows.querySelectorAll('.perm-row').forEach(function (row) {
+      var m = MODULES.find(function (x) { return x.id === row.dataset.mod; });
+      var hit = !q || (m && (m.name.toLowerCase().indexOf(q) > -1 || m.sub.toLowerCase().indexOf(q) > -1));
+      row.classList.toggle('hidden', !hit);
+      if (hit) shown++;
+    });
+    var empty = document.getElementById('permEmpty');
+    if (empty) empty.style.display = (shown === 0 && q) ? '' : 'none';
+  }
+  permSearch.addEventListener('input', applySearch);
+
+  // save / reset
+  var toast = document.getElementById('toast');
+  var toastTimer = null;
+  function showToast(msg) {
+    document.getElementById('toastMsg').textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 2200);
+  }
+  document.getElementById('saveBtn').addEventListener('click', function () {
+    currentRole.perms = Object.assign({}, state);
+    dirty = false;
+    document.getElementById('pfInfo').innerHTML = 'Все изменения сохранены.';
+    showToast('Права роли «' + currentRole.name + '» сохранены');
+  });
+  document.getElementById('resetBtn').addEventListener('click', function () {
+    state = Object.assign({}, currentRole.perms);
+    dirty = false;
+    renderPerms(); updateSummary();
+    document.getElementById('pfInfo').innerHTML = 'Изменения отменены.';
+  });
+
+  document.getElementById('newRoleBtn').addEventListener('click', newRole);
+  document.getElementById('addRoleInline').addEventListener('click', newRole);
+  function newRole() { showToast('Откроется мастер создания роли'); }
+
+  // ---- page state: data / loading / error ----
+  var pageState = 'normal';
+  function skelRoleRow() {
+    return '<div class="skel-row"><div class="skel" style="width:34px;height:34px;border-radius:10px;flex-shrink:0;"></div><div style="flex:1;min-width:0;"><div class="skel skel-line" style="width:60%;"></div><div class="skel skel-line" style="width:38%;margin-top:8px;"></div></div></div>';
+  }
+  function renderSkeleton() {
+    var rl = document.getElementById('roleList'); rl.innerHTML = '';
+    for (var i = 0; i < 6; i++) rl.insertAdjacentHTML('beforeend', skelRoleRow());
+    var ico = document.getElementById('rdIco'); ico.className = 'rd-ico skel'; ico.innerHTML = '';
+    document.getElementById('rdName').innerHTML = '<span class="skel skel-line" style="display:inline-block;width:150px;height:16px;"></span>';
+    document.getElementById('rdBadge').style.display = 'none';
+    document.getElementById('rdDesc').innerHTML = '<span class="skel skel-line" style="display:block;width:90%;height:11px;margin-top:8px;"></span><span class="skel skel-line" style="display:block;width:60%;height:11px;margin-top:7px;"></span>';
+    document.getElementById('rdAvas').innerHTML = '';
+    document.getElementById('rdMembers').innerHTML = '';
+    document.getElementById('lockNote').classList.add('hidden');
+    document.getElementById('permSummary').innerHTML = '';
+    document.getElementById('permEmpty').style.display = 'none';
+    var pr = document.getElementById('permRows'); pr.innerHTML = '';
+    for (var j = 0; j < 7; j++) pr.insertAdjacentHTML('beforeend', '<div class="perm-row"><div class="pr-mod"><span class="skel" style="width:32px;height:32px;border-radius:9px;flex-shrink:0;"></span><div style="flex:1;min-width:0;"><div class="skel skel-line" style="width:120px;"></div><div class="skel skel-line" style="width:80px;margin-top:8px;"></div></div></div><div class="skel" style="height:36px;border-radius:9px;"></div></div>');
+  }
+  function setState(s) {
+    pageState = s;
+    document.querySelectorAll('[data-state-btn]').forEach(function (b) { b.classList.toggle('active', b.dataset.stateBtn === s); });
+    var de = document.getElementById('detailError'), db = document.getElementById('detailBody');
+    if (s === 'error') { de.style.display = ''; db.style.display = 'none'; renderRoleList(); return; }
+    de.style.display = 'none'; db.style.display = '';
+    if (s === 'loading') { renderSkeleton(); }
+    else { document.getElementById('rdIco').className = 'rd-ico ri-ico'; selectRole(currentRole ? currentRole.id : 'manager'); }
+  }
+  document.querySelectorAll('[data-state-btn]').forEach(function (b) { b.addEventListener('click', function () { setState(b.dataset.stateBtn); }); });
+  document.getElementById('retryBtn').addEventListener('click', function () { setState('loading'); setTimeout(function () { setState('normal'); }, 1100); });
+
+  // init
+  renderRoleList();
+  selectRole('manager');
+</script>
+<script>
+/* ============================================================
+   mobile-dock.js — shared Gen-2 mobile quick-action dock
+   Self-contained: injects its own scoped styles (.g2-*), a bottom
+   quick-action dock (≤900px), generic bottom-sheets, and a toast.
+   Relies only on design tokens every screen defines (--text,
+   --surface, --border, --accent, etc.). Safe to drop on any page:
+   inline this IIFE inside a script tag just before the closing body tag.
+   ============================================================ */
+(function () {
+  'use strict';
+  if (window.__g2dock) return;
+  window.__g2dock = true;
+
+  /* ---------- styles ---------- */
+  var css = `
+  .g2-dock { display: none; }
+  @media (max-width: 900px) {
+    .content { padding-bottom: calc(86px + env(safe-area-inset-bottom)) !important; }
+    .g2-dock {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px;
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 95;
+      background: color-mix(in oklab, var(--surface) 92%, transparent);
+      backdrop-filter: blur(16px) saturate(150%); -webkit-backdrop-filter: blur(16px) saturate(150%);
+      border-top: 0.5px solid var(--border);
+      padding: 7px 8px max(8px, env(safe-area-inset-bottom));
+    }
+    .g2-dock-btn {
+      appearance: none; border: 0; background: transparent; cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+      padding: 6px 2px 5px; border-radius: 12px; color: var(--text-2);
+      font-family: inherit; min-height: 56px;
+      transition: background .15s, transform .12s, color .15s;
+    }
+    .g2-dock-btn:active { background: var(--surface-3); transform: scale(.96); }
+    .g2-dock-btn .g2-qd-ico {
+      width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center;
+      background: var(--surface-3); color: var(--text-2);
+      transition: background .15s, color .15s, box-shadow .2s;
+    }
+    .g2-dock-btn.primary .g2-qd-ico { background: var(--text); color: var(--surface); box-shadow: 0 0 0 3px var(--accent-soft); }
+    [data-theme="dark"] .g2-dock-btn.primary .g2-qd-ico { background: var(--accent); color: #06120c; }
+    .g2-dock-btn .g2-qd-lbl { font-size: 10.5px; font-weight: 600; letter-spacing: -.1px; line-height: 1; color: var(--text-3); }
+    .g2-dock-btn.primary .g2-qd-lbl { color: var(--text); }
+  }
+  @media (max-width: 380px) {
+    .g2-dock { padding: 6px 6px max(6px, env(safe-area-inset-bottom)); }
+    .g2-dock-btn { padding: 5px 2px 4px; gap: 3px; min-height: 52px; }
+    .g2-dock-btn .g2-qd-ico { width: 28px; height: 28px; border-radius: 8px; }
+    .g2-dock-btn .g2-qd-lbl { font-size: 10px; }
+  }
+  /* keep page's bottom-anchored chrome (demo state switchers, toasts) above the dock */
+  @media (max-width: 900px) {
+    .state-switcher, .switcher { bottom: calc(96px + env(safe-area-inset-bottom)) !important; top: auto !important; }
+    .toast { bottom: calc(96px + env(safe-area-inset-bottom)) !important; }
+  }
+  /* comfortable touch targets on mobile (≥44px) without distorting icon/round buttons */
+  @media (max-width: 640px) {
+    .btn:not(.btn-sm):not(.icon-btn) { min-height: 44px; }
+  }
+
+  /* bottom-sheet */
+  .g2-sheet-ov {
+    position: fixed; inset: 0; z-index: 140; display: none;
+    align-items: flex-end; justify-content: center;
+    background: rgba(0,0,0,.4); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  }
+  .g2-sheet-ov.open { display: flex; }
+  .g2-sheet {
+    width: 100%; max-width: 520px; background: var(--surface);
+    border-radius: 22px 22px 0 0; box-shadow: 0 -12px 40px rgba(0,0,0,.22);
+    display: flex; flex-direction: column; max-height: 90dvh;
+    transform: translateY(100%); transition: transform .28s cubic-bezier(.32,.72,.2,1);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .g2-sheet-ov.open .g2-sheet { transform: none; }
+  @media (min-width: 560px) { .g2-sheet-ov { align-items: center; } .g2-sheet { border-radius: 20px; margin: 16px; max-height: calc(100dvh - 32px); } }
+  .g2-sheet-grip { width: 36px; height: 4px; border-radius: 999px; background: var(--border-strong); margin: 10px auto 2px; }
+  .g2-sheet-head { display: flex; align-items: flex-start; gap: 12px; padding: 8px 20px 12px; }
+  .g2-sheet-ico { width: 40px; height: 40px; border-radius: 11px; flex-shrink: 0; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-deep); }
+  [data-theme="dark"] .g2-sheet-ico { color: var(--accent); }
+  .g2-sheet-title { font-size: 16.5px; font-weight: 700; letter-spacing: -.3px; }
+  .g2-sheet-sub { font-size: 12.5px; color: var(--text-3); margin-top: 2px; }
+  .g2-sheet-close { margin-left: auto; width: 32px; height: 32px; flex-shrink: 0; border: 0; border-radius: 50%; background: var(--surface-3); color: var(--text-2); display: grid; place-items: center; cursor: pointer; }
+  .g2-sheet-body { padding: 4px 20px 18px; overflow-y: auto; }
+  .g2-lbl { display: block; font-size: 12px; font-weight: 600; color: var(--text-2); margin: 14px 0 7px; }
+  .g2-lbl:first-child { margin-top: 4px; }
+  .g2-inp, .g2-sel {
+    width: 100%; height: 48px; border: 0.5px solid var(--border-strong); background: var(--surface-2);
+    border-radius: 12px; padding: 0 14px; font-size: 16px; color: var(--text); outline: none; font-family: inherit;
+  }
+  .g2-sel { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a8a29e' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; }
+  .g2-inp:focus, .g2-sel:focus { border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .g2-sheet-foot { padding: 12px 20px max(14px, env(safe-area-inset-bottom)); border-top: 0.5px solid var(--border); display: flex; flex-direction: column-reverse; gap: 8px; background: var(--surface-2); }
+  .g2-btn { height: 48px; border-radius: 12px; border: 0; font-size: 15px; font-weight: 650; cursor: pointer; font-family: inherit; width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+  .g2-btn-primary { background: var(--text); color: var(--surface); }
+  [data-theme="dark"] .g2-btn-primary { background: var(--accent); color: #06120c; }
+  .g2-btn-ghost { background: var(--surface); border: 0.5px solid var(--border-strong); color: var(--text); }
+
+  .g2-toast {
+    position: fixed; bottom: calc(96px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--text); color: var(--surface); padding: 12px 18px; border-radius: 999px;
+    font-size: 13.5px; font-weight: 600; box-shadow: 0 12px 32px rgba(0,0,0,.25);
+    display: flex; align-items: center; gap: 9px; opacity: 0; pointer-events: none;
+    transition: opacity .22s, transform .22s; z-index: 160; max-width: calc(100vw - 32px);
+  }
+  [data-theme="dark"] .g2-toast { background: var(--accent); color: #06120c; }
+  .g2-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  @media (min-width: 901px) { .g2-toast { bottom: 24px; } }
+  `;
+  var st = document.createElement('style');
+  st.id = 'g2-dock-styles';
+  st.textContent = css;
+  document.head.appendChild(st);
+
+  /* ---------- icons ---------- */
+  var ICO = {
+    checkin: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>',
+    client: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>',
+    extend: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>',
+    book: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+    close: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+    ok: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+  };
+
+  /* ---------- action sheet content ---------- */
+  var ACTIONS = {
+    checkin: {
+      title: 'Отметить визит', sub: 'Чек-ин клиента на сегодня', ico: ICO.checkin,
+      body: '<label class="g2-lbl">Клиент</label><input class="g2-inp" type="text" placeholder="Имя, телефон или № карты" />' +
+            '<label class="g2-lbl">Направление</label><select class="g2-sel"><option>Тренажёрный зал</option><option>Групповые</option><option>Бассейн</option><option>Персональная</option></select>',
+      cta: 'Отметить визит', toast: 'Визит отмечен'
+    },
+    client: {
+      title: 'Новый клиент', sub: 'Быстрое добавление', ico: ICO.client,
+      body: '<label class="g2-lbl">Имя и фамилия</label><input class="g2-inp" type="text" placeholder="Например, Анна Петрова" />' +
+            '<label class="g2-lbl">Телефон</label><input class="g2-inp" type="tel" inputmode="tel" placeholder="+7" />' +
+            '<label class="g2-lbl">Абонемент</label><select class="g2-sel"><option>Без абонемента</option><option>12 месяцев</option><option>6 месяцев</option><option>Разовое посещение</option></select>',
+      cta: 'Создать клиента', toast: 'Клиент создан'
+    },
+    extend: {
+      title: 'Продлить абонемент', sub: 'Добавить срок действующему', ico: ICO.extend,
+      body: '<label class="g2-lbl">Клиент</label><input class="g2-inp" type="text" placeholder="Имя или телефон" />' +
+            '<label class="g2-lbl">Срок продления</label><select class="g2-sel"><option>1 месяц</option><option>3 месяца</option><option>6 месяцев</option><option>12 месяцев</option></select>',
+      cta: 'Продлить', toast: 'Абонемент продлён'
+    },
+    book: {
+      title: 'Записать на тренировку', sub: 'Бронь слота в расписании', ico: ICO.book,
+      body: '<label class="g2-lbl">Клиент</label><input class="g2-inp" type="text" placeholder="Имя или телефон" />' +
+            '<label class="g2-lbl">Тренировка</label><select class="g2-sel"><option>Йога · сегодня 18:00</option><option>Бокс · сегодня 19:30</option><option>Силовая · завтра 09:00</option><option>Стретчинг · завтра 11:00</option></select>',
+      cta: 'Записать', toast: 'Клиент записан'
+    }
+  };
+
+  /* ---------- dock ---------- */
+  var dock = document.createElement('nav');
+  dock.className = 'g2-dock';
+  dock.setAttribute('aria-label', 'Быстрые действия');
+  dock.innerHTML =
+    '<button class="g2-dock-btn primary" type="button" data-g2-act="checkin"><span class="g2-qd-ico">' + ICO.checkin + '</span><span class="g2-qd-lbl">Чек-ин</span></button>' +
+    '<button class="g2-dock-btn" type="button" data-g2-act="client"><span class="g2-qd-ico">' + ICO.client + '</span><span class="g2-qd-lbl">Клиент</span></button>' +
+    '<button class="g2-dock-btn" type="button" data-g2-act="extend"><span class="g2-qd-ico">' + ICO.extend + '</span><span class="g2-qd-lbl">Продлить</span></button>' +
+    '<button class="g2-dock-btn" type="button" data-g2-act="book"><span class="g2-qd-ico">' + ICO.book + '</span><span class="g2-qd-lbl">Запись</span></button>';
+  document.body.appendChild(dock);
+
+  /* ---------- sheet ---------- */
+  var ov = document.createElement('div');
+  ov.className = 'g2-sheet-ov';
+  ov.innerHTML =
+    '<div class="g2-sheet" role="dialog" aria-modal="true">' +
+      '<div class="g2-sheet-grip"></div>' +
+      '<div class="g2-sheet-head">' +
+        '<div class="g2-sheet-ico" id="g2-ico"></div>' +
+        '<div style="min-width:0;flex:1;"><div class="g2-sheet-title" id="g2-title"></div><div class="g2-sheet-sub" id="g2-sub"></div></div>' +
+        '<button class="g2-sheet-close" type="button" data-g2-close>' + ICO.close + '</button>' +
+      '</div>' +
+      '<div class="g2-sheet-body" id="g2-body"></div>' +
+      '<div class="g2-sheet-foot">' +
+        '<button class="g2-btn g2-btn-primary" type="button" id="g2-cta"></button>' +
+        '<button class="g2-btn g2-btn-ghost" type="button" data-g2-close>Отмена</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(ov);
+
+  /* ---------- toast ---------- */
+  var toast = document.createElement('div');
+  toast.className = 'g2-toast';
+  toast.innerHTML = ICO.ok + '<span id="g2-toast-msg"></span>';
+  document.body.appendChild(toast);
+  var toastTimer = null;
+  function showToast(msg) {
+    document.getElementById('g2-toast-msg').textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 2400);
+  }
+
+  /* ---------- behaviour ---------- */
+  var curAct = null;
+  function openSheet(key) {
+    var a = ACTIONS[key]; if (!a) return;
+    curAct = a;
+    document.getElementById('g2-ico').innerHTML = a.ico;
+    document.getElementById('g2-title').textContent = a.title;
+    document.getElementById('g2-sub').textContent = a.sub;
+    document.getElementById('g2-body').innerHTML = a.body;
+    document.getElementById('g2-cta').textContent = a.cta;
+    ov.classList.add('open');
+  }
+  function closeSheet() { ov.classList.remove('open'); }
+
+  dock.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-g2-act]'); if (!b) return;
+    openSheet(b.getAttribute('data-g2-act'));
+  });
+  ov.addEventListener('click', function (e) {
+    if (e.target === ov || e.target.closest('[data-g2-close]')) closeSheet();
+  });
+  document.getElementById('g2-cta').addEventListener('click', function () {
+    var msg = curAct ? curAct.toast : 'Готово';
+    closeSheet();
+    setTimeout(function () { showToast(msg); }, 180);
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeSheet(); });
+})();
+
+</script>
+</body>
+</html>

@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Админка · Мой зал — Тренировка</title>
+<script>
+  (function () { var t = localStorage.getItem('admin-theme') || 'light'; if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); })();
+</script>
+<style>
+  :root {
+    --accent: #2dd4a4; --accent-deep: #0f9b76; --accent-soft: #d6f5ea;
+    --bg: #f5f5f4; --surface: #ffffff; --surface-2: #fafaf9; --surface-3: #f1f0ee;
+    --border: #e7e5e4; --border-strong: #d6d3d1;
+    --text: #1c1917; --text-2: #57534e; --text-3: #a8a29e;
+    --warn: #e9a23b; --warn-soft: #fef3e2; --danger: #dc2626; --danger-soft: #fee2e2;
+    --indigo: #6366f1; --indigo-soft: rgba(99,102,241,.13);
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", system-ui, sans-serif;
+    --mono: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+    --sh-2: 0 1px 3px rgba(28,25,23,.05), 0 4px 14px rgba(28,25,23,.04);
+    --sh-3: 0 30px 80px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.12);
+  }
+  [data-theme="dark"] {
+    --bg: #0c0c0c; --surface: #181715; --surface-2: #141312; --surface-3: #232120;
+    --border: #2a2826; --border-strong: #3a3735;
+    --text: #f5f5f4; --text-2: #a8a29e; --text-3: #6b6663;
+    --accent-soft: rgba(45,212,164,.16); --warn-soft: rgba(233,162,59,.18); --danger-soft: rgba(220,38,38,.18); --indigo-soft: rgba(99,102,241,.22);
+    --sh-2: 0 1px 3px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.25); --sh-3: 0 30px 80px rgba(0,0,0,.6), 0 8px 24px rgba(0,0,0,.4);
+  }
+  [data-theme="dark"] body { background: #050505; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; font-family: var(--font); background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; font-size: 14px; line-height: 1.4; min-height: 100vh; }
+  button { font-family: inherit; cursor: pointer; }
+  input, select, textarea { font-family: inherit; }
+
+  /* faux calendar backdrop */
+  .backdrop { position: fixed; inset: 0; overflow: hidden; background: var(--bg); }
+  .bd-bar { height: 60px; border-bottom: 0.5px solid var(--border); display: flex; align-items: center; padding: 0 24px; gap: 10px; background: var(--surface-2); }
+  .bd-mark { width: 28px; height: 28px; border-radius: 8px; background: var(--text); color: var(--accent); display: grid; place-items: center; font-weight: 800; font-size: 14px; }
+  [data-theme="dark"] .bd-mark { background: var(--accent); color: #06120c; }
+  .bd-name { font-size: 14px; font-weight: 700; letter-spacing: -0.3px; }
+  .cal { padding: 18px 24px; }
+  .cal-grid { display: grid; grid-template-columns: 44px repeat(7, 1fr); gap: 1px; background: var(--border); border: 0.5px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .cal-cell { background: var(--surface); min-height: 46px; padding: 4px; }
+  .cal-head { background: var(--surface-2); min-height: 0; padding: 9px 4px; text-align: center; font-size: 11px; font-weight: 700; color: var(--text-3); }
+  .cal-time { background: var(--surface-2); font-size: 10px; color: var(--text-3); text-align: right; padding: 4px 6px; font-variant-numeric: tabular-nums; }
+  .cal-ev { border-radius: 6px; padding: 4px 6px; font-size: 10px; font-weight: 600; margin-bottom: 2px; line-height: 1.2; color: var(--accent-deep); background: var(--accent-soft); border-left: 2px solid var(--accent); }
+  .cal-ev.g { color: #a36a16; background: var(--warn-soft); border-left-color: var(--warn); }
+  [data-theme="dark"] .cal-ev { color: var(--accent); }
+  [data-theme="dark"] .cal-ev.g { color: var(--warn); }
+
+  .am-overlay { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(0,0,0,.4); backdrop-filter: blur(7px) saturate(120%); -webkit-backdrop-filter: blur(7px) saturate(120%); }
+  .am-modal { background: var(--surface); border: 0.5px solid var(--border); border-radius: 18px; box-shadow: var(--sh-3); width: min(500px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); display: none; flex-direction: column; overflow: hidden; animation: pop .26s cubic-bezier(.32,.72,.2,1); }
+  .am-modal.active { display: flex; }
+  .am-modal.wide { width: min(560px, calc(100vw - 32px)); }
+  @keyframes pop { from { transform: scale(.96) translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+  .am-modal-head { display: flex; align-items: flex-start; gap: 13px; padding: 18px 22px 14px; }
+  .am-modal-ico { width: 44px; height: 44px; border-radius: 13px; flex-shrink: 0; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent-deep); }
+  [data-theme="dark"] .am-modal-ico { color: var(--accent); }
+  .am-modal-ico.warn { background: var(--warn-soft); color: #a36a16; }
+  [data-theme="dark"] .am-modal-ico.warn { color: var(--warn); }
+  .am-modal-ico.danger { background: var(--danger-soft); color: var(--danger); }
+  .am-modal-ico.indigo { background: var(--indigo-soft); color: var(--indigo); }
+  [data-theme="dark"] .am-modal-ico.indigo { color: #a5b4fc; }
+  .am-modal-htext { min-width: 0; flex: 1; }
+  .am-modal-title { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; line-height: 1.2; display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+  .am-modal-sub { font-size: 12.5px; color: var(--text-2); margin-top: 4px; line-height: 1.45; }
+  .badge { font-size: 10px; font-weight: 700; letter-spacing: 0.3px; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-deep); }
+  [data-theme="dark"] .badge { color: var(--accent); }
+  .badge.warn { background: var(--warn-soft); color: #a36a16; }
+  [data-theme="dark"] .badge.warn { color: var(--warn); }
+  .am-modal-close { width: 32px; height: 32px; border-radius: 50%; border: 0; background: var(--surface-3); color: var(--text-2); display: grid; place-items: center; flex-shrink: 0; }
+  .am-modal-close:hover { background: var(--border); color: var(--text); }
+  .am-modal-body { padding: 4px 22px 18px; overflow-y: auto; }
+  .am-modal-foot { padding: 14px 22px; border-top: 0.5px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; align-items: center; background: var(--surface-2); }
+  .am-modal-foot.spread { justify-content: space-between; }
+
+  .btn { height: 40px; border-radius: 11px; padding: 0 17px; border: 0; font-size: 13.5px; font-weight: 600; letter-spacing: -0.1px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; white-space: nowrap; transition: background .15s, transform .05s, border-color .15s, color .15s; }
+  .btn:active { transform: scale(.98); }
+  .btn-primary { background: var(--text); color: var(--bg); }
+  .btn-primary:hover { background: #000; }
+  [data-theme="dark"] .btn-primary { background: var(--accent); color: #06120c; }
+  .btn-ghost { background: var(--surface); border: 0.5px solid var(--border-strong); color: var(--text); }
+  .btn-ghost:hover { background: var(--surface-3); }
+  .btn-danger { background: var(--danger); color: #fff; }
+  .btn-danger:hover { background: #b91c1c; }
+  .btn-icon { width: 40px; padding: 0; }
+  .btn-sm { height: 34px; padding: 0 12px; font-size: 12.5px; border-radius: 9px; }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+  /* fields */
+  .am-section { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-3); margin: 18px 0 11px; }
+  .am-section:first-child { margin-top: 14px; }
+  .field { margin-bottom: 12px; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .field-row.three { grid-template-columns: 1fr 1fr 1fr; }
+  .label { display: block; font-size: 12px; font-weight: 600; color: var(--text-2); margin-bottom: 7px; }
+  .am-input, .am-select { width: 100%; height: 42px; border: 0.5px solid var(--border-strong); background: var(--surface-2); border-radius: 11px; padding: 0 13px; font-size: 14px; color: var(--text); outline: none; transition: border-color .15s, background .15s, box-shadow .15s; }
+  .am-select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a8a29e' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 13px center; padding-right: 34px; }
+  .am-input:focus, .am-select:focus { border-color: var(--accent); background: var(--surface); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .seg { display: grid; grid-auto-flow: column; gap: 3px; background: var(--surface-3); border-radius: 10px; padding: 3px; }
+  .seg button { border: 0; background: transparent; color: var(--text-2); font-size: 13px; font-weight: 600; height: 34px; border-radius: 8px; transition: background .14s, color .14s, box-shadow .14s; }
+  .seg button.on { background: var(--surface); color: var(--text); box-shadow: var(--sh-2); }
+
+  /* callouts */
+  .am-callout { display: flex; gap: 10px; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); border: 0.5px solid var(--border); margin-top: 14px; }
+  .am-callout.accent { background: var(--accent-soft); border-color: transparent; }
+  .am-callout.warn { background: var(--warn-soft); border-color: transparent; }
+  .am-callout.danger { background: var(--danger-soft); border-color: transparent; }
+  .am-callout-ico { width: 18px; flex-shrink: 0; color: var(--text-2); margin-top: 1px; }
+  .am-callout.accent .am-callout-ico { color: var(--accent-deep); }
+  .am-callout.warn .am-callout-ico { color: #a36a16; }
+  .am-callout.danger .am-callout-ico { color: var(--danger); }
+  .am-callout-text { font-size: 12.5px; color: var(--text-2); line-height: 1.45; }
+  .am-callout-text b { color: var(--text); font-weight: 650; }
+  .am-callout.accent .am-callout-text { color: var(--accent-deep); }
+  [data-theme="dark"] .am-callout.accent .am-callout-text { color: var(--accent); }
+
+  /* slot status (reschedule) */
+  .slot-status { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 12.5px; font-weight: 600; }
+  .slot-status.free { color: var(--accent-deep); }
+  [data-theme="dark"] .slot-status.free { color: var(--accent); }
+  .slot-status.busy { color: var(--danger); }
+
+  /* detail bits */
+  .det-row { display: flex; align-items: center; gap: 11px; padding: 11px 0; border-bottom: 0.5px dashed var(--border); }
+  .det-row:last-child { border-bottom: 0; }
+  .det-ava { width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center; color: #fff; font-size: 12px; font-weight: 700; }
+  .det-k { font-size: 11.5px; color: var(--text-3); }
+  .det-v { font-size: 13.5px; font-weight: 600; margin-top: 1px; }
+  .cap-wrap { margin-top: 14px; }
+  .cap-top { display: flex; align-items: baseline; gap: 8px; margin-bottom: 7px; }
+  .cap-n { font-size: 14px; font-weight: 700; }
+  .cap-free { font-size: 12px; color: var(--text-3); margin-left: auto; }
+  .cap-bar { height: 8px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
+  .cap-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), #5ee9b8); }
+  .cap-fill.full { background: linear-gradient(90deg, var(--warn), #f5c563); }
+  .avatars { display: flex; align-items: center; margin-top: 14px; flex-wrap: wrap; gap: 8px 0; }
+  .avatars .a { width: 32px; height: 32px; border-radius: 50%; margin-right: -8px; border: 2px solid var(--surface); display: grid; place-items: center; color: #fff; font-size: 11px; font-weight: 700; }
+  .avatars .a.more { background: var(--surface-3); color: var(--text-2); }
+
+  /* conflicts list */
+  .cf-item { border: 0.5px solid var(--border); border-radius: 13px; padding: 13px; margin-top: 12px; }
+  .cf-item-head { display: flex; align-items: center; gap: 9px; font-size: 12.5px; font-weight: 650; color: var(--danger); margin-bottom: 11px; }
+  .cf-pair { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; }
+  .cf-card { background: var(--surface-2); border-radius: 10px; padding: 10px 11px; }
+  .cf-card.dim { opacity: .8; }
+  .cf-card-t { font-size: 12.5px; font-weight: 650; }
+  .cf-card-s { font-size: 11px; color: var(--text-3); margin-top: 2px; }
+  .cf-vs { font-size: 11px; font-weight: 700; color: var(--text-3); }
+  .cf-item-acts { display: flex; gap: 8px; margin-top: 11px; }
+
+  /* waitlist */
+  .wl-row { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 0.5px solid var(--border); }
+  .wl-row:last-child { border-bottom: 0; }
+  .wl-pos { width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center; font-size: 11.5px; font-weight: 700; background: var(--surface-3); color: var(--text-2); }
+  .wl-row:first-child .wl-pos { background: var(--accent); color: #06120c; }
+  .wl-name { font-size: 13.5px; font-weight: 600; }
+  .wl-sub { font-size: 11px; color: var(--text-3); margin-top: 1px; }
+  .wl-acts { margin-left: auto; display: flex; gap: 6px; }
+
+  /* toggle */
+  .cf-toggle { display: flex; align-items: center; gap: 12px; margin-top: 14px; padding: 11px 14px; border-radius: 12px; background: var(--surface-2); border: 0.5px solid var(--border); }
+  .cf-toggle-t { font-size: 13px; font-weight: 600; }
+  .cf-toggle-s { font-size: 11.5px; color: var(--text-3); margin-top: 1px; }
+  .sw { width: 40px; height: 24px; border-radius: 999px; background: var(--border-strong); position: relative; flex-shrink: 0; transition: background .18s; border: 0; margin-left: auto; }
+  .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .18s; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+  .sw.on { background: var(--accent); }
+  .sw.on::after { transform: translateX(16px); }
+
+  /* toast + switcher */
+  .toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--text); color: var(--bg); padding: 11px 16px; border-radius: 999px; font-size: 13px; font-weight: 600; box-shadow: var(--sh-3); display: flex; align-items: center; gap: 9px; opacity: 0; pointer-events: none; transition: opacity .22s, transform .22s; z-index: 300; }
+  [data-theme="dark"] .toast { background: var(--accent); color: #06120c; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .switcher { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 200; display: flex; align-items: center; gap: 3px; background: color-mix(in oklab, var(--surface) 88%, transparent); backdrop-filter: blur(14px) saturate(140%); -webkit-backdrop-filter: blur(14px) saturate(140%); border: 0.5px solid var(--border); border-radius: 999px; padding: 5px; box-shadow: var(--sh-3); max-width: calc(100vw - 24px); overflow-x: auto; scrollbar-width: none; }
+  .switcher::-webkit-scrollbar { display: none; }
+  .switcher .sw-lbl { font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-3); padding: 0 8px 0 6px; white-space: nowrap; }
+  .switcher button { border: 0; background: transparent; color: var(--text-2); font-size: 12.5px; font-weight: 600; padding: 7px 12px; border-radius: 999px; white-space: nowrap; }
+  .switcher button:hover { color: var(--text); }
+  .switcher button.active { background: var(--text); color: var(--bg); }
+  [data-theme="dark"] .switcher button.active { background: var(--accent); color: #06120c; }
+
+  @media (max-width: 640px) {
+    .am-overlay { align-items: flex-end; padding: 0; }
+    .am-modal, .am-modal.wide { width: 100%; max-width: 100%; border-radius: 22px 22px 0 0; max-height: 92dvh; }
+    .am-modal-body { max-height: 60vh; }
+    .am-modal-foot { flex-direction: column-reverse; align-items: stretch; padding-bottom: max(14px, env(safe-area-inset-bottom)); }
+    .am-modal-foot .btn { width: 100%; }
+    .am-modal-foot.spread { flex-direction: column-reverse; align-items: stretch; }
+    .am-modal-foot.spread > div { display: flex; flex-direction: column-reverse; gap: 8px; }
+    .am-modal-foot.spread > div .btn { width: 100%; }
+    .field-row, .field-row.three { grid-template-columns: 1fr; gap: 0; }
+    .cf-pair { grid-template-columns: 1fr; }
+    .cf-vs { justify-self: start; }
+    .switcher { top: 12px; bottom: auto; }
+    .cal { display: none; }
+  }
+</style>
+</head>
+<body data-screen-label="Расписание · тренировка">
+
+  <!-- faux calendar backdrop -->
+  <div class="backdrop" aria-hidden="true">
+    <div class="bd-bar"><div class="bd-mark">М</div><div class="bd-name">Мой&nbsp;зал</div><span style="margin-left:14px;font-size:13px;font-weight:600;color:var(--text-2)">Расписание · неделя</span></div>
+    <div class="cal">
+      <div class="cal-grid">
+        <div class="cal-head"></div><div class="cal-head">ПН 28</div><div class="cal-head">ВТ 29</div><div class="cal-head">СР 30</div><div class="cal-head">ЧТ 1</div><div class="cal-head">ПТ 2</div><div class="cal-head">СБ 3</div><div class="cal-head">ВС 4</div>
+        <div class="cal-time">09:00</div><div class="cal-cell"><div class="cal-ev">Йога</div></div><div class="cal-cell"></div><div class="cal-cell"><div class="cal-ev">Пилатес</div></div><div class="cal-cell"></div><div class="cal-cell"><div class="cal-ev">Йога</div></div><div class="cal-cell"></div><div class="cal-cell"></div>
+        <div class="cal-time">12:00</div><div class="cal-cell"></div><div class="cal-cell"><div class="cal-ev g">Группа</div></div><div class="cal-cell"><div class="cal-ev">Перс.</div></div><div class="cal-cell"></div><div class="cal-cell"><div class="cal-ev g">Группа</div></div><div class="cal-cell"></div><div class="cal-cell"></div>
+        <div class="cal-time">15:00</div><div class="cal-cell"><div class="cal-ev g">Йога 8/12</div></div><div class="cal-cell"></div><div class="cal-cell"><div class="cal-ev g">Йога 12/12</div></div><div class="cal-cell"></div><div class="cal-cell"></div><div class="cal-cell"><div class="cal-ev">Бокс</div></div><div class="cal-cell"></div>
+        <div class="cal-time">18:00</div><div class="cal-cell"><div class="cal-ev">Стретч</div></div><div class="cal-cell"><div class="cal-ev">Перс.</div></div><div class="cal-cell"><div class="cal-ev g">Группа</div></div><div class="cal-cell"><div class="cal-ev">Йога</div></div><div class="cal-cell"></div><div class="cal-cell"></div><div class="cal-cell"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="am-overlay">
+
+    <!-- ===== ДЕТАЛИ ===== -->
+    <section class="am-modal active" data-screen="detail" data-screen-label="Детали">
+      <div class="am-modal-head">
+        <div class="am-modal-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.42 4.58a5.4 5.4 0 0 0-7.65 0l-.77.78-.77-.78a5.4 5.4 0 0 0-7.65 7.65l8.42 8.42 8.42-8.42a5.4 5.4 0 0 0 0-7.65z"/></svg></div>
+        <div class="am-modal-htext">
+          <div class="am-modal-title">Йога · групповая <span class="badge">Запланирована</span></div>
+          <div class="am-modal-sub">Сегодня, 30 апр · 15:00–16:00 · Зал 1</div>
+        </div>
+        <button class="am-modal-close" type="button" data-close><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="am-modal-body">
+        <div class="det-row">
+          <div class="det-ava" style="background:linear-gradient(135deg,#8b5cf6,#ec4899)">ОВ</div>
+          <div style="flex:1;min-width:0;"><div class="det-k">Тренер</div><div class="det-v">Ольга Власова</div></div>
+          <a class="btn btn-ghost btn-sm" href="Trainer.html">Профиль</a>
+        </div>
+        <div class="cap-wrap">
+          <div class="cap-top"><span class="cap-n">8 из 12</span><span style="font-size:12px;color:var(--text-2)">записано</span><span class="cap-free">осталось 4 места</span></div>
+          <div class="cap-bar"><div class="cap-fill" style="width:66%"></div></div>
+          <div class="avatars">
+            <span class="a" style="background:linear-gradient(135deg,#6366f1,#818cf8)">АП</span>
+            <span class="a" style="background:linear-gradient(135deg,#10b981,#34d399)">МС</span>
+            <span class="a" style="background:linear-gradient(135deg,#f43f5e,#fb7185)">КЛ</span>
+            <span class="a" style="background:linear-gradient(135deg,#0ea5e9,#38bdf8)">ИК</span>
+            <span class="a" style="background:linear-gradient(135deg,#f59e0b,#fbbf24)">СО</span>
+            <span class="a more">+3</span>
+          </div>
+        </div>
+        <div class="am-callout warn">
+          <span class="am-callout-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></span>
+          <div class="am-callout-text">Перенесена с <b>1 мая, 09:00</b>. Участники уведомлены.</div>
+        </div>
+      </div>
+      <div class="am-modal-foot spread">
+        <button class="btn btn-ghost btn-icon" type="button" id="detMore" title="Ещё"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg></button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-ghost" type="button" data-go="reschedule">Перенести</button>
+          <button class="btn btn-primary" type="button" data-go="detail" id="checkinBtn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Чек-ин участников</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== СОЗДАНИЕ / РЕДАКТИРОВАНИЕ ===== -->
+    <section class="am-modal wide" data-screen="create" data-screen-label="Создание">
+      <div class="am-modal-head">
+        <div class="am-modal-ico" id="formIco"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/></svg></div>
+        <div class="am-modal-htext">
+          <div class="am-modal-title" id="formTitle">Новая тренировка</div>
+          <div class="am-modal-sub" id="formSub">Добавьте занятие в расписание зала</div>
+        </div>
+        <button class="am-modal-close" type="button" data-close><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="am-modal-body">
+        <div class="field">
+          <label class="label">Тип</label>
+          <div class="seg" id="typeSeg"><button type="button" class="on" data-v="group">Групповая</button><button type="button" data-v="personal">Персональная</button></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label class="label">Направление</label><select class="am-select"><option>Йога</option><option>Стретчинг</option><option>Пилатес</option><option>Функционал</option><option>Бокс</option><option>Кардио</option></select></div>
+          <div class="field"><label class="label">Тренер</label><select class="am-select"><option>Ольга Власова</option><option>Артём Поляков</option><option>Вадим Дроздов</option></select></div>
+        </div>
+        <div class="field-row three">
+          <div class="field"><label class="label">Дата</label><input class="am-input" type="text" id="cDate" value="30.04.2026" /></div>
+          <div class="field"><label class="label">Начало</label><input class="am-input" type="text" id="cTime" value="15:00" /></div>
+          <div class="field"><label class="label">Длит.</label><select class="am-select"><option>60 мин</option><option>45 мин</option><option>90 мин</option></select></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label class="label">Зал</label><select class="am-select" id="cRoom"><option>Зал 1</option><option>Зал 2</option><option>Кардио-зона</option></select></div>
+          <div class="field" id="capField"><label class="label">Вместимость</label><input class="am-input" type="text" value="12" /></div>
+        </div>
+        <div class="field"><label class="label">Повтор</label><select class="am-select"><option>Не повторять</option><option>Каждую неделю · Ср</option><option>По будням</option><option>Пн / Ср / Пт</option></select></div>
+        <div class="am-callout accent" id="slotOk">
+          <span class="am-callout-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+          <div class="am-callout-text">Слот свободен — <b>Зал 1</b> и тренер не заняты в это время.</div>
+        </div>
+      </div>
+      <div class="am-modal-foot spread">
+        <button class="btn btn-ghost btn-icon" type="button" id="formDelete" title="Удалить" style="display:none;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>
+        <div style="display:flex;gap:8px;margin-left:auto;">
+          <button class="btn btn-ghost" type="button" data-close>Отмена</button>
+          <button class="btn btn-primary" type="button" data-close id="formSave"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span id="formSaveLbl">Создать тренировку</span></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== ПЕРЕНОС ===== -->
+    <section class="am-modal" data-screen="reschedule" data-screen-label="Перенос">
+      <div class="am-modal-head">
+        <div class="am-modal-ico warn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></div>
+        <div class="am-modal-htext">
+          <div class="am-modal-title">Перенести тренировку</div>
+          <div class="am-modal-sub">Йога · групповая · сейчас 30 апр, 15:00</div>
+        </div>
+        <button class="am-modal-close" type="button" data-close><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="am-modal-body">
+        <div class="field-row three">
+          <div class="field"><label class="label">Новая дата</label><input class="am-input" type="text" id="rDate" value="02.05.2026" /></div>
+          <div class="field"><label class="label">Начало</label><input class="am-input" type="text" id="rTime" value="15:00" /></div>
+          <div class="field"><label class="label">Зал</label><select class="am-select" id="rRoom"><option>Зал 1</option><option>Зал 2</option><option>Кардио-зона</option></select></div>
+        </div>
+        <div class="slot-status free" id="slotStatus"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span>Слот свободен — можно переносить</span></div>
+        <div class="cf-toggle">
+          <div><div class="cf-toggle-t">Уведомить участников</div><div class="cf-toggle-s">8 человек получат SMS и push о переносе</div></div>
+          <button class="sw on" type="button" data-sw></button>
+        </div>
+      </div>
+      <div class="am-modal-foot">
+        <button class="btn btn-ghost" type="button" data-close>Отмена</button>
+        <button class="btn btn-primary" type="button" data-close id="rSubmit">Перенести</button>
+      </div>
+    </section>
+
+    <!-- ===== КОНФЛИКТЫ ===== -->
+    <section class="am-modal wide" data-screen="conflict" data-screen-label="Конфликты">
+      <div class="am-modal-head">
+        <div class="am-modal-ico danger"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+        <div class="am-modal-htext">
+          <div class="am-modal-title">Конфликты в расписании <span class="badge warn">3</span></div>
+          <div class="am-modal-sub">Найдены пересечения по тренерам и залам на этой неделе</div>
+        </div>
+        <button class="am-modal-close" type="button" data-close><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="am-modal-body">
+        <div class="cf-item">
+          <div class="cf-item-head"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/></svg>Зал 1 занят дважды · Ср, 15:00</div>
+          <div class="cf-pair">
+            <div class="cf-card"><div class="cf-card-t">Йога · групповая</div><div class="cf-card-s">Ольга Власова · 15:00–16:00</div></div>
+            <div class="cf-vs">⚡</div>
+            <div class="cf-card dim"><div class="cf-card-t">Стретчинг · персон.</div><div class="cf-card-s">Артём Поляков · 15:30–16:30</div></div>
+          </div>
+          <div class="cf-item-acts"><button class="btn btn-ghost btn-sm" type="button" data-go="reschedule">Перенести вторую</button><button class="btn btn-ghost btn-sm" type="button" data-toast="Открыта в расписании">Открыть</button></div>
+        </div>
+        <div class="cf-item">
+          <div class="cf-item-head"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>Тренер занят · Вадим Дроздов · Пт, 18:00</div>
+          <div class="cf-pair">
+            <div class="cf-card"><div class="cf-card-t">Бокс · группа</div><div class="cf-card-s">Зал 2 · 18:00–19:00</div></div>
+            <div class="cf-vs">⚡</div>
+            <div class="cf-card dim"><div class="cf-card-t">Функционал · перс.</div><div class="cf-card-s">Кардио-зона · 18:00–19:00</div></div>
+          </div>
+          <div class="cf-item-acts"><button class="btn btn-ghost btn-sm" type="button" data-toast="Назначен другой тренер">Сменить тренера</button><button class="btn btn-ghost btn-sm" type="button" data-go="reschedule">Перенести</button></div>
+        </div>
+        <div class="cf-item">
+          <div class="cf-item-head"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Клиент в двух записях · Анна Петрова · Сб, 12:00</div>
+          <div class="cf-pair">
+            <div class="cf-card"><div class="cf-card-t">Пилатес · персон.</div><div class="cf-card-s">12:00–13:00 · Зал 2</div></div>
+            <div class="cf-vs">⚡</div>
+            <div class="cf-card dim"><div class="cf-card-t">Йога · группа</div><div class="cf-card-s">12:00–13:00 · Зал 1</div></div>
+          </div>
+          <div class="cf-item-acts"><button class="btn btn-ghost btn-sm" type="button" data-toast="Запись отменена">Снять с группы</button></div>
+        </div>
+      </div>
+      <div class="am-modal-foot"><button class="btn btn-ghost" type="button" data-close>Закрыть</button><button class="btn btn-primary" type="button" data-toast="Автоперенос предложен для 3 конфликтов">Решить автоматически</button></div>
+    </section>
+
+    <!-- ===== ЛИСТ ОЖИДАНИЯ ===== -->
+    <section class="am-modal" data-screen="waitlist" data-screen-label="Лист ожидания">
+      <div class="am-modal-head">
+        <div class="am-modal-ico indigo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg></div>
+        <div class="am-modal-htext">
+          <div class="am-modal-title">Лист ожидания <span class="badge warn">12/12</span></div>
+          <div class="am-modal-sub">Йога · группа · Ср, 15:00 · мест нет</div>
+        </div>
+        <button class="am-modal-close" type="button" data-close><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="am-modal-body">
+        <div class="am-callout accent">
+          <span class="am-callout-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></span>
+          <div class="am-callout-text">Когда освободится место, <b>первый в списке</b> получит уведомление и автоматически запишется.</div>
+        </div>
+        <div id="wlList" style="margin-top:6px;">
+          <div class="wl-row"><span class="wl-pos">1</span><div class="det-ava" style="width:32px;height:32px;font-size:11px;background:linear-gradient(135deg,#6366f1,#818cf8)">ДВ</div><div style="flex:1;min-width:0;"><div class="wl-name">Дмитрий Васин</div><div class="wl-sub">в очереди с 09:14</div></div><div class="wl-acts"><button class="btn btn-primary btn-sm" type="button" data-promote>Записать</button></div></div>
+          <div class="wl-row"><span class="wl-pos">2</span><div class="det-ava" style="width:32px;height:32px;font-size:11px;background:linear-gradient(135deg,#f59e0b,#fbbf24)">ЕС</div><div style="flex:1;min-width:0;"><div class="wl-name">Екатерина Соколова</div><div class="wl-sub">в очереди с 09:40</div></div><div class="wl-acts"><button class="btn btn-primary btn-sm" type="button" data-promote>Записать</button></div></div>
+          <div class="wl-row"><span class="wl-pos">3</span><div class="det-ava" style="width:32px;height:32px;font-size:11px;background:linear-gradient(135deg,#10b981,#34d399)">ПС</div><div style="flex:1;min-width:0;"><div class="wl-name">Павел Сидоров</div><div class="wl-sub">в очереди с 10:05</div></div><div class="wl-acts"><button class="btn btn-primary btn-sm" type="button" data-promote>Записать</button></div></div>
+          <div class="wl-row"><span class="wl-pos">4</span><div class="det-ava" style="width:32px;height:32px;font-size:11px;background:linear-gradient(135deg,#f43f5e,#fb7185)">ЛТ</div><div style="flex:1;min-width:0;"><div class="wl-name">Лидия Тарасова</div><div class="wl-sub">в очереди с 10:22</div></div><div class="wl-acts"><button class="btn btn-primary btn-sm" type="button" data-promote>Записать</button></div></div>
+        </div>
+      </div>
+      <div class="am-modal-foot spread">
+        <span style="font-size:12.5px;color:var(--text-2)">В очереди: <b style="color:var(--text)" id="wlCount">4</b></span>
+        <button class="btn btn-ghost" type="button" data-toast="Всем отправлено уведомление">Уведомить всех</button>
+      </div>
+    </section>
+
+    <!-- ===== ОТМЕНА ===== -->
+    <section class="am-modal" data-screen="cancel" data-screen-label="Отмена">
+      <div class="am-modal-head">
+        <div class="am-modal-ico danger"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="9.5" y1="15" x2="14.5" y2="20"/><line x1="14.5" y1="15" x2="9.5" y2="20"/></svg></div>
+        <div class="am-modal-htext">
+          <div class="am-modal-title">Отменить тренировку?</div>
+          <div class="am-modal-sub">Йога · групповая · Ср, 15:00 · Зал 1</div>
+        </div>
+        <button class="am-modal-close" type="button" data-close><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="am-modal-body">
+        <div class="cf-toggle">
+          <div><div class="cf-toggle-t">Уведомить участников</div><div class="cf-toggle-s">8 записанных получат сообщение об отмене</div></div>
+          <button class="sw on" type="button" data-sw></button>
+        </div>
+        <div class="am-callout danger">
+          <span class="am-callout-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+          <div class="am-callout-text">Запись вернётся на абонементы участников. Лист ожидания <b>(4 человека)</b> будет закрыт.</div>
+        </div>
+      </div>
+      <div class="am-modal-foot">
+        <button class="btn btn-ghost" type="button" data-close>Не отменять</button>
+        <button class="btn btn-danger" type="button" data-close>Отменить тренировку</button>
+      </div>
+    </section>
+
+  </div>
+
+  <div class="toast" id="toast"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span id="toastMsg"></span></div>
+
+  <div class="switcher" id="switcher">
+    <span class="sw-lbl">Экраны</span>
+    <button data-screen-btn="detail" class="active">Детали</button>
+    <button data-screen-btn="create">Создание</button>
+    <button data-screen-btn="edit">Редактирование</button>
+    <button data-screen-btn="reschedule">Перенос</button>
+    <button data-screen-btn="conflict">Конфликты</button>
+    <button data-screen-btn="waitlist">Лист ожидания</button>
+    <button data-screen-btn="cancel">Отмена</button>
+  </div>
+
+<script>
+  var modals = document.querySelectorAll('.am-modal');
+  var swBtns = document.querySelectorAll('[data-screen-btn]');
+  function show(name) {
+    var formMode = (name === 'edit') ? 'edit' : (name === 'create' ? 'create' : null);
+    var target = (name === 'edit') ? 'create' : name;
+    var found = false;
+    modals.forEach(function (m) { var on = m.dataset.screen === target; m.classList.toggle('active', on); if (on) found = true; });
+    if (!found) return;
+    swBtns.forEach(function (b) { b.classList.toggle('active', b.dataset.screenBtn === name); });
+    if (formMode) applyFormMode(formMode);
+  }
+  function applyFormMode(mode) {
+    var create = mode === 'create';
+    document.getElementById('formTitle').textContent = create ? 'Новая тренировка' : 'Редактирование тренировки';
+    document.getElementById('formSub').textContent = create ? 'Добавьте занятие в расписание зала' : 'Йога · групповая · #SS-3120';
+    document.getElementById('formSaveLbl').textContent = create ? 'Создать тренировку' : 'Сохранить';
+    document.getElementById('formDelete').style.display = create ? 'none' : 'grid';
+    document.getElementById('formSave').querySelector('svg').style.display = create ? '' : 'none';
+  }
+  document.querySelectorAll('[data-go]').forEach(function (el) { el.addEventListener('click', function () { show(el.dataset.go); }); });
+  swBtns.forEach(function (b) { b.addEventListener('click', function () { show(b.dataset.screenBtn); }); });
+
+  // close = flash hide then keep on screen (review tool)
+  document.querySelectorAll('[data-close]').forEach(function (el) {
+    el.addEventListener('click', function () {
+      var m = el.closest('.am-modal');
+      m.style.transition = 'opacity .18s, transform .18s'; m.style.opacity = '0'; m.style.transform = 'scale(.97) translateY(6px)';
+      setTimeout(function () { m.style.opacity = ''; m.style.transform = ''; m.style.transition = ''; }, 230);
+    });
+  });
+
+  // toggles
+  document.querySelectorAll('[data-sw]').forEach(function (s) { s.addEventListener('click', function () { s.classList.toggle('on'); }); });
+
+  // type seg → toggle capacity field
+  document.getElementById('typeSeg').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    this.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); });
+    document.getElementById('capField').style.display = (b.dataset.v === 'group') ? '' : 'none';
+  });
+
+  // reschedule live conflict check
+  function checkSlot() {
+    var room = document.getElementById('rRoom').value;
+    var time = document.getElementById('rTime').value.trim();
+    var st = document.getElementById('slotStatus');
+    // demo: Зал 1 @ 15:00 is busy
+    var busy = (room === 'Зал 1' && time === '15:00');
+    if (busy) { st.className = 'slot-status busy'; st.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span>Конфликт — Зал 1 занят в 15:00. Выберите другой слот.</span>'; document.getElementById('rSubmit').disabled = true; }
+    else { st.className = 'slot-status free'; st.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span>Слот свободен — можно переносить</span>'; document.getElementById('rSubmit').disabled = false; }
+  }
+  document.getElementById('rRoom').addEventListener('change', checkSlot);
+  document.getElementById('rTime').addEventListener('input', checkSlot);
+  document.getElementById('rDate').addEventListener('input', checkSlot);
+
+  // waitlist promote
+  document.querySelectorAll('[data-promote]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var row = b.closest('.wl-row'); row.style.transition = 'opacity .25s, transform .25s'; row.style.opacity = '0'; row.style.transform = 'translateX(10px)';
+      setTimeout(function () { row.remove(); var rows = document.querySelectorAll('#wlList .wl-row'); rows.forEach(function (r, i) { r.querySelector('.wl-pos').textContent = i + 1; }); document.getElementById('wlCount').textContent = rows.length; }, 260);
+      showToast('Записан из листа ожидания');
+    });
+  });
+
+  // toasts
+  var toast = document.getElementById('toast'), toastTimer = null;
+  function showToast(msg) { document.getElementById('toastMsg').textContent = msg; toast.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 2200); }
+  document.querySelectorAll('[data-toast]').forEach(function (b) { b.addEventListener('click', function () { showToast(b.dataset.toast); }); });
+  document.getElementById('detMore').addEventListener('click', function () { showToast('Дублировать · Отменить · Экспорт'); });
+  document.getElementById('checkinBtn').addEventListener('click', function () { showToast('Открыт чек-ин участников'); });
+  document.getElementById('formDelete').addEventListener('click', function () { showToast('Откроется подтверждение удаления'); });
+
+  var hash = (location.hash || '').replace('#', '');
+  if (hash && (document.querySelector('[data-screen="' + hash + '"]') || hash === 'edit')) show(hash);
+</script>
+</body>
+</html>
