@@ -16,4 +16,4 @@ export const scheduleKeys = {
     [...scheduleKeys.slots(), params] as const,
   templates: () => [...scheduleKeys.all, 'templates'] as const,
   timeOff: () => [...scheduleKeys.all, 'time-off'] as const,
-} as const
+} as const;

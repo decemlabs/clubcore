@@ -18,10 +18,10 @@
  * ApiError re-exported for page/modal layers (ESLint import-boundary — pages/modals
  * may not import @/api/client directly).
  */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'sonner'
-import { staffRequest, ApiError } from '@/api/client'
-import { scheduleKeys } from './keys'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { staffRequest, ApiError } from '@/api/client';
+import { scheduleKeys } from './keys';
 import {
   TrainerSlotListResponseSchema,
   TrainerSlotSchema,
@@ -33,7 +33,7 @@ import {
   type CancelSlotInput,
   type CreateTemplateInput,
   type CreateTimeOffInput,
-} from './schemas'
+} from './schemas';
 
 // ---------------------------------------------------------------------------
 // Queries
@@ -49,11 +49,11 @@ export function useTrainerSlots(params: { trainerId?: string; fromTime: string; 
     queryFn: async () => {
       const raw = await staffRequest('get', '/api/v1/trainer-slots', {
         query: params as Record<string, string>,
-      })
-      return TrainerSlotListResponseSchema.parse(raw).data
+      });
+      return TrainerSlotListResponseSchema.parse(raw).data;
     },
     staleTime: 30_000,
-  })
+  });
 }
 
 /**
@@ -64,11 +64,11 @@ export function useRecurringTemplates() {
   return useQuery({
     queryKey: scheduleKeys.templates(),
     queryFn: async () => {
-      const raw = await staffRequest('get', '/api/v1/recurring-templates', {})
-      return RecurringTemplateListResponseSchema.parse(raw).data
+      const raw = await staffRequest('get', '/api/v1/recurring-templates', {});
+      return RecurringTemplateListResponseSchema.parse(raw).data;
     },
     staleTime: 30_000,
-  })
+  });
 }
 
 /**
@@ -79,11 +79,11 @@ export function useTimeOffBlocks() {
   return useQuery({
     queryKey: scheduleKeys.timeOff(),
     queryFn: async () => {
-      const raw = await staffRequest('get', '/api/v1/time-off', {})
-      return TimeOffListResponseSchema.parse(raw).data
+      const raw = await staffRequest('get', '/api/v1/time-off', {});
+      return TimeOffListResponseSchema.parse(raw).data;
     },
     staleTime: 30_000,
-  })
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -97,27 +97,27 @@ export function useTimeOffBlocks() {
  * All 409s are toasted as generic error — caller may show inline Callout from the thrown err.
  */
 export function usePublishSlot() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async (body: PublishSlotInput) => {
       // crypto.randomUUID() called at submit time — fresh key per attempt (T-102-IDEM)
       const raw = await staffRequest('post', '/api/v1/trainer-slots', {
         body,
         headers: { 'Idempotency-Key': crypto.randomUUID() },
-      })
-      return TrainerSlotSchema.parse((raw as { data: unknown }).data)
+      });
+      return TrainerSlotSchema.parse((raw as { data: unknown }).data);
     },
     onSuccess: () => {
-      toast.success('Слот опубликован')
-      void qc.invalidateQueries({ queryKey: scheduleKeys.all })
+      toast.success('Слот опубликован');
+      void qc.invalidateQueries({ queryKey: scheduleKeys.all });
     },
     onError: (err) => {
-      const msg = err instanceof ApiError ? err.message : undefined
+      const msg = err instanceof ApiError ? err.message : undefined;
       toast.error(
         msg ?? 'Не удалось выполнить действие. Проверьте соединение и попробуйте ещё раз.',
-      )
+      );
     },
-  })
+  });
 }
 
 /**
@@ -125,26 +125,26 @@ export function usePublishSlot() {
  * OWNER_ONLY. Idempotency-Key per attempt.
  */
 export function useCancelSlot() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ slotId, body }: { slotId: string; body: CancelSlotInput }) => {
       await staffRequest('patch', '/api/v1/trainer-slots/{slot_id}/cancel', {
         params: { slot_id: slotId },
         body,
         headers: { 'Idempotency-Key': crypto.randomUUID() },
-      })
+      });
     },
     onSuccess: () => {
-      toast.success('Слот отменён')
-      void qc.invalidateQueries({ queryKey: scheduleKeys.all })
+      toast.success('Слот отменён');
+      void qc.invalidateQueries({ queryKey: scheduleKeys.all });
     },
     onError: (err) => {
-      const msg = err instanceof ApiError ? err.message : undefined
+      const msg = err instanceof ApiError ? err.message : undefined;
       toast.error(
         msg ?? 'Не удалось выполнить действие. Проверьте соединение и попробуйте ещё раз.',
-      )
+      );
     },
-  })
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -156,26 +156,26 @@ export function useCancelSlot() {
  * OWNER_ONLY. Idempotency-Key per attempt.
  */
 export function useCreateTemplate() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async (body: CreateTemplateInput) => {
       const raw = await staffRequest('post', '/api/v1/recurring-templates', {
         body,
         headers: { 'Idempotency-Key': crypto.randomUUID() },
-      })
-      return RecurringTemplateSchema.parse((raw as { data: unknown }).data)
+      });
+      return RecurringTemplateSchema.parse((raw as { data: unknown }).data);
     },
     onSuccess: () => {
-      toast.success('Шаблон создан')
-      void qc.invalidateQueries({ queryKey: scheduleKeys.all })
+      toast.success('Шаблон создан');
+      void qc.invalidateQueries({ queryKey: scheduleKeys.all });
     },
     onError: (err) => {
-      const msg = err instanceof ApiError ? err.message : undefined
+      const msg = err instanceof ApiError ? err.message : undefined;
       toast.error(
         msg ?? 'Не удалось выполнить действие. Проверьте соединение и попробуйте ещё раз.',
-      )
+      );
     },
-  })
+  });
 }
 
 /**
@@ -183,26 +183,26 @@ export function useCreateTemplate() {
  * OWNER_ONLY. Idempotency-Key per attempt.
  */
 export function useDeactivateTemplate() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async (templateId: string) => {
       await staffRequest('post', '/api/v1/recurring-templates/{template_id}/deactivate', {
         params: { template_id: templateId },
         body: {},
         headers: { 'Idempotency-Key': crypto.randomUUID() },
-      })
+      });
     },
     onSuccess: () => {
-      toast.success('Шаблон деактивирован')
-      void qc.invalidateQueries({ queryKey: scheduleKeys.all })
+      toast.success('Шаблон деактивирован');
+      void qc.invalidateQueries({ queryKey: scheduleKeys.all });
     },
     onError: (err) => {
-      const msg = err instanceof ApiError ? err.message : undefined
+      const msg = err instanceof ApiError ? err.message : undefined;
       toast.error(
         msg ?? 'Не удалось выполнить действие. Проверьте соединение и попробуйте ещё раз.',
-      )
+      );
     },
-  })
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -218,35 +218,35 @@ export function useDeactivateTemplate() {
  * force-override conflict state. Generic errors still toast. (T-102-FORCE)
  */
 export function useCreateTimeOff() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ body, force }: { body: CreateTimeOffInput; force?: boolean }) => {
-      const query = force ? { force: true } : undefined
+      const query = force ? { force: true } : undefined;
       const raw = await staffRequest('post', '/api/v1/time-off', {
         body,
         query: query as Record<string, boolean> | undefined,
         headers: { 'Idempotency-Key': crypto.randomUUID() },
-      })
-      return TimeOffSchema.parse((raw as { data: unknown }).data)
+      });
+      return TimeOffSchema.parse((raw as { data: unknown }).data);
     },
     onSuccess: (_data, vars) => {
       // Force path: modal shows a descriptive toast; hook only toasts for the normal path.
       if (!vars.force) {
-        toast.success('Период заблокирован')
+        toast.success('Период заблокирован');
       }
-      void qc.invalidateQueries({ queryKey: scheduleKeys.all })
+      void qc.invalidateQueries({ queryKey: scheduleKeys.all });
     },
     onError: (err) => {
       // 409 time_off_booked_conflict — let caller handle (no toast)
       if (err instanceof ApiError && err.code === 'time_off_booked_conflict') {
-        return
+        return;
       }
-      const msg = err instanceof ApiError ? err.message : undefined
+      const msg = err instanceof ApiError ? err.message : undefined;
       toast.error(
         msg ?? 'Не удалось выполнить действие. Проверьте соединение и попробуйте ещё раз.',
-      )
+      );
     },
-  })
+  });
 }
 
 /**
@@ -254,29 +254,29 @@ export function useCreateTimeOff() {
  * OWNER_ONLY. Idempotency-Key per attempt.
  */
 export function useDeleteTimeOff() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async (timeOffId: string) => {
       await staffRequest('delete', '/api/v1/time-off/{time_off_id}', {
         params: { time_off_id: timeOffId },
         headers: { 'Idempotency-Key': crypto.randomUUID() },
-      })
+      });
     },
     onSuccess: () => {
-      toast.success('Блокировка удалена')
-      void qc.invalidateQueries({ queryKey: scheduleKeys.all })
+      toast.success('Блокировка удалена');
+      void qc.invalidateQueries({ queryKey: scheduleKeys.all });
     },
     onError: (err) => {
-      const msg = err instanceof ApiError ? err.message : undefined
+      const msg = err instanceof ApiError ? err.message : undefined;
       toast.error(
         msg ?? 'Не удалось выполнить действие. Проверьте соединение и попробуйте ещё раз.',
-      )
+      );
     },
-  })
+  });
 }
 
 // ---------------------------------------------------------------------------
 // Re-export for page/modal layers (ESLint import-boundary)
 // ---------------------------------------------------------------------------
 
-export { ApiError }
+export { ApiError };

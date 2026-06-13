@@ -8,7 +8,7 @@
  * TrainerUpdateSchema — all fields optional for PATCH semantics (omit = no change).
  * TrainerCreateSchema — fullName required, phone optional.
  */
-import { z } from 'zod'
+import { z } from 'zod';
 
 // ---------------------------------------------------------------------------
 // Trainer wire shape (GET /api/v1/trainers, GET /api/v1/trainers/{trainer_id})
@@ -24,8 +24,8 @@ export const TrainerSchema = z.object({
   photoUrl: z.string().nullable().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
-})
-export type TrainerData = z.infer<typeof TrainerSchema>
+});
+export type TrainerData = z.infer<typeof TrainerSchema>;
 
 // ---------------------------------------------------------------------------
 // List response
@@ -38,7 +38,7 @@ export const TrainersListResponseSchema = z.object({
     page: z.number(),
     pageSize: z.number(),
   }),
-})
+});
 
 // ---------------------------------------------------------------------------
 // PATCH — all optional; omit = no change per backend contract
@@ -51,8 +51,8 @@ export const TrainerUpdateSchema = z.object({
   bio: z.string().nullable().optional(),
   specialization: z.string().nullable().optional(),
   photoUrl: z.string().nullable().optional(),
-})
-export type TrainerUpdateInput = z.infer<typeof TrainerUpdateSchema>
+});
+export type TrainerUpdateInput = z.infer<typeof TrainerUpdateSchema>;
 
 // ---------------------------------------------------------------------------
 // POST — fullName required, phone optional
@@ -61,5 +61,5 @@ export type TrainerUpdateInput = z.infer<typeof TrainerUpdateSchema>
 export const TrainerCreateSchema = z.object({
   fullName: z.string().min(1, 'Имя обязательно'),
   phone: z.string().optional(),
-})
-export type TrainerCreateInput = z.infer<typeof TrainerCreateSchema>
+});
+export type TrainerCreateInput = z.infer<typeof TrainerCreateSchema>;

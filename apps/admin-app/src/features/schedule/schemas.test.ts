@@ -3,7 +3,7 @@
  *
  * Pure Zod schema validation — no network, no React.
  */
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect } from 'vitest';
 import {
   TrainerSlotSchema,
   TrainerSlotListResponseSchema,
@@ -13,7 +13,7 @@ import {
   CreateTimeOffSchema,
   RecurringTemplateSchema,
   TimeOffSchema,
-} from './schemas'
+} from './schemas';
 
 // ---------------------------------------------------------------------------
 // TrainerSlotSchema
@@ -27,25 +27,25 @@ describe('TrainerSlotSchema', () => {
     endTime: '2026-06-15T11:00:00Z',
     status: 'active' as const,
     createdAt: '2026-06-13T00:00:00Z',
-  }
+  };
 
   it('parses a valid wire slot', () => {
-    const result = TrainerSlotSchema.parse(validSlot)
-    expect(result.id).toBe('slot-1')
-    expect(result.status).toBe('active')
-  })
+    const result = TrainerSlotSchema.parse(validSlot);
+    expect(result.id).toBe('slot-1');
+    expect(result.status).toBe('active');
+  });
 
   it('accepts all status enum values', () => {
     for (const status of ['active', 'cancelled', 'booked'] as const) {
-      const result = TrainerSlotSchema.parse({ ...validSlot, status })
-      expect(result.status).toBe(status)
+      const result = TrainerSlotSchema.parse({ ...validSlot, status });
+      expect(result.status).toBe(status);
     }
-  })
+  });
 
   it('rejects invalid status', () => {
-    expect(() => TrainerSlotSchema.parse({ ...validSlot, status: 'pending' })).toThrow()
-  })
-})
+    expect(() => TrainerSlotSchema.parse({ ...validSlot, status: 'pending' })).toThrow();
+  });
+});
 
 // ---------------------------------------------------------------------------
 // TrainerSlotListResponseSchema
@@ -60,11 +60,11 @@ describe('TrainerSlotListResponseSchema', () => {
         page: 1,
         pageSize: 25,
       },
-    }
-    const result = TrainerSlotListResponseSchema.parse(raw)
-    expect(result.data.total).toBe(0)
-    expect(result.data.items).toHaveLength(0)
-  })
+    };
+    const result = TrainerSlotListResponseSchema.parse(raw);
+    expect(result.data.total).toBe(0);
+    expect(result.data.items).toHaveLength(0);
+  });
 
   it('parses a list response with items', () => {
     const raw = {
@@ -83,12 +83,12 @@ describe('TrainerSlotListResponseSchema', () => {
         page: 1,
         pageSize: 25,
       },
-    }
-    const result = TrainerSlotListResponseSchema.parse(raw)
-    expect(result.data.items).toHaveLength(1)
-    expect(result.data.items[0]?.id).toBe('slot-1')
-  })
-})
+    };
+    const result = TrainerSlotListResponseSchema.parse(raw);
+    expect(result.data.items).toHaveLength(1);
+    expect(result.data.items[0]?.id).toBe('slot-1');
+  });
+});
 
 // ---------------------------------------------------------------------------
 // PublishSlotSchema
@@ -100,9 +100,9 @@ describe('PublishSlotSchema', () => {
       trainerId: 'trainer-1',
       startTime: '2026-06-15T10:00:00Z',
       endTime: '2026-06-15T11:00:00Z',
-    })
-    expect(result.trainerId).toBe('trainer-1')
-  })
+    });
+    expect(result.trainerId).toBe('trainer-1');
+  });
 
   it('rejects empty trainerId with Russian message', () => {
     expect(() =>
@@ -111,8 +111,8 @@ describe('PublishSlotSchema', () => {
         startTime: '2026-06-15T10:00:00Z',
         endTime: '2026-06-15T11:00:00Z',
       }),
-    ).toThrow('Выберите тренера')
-  })
+    ).toThrow('Выберите тренера');
+  });
 
   it('rejects missing trainerId', () => {
     expect(() =>
@@ -120,9 +120,9 @@ describe('PublishSlotSchema', () => {
         startTime: '2026-06-15T10:00:00Z',
         endTime: '2026-06-15T11:00:00Z',
       }),
-    ).toThrow()
-  })
-})
+    ).toThrow();
+  });
+});
 
 // ---------------------------------------------------------------------------
 // CancelSlotSchema
@@ -130,23 +130,23 @@ describe('PublishSlotSchema', () => {
 
 describe('CancelSlotSchema', () => {
   it('accepts cancelReason 1-200 chars', () => {
-    const result = CancelSlotSchema.parse({ cancelReason: 'Тренер заболел' })
-    expect(result.cancelReason).toBe('Тренер заболел')
-  })
+    const result = CancelSlotSchema.parse({ cancelReason: 'Тренер заболел' });
+    expect(result.cancelReason).toBe('Тренер заболел');
+  });
 
   it('rejects empty cancelReason', () => {
-    expect(() => CancelSlotSchema.parse({ cancelReason: '' })).toThrow()
-  })
+    expect(() => CancelSlotSchema.parse({ cancelReason: '' })).toThrow();
+  });
 
   it('rejects cancelReason longer than 200 chars', () => {
-    expect(() => CancelSlotSchema.parse({ cancelReason: 'a'.repeat(201) })).toThrow()
-  })
+    expect(() => CancelSlotSchema.parse({ cancelReason: 'a'.repeat(201) })).toThrow();
+  });
 
   it('accepts exactly 200 chars', () => {
-    const result = CancelSlotSchema.parse({ cancelReason: 'a'.repeat(200) })
-    expect(result.cancelReason).toHaveLength(200)
-  })
-})
+    const result = CancelSlotSchema.parse({ cancelReason: 'a'.repeat(200) });
+    expect(result.cancelReason).toHaveLength(200);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // CreateTemplateSchema
@@ -160,9 +160,9 @@ describe('CreateTemplateSchema', () => {
       startTime: '10:00',
       endTime: '11:00',
       validFrom: '2026-06-15',
-    })
-    expect(result.dayOfWeek).toBe(1)
-  })
+    });
+    expect(result.dayOfWeek).toBe(1);
+  });
 
   it('enforces dayOfWeek int 0-6', () => {
     expect(() =>
@@ -173,7 +173,7 @@ describe('CreateTemplateSchema', () => {
         endTime: '11:00',
         validFrom: '2026-06-15',
       }),
-    ).toThrow()
+    ).toThrow();
     expect(() =>
       CreateTemplateSchema.parse({
         trainerId: 'trainer-1',
@@ -182,8 +182,8 @@ describe('CreateTemplateSchema', () => {
         endTime: '11:00',
         validFrom: '2026-06-15',
       }),
-    ).toThrow()
-  })
+    ).toThrow();
+  });
 
   it('accepts dayOfWeek 0 (Sunday)', () => {
     const result = CreateTemplateSchema.parse({
@@ -192,9 +192,9 @@ describe('CreateTemplateSchema', () => {
       startTime: '10:00',
       endTime: '11:00',
       validFrom: '2026-06-15',
-    })
-    expect(result.dayOfWeek).toBe(0)
-  })
+    });
+    expect(result.dayOfWeek).toBe(0);
+  });
 
   it('rejects empty trainerId with Russian message', () => {
     expect(() =>
@@ -205,8 +205,8 @@ describe('CreateTemplateSchema', () => {
         endTime: '11:00',
         validFrom: '2026-06-15',
       }),
-    ).toThrow('Выберите тренера')
-  })
+    ).toThrow('Выберите тренера');
+  });
 
   it('accepts optional validUntil', () => {
     const result = CreateTemplateSchema.parse({
@@ -216,10 +216,10 @@ describe('CreateTemplateSchema', () => {
       endTime: '11:00',
       validFrom: '2026-06-15',
       validUntil: '2026-12-31',
-    })
-    expect(result.validUntil).toBe('2026-12-31')
-  })
-})
+    });
+    expect(result.validUntil).toBe('2026-12-31');
+  });
+});
 
 // ---------------------------------------------------------------------------
 // CreateTimeOffSchema
@@ -231,10 +231,10 @@ describe('CreateTimeOffSchema', () => {
       trainerId: 'trainer-1',
       blockStart: '2026-06-20T00:00:00Z',
       blockEnd: '2026-06-21T00:00:00Z',
-    })
-    expect(result.blockStart).toBe('2026-06-20T00:00:00Z')
-    expect(result.blockEnd).toBe('2026-06-21T00:00:00Z')
-  })
+    });
+    expect(result.blockStart).toBe('2026-06-20T00:00:00Z');
+    expect(result.blockEnd).toBe('2026-06-21T00:00:00Z');
+  });
 
   it('rejects empty trainerId with Russian message', () => {
     expect(() =>
@@ -243,8 +243,8 @@ describe('CreateTimeOffSchema', () => {
         blockStart: '2026-06-20T00:00:00Z',
         blockEnd: '2026-06-21T00:00:00Z',
       }),
-    ).toThrow('Выберите тренера')
-  })
+    ).toThrow('Выберите тренера');
+  });
 
   it('accepts optional reason', () => {
     const result = CreateTimeOffSchema.parse({
@@ -252,10 +252,10 @@ describe('CreateTimeOffSchema', () => {
       blockStart: '2026-06-20T00:00:00Z',
       blockEnd: '2026-06-21T00:00:00Z',
       reason: 'Болезнь',
-    })
-    expect(result.reason).toBe('Болезнь')
-  })
-})
+    });
+    expect(result.reason).toBe('Болезнь');
+  });
+});
 
 // ---------------------------------------------------------------------------
 // RecurringTemplateSchema
@@ -271,11 +271,11 @@ describe('RecurringTemplateSchema', () => {
       endTime: '11:00',
       validFrom: '2026-06-15',
       isActive: true,
-    })
-    expect(result.id).toBe('tmpl-1')
-    expect(result.isActive).toBe(true)
-  })
-})
+    });
+    expect(result.id).toBe('tmpl-1');
+    expect(result.isActive).toBe(true);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // TimeOffSchema
@@ -289,9 +289,9 @@ describe('TimeOffSchema', () => {
       blockStart: '2026-06-20T00:00:00Z',
       blockEnd: '2026-06-21T00:00:00Z',
       createdAt: '2026-06-13T00:00:00Z',
-    })
-    expect(result.id).toBe('off-1')
-  })
+    });
+    expect(result.id).toBe('off-1');
+  });
 
   it('accepts optional reason', () => {
     const result = TimeOffSchema.parse({
@@ -301,7 +301,7 @@ describe('TimeOffSchema', () => {
       blockEnd: '2026-06-21T00:00:00Z',
       reason: 'Отпуск',
       createdAt: '2026-06-13T00:00:00Z',
-    })
-    expect(result.reason).toBe('Отпуск')
-  })
-})
+    });
+    expect(result.reason).toBe('Отпуск');
+  });
+});

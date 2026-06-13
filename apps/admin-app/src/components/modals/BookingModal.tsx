@@ -17,11 +17,11 @@
  * ESLint import-boundary: ApiError imported via @/features/bookings/api (re-export); scheduleKeys
  * imported from @/features/schedule/keys (feature module boundary is acceptable for cross-module keys).
  */
-import { useEffect, useState, useCallback } from 'react'
-import { toast } from 'sonner'
-import { CalendarCheck, Loader2, Search, TriangleAlert, X as XIcon } from '@/components/icons'
-import { Skeleton } from '@/components/ui/skeleton'
-import { AdaptiveModal } from './AdaptiveModal'
+import { useEffect, useState, useCallback } from 'react';
+import { toast } from 'sonner';
+import { CalendarCheck, Loader2, Search, TriangleAlert, X as XIcon } from '@/components/icons';
+import { Skeleton } from '@/components/ui/skeleton';
+import { AdaptiveModal } from './AdaptiveModal';
 import {
   Callout,
   IconChip,
@@ -31,14 +31,14 @@ import {
   ResultItem,
   ResultList,
   Section,
-} from './fields'
-import { useClients } from '@/features/clients/api'
-import { usePtPackagesByClient } from '@/features/pt-packages/api'
-import { useCreateBooking, ApiError } from '@/features/bookings/api'
-import { scheduleKeys } from '@/features/schedule/keys'
-import { useQueryClient } from '@tanstack/react-query'
-import { formatTime, formatDateRu } from '@/lib/format'
-import type { PlanOption } from './fields'
+} from './fields';
+import { useClients } from '@/features/clients/api';
+import { usePtPackagesByClient } from '@/features/pt-packages/api';
+import { useCreateBooking, ApiError } from '@/features/bookings/api';
+import { scheduleKeys } from '@/features/schedule/keys';
+import { useQueryClient } from '@tanstack/react-query';
+import { formatTime, formatDateRu } from '@/lib/format';
+import type { PlanOption } from './fields';
 
 // PT-package 409 error codes → friendly Russian copy
 const PT_PACKAGE_ERROR_COPY: Record<string, string> = {
@@ -46,23 +46,23 @@ const PT_PACKAGE_ERROR_COPY: Record<string, string> = {
   pt_package_exhausted: 'Все занятия в пакете уже использованы',
   pt_package_expired_before_slot: 'Срок действия пакета истечёт до даты слота',
   trainer_mismatch: 'Тренер в пакете не совпадает с тренером слота',
-}
+};
 
 interface BookingModalProps {
-  slotId: string
-  trainerId: string
-  trainerFullName: string
+  slotId: string;
+  trainerId: string;
+  trainerFullName: string;
   /** ISO string for slot start time */
-  slotStartTime: string
+  slotStartTime: string;
   /** ISO string for slot end time */
-  slotEndTime: string
-  open: boolean
-  onOpenChange: (open: boolean) => void
+  slotEndTime: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
 /** Format slot time for display: «20 июня 10:00–11:00» */
 function formatSlotDisplay(startTime: string, endTime: string): string {
-  return `${formatDateRu(startTime, 'd MMMM')} ${formatTime(startTime)}–${formatTime(endTime)}`
+  return `${formatDateRu(startTime, 'd MMMM')} ${formatTime(startTime)}–${formatTime(endTime)}`;
 }
 
 export function BookingModal({
@@ -73,62 +73,62 @@ export function BookingModal({
   open,
   onOpenChange,
 }: BookingModalProps) {
-  const qc = useQueryClient()
-  const [search, setSearch] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(null)
-  const [selectedClientName, setSelectedClientName] = useState<string | null>(null)
-  const [selectedPtPackageId, setSelectedPtPackageId] = useState<string | null>(null)
-  const [apiError, setApiError] = useState<string | null>(null)
+  const qc = useQueryClient();
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [selectedClientName, setSelectedClientName] = useState<string | null>(null);
+  const [selectedPtPackageId, setSelectedPtPackageId] = useState<string | null>(null);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   // Debounce search input (300ms)
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(search), 300)
-    return () => clearTimeout(timer)
-  }, [search])
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   // Reset on modal open (pattern from BookModal.tsx)
   useEffect(() => {
     if (open) {
-      setSearch('')
-      setDebouncedSearch('')
-      setSelectedClientId(null)
-      setSelectedClientName(null)
-      setSelectedPtPackageId(null)
-      setApiError(null)
+      setSearch('');
+      setDebouncedSearch('');
+      setSelectedClientId(null);
+      setSelectedClientName(null);
+      setSelectedPtPackageId(null);
+      setApiError(null);
     }
-  }, [open])
+  }, [open]);
 
   // All hooks before any conditional return
-  const clientsQuery = useClients({ q: debouncedSearch })
-  const ptPackagesQuery = usePtPackagesByClient(selectedClientId ?? '')
-  const createBooking = useCreateBooking()
-  const isPending = createBooking.isPending
+  const clientsQuery = useClients({ q: debouncedSearch });
+  const ptPackagesQuery = usePtPackagesByClient(selectedClientId ?? '');
+  const createBooking = useCreateBooking();
+  const isPending = createBooking.isPending;
 
   const handleBook = useCallback(async () => {
-    if (!selectedClientId || !selectedPtPackageId) return
-    setApiError(null)
+    if (!selectedClientId || !selectedPtPackageId) return;
+    setApiError(null);
     try {
       await createBooking.mutateAsync({
         slotId,
         clientId: selectedClientId,
         ptPackageId: selectedPtPackageId,
-      })
+      });
       toast.success('Запись создана', {
         description: `${selectedClientName ?? ''} · ${trainerFullName} · ${formatTime(slotStartTime)}–${formatTime(slotEndTime)}`,
-      })
-      onOpenChange(false)
+      });
+      onOpenChange(false);
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.code === 'slot_already_booked') {
-          setApiError('Слот уже занят')
+          setApiError('Слот уже занят');
           // Calendar invalidate so the user sees the updated state on close
-          void qc.invalidateQueries({ queryKey: scheduleKeys.all })
+          void qc.invalidateQueries({ queryKey: scheduleKeys.all });
         } else if (err.code === 'slot_not_available') {
-          setApiError('Слот недоступен')
-          void qc.invalidateQueries({ queryKey: scheduleKeys.all })
+          setApiError('Слот недоступен');
+          void qc.invalidateQueries({ queryKey: scheduleKeys.all });
         } else {
-          setApiError(PT_PACKAGE_ERROR_COPY[err.code] ?? err.message)
+          setApiError(PT_PACKAGE_ERROR_COPY[err.code] ?? err.message);
         }
       }
       // Modal stays open — user manually closes (never crash)
@@ -144,22 +144,20 @@ export function BookingModal({
     slotEndTime,
     onOpenChange,
     qc,
-  ])
+  ]);
 
-  const handleOpenChange = isPending ? () => {} : onOpenChange
+  const handleOpenChange = isPending ? () => {} : onOpenChange;
 
-  const clients = clientsQuery.data?.items ?? []
-  const isSearching = debouncedSearch.length > 0 && clientsQuery.isFetching
+  const clients = clientsQuery.data?.items ?? [];
+  const isSearching = debouncedSearch.length > 0 && clientsQuery.isFetching;
 
   /** Derive full name from firstName + lastName */
   function clientFullName(c: { firstName: string; lastName: string }): string {
-    return `${c.firstName} ${c.lastName}`.trim()
+    return `${c.firstName} ${c.lastName}`.trim();
   }
 
   // PT-packages for the selected client (filtered to active only)
-  const ptPackages = (ptPackagesQuery.data?.items ?? []).filter(
-    (pkg) => pkg.status === 'active',
-  )
+  const ptPackages = (ptPackagesQuery.data?.items ?? []).filter((pkg) => pkg.status === 'active');
 
   // Build PlanCards options from active PT-packages
   const planOptions: PlanOption[] = ptPackages.map((pkg) => ({
@@ -167,15 +165,14 @@ export function BookingModal({
     name: pkg.planSnapshot.name,
     price: `Осталось: ${pkg.sessionsRemaining} из ${pkg.sessionsTotal}`,
     sub: 'PT-пакет',
-  }))
+  }));
 
-  const footerInfo =
-    selectedClientId ? (
-      <span>
-        <b className="font-semibold text-fg">{selectedClientName}</b> ·{' '}
-        {trainerFullName} · {formatTime(slotStartTime)}–{formatTime(slotEndTime)}
-      </span>
-    ) : null
+  const footerInfo = selectedClientId ? (
+    <span>
+      <b className="font-semibold text-fg">{selectedClientName}</b> · {trainerFullName} ·{' '}
+      {formatTime(slotStartTime)}–{formatTime(slotEndTime)}
+    </span>
+  ) : null;
 
   return (
     <AdaptiveModal
@@ -209,12 +206,12 @@ export function BookingModal({
           placeholder="Найти по имени или телефону…"
           value={search}
           onChange={(e) => {
-            setSearch(e.target.value)
+            setSearch(e.target.value);
             // Deselect client when search changes
             if (selectedClientId) {
-              setSelectedClientId(null)
-              setSelectedClientName(null)
-              setSelectedPtPackageId(null)
+              setSelectedClientId(null);
+              setSelectedClientName(null);
+              setSelectedPtPackageId(null);
             }
           }}
         />
@@ -238,9 +235,9 @@ export function BookingModal({
                 aria-label="Снять выбор клиента"
                 className="text-fg-muted hover:text-fg"
                 onClick={() => {
-                  setSelectedClientId(null)
-                  setSelectedClientName(null)
-                  setSelectedPtPackageId(null)
+                  setSelectedClientId(null);
+                  setSelectedClientName(null);
+                  setSelectedPtPackageId(null);
                 }}
               >
                 <XIcon className="size-3.5" strokeWidth={2.4} />
@@ -263,10 +260,10 @@ export function BookingModal({
                 name={clientFullName(client)}
                 meta={client.phone ?? ''}
                 onClick={() => {
-                  setSelectedClientId(client.id)
-                  setSelectedClientName(clientFullName(client))
-                  setSearch('')
-                  setDebouncedSearch('')
+                  setSelectedClientId(client.id);
+                  setSelectedClientName(clientFullName(client));
+                  setSearch('');
+                  setDebouncedSearch('');
                 }}
               />
             ))}
@@ -315,14 +312,14 @@ export function BookingModal({
         </div>
       )}
     </AdaptiveModal>
-  )
+  );
 }
 
 function getInitials(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean)
-  if (words.length === 0) return '?'
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '?';
   return words
     .slice(0, 2)
     .map((w) => w.charAt(0)?.toUpperCase() ?? '')
-    .join('')
+    .join('');
 }

@@ -25,17 +25,17 @@
  *
  * ApiError re-exported for page/modal layers (ESLint import-boundary — D-100-03-APIERROR-REEXPORT).
  */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'sonner'
-import { staffRequest, ApiError } from '@/api/client'
-import { scheduleKeys } from '@/features/schedule/keys'
-import { bookingsKeys } from './keys'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { staffRequest, ApiError } from '@/api/client';
+import { scheduleKeys } from '@/features/schedule/keys';
+import { bookingsKeys } from './keys';
 import {
   BookingSchema,
   BookingsListResponseSchema,
   type BookingCreateInput,
   type CancelBookingInput,
-} from './schemas'
+} from './schemas';
 
 // ---------------------------------------------------------------------------
 // Queries
@@ -43,9 +43,9 @@ import {
 
 /** Fetch bookings for the visible week window (used by calendar merge). */
 export function useBookingsByWeek(params: {
-  trainerId?: string
-  fromTime: string
-  toTime: string
+  trainerId?: string;
+  fromTime: string;
+  toTime: string;
 }) {
   return useQuery({
     queryKey: bookingsKeys.byWeek(params),
@@ -53,13 +53,13 @@ export function useBookingsByWeek(params: {
       const query: Record<string, string> = {
         fromTime: params.fromTime,
         toTime: params.toTime,
-      }
-      if (params.trainerId) query['trainerId'] = params.trainerId
-      const raw = await staffRequest('get', '/api/v1/bookings', { query })
-      return BookingsListResponseSchema.parse(raw).data
+      };
+      if (params.trainerId) query['trainerId'] = params.trainerId;
+      const raw = await staffRequest('get', '/api/v1/bookings', { query });
+      return BookingsListResponseSchema.parse(raw).data;
     },
     staleTime: 30_000,
-  })
+  });
 }
 
 /**
@@ -79,13 +79,13 @@ export function useBookingsByTrainer(
         fromTime: range.fromTime,
         toTime: range.toTime,
         status,
-      }
-      const raw = await staffRequest('get', '/api/v1/bookings', { query })
-      return BookingsListResponseSchema.parse(raw).data
+      };
+      const raw = await staffRequest('get', '/api/v1/bookings', { query });
+      return BookingsListResponseSchema.parse(raw).data;
     },
     enabled: !!trainerId,
     staleTime: 30_000,
-  })
+  });
 }
 
 /** Fetch a single booking by id (GET /api/v1/bookings/{booking_id}). */
@@ -95,12 +95,12 @@ export function useBooking(id: string) {
     queryFn: async () => {
       const raw = await staffRequest('get', '/api/v1/bookings/{booking_id}', {
         params: { booking_id: id },
-      })
-      return BookingSchema.parse((raw as { data: unknown }).data)
+      });
+      return BookingSchema.parse((raw as { data: unknown }).data);
     },
     enabled: !!id,
     staleTime: 30_000,
-  })
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -121,23 +121,23 @@ export function useBooking(id: string) {
  * and booking lists refetch automatically.
  */
 export function useCreateBooking() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async (body: BookingCreateInput) => {
       // crypto.randomUUID() called at submit time — fresh key per attempt (T-102-BK-IDEM)
       const raw = await staffRequest('post', '/api/v1/bookings', {
         body,
         headers: { 'Idempotency-Key': crypto.randomUUID() },
-      })
-      return BookingSchema.parse((raw as { data: unknown }).data)
+      });
+      return BookingSchema.parse((raw as { data: unknown }).data);
     },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: scheduleKeys.all })
-      void qc.invalidateQueries({ queryKey: bookingsKeys.lists() })
+      void qc.invalidateQueries({ queryKey: scheduleKeys.all });
+      void qc.invalidateQueries({ queryKey: bookingsKeys.lists() });
     },
     // onError: NOT defined here — caller inspects ApiError.code for all slot/pt-package errors
     // and renders inline Callouts (T-102-BK-RACE). Do NOT toast here.
-  })
+  });
 }
 
 /**
@@ -149,41 +149,35 @@ export function useCreateBooking() {
  * Success → toast «Бронирование отменено» + invalidate schedule + bookings.
  */
 export function useCancelBooking() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({
-      bookingId,
-      body,
-    }: {
-      bookingId: string
-      body: CancelBookingInput
-    }) => {
+    mutationFn: async ({ bookingId, body }: { bookingId: string; body: CancelBookingInput }) => {
       // crypto.randomUUID() called at submit time — fresh key per attempt (T-102-BK-IDEM)
       await staffRequest('post', '/api/v1/bookings/{booking_id}/cancel', {
         params: { booking_id: bookingId },
         body,
         headers: { 'Idempotency-Key': crypto.randomUUID() },
-      })
+      });
     },
     onSuccess: () => {
-      toast.success('Бронирование отменено')
-      void qc.invalidateQueries({ queryKey: scheduleKeys.all })
-      void qc.invalidateQueries({ queryKey: bookingsKeys.lists() })
+      toast.success('Бронирование отменено');
+      void qc.invalidateQueries({ queryKey: scheduleKeys.all });
+      void qc.invalidateQueries({ queryKey: bookingsKeys.lists() });
     },
     onError: (err) => {
       if (err instanceof ApiError && err.code === 'cancel_window_expired') {
         // UI-SPEC Copywriting Contract — cancel_window_expired special-case
         toast.error('Окно отмены закрыто', {
           description: 'До занятия менее 24 часов. Отмена доступна только владельцу.',
-        })
+        });
       } else {
-        const msg = err instanceof ApiError ? err.message : undefined
+        const msg = err instanceof ApiError ? err.message : undefined;
         toast.error(
           msg ?? 'Не удалось выполнить действие. Проверьте соединение и попробуйте ещё раз.',
-        )
+        );
       }
     },
-  })
+  });
 }
 
 /**
@@ -198,16 +192,16 @@ export function useCancelBooking() {
  * Success → toast «Сессия записана» + invalidate schedule + bookings.
  */
 export function useCompleteBooking() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({
       ptPackageId,
       trainerId,
       bookingId,
     }: {
-      ptPackageId: string
-      trainerId: string
-      bookingId: string
+      ptPackageId: string;
+      trainerId: string;
+      bookingId: string;
     }) => {
       // crypto.randomUUID() called at submit time — fresh key per attempt (T-102-BK-IDEM)
       // performedAt = now (ISO string). clientId intentionally absent (T-102-BK-COMPLETE).
@@ -216,39 +210,39 @@ export function useCompleteBooking() {
         trainerId,
         performedAt: new Date().toISOString(),
         bookingId,
-      }
+      };
       const raw = await staffRequest('post', '/api/v1/pt-sessions', {
         body,
         headers: { 'Idempotency-Key': crypto.randomUUID() },
-      })
-      return raw
+      });
+      return raw;
     },
     onSuccess: () => {
-      toast.success('Сессия записана')
-      void qc.invalidateQueries({ queryKey: scheduleKeys.all })
-      void qc.invalidateQueries({ queryKey: bookingsKeys.lists() })
+      toast.success('Сессия записана');
+      void qc.invalidateQueries({ queryKey: scheduleKeys.all });
+      void qc.invalidateQueries({ queryKey: bookingsKeys.lists() });
     },
     onError: (err) => {
       if (err instanceof ApiError && err.code === 'booking_not_confirmed') {
         toast.error('Бронирование не подтверждено', {
           description: 'Для записи сессии бронирование должно быть в статусе «Подтверждено».',
-        })
+        });
       } else if (err instanceof ApiError && err.code === 'booking_mismatch') {
         toast.error('Несоответствие данных', {
           description: 'Тренер или пакет не совпадают с данными бронирования.',
-        })
+        });
       } else {
-        const msg = err instanceof ApiError ? err.message : undefined
+        const msg = err instanceof ApiError ? err.message : undefined;
         toast.error(
           msg ?? 'Не удалось выполнить действие. Проверьте соединение и попробуйте ещё раз.',
-        )
+        );
       }
     },
-  })
+  });
 }
 
 // ---------------------------------------------------------------------------
 // Re-export for page/modal layers (ESLint import-boundary — D-100-03-APIERROR-REEXPORT)
 // ---------------------------------------------------------------------------
 
-export { ApiError }
+export { ApiError };

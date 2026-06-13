@@ -7,7 +7,7 @@
  * All mutation schemas enforce business rules client-side as defense-in-depth;
  * the backend is the authority.
  */
-import { z } from 'zod'
+import { z } from 'zod';
 
 // ---------------------------------------------------------------------------
 // TrainerSlot (wire shape)
@@ -20,8 +20,8 @@ export const TrainerSlotSchema = z.object({
   endTime: z.string(),
   status: z.enum(['active', 'cancelled', 'booked']),
   createdAt: z.string(),
-})
-export type TrainerSlotData = z.infer<typeof TrainerSlotSchema>
+});
+export type TrainerSlotData = z.infer<typeof TrainerSlotSchema>;
 
 export const TrainerSlotListResponseSchema = z.object({
   data: z.object({
@@ -30,7 +30,7 @@ export const TrainerSlotListResponseSchema = z.object({
     page: z.number(),
     pageSize: z.number(),
   }),
-})
+});
 
 // ---------------------------------------------------------------------------
 // RecurringTemplate (wire shape)
@@ -45,8 +45,8 @@ export const RecurringTemplateSchema = z.object({
   validFrom: z.string(),
   validUntil: z.string().nullable().optional(),
   isActive: z.boolean(),
-})
-export type RecurringTemplateData = z.infer<typeof RecurringTemplateSchema>
+});
+export type RecurringTemplateData = z.infer<typeof RecurringTemplateSchema>;
 
 export const RecurringTemplateListResponseSchema = z.object({
   data: z.object({
@@ -55,7 +55,7 @@ export const RecurringTemplateListResponseSchema = z.object({
     page: z.number(),
     pageSize: z.number(),
   }),
-})
+});
 
 // ---------------------------------------------------------------------------
 // TimeOff (wire shape)
@@ -68,8 +68,8 @@ export const TimeOffSchema = z.object({
   blockEnd: z.string(),
   reason: z.string().nullable().optional(),
   createdAt: z.string(),
-})
-export type TimeOffData = z.infer<typeof TimeOffSchema>
+});
+export type TimeOffData = z.infer<typeof TimeOffSchema>;
 
 export const TimeOffListResponseSchema = z.object({
   data: z.object({
@@ -78,7 +78,7 @@ export const TimeOffListResponseSchema = z.object({
     page: z.number(),
     pageSize: z.number(),
   }),
-})
+});
 
 // ---------------------------------------------------------------------------
 // Mutation input schemas
@@ -89,14 +89,14 @@ export const PublishSlotSchema = z.object({
   trainerId: z.string().min(1, 'Выберите тренера'),
   startTime: z.string().min(1),
   endTime: z.string().min(1),
-})
-export type PublishSlotInput = z.infer<typeof PublishSlotSchema>
+});
+export type PublishSlotInput = z.infer<typeof PublishSlotSchema>;
 
 /** PATCH /api/v1/trainer-slots/{slot_id}/cancel */
 export const CancelSlotSchema = z.object({
   cancelReason: z.string().min(1).max(200),
-})
-export type CancelSlotInput = z.infer<typeof CancelSlotSchema>
+});
+export type CancelSlotInput = z.infer<typeof CancelSlotSchema>;
 
 /** POST /api/v1/recurring-templates */
 export const CreateTemplateSchema = z.object({
@@ -106,8 +106,8 @@ export const CreateTemplateSchema = z.object({
   endTime: z.string().min(1),
   validFrom: z.string().min(1),
   validUntil: z.string().optional(),
-})
-export type CreateTemplateInput = z.infer<typeof CreateTemplateSchema>
+});
+export type CreateTemplateInput = z.infer<typeof CreateTemplateSchema>;
 
 /** POST /api/v1/time-off */
 export const CreateTimeOffSchema = z.object({
@@ -115,5 +115,5 @@ export const CreateTimeOffSchema = z.object({
   blockStart: z.string().min(1),
   blockEnd: z.string().min(1),
   reason: z.string().optional(),
-})
-export type CreateTimeOffInput = z.infer<typeof CreateTimeOffSchema>
+});
+export type CreateTimeOffInput = z.infer<typeof CreateTimeOffSchema>;

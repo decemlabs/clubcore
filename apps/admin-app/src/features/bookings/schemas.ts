@@ -12,7 +12,7 @@
  *   CompletePtSessionSchema — POST /api/v1/pt-sessions {ptPackageId, trainerId, performedAt, bookingId}
  *                             NOTE: no clientId (backend extra='forbid' — T-102-BK-COMPLETE)
  */
-import { z } from 'zod'
+import { z } from 'zod';
 
 // ---------------------------------------------------------------------------
 // Booking (wire shape + optional detail snapshots)
@@ -43,8 +43,8 @@ export const BookingSchema = z.object({
     .optional(),
   clientFullName: z.string().optional(),
   createdAt: z.string(),
-})
-export type BookingData = z.infer<typeof BookingSchema>
+});
+export type BookingData = z.infer<typeof BookingSchema>;
 
 export const BookingsListResponseSchema = z.object({
   data: z.object({
@@ -53,7 +53,7 @@ export const BookingsListResponseSchema = z.object({
     page: z.number(),
     pageSize: z.number(),
   }),
-})
+});
 
 // ---------------------------------------------------------------------------
 // Mutation input schemas
@@ -64,14 +64,14 @@ export const BookingCreateSchema = z.object({
   slotId: z.string().min(1),
   clientId: z.string().min(1, 'Клиент обязателен'),
   ptPackageId: z.string().min(1, 'Выберите PT-пакет'),
-})
-export type BookingCreateInput = z.infer<typeof BookingCreateSchema>
+});
+export type BookingCreateInput = z.infer<typeof BookingCreateSchema>;
 
 /** POST /api/v1/bookings/{booking_id}/cancel */
 export const CancelBookingSchema = z.object({
   reason: z.string().min(1).max(200),
-})
-export type CancelBookingInput = z.infer<typeof CancelBookingSchema>
+});
+export type CancelBookingInput = z.infer<typeof CancelBookingSchema>;
 
 /**
  * POST /api/v1/pt-sessions body when completing a booking.
@@ -83,5 +83,5 @@ export const CompletePtSessionSchema = z.object({
   trainerId: z.string().min(1),
   performedAt: z.string(),
   bookingId: z.string().min(1),
-})
-export type CompletePtSessionInput = z.infer<typeof CompletePtSessionSchema>
+});
+export type CompletePtSessionInput = z.infer<typeof CompletePtSessionSchema>;

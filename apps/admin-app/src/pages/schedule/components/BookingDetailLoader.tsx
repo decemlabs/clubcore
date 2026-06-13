@@ -51,11 +51,6 @@ export function BookingDetailLoader({ bookingId, role, open, onOpenChange }: Pro
   }
 
   return (
-    <BookingDetailModal
-      booking={booking}
-      role={role}
-      open={open}
-      onOpenChange={onOpenChange}
-    />
+    <BookingDetailModal booking={booking} role={role} open={open} onOpenChange={onOpenChange} />
   );
 }

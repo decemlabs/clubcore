@@ -11,11 +11,11 @@
  */
 
 export interface BookingsListQuery {
-  clientId?: string
-  trainerId?: string
-  fromTime?: string
-  toTime?: string
-  status?: string
+  clientId?: string;
+  trainerId?: string;
+  fromTime?: string;
+  toTime?: string;
+  status?: string;
 }
 
 export const bookingsKeys = {
@@ -27,4 +27,4 @@ export const bookingsKeys = {
     [...bookingsKeys.all, 'byWeek', params] as const,
   byTrainer: (trainerId: string, range: { fromTime: string; toTime: string }) =>
     [...bookingsKeys.all, 'byTrainer', trainerId, range] as const,
-} as const
+} as const;

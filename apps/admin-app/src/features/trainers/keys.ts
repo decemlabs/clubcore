@@ -10,7 +10,7 @@
  */
 
 export interface TrainersListQuery {
-  active?: boolean
+  active?: boolean;
 }
 
 export const trainersKeys = {
@@ -19,4 +19,4 @@ export const trainersKeys = {
   list: (filter: TrainersListQuery) => [...trainersKeys.lists(), filter] as const,
   details: () => [...trainersKeys.all, 'detail'] as const,
   detail: (id: string) => [...trainersKeys.details(), id] as const,
-} as const
+} as const;

@@ -36,10 +36,7 @@ import { CalendarPlus, CalendarX, Plus } from '@/components/icons';
 import { useTrainerSlots } from '@/features/schedule/api';
 import { useBookingsByWeek } from '@/features/bookings/api';
 import { useTrainers } from '@/features/trainers/api';
-import {
-  mergeSlotBookings,
-  type CalendarEvent,
-} from './components/calendar-utils';
+import { mergeSlotBookings, type CalendarEvent } from './components/calendar-utils';
 import type { ScheduleDay, DayState } from '@/features/schedule/types';
 import { SchedulePageHead, type CalView } from './components/SchedulePageHead';
 import { ScheduleToolbar, type ScheduleFilters } from './components/ScheduleToolbar';
@@ -113,11 +110,7 @@ function buildDays(weekStart: Date, todayMidnight: Date): ScheduleDay[] {
     const state: DayState = isToday ? 'today' : isPast ? 'past' : 'default';
 
     const num = format(day, 'd');
-    const sub = isToday
-      ? 'сегодня'
-      : isPast
-        ? 'завершено'
-        : format(day, 'd MMMM', { locale: ru });
+    const sub = isToday ? 'сегодня' : isPast ? 'завершено' : format(day, 'd MMMM', { locale: ru });
 
     return {
       dow: DOW_SHORT[i] ?? '',
@@ -186,15 +179,9 @@ export function SchedulePage() {
 
   // Data queries
   const trainersQuery = useTrainers({ active: true });
-  const trainers = useMemo(
-    () => trainersQuery.data?.items ?? [],
-    [trainersQuery.data],
-  );
+  const trainers = useMemo(() => trainersQuery.data?.items ?? [], [trainersQuery.data]);
 
-  const trainerColorMap = useMemo(
-    () => buildColorMap(trainers.map((t) => t.id)),
-    [trainers],
-  );
+  const trainerColorMap = useMemo(() => buildColorMap(trainers.map((t) => t.id)), [trainers]);
 
   const trainerNameMap = useMemo(
     () => new Map(trainers.map((t) => [t.id, t.fullName])),
@@ -233,8 +220,7 @@ export function SchedulePage() {
   }).length;
 
   // Combined pending/error states
-  const isPending =
-    slotsQuery.isPending || bookingsQuery.isPending || trainersQuery.isPending;
+  const isPending = slotsQuery.isPending || bookingsQuery.isPending || trainersQuery.isPending;
   const isError = slotsQuery.isError || bookingsQuery.isError;
 
   const handleRetry = () => {
@@ -273,11 +259,7 @@ export function SchedulePage() {
 
   return (
     <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-4 px-4 pb-10 pt-5 sm:px-6 sm:pb-12 sm:pt-6 lg:px-7">
-      <SchedulePageHead
-        data={headData}
-        view={view}
-        onViewChange={setView}
-      />
+      <SchedulePageHead data={headData} view={view} onViewChange={setView} />
 
       <ScheduleToolbar
         rangeLabel={rangeLabel}
@@ -338,11 +320,7 @@ export function SchedulePage() {
       )}
 
       {/* Schedule management modal (owner only) */}
-      <ScheduleManagementModal
-        open={mgmtOpen}
-        onOpenChange={setMgmtOpen}
-        role={role}
-      />
+      <ScheduleManagementModal open={mgmtOpen} onOpenChange={setMgmtOpen} role={role} />
 
       {/* Booking create modal (available slot click) */}
       {bookingSlotTarget && (

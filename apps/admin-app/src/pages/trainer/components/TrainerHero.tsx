@@ -5,24 +5,24 @@
  * isActive badge. Phone shown when available.
  * Owner edit opens TrainerFormModal via local state (not global modals context).
  */
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { ROUTES } from '@/app/routes'
-import { Initials } from '@/components/ui/initials'
-import { Button } from '@/components/ui/button'
-import { ChevronLeft, MessageSquare, Phone, SquarePen } from '@/components/icons'
-import { getInitials } from '@/lib/format'
-import type { TrainerData } from '@/features/trainers/schemas'
-import { TrainerFormModal } from '@/components/modals/TrainerFormModal'
-import { can } from '@/shared/session/can'
-import type { Role } from '@/shared/session/types'
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ROUTES } from '@/app/routes';
+import { Initials } from '@/components/ui/initials';
+import { Button } from '@/components/ui/button';
+import { ChevronLeft, MessageSquare, Phone, SquarePen } from '@/components/icons';
+import { getInitials } from '@/lib/format';
+import type { TrainerData } from '@/features/trainers/schemas';
+import { TrainerFormModal } from '@/components/modals/TrainerFormModal';
+import { can } from '@/shared/session/can';
+import type { Role } from '@/shared/session/types';
 
-const HERO_BTN = 'h-[38px] gap-[7px] rounded-full px-[18px] text-[13.5px] font-semibold'
+const HERO_BTN = 'h-[38px] gap-[7px] rounded-full px-[18px] text-[13.5px] font-semibold';
 
 export function TrainerHero({ trainer: t, role }: { trainer: TrainerData; role: Role }) {
-  const navigate = useNavigate()
-  const [editOpen, setEditOpen] = useState(false)
-  const initials = getInitials(t.fullName)
+  const navigate = useNavigate();
+  const [editOpen, setEditOpen] = useState(false);
+  const initials = getInitials(t.fullName);
 
   return (
     <div>
@@ -92,9 +92,7 @@ export function TrainerHero({ trainer: t, role }: { trainer: TrainerData; role: 
             </div>
           ) : null}
 
-          {t.bio ? (
-            <p className="mt-3 text-[13px] leading-relaxed text-fg-muted">{t.bio}</p>
-          ) : null}
+          {t.bio ? <p className="mt-3 text-[13px] leading-relaxed text-fg-muted">{t.bio}</p> : null}
         </div>
 
         <div className="flex flex-wrap items-center gap-2 self-start max-sm:w-full">
@@ -113,5 +111,5 @@ export function TrainerHero({ trainer: t, role }: { trainer: TrainerData; role: 
 
       <TrainerFormModal open={editOpen} onOpenChange={setEditOpen} trainer={t} />
     </div>
-  )
+  );
 }
