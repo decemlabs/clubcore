@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Production Admin — Backend Wiring
 status: in-progress
-stopped_at: Phase 101 Plan 04 complete (CLI-02 delivered — visits/payments/memberships tabs wired)
-last_updated: "2026-06-13T15:01:33.124Z"
-last_activity: "2026-06-13 — Phase 101 Plan 04 complete: visits/payments Zod schemas + by-client hooks + ClientPage tabs wired to real data with per-tab error isolation (CLI-02 done)"
+stopped_at: Phase 103 Plan 01 complete (ATT-01/ATT-02/FIN-01/FIN-02 data layer delivered)
+last_updated: "2026-06-13T17:25:00Z"
+last_activity: "2026-06-13 — Phase 103 Plan 01 complete: visits+payments+reports schemas+keys+utils+hooks wired (useVisitsList/useGymMeta/useCheckIn/usePaymentsLedger/useVisitsReport/useRevenueReport + TDD zero-fill utils)"
 progress:
   total_phases: 11
   completed_phases: 3
-  total_plans: 12
-  completed_plans: 12
+  total_plans: 16
+  completed_plans: 13
   percent: 27
 ---
 
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 101 of 106 (Clients + Memberships) — Complete
-Plan: 4/4 complete
-Status: Phase 101 complete — all plans done (CLI-01, CLI-02, CLI-03, MEM-01, MEM-02, MEM-03 delivered)
-Last activity: 2026-06-13 — Phase 101 Plan 04 complete: visits/payments Zod schemas + by-client hooks + ClientPage tabs wired to real data with per-tab error isolation (CLI-02 done)
+Phase: 103 of 106 (Attendance + Finance)
+Plan: 1/4 complete
+Status: Phase 103 Plan 01 complete — data layer done (ATT-01, ATT-02, FIN-01, FIN-02 delivered)
+Last activity: 2026-06-13 — Phase 103 Plan 01 complete: visits+payments+reports schemas+utils+hooks (useVisitsList/useGymMeta/useCheckIn/usePaymentsLedger/useVisitsReport/useRevenueReport + TDD zero-fill)
 
-Progress: [██████████] 100%
+Progress: [███░░░░░░░] 30%
 
 ## v3.0 Roadmap Summary
 
@@ -60,7 +60,7 @@ Progress: [██████████] 100%
 
 ### Pending Todos
 
-- Phase 101 complete. Next: Phase 102 (Schedule + Trainers).
+- Phase 103 Plan 01 complete. Continue with Phase 103 Plan 02 (Attendance page wire).
 
 ### Phase 101 Decisions
 
@@ -78,6 +78,12 @@ Progress: [██████████] 100%
 - **D-101-04-PER-TAB-HOOKS**: Hooks called inside each tab component (clientId prop), not lifted to ClientPage — preserves per-tab error isolation
 - **D-101-04-TRAININGS-PTPKG**: TrainingsTab uses usePtPackagesByClient (101-03) — PT-package instances available in scope
 - **D-101-04-MEMBERSHIPS-SECTION**: MembershipsSection rendered inline in ClientPage above tabs using useMembershipsByClient reuse
+
+### Phase 103 Decisions
+
+- **D-103-01-SESSION-FROM-CALLER**: useCheckIn receives currentUserId as a mutation var from caller rather than calling useSession() internally — avoids hook coupling in mutationFn, keeps hook context-free
+- **D-103-01-LEGACY-USEREPORTS**: useReports() + reportsKeys preserved in reports/api.ts so ReportsPage (Phase 104 scope) builds without changes; reportsQueryKeys uses ['reports-data'] root to avoid key collision
+- **D-103-01-NOSESSION-VISITS**: visits/api.ts does NOT import useSession — currentUserId is caller-provided via CheckInVars; payments/api.ts accepts role as explicit parameter
 
 ### Phase 100 Decisions
 
@@ -115,6 +121,6 @@ v3.0 in-progress deferrals:
 
 ## Session Continuity
 
-Last session: 2026-06-13T15:01:33.119Z
+Last session: 2026-06-13T17:25:28.000Z
 Stopped at: Phase 101 Plan 04 complete (CLI-02 delivered — visits/payments/memberships tabs wired)
 Resume: Phase 101 complete. Continue with Phase 102 (Schedule + Trainers).

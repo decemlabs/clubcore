@@ -50,13 +50,13 @@
 
 ### ATT — Attendance & Load
 
-- [ ] **ATT-01**: the Attendance screen renders real visits (`/visits` list) and supports reception check-in (`/visits/check-in`).
-- [ ] **ATT-02**: the Load screen renders the real hourly/daily visits aggregate (`/reports/visits`) — no mock NaN on empty buckets.
+- [x] **ATT-01**: the Attendance screen renders real visits (`/visits` list) and supports reception check-in (`/visits/check-in`).
+- [x] **ATT-02**: the Load screen renders the real hourly/daily visits aggregate (`/reports/visits`) — no mock NaN on empty buckets.
 
 ### FIN — Cashbox & Finance
 
-- [ ] **FIN-01**: the Cashbox screen renders the real cash ledger (`/payments`) with sell + refund records and daily totals; the refund flow is wired. *(Shift open/close + Z-report — see Future.)*
-- [ ] **FIN-02**: the Finance screen renders real revenue (`/reports/revenue`, net-of-refund, by method/subject) and online payments (`/online-payments`) read.
+- [x] **FIN-01**: the Cashbox screen renders the real cash ledger (`/payments`) with sell + refund records and daily totals; the refund flow is wired. *(Shift open/close + Z-report — see Future.)*
+- [x] **FIN-02**: the Finance screen renders real revenue (`/reports/revenue`, net-of-refund, by method/subject) and online payments (`/online-payments`) read.
 
 ### RPT — Dashboard, Reports & Audit
 
@@ -136,10 +136,10 @@ Which phases cover which requirements.
 | SCH-02 | Phase 102 | Complete |
 | TRN-01 | Phase 102 | Complete |
 | TRN-02 | Phase 102 | Complete |
-| ATT-01 | Phase 103 | Pending |
-| ATT-02 | Phase 103 | Pending |
-| FIN-01 | Phase 103 | Pending |
-| FIN-02 | Phase 103 | Pending |
+| ATT-01 | Phase 103 | Complete |
+| ATT-02 | Phase 103 | Complete |
+| FIN-01 | Phase 103 | Complete |
+| FIN-02 | Phase 103 | Complete |
 | RPT-01 | Phase 104 | Pending |
 | RPT-02 | Phase 104 | Pending |
 | RPT-03 | Phase 104 | Pending |

@@ -214,7 +214,7 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
   3. Cashbox screen renders the real cash ledger (`/payments`) with sell + refund records and daily totals; the refund flow is wired (rows read-only); mock removed.
   4. Finance screen renders real revenue report (`/reports/revenue`, net-of-refund, by method/subject) and online payments read; mock removed.
 **Plans**: 4 plans, 3 waves
-- [ ] 103-01-PLAN.md — Domain foundation: extend visits (list/check-in/gym-meta) + payments (global ledger) hooks; NEW reports domain (revenue+visits schemas/keys/api) + zero-fill utils [ATT-01, ATT-02, FIN-01, FIN-02] · wave 1
+- [x] 103-01-PLAN.md — Domain foundation: extend visits (list/check-in/gym-meta) + payments (global ledger) hooks; NEW reports domain (revenue+visits schemas/keys/api) + zero-fill utils [ATT-01, ATT-02, FIN-01, FIN-02] · wave 1
 - [ ] 103-02-PLAN.md — Attendance: real visits list + CheckInModal (client picker, optimistic, 3 distinct 409 states), hide 9 mock analytics widgets [ATT-01] · wave 2
 - [ ] 103-03-PLAN.md — Cashbox + Load + nav gating: /payments ledger (read-only refund rows + client-side daily totals), zero-filled /reports/visits, Касса+Загруженность ownerOnly, shared DateRangePicker, Lock-EmptyState [FIN-01, ATT-02] · wave 2
 - [ ] 103-04-PLAN.md — Finance: 2 real tabs (Выручка /reports/revenue day|month + Онлайн-платежи method=online slice), zero-filled signed-net chart, Lock guard, mock tabs + CSV export removed [FIN-02] · wave 3
@@ -276,7 +276,7 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
 | 100. Foundation + Authentication | 4/4 | Complete   | 2026-06-13 |
 | 101. Clients + Memberships | 4/4 | Complete   | 2026-06-13 |
 | 102. Schedule + Trainers | 4/4 | Complete   | 2026-06-13 |
-| 103. Attendance + Finance | 0/4 | Planned | - |
+| 103. Attendance + Finance | 1/4 | In Progress|  |
 | 104. Dashboard, Reports + Settings | 0/TBD | Not started | - |
 | 105. admin-web Retirement + RBAC Re-home | 0/TBD | Not started | - |
 | 106. OpenAPI Handoff + Milestone Gate | 0/TBD | Not started | - |
