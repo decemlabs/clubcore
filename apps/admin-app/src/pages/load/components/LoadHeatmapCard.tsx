@@ -98,7 +98,7 @@ export function LoadHeatmapCard({
           <AreaTrendChart
             data={dailyTrend}
             height={220}
-            yMax={Math.max(...daily.map((b) => b.count), 0)}
+            yMax={Math.max(...daily.map((b) => b.count), 0) || undefined}
             ticks={ticks}
           />
         </div>
