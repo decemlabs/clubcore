@@ -104,6 +104,14 @@ Carrying forward from v2.6 close (2026-06-08):
 | security | Phase 70 CR-02/IN-01/IN-02 (proxy rate-limit, QR post-decode, cancel idempotency) | deferred → /gsd:secure-phase 70 |
 | compliance | Phase 81 ФЗ-376 consent wording (concrete ₽ amount vs generic) | needs legal review |
 
+v3.0 in-progress deferrals:
+
+| Category | Item | Status |
+|----------|------|--------|
+| feature | P101 WR-01 — Plans create/edit form modals (list/gating/delete/API-hooks done; forms are toast stubs) | deferred → follow-up (user-accepted 2026-06-13) |
+| human-verify | P100 — login round-trip + 401 redirect | ✅ validated live 2026-06-13 |
+| human-verify | P101 — 9 live-backend UAT items (CRUD round-trips, sell/freeze/refund, role gating) | deferred → batch-validate at Phase 106 gate |
+
 ## Session Continuity
 
 Last session: 2026-06-13T12:10:00Z
