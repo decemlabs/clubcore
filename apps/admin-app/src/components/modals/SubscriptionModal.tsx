@@ -14,9 +14,7 @@
  * Error state (all dialogs): inline Callout tone="danger" below fields; dialog stays open.
  * Success (all dialogs): close + toast (per UI-SPEC Copywriting Contract).
  */
-import { useEffect, useState, type ReactNode } from 'react';
-import type { LucideIcon } from 'lucide-react';
-import { toast } from 'sonner';
+import { useEffect, useState } from 'react';
 import { cn } from '@/lib/cn';
 import { formatRub, formatDateRu } from '@/lib/format';
 import { useSession } from '@/features/auth/api';
@@ -32,7 +30,6 @@ import {
   ApiError,
 } from '@/features/memberships/api';
 import {
-  Check,
   CircleX,
   CreditCard,
   History,
@@ -42,7 +39,6 @@ import {
   Snowflake,
   Sun,
   TriangleAlert,
-  Wallet,
 } from '@/components/icons';
 import type { SubscriptionScreen } from './modals-context';
 import { AdaptiveModal } from './AdaptiveModal';
@@ -638,66 +634,8 @@ function RefundScreen({ open, onOpenChange, clientName, membershipId, membership
 }
 
 // ---------------------------------------------------------------------------
-// HistoryScreen (read-only, unchanged)
+// HistoryScreen (placeholder — real endpoint deferred to a future phase)
 // ---------------------------------------------------------------------------
-
-const HISTORY: {
-  id: string;
-  icon: LucideIcon;
-  tone: 'accent' | 'warn' | 'indigo';
-  title: ReactNode;
-  meta: string;
-  amount?: string;
-}[] = [
-  {
-    id: '1',
-    icon: Snowflake,
-    tone: 'indigo',
-    title: (
-      <>
-        Заморожен на <b className="font-bold text-fg">14 дней</b> · причина: отпуск
-      </>
-    ),
-    meta: '22 апр 2026 · Маша К.',
-  },
-  {
-    id: '2',
-    icon: Wallet,
-    tone: 'accent',
-    title: (
-      <>
-        Продлён на <b className="font-bold text-fg">12 месяцев</b>
-      </>
-    ),
-    meta: '14 фев 2026 · карта •• 4417',
-    amount: '24 000 ₽',
-  },
-  {
-    id: '3',
-    icon: Snowflake,
-    tone: 'warn',
-    title: (
-      <>
-        Разморожен досрочно · вернулось <b className="font-bold text-fg">5 дней</b>
-      </>
-    ),
-    meta: '03 дек 2025 · Дмитрий С.',
-  },
-  {
-    id: '4',
-    icon: Check,
-    tone: 'accent',
-    title: <>Абонемент оформлен · «12 месяцев»</>,
-    meta: '14 фев 2025 · карта •• 4417',
-    amount: '24 000 ₽',
-  },
-];
-
-const TL_DOT: Record<'accent' | 'warn' | 'indigo', string> = {
-  accent: 'border-transparent bg-primary-soft text-primary-deep dark:text-primary',
-  warn: 'border-transparent bg-warning-soft text-warning-deep',
-  indigo: 'border-transparent bg-indigo-500/15 text-indigo-600 dark:text-indigo-300',
-};
 
 function HistoryScreen({ open, onOpenChange, clientName }: ScreenProps) {
   return (
@@ -707,38 +645,10 @@ function HistoryScreen({ open, onOpenChange, clientName }: ScreenProps) {
       icon={<IconChip icon={History} />}
       title="История абонемента"
       description={clientName ?? undefined}
-      footerActions={
-        <>
-          <ModalButton variant="ghost" onClick={() => toast('Выгрузка в PDF')}>
-            Экспорт
-          </ModalButton>
-          <ModalButton onClick={() => onOpenChange(false)}>Закрыть</ModalButton>
-        </>
-      }
+      footerActions={<ModalButton onClick={() => onOpenChange(false)}>Закрыть</ModalButton>}
     >
-      <div className="relative mt-2 pl-[30px] before:absolute before:bottom-1 before:left-[9px] before:top-1 before:w-[1.5px] before:bg-border before:content-['']">
-        {HISTORY.map((it) => {
-          const Icon = it.icon;
-          return (
-            <div key={it.id} className="relative pb-[18px] last:pb-0.5">
-              <span
-                className={cn(
-                  'absolute -left-[30px] top-0 grid size-5 place-items-center rounded-full border-[1.5px]',
-                  TL_DOT[it.tone],
-                )}
-              >
-                <Icon className="size-[11px]" strokeWidth={2.2} />
-              </span>
-              <div className="text-[13px] font-semibold">
-                {it.amount ? (
-                  <span className="float-right font-bold tabular-nums">{it.amount}</span>
-                ) : null}
-                {it.title}
-              </div>
-              <div className="mt-0.5 text-[11.5px] tabular-nums text-fg-subtle">{it.meta}</div>
-            </div>
-          );
-        })}
+      <div className="py-8 text-center text-[13px] text-fg-muted">
+        История появится позже — эта функция будет доступна в следующей версии.
       </div>
     </AdaptiveModal>
   );
