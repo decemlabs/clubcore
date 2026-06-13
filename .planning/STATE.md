@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Production Admin — Backend Wiring
 status: in-progress
-stopped_at: Phase 103 Plan 02 complete (ATT-01 UI delivered — CheckInModal + AttendancePage wired)
-last_updated: "2026-06-13T17:35:00Z"
-last_activity: "2026-06-13 — Phase 103 Plan 02 complete: CheckInModal (client-picker + 3-code 409) + AttendancePage wired to real visits list; VisitsList + AttendancePageHead + attendance/api delegation"
+stopped_at: Phase 103 Plan 03 complete (FIN-01 + ATT-02 — CashboxPage+LoadPage wired, nav gating corrected, DateRangePicker)
+last_updated: "2026-06-13T17:50:00Z"
+last_activity: "2026-06-13 — Phase 103 Plan 03 complete: CashboxPage wired to real /payments ledger with signed refund rows + daily totals; LoadPage wired to zero-filled /reports/visits; shared DateRangePicker; nav Касса+Загруженность ownerOnly gated"
 progress:
   total_phases: 11
   completed_phases: 3
   total_plans: 16
-  completed_plans: 14
-  percent: 30
+  completed_plans: 15
+  percent: 94
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 103 of 106 (Attendance + Finance)
-Plan: 2/4 complete
-Status: Phase 103 Plan 02 complete — ATT-01 UI delivered (CheckInModal + AttendancePage wired to real visits)
-Last activity: 2026-06-13 — Phase 103 Plan 02 complete: CheckInModal (client-picker + 3 distinct 409 Callouts) + AttendancePage wired to real visits list + VisitsList + AttendancePageHead with check-in button
+Plan: 3/4 complete
+Status: Phase 103 Plan 03 complete — FIN-01 (cashbox ledger+refund rows+daily totals) + ATT-02 (load zero-fill no-NaN) delivered
+Last activity: 2026-06-13 — Phase 103 Plan 03 complete: CashboxPage wired to real /payments ledger with refund rows+daily totals; LoadPage wired to zero-filled /reports/visits; shared DateRangePicker (366-cap+inversion); nav Касса+Загруженность ownerOnly gated
 
-Progress: [███░░░░░░░] 30%
+Progress: [█████████░] 94%
 
 ## v3.0 Roadmap Summary
 
@@ -60,7 +60,7 @@ Progress: [███░░░░░░░] 30%
 
 ### Pending Todos
 
-- Phase 103 Plan 02 complete. Continue with Phase 103 Plan 03 (Load page wire + nav gating + cashbox).
+- Phase 103 Plan 03 complete. Continue with Phase 103 Plan 04 (Finance page — FinancePage revenue+online-payments tabs).
 
 ### Phase 101 Decisions
 
@@ -87,6 +87,10 @@ Progress: [███░░░░░░░] 30%
 - **D-103-02-CHECKIN-RENAME**: Old mock CheckinModal.tsx (QR scanner) replaced/renamed to CheckInModal.tsx with real client-picker + 3-code 409 implementation; git mv used for proper case rename on macOS case-insensitive FS
 - **D-103-02-ATTENDANCE-STATIC-RANGE**: AttendancePage uses static last-30-days range (no date picker); date-range filter UI deferred to Phase 103-03+ where cashbox/finance also need it (shared component)
 - **D-103-02-CLIENTNAME-TODO**: VisitData does not embed clientName from server; VisitsList shows fallback label; N+1 client fetches avoided; wiring deferred to Phase 104
+- **D-103-03-CASHBOX-HOOKS-SPLIT**: CashboxPage split into outer RBAC guard (useSession only) + inner CashboxPageContent (data hooks); same pattern for LoadPage — avoids conditional React hook calls
+- **D-103-03-MSK-SLICE**: computeDailyTotals derives MSK date via receivedAt.slice(0,10) (ISO prefix) rather than TZ conversion; date-fns-tz not installed; backend stores MSK-anchored timestamps
+- **D-103-03-LOAD-HEATMAP-SINGLE-ROW**: IntensityHeatmap shown with one row ('Часы') for the 24 hourly aggregate buckets; real data is single-period aggregate not a 7-day matrix
+- **D-103-03-FAKEREFUND**: «Оформить возврат» dropdown removed from TransactionsCard — no /payments refund endpoint; refund rows are READ-ONLY per T-103-03-FAKEREFUND
 
 ### Phase 100 Decisions
 
@@ -124,6 +128,6 @@ v3.0 in-progress deferrals:
 
 ## Session Continuity
 
-Last session: 2026-06-13T17:35:00Z
+Last session: 2026-06-13T17:47:58.572Z
 Stopped at: Phase 103 Plan 02 complete (ATT-01 UI delivered — CheckInModal + AttendancePage wired to real visits)
 Resume: Phase 103 Plan 02 complete. Continue with Phase 103 Plan 03 (Load + nav gating + cashbox).
