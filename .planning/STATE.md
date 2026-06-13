@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Production Admin — Backend Wiring
 status: in-progress
-stopped_at: Phase 103 Plan 03 complete (FIN-01 + ATT-02 — CashboxPage+LoadPage wired, nav gating corrected, DateRangePicker)
-last_updated: "2026-06-13T17:50:00Z"
-last_activity: "2026-06-13 — Phase 103 Plan 03 complete: CashboxPage wired to real /payments ledger with signed refund rows + daily totals; LoadPage wired to zero-filled /reports/visits; shared DateRangePicker; nav Касса+Загруженность ownerOnly gated"
+stopped_at: Phase 103 complete (all 4 plans done — ATT-01, ATT-02, FIN-01, FIN-02 all delivered)
+last_updated: "2026-06-13T17:56:00Z"
+last_activity: "2026-06-13 — Phase 103 Plan 04 complete: FinancePage wired to real /reports/revenue (zero-fill, groupBy day|month, signed netKopecks) and /payments?method=online; FIN-02 done; Phase 103 complete"
 progress:
   total_phases: 11
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 16
-  completed_plans: 15
-  percent: 94
+  completed_plans: 16
+  percent: 100
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 103 of 106 (Attendance + Finance)
-Plan: 3/4 complete
-Status: Phase 103 Plan 03 complete — FIN-01 (cashbox ledger+refund rows+daily totals) + ATT-02 (load zero-fill no-NaN) delivered
-Last activity: 2026-06-13 — Phase 103 Plan 03 complete: CashboxPage wired to real /payments ledger with refund rows+daily totals; LoadPage wired to zero-filled /reports/visits; shared DateRangePicker (366-cap+inversion); nav Касса+Загруженность ownerOnly gated
+Phase: 103 of 106 (Attendance + Finance) — COMPLETE
+Plan: 4/4 complete
+Status: Phase 103 complete — ATT-01 (check-in), ATT-02 (load zero-fill), FIN-01 (cashbox ledger), FIN-02 (revenue+online-payments) all delivered
+Last activity: 2026-06-13 — Phase 103 Plan 04 complete: FinancePage wired to /reports/revenue (zero-fill, groupBy, signed net) + /payments?method=online (paginated); Lock-EmptyState RBAC guard; mock tabs removed; Phase 103 complete
 
-Progress: [█████████░] 94%
+Progress: [██████████] 100%
 
 ## v3.0 Roadmap Summary
 
@@ -60,7 +60,7 @@ Progress: [█████████░] 94%
 
 ### Pending Todos
 
-- Phase 103 Plan 03 complete. Continue with Phase 103 Plan 04 (Finance page — FinancePage revenue+online-payments tabs).
+- Phase 103 complete (all 4 plans). Continue with Phase 104 (Dashboard + Reports + Settings).
 
 ### Phase 101 Decisions
 
@@ -91,6 +91,8 @@ Progress: [█████████░] 94%
 - **D-103-03-MSK-SLICE**: computeDailyTotals derives MSK date via receivedAt.slice(0,10) (ISO prefix) rather than TZ conversion; date-fns-tz not installed; backend stores MSK-anchored timestamps
 - **D-103-03-LOAD-HEATMAP-SINGLE-ROW**: IntensityHeatmap shown with one row ('Часы') for the 24 hourly aggregate buckets; real data is single-period aggregate not a 7-day matrix
 - **D-103-03-FAKEREFUND**: «Оформить возврат» dropdown removed from TransactionsCard — no /payments refund endpoint; refund rows are READ-ONLY per T-103-03-FAKEREFUND
+- **D-103-04-FINANCE-SPLIT**: FinancePage split into outer RBAC guard (useSession only) + inner FinancePageContent (data hooks) — same pattern as D-103-03-CASHBOX-HOOKS-SPLIT; React Rules of Hooks safe
+- **D-103-04-ALLZERO-EMPTYSTATE**: All-zero revenue buckets (after zero-fill) and all-empty online payments both render EmptyState inline — no flat-zero/NaN chart
 
 ### Phase 100 Decisions
 
@@ -128,6 +130,6 @@ v3.0 in-progress deferrals:
 
 ## Session Continuity
 
-Last session: 2026-06-13T17:47:58.572Z
+Last session: 2026-06-13T17:55:44.092Z
 Stopped at: Phase 103 Plan 02 complete (ATT-01 UI delivered — CheckInModal + AttendancePage wired to real visits)
 Resume: Phase 103 Plan 02 complete. Continue with Phase 103 Plan 03 (Load + nav gating + cashbox).
