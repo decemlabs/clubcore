@@ -501,13 +501,15 @@ function TrainersTab({
         <span className="text-right">Выручка</span>
       </div>
       {rows.map((row, i) => (
-        <TrainerRow key={row.trainerId} row={row} first={i === 0} maxRevenue={maxRevenue} />
+        <ReportsTrainerRow key={row.trainerId} row={row} first={i === 0} maxRevenue={maxRevenue} />
       ))}
     </Card>
   );
 }
 
-function TrainerRow({
+// IN-03 fix: renamed from TrainerRow to ReportsTrainerRow to avoid name collision
+// with the imported TrainerRow type from @/features/reports/schemas.
+function ReportsTrainerRow({
   row,
   first,
   maxRevenue,
