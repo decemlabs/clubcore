@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Production Admin — Backend Wiring
-status: in-progress
-stopped_at: Phase 104 Plan 03 complete (RPT-02 Reports page + RPT-03 Audit page wired + «Журнал действий» nav entry)
-last_updated: "2026-06-13T22:40:00.000Z"
-last_activity: "2026-06-13 — Phase 104 Plan 03 complete: 4-tab Reports page + per-tab CSV export; wired AuditPage with server filters/pagination/CSV/XSS-safe payload; «Журнал действий» owner-only nav entry; full admin-app gate green"
+status: "Phase 104 complete: all 5 plans done (Dashboard/Reports/Audit/Profile+Sessions/Users Admin); all requirements RPT-01 RPT-02 RPT-03 SET-01 SET-02 delivered"
+stopped_at: Phase 104 Plan 05 complete (Users Admin TeamSection wired — SET-02)
+last_updated: "2026-06-13T19:51:00Z"
+last_activity: "2026-06-13 — Phase 104 Plan 05 complete: owner-only users admin wired in Settings→Team (invite+copy-link, deactivate/reactivate/delete/revoke, 409 guards, reception Lock-EmptyState); all 5 Phase 104 plans done; full gate green (typecheck+lint+337 tests+build)"
 progress:
   total_phases: 11
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 21
-  completed_plans: 23
-  percent: 40
+  completed_plans: 21
+  percent: 45
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 104 of 106 (Dashboard + Reports + Settings) — IN PROGRESS
-Plan: 3/5 complete
-Status: RPT-02 (Reports 4-tab + CSV), RPT-03 (Audit log + filters + CSV) delivered; nav entry added; remaining: SET-01 (profile/sessions), SET-02 (users admin) via 104-04/104-05
-Last activity: 2026-06-13 — Phase 104 Plan 03 complete: 4-tab Reports page + per-tab CSV export; wired AuditPage with server filters/pagination/CSV/XSS-safe payload; «Журнал действий» owner-only nav entry; full admin-app gate green
+Phase: 104 of 106 (Dashboard + Reports + Settings) — COMPLETE
+Plan: 5/5 complete
+Status: Phase 104 complete. All requirements: RPT-01 (Dashboard role-gating), RPT-02 (Reports 4-tab+CSV), RPT-03 (Audit log+filters+CSV), SET-01 (Profile read-only+Sessions), SET-02 (Users Admin TeamSection). Next: Phase 105 (admin-web Retirement + RBAC Re-home).
+Last activity: 2026-06-13 — Phase 104 Plan 05 complete: users admin TeamSection wired (invite+copy-link, deactivate/reactivate/delete/revoke, 409 guards, reception Lock-EmptyState); full gate green (typecheck+lint+337 tests+build)
 
 Progress: [█████████░] 90%
 
@@ -102,6 +102,9 @@ Progress: [█████████░] 90%
 - **D-104-04-MOCKCOMPAT**: useSettings renamed to useMockSettingsData (not deleted) — other sections (Branch/Hours/Booking/Payments/Notifications/App/Integrations/Billing) still need mock data; ProfileSection and SecuritySection are now self-fetching; TeamSection wired in 104-05
 - **D-104-04-SELFREVOKE-AUTHBUS**: useRevokeCurrentSession calls publishSessionExpired() on 204 (not navigate()) — routes through RequireAuth authBus subscriber, same path as mid-session 401 (T-104-09 mitigation)
 - **D-104-04-PROFILE-READONLY**: ProfileSection is fully read-only; PATCH /auth/me confirmed absent in backend; code comment added noting edit is deferred
+- **D-104-05-ROLE-TONE**: ROLE_TONE updated from mock types (owner/admin/trainer/cashier) to API types (owner/reception); mock Role import removed from SectionsBottom.tsx
+- **D-104-05-TEAM-COLS**: Simplified TeamSection grid (Сотрудник/Роль/Статус/Actions) — branch/2FA/last-login not in GET /api/v1/users response
+- **D-104-05-TOKEN-ID**: useRevokeInvitation receives user.id as tokenId for pending_invitation rows
 - **D-104-03-TABSGROUP**: Inline TabsGroup component (not imported from FinancePage parts) — avoids cross-page import, self-contained Reports module
 - **D-104-03-CLIENTS-INLINE-KPI**: ClientsTab uses inline KpiCard instead of existing KpiTile — clients 3-scalar data doesn't match KpiTile's icon+delta contract
 - **D-104-03-ACTIVITY-ICON-REUSE**: «Журнал действий» nav entry reuses already-imported Activity icon (consistent with Посещаемость entry)

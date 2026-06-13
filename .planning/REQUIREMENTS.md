@@ -67,7 +67,7 @@
 ### SET — Settings & Users
 
 - [x] **SET-01**: Settings (profile) reads/edits the current staff profile + theme, and manages active sessions.
-- [ ] **SET-02**: the Users surface wires owner-only multi-user admin CRUD (`/api/v1/users`: invite / list / deactivate / soft-delete).
+- [x] **SET-02**: the Users surface wires owner-only multi-user admin CRUD (`/api/v1/users`: invite / list / deactivate / soft-delete).
 
 ### ADMW — admin-web Retirement & RBAC Re-home
 
@@ -144,7 +144,7 @@ Which phases cover which requirements.
 | RPT-02 | Phase 104 | Complete |
 | RPT-03 | Phase 104 | Complete |
 | SET-01 | Phase 104 | Complete |
-| SET-02 | Phase 104 | Pending |
+| SET-02 | Phase 104 | Complete |
 | ADMW-01 | Phase 105 | Pending |
 | ADMW-02 | Phase 105 | Pending |
 | ADMW-03 | Phase 105 | Pending |
