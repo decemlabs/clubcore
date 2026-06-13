@@ -257,7 +257,9 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
   1. `openapi.json` + `schema.d.ts` regenerate byte-stably; no new backend domains means the staff contract is unchanged vs `contract-freeze-v1.11.0`.
   2. Staff drift-gate is green; full milestone gate passes: mypy --strict + lint-imports + pytest + admin-app `check`/`test` + Redocly.
   3. All 30 v3.0 requirements are verified satisfied (no open blockers).
-**Plans**: TBD
+**Plans**: 2 plans, 2 waves
+- [ ] 106-01-PLAN.md — NO-OP contract freeze: regenerate openapi.json + schema.d.ts + assert BOTH byte-UNCHANGED (zero git diff — v3.0 added zero routes); _v26Checks[8] intact, no _v30Checks; Redocly clean [HND-01] · wave 1
+- [ ] 106-02-PLAN.md — Full 7-gate green vs live docker stack (backend ruff/mypy/lint-imports/alembic/pytest + frontend recursive + admin-app + client-pwa + Redocly) + flake classification (only the 4 accepted) + CISO-01 parity green + 30/30 reqs + 106-GATE-EVIDENCE.md [HND-01] · wave 2
 
 ## Backlog
 
@@ -285,4 +287,4 @@ Full phase detail: [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md).
 | 103. Attendance + Finance | 4/4 | Complete   | 2026-06-13 |
 | 104. Dashboard, Reports + Settings | 5/5 | Complete   | 2026-06-13 |
 | 105. admin-web Retirement + RBAC Re-home | 1/1 | Complete   | 2026-06-13 |
-| 106. OpenAPI Handoff + Milestone Gate | 0/TBD | Not started | - |
+| 106. OpenAPI Handoff + Milestone Gate | 0/2 | Planned | - |
