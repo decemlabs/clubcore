@@ -344,7 +344,15 @@ Full phase details archived in [milestones/v3.0-ROADMAP.md](milestones/v3.0-ROAD
   4. Owner can edit the client-notification matrix (per-trigger × per-channel toggles) + sender signature + quiet hours; they persist and are honored by the notification dispatcher.
   5. Each Settings surface is owner-gated in the UI (reception sees a friendly Lock/403 state, not a crash); every new endpoint is RBAC byte-parity safe and added additively to the staff contract.
 
-**Plans**: TBD
+**Plans**: 5 plans (4 waves)
+
+Plans:
+- [ ] 108-01-PLAN.md — Backend foundation: RBAC (EDIT,SETTINGS) byte-parity + 4 LOCKED audit events + 3 settings singleton models + gym lat/lng + migrations 0070/0071
+- [ ] 108-02-PLAN.md — Settings endpoints (hours/booking/notifications GET+PUT, RBAC+CSRF+audit) + staff GET /api/v1/gym + lat/lng (CFG-01 backend complete)
+- [ ] 108-03-PLAN.md — Enforcement: bookings.service reads booking_config + working_hours/closures; notifications dispatcher matrix gate + quiet hours + always-on (raw-SQL cross-module reads)
+- [ ] 108-04-PLAN.md — FE data layer: Zod wire+form schemas + 8 TanStack Query hooks (gym/hours/booking/notifications) gated by can()
+- [ ] 108-05-PLAN.md — FE section wiring: BranchSection/HoursSection/BookingSection/NotificationsSection + Lock cards + SaveBar + navigate-away guard + human-verify
+
 **UI hint**: yes
 
 ### Phase 109: Profile & Security — Backend + Wiring
