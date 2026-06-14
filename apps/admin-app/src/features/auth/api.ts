@@ -1,5 +1,5 @@
 /**
- * Auth domain TanStack Query hooks (Phase 100 AUTH-01, AUTH-02).
+ * Auth domain TanStack Query hooks (Phase 100 AUTH-01, AUTH-02; Phase 109 PROF-01/02).
  *
  * This is the auth domain's http swap-seam — auth always uses http in Phase 100 (D-V30).
  * There is no mock path here. The VITE_API_MODE chokepoint ESLint rule exempts
@@ -11,6 +11,12 @@
  *   includes — setting partial data would produce a shape inconsistent with MeResponse.
  *   Invalidating forces a fresh /auth/me fetch that returns the complete shape.
  *   Cost: one extra round-trip on login. Benefit: single source of truth, no cache pollution.
+ *
+ * Phase 109 additions:
+ *   useUpdateProfile() — PATCH /api/v1/auth/me; invalidates authKeys.me on success (PROF-01).
+ *   useChangePassword() — POST /api/v1/auth/change-password; invalidates sessions on success (PROF-02).
+ *   Both hooks propagate ApiError to callers (no toast here — component owns error UX).
+ *   Paths are `as never` (D-V31-CONTRACT-ADDITIVE — regenerated in Phase 111).
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { staffRequest, ApiError } from '@/api/client'
@@ -22,6 +28,8 @@ import {
   type MeData,
   type PasswordResetConfirm,
   type PasswordResetRequest,
+  type ProfileUpdate,
+  type ChangePassword,
 } from './schemas'
 
 // ---------------------------------------------------------------------------
@@ -112,9 +120,72 @@ export function usePasswordResetConfirm() {
 }
 
 // ---------------------------------------------------------------------------
+// useUpdateProfile (Phase 109 PROF-01)
+// ---------------------------------------------------------------------------
+
+/**
+ * Mutates the current user's profile via PATCH /api/v1/auth/me.
+ *
+ * On success: invalidates authKeys.me so the sidebar/header reflects the
+ * new fullName and email immediately (no full reload). See D-109-16 (T-109-16).
+ *
+ * Error handling: ApiError (including .fields.email for 409 conflict) propagates
+ * to the caller — the component maps it to an inline field error (Plan 04).
+ * No toast here — toast is the component's responsibility.
+ *
+ * Path cast: not yet in schema.d.ts — regenerated in Phase 111 (D-V31-CONTRACT-ADDITIVE).
+ */
+export function useUpdateProfile() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (body: Partial<ProfileUpdate>) => {
+      // Path cast: not yet in schema.d.ts — regenerated in Phase 111 (D-V31-CONTRACT-ADDITIVE).
+      const raw = await staffRequest('patch' as never, '/api/v1/auth/me' as never, { body })
+      return MeResponseSchema.parse(raw).data
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: authKeys.me })
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
+// useChangePassword (Phase 109 PROF-02)
+// ---------------------------------------------------------------------------
+
+/**
+ * Changes the current user's password via POST /api/v1/auth/change-password.
+ *
+ * On success (204): invalidates the sessions query so the reduced session count
+ * appears in the SecuritySection (other sessions were revoked by the backend).
+ * The sessions key ['auth','sessions'] mirrors settingsKeys.sessions — inlined
+ * here as a literal to avoid a cross-feature import (features/auth → features/settings
+ * would be unusual; the key is a 2-element const tuple with no logic attached).
+ *
+ * Error handling: ApiError (.code / .fields for wrong current password) propagates
+ * to the caller — the component maps it to an inline field error (Plan 04).
+ * No toast here — toast is the component's responsibility.
+ *
+ * Path cast: not yet in schema.d.ts — regenerated in Phase 111 (D-V31-CONTRACT-ADDITIVE).
+ */
+export function useChangePassword() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (body: ChangePassword) =>
+      // Path cast: not yet in schema.d.ts — regenerated in Phase 111 (D-V31-CONTRACT-ADDITIVE).
+      staffRequest('post' as never, '/api/v1/auth/change-password' as never, { body }),
+    onSuccess: () => {
+      // Mirrors settingsKeys.sessions — inlined to avoid cross-feature import.
+      void qc.invalidateQueries({ queryKey: ['auth', 'sessions'] as const })
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Re-exports for page-layer consumers (pages import from features/, not api/client directly)
 // ---------------------------------------------------------------------------
 
 // ApiError is re-exported so pages can do `instanceof ApiError` without importing @/api/client.
 export { ApiError }
 export { LoginRequestSchema }
+export type { ProfileUpdate, ChangePassword }
