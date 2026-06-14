@@ -27,7 +27,7 @@
 
 ### CLI — Clients (continues v3.0 CLI-01..03)
 
-- [ ] **CLI-04**: Staff can delete a client directly from the client-page hero action — a real owner-gated soft-delete (`DELETE /api/v1/clients/{id}`) with confirm — replacing the current `toast.info('Удаление доступно из карточки редактирования')` stub.
+- [x] **CLI-04**: Staff can delete a client directly from the client-page hero action — a real owner-gated soft-delete (`DELETE /api/v1/clients/{id}`) with confirm — replacing the current `toast.info('Удаление доступно из карточки редактирования')` stub.
 
 ### CFG — Настройки (persist; новый/расширенный backend)
 
@@ -94,7 +94,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | PLAN-02 | Phase 107 | Complete |
 | PTPKG-01 | Phase 107 | Complete |
 | PTPKG-02 | Phase 107 | Complete |
-| CLI-04 | Phase 107 | Pending |
+| CLI-04 | Phase 107 | Complete |
 | CFG-01 | Phase 108 | Pending |
 | CFG-02 | Phase 108 | Pending |
 | CFG-03 | Phase 108 | Pending |
