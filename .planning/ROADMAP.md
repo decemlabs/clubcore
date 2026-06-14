@@ -352,7 +352,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 108-02-PLAN.md — Settings endpoints (hours/booking/notifications GET+PUT, RBAC+CSRF+audit) + staff GET /api/v1/gym + lat/lng (CFG-01 backend complete)
+- [x] 108-02-PLAN.md — Settings endpoints (hours/booking/notifications GET+PUT, RBAC+CSRF+audit) + staff GET /api/v1/gym + lat/lng (CFG-01 backend complete)
 - [ ] 108-03-PLAN.md — Enforcement: bookings.service reads booking_config + working_hours/closures; notifications dispatcher matrix gate + quiet hours + always-on (raw-SQL cross-module reads)
 
 **Wave 3** *(blocked on Wave 2 completion)*
@@ -430,7 +430,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 107. Admin FE Completion on Existing Backend | 3/3 | Complete    | 2026-06-14 |
-| 108. Editable Settings — Backend + Wiring | 1/5 | In Progress|  |
+| 108. Editable Settings — Backend + Wiring | 2/5 | In Progress|  |
 | 109. Profile & Security — Backend + Wiring | 0/TBD | Not started | - |
 | 110. Live Verification — Deferred P102 | 0/TBD | Not started | - |
 | 111. OpenAPI Handoff + Milestone Gate | 0/TBD | Not started | - |
