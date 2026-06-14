@@ -17,13 +17,20 @@ Phase 6 wiring (D-02, D-09):
 `require_permission` is NOT used here — Phase 6 wires it onto every other
 business route (RBAC-02..05). Auth endpoints don't need RBAC because login
 grants the role; logout/me are role-agnostic.
+
+Phase 109 wiring (PROF-01 / PROF-02):
+  - `PATCH /me` — authenticated + CSRF-gated; partial profile update (full_name,
+    email); returns MeResponse echo.  Duplicate email → 409 field error (D-109-01).
+  - `POST /change-password` — authenticated + CSRF-gated; Argon2id re-hash;
+    revokes OTHER sessions while keeping current alive (T-109-10); returns 204.
+    Both declare auth dep FIRST then verify_csrf to preserve RBAC-04 (401 before 403).
 """
 
 import hashlib
 from typing import Annotated, cast
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Request, Response, status
 from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,7 +39,7 @@ from app.core import audit
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.dependencies import CurrentUser, require_authenticated, verify_csrf
-from app.core.exceptions import InvalidAccessToken, NotFoundError
+from app.core.exceptions import InvalidAccessToken, NotFoundError, ValidationAppError
 from app.core.pagination import PageQuery, PaginatedData
 from app.core.redis import get_redis
 from app.core.schemas import ResponseEnvelope, envelope
@@ -45,12 +52,14 @@ from app.modules.auth.exceptions import BotNotStarted
 from app.modules.auth.models import RefreshToken, User
 from app.modules.auth.schemas import (
     ActiveSessionItem,
+    ChangePasswordRequest,
     LoginRequest,
     LoginResponse,
     MeResponse,
     OtpRequestBody,
     PasswordResetConfirmBody,
     PasswordResetRequestBody,
+    ProfileUpdateRequest,
     TelegramStartResponse,
     TelegramStatusResponse,
     TelegramVerifyRequest,
@@ -58,6 +67,7 @@ from app.modules.auth.schemas import (
 )
 from app.modules.auth.service import (
     authenticate,
+    change_password,
     issue_tokens,
     list_user_sessions,
     request_otp_email,
@@ -66,6 +76,7 @@ from app.modules.auth.service import (
     revoke_family,
     revoke_session,
     rotate_refresh,
+    update_profile,
 )
 
 router = APIRouter(tags=["Auth"])
@@ -263,6 +274,115 @@ async def me(
             has_telegram=u.telegram_chat_id is not None,
         )
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase 109 — Profile edit (PROF-01) + self password-change (PROF-02).
+#
+# Both endpoints are SELF-SERVICE (no Resource permission check — every
+# authenticated staff member can update their own profile / change their own
+# password).  Auth dep FIRST, verify_csrf SECOND → RBAC-04 (401 before 403)
+# preserved identical to /logout and /sessions/{id}/revoke (D-22).
+# ---------------------------------------------------------------------------
+
+
+@router.patch("/me", response_model=ResponseEnvelope[MeResponse])
+async def update_me(
+    payload: ProfileUpdateRequest,
+    # RBAC-04 ordering: auth FIRST so unauthenticated callers get 401 before 403.
+    user: Annotated[CurrentUser, Depends(require_authenticated())],
+    _csrf: Annotated[None, Depends(verify_csrf)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[MeResponse]:
+    """Partially update the authenticated user's own profile (PROF-01).
+
+    Accepts an optional subset of {full_name, email}; at least one field must
+    be non-None (all-None body → 422, client bug).  Duplicate email → 409 with
+    fields.email (D-109-01-CONFLICT).  Returns the updated MeResponse echo.
+
+    CSRF-gated (T-109-07); auth required (T-109-08).
+    """
+    if payload.full_name is None and payload.email is None:
+        raise ValidationAppError(
+            "at_least_one_field_required",
+            fields={"_": "Provide full_name or email"},
+        )
+
+    updated_user = await update_profile(
+        session,
+        user_id=user.id,
+        full_name=payload.full_name,
+        email=payload.email,
+    )
+    return envelope(
+        MeResponse(
+            id=updated_user.id,
+            role=updated_user.role,
+            full_name=updated_user.full_name,
+            email=updated_user.email,
+            has_telegram=updated_user.telegram_chat_id is not None,
+        )
+    )
+
+
+@router.post(
+    "/change-password",
+    response_model=None,
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def change_password_endpoint(
+    payload: ChangePasswordRequest,
+    request: Request,
+    # RBAC-04 ordering: auth FIRST so unauthenticated callers get 401 before 403.
+    user: Annotated[CurrentUser, Depends(require_authenticated())],
+    _csrf: Annotated[None, Depends(verify_csrf)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    redis: Annotated[Redis, Depends(get_redis)],
+) -> None:
+    """Self-service password change (PROF-02).
+
+    Verifies the current password, rehashes with Argon2id, revokes all OTHER
+    session families (T-109-10 — current device stays logged in), and returns
+    204 No Content.  Wrong current password → 401 invalid_credentials
+    (InvalidPassword handler).
+
+    Resolves the current refresh-token family from the cc_refresh cookie so
+    that the calling device's session is excluded from revocation.  If the
+    cookie is absent or unresolvable, current_family_id falls back to a nil
+    UUID (revoke-all fallback — extremely unlikely while access token was valid).
+
+    CSRF-gated (T-109-07); auth required (T-109-08).
+    """
+    # Resolve current family_id from the cc_refresh cookie (reuses the
+    # sha256 → token_hash → RefreshToken.family_id lookup from
+    # revoke_session_family lines 217-223).
+    current_family_id: UUID | None = None
+    presented = request.cookies.get("cc_refresh")
+    if presented is not None:
+        presented_hash = hashlib.sha256(presented.encode("utf-8")).hexdigest()
+        current_row = await session.scalar(
+            select(RefreshToken).where(RefreshToken.token_hash == presented_hash)
+        )
+        if current_row is not None:
+            current_family_id = current_row.family_id
+
+    # If resolution failed (no cc_refresh cookie or hash not found in DB),
+    # use a nil UUID — this means no family is excluded and all alive sessions
+    # are revoked.  The authenticated access-cookie was valid so this is an
+    # extremely rare edge case (cookie cleared mid-request, etc.).
+    effective_family_id: UUID = (
+        current_family_id if current_family_id is not None else UUID(int=0)
+    )
+
+    await change_password(
+        session,
+        redis,
+        user_id=user.id,
+        current_password=payload.current_password,
+        new_password=payload.new_password,
+        current_family_id=effective_family_id,
+    )
+    # 204 No Content — no response body.
 
 
 # ---------------------------------------------------------------------------
