@@ -1,4 +1,5 @@
 ---
+status: complete
 phase: 999.1
 plan: 01
 subsystem: backend/schedule + backend/core

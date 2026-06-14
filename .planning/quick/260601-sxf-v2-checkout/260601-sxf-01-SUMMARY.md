@@ -1,4 +1,5 @@
 ---
+status: complete
 phase: 260601-sxf-v2-checkout
 plan: "01"
 subsystem: client-pwa

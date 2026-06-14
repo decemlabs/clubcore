@@ -1,4 +1,5 @@
 ---
+status: complete
 phase: quick-260529-ll9
 plan: 01
 subsystem: backend-auth, api-contract, frontend-fetcher, tooling, handoff

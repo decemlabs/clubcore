@@ -1,4 +1,5 @@
 ---
+status: complete
 phase: quick-260601-oan
 plan: 01
 subsystem: client-pwa

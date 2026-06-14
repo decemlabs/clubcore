@@ -1,4 +1,5 @@
 ---
+status: complete
 phase: 260601-vxr
 plan: "01"
 subsystem: client-pwa

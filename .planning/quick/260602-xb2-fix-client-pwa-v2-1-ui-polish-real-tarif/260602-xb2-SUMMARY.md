@@ -1,4 +1,5 @@
 ---
+status: complete
 quick_id: 260602-xb2
 description: Fix client-pwa v2.1 UI polish — real tariff buttons, checkout scroll padding, applied-promo chip overflow
 completed: 2026-06-03
