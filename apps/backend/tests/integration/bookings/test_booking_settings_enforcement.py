@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 import sqlalchemy as sa
@@ -42,6 +43,9 @@ from app.modules.bookings.schemas import (
     BookingCancelRequest,
     BookingCreateRequest,
 )
+from app.modules.clients.models import Client
+from app.modules.pt_packages.models import PtPackage
+from app.modules.schedule.models import TrainerAvailabilitySlot
 
 MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 
@@ -50,7 +54,7 @@ _BOOKING_CONFIG_ID = "00000000-0000-0000-0000-000000000003"
 _WORKING_HOURS_CONFIG_ID = "00000000-0000-0000-0000-000000000004"
 
 # Permissive schedule covering all 7 days, 00:00 - 23:59.
-_ALL_DAYS_OPEN: list[dict[str, object]] = [
+_ALL_DAYS_OPEN: list[Any] = [
     {"day_of_week": dow, "open_time": "00:00", "close_time": "23:59"}
     for dow in range(1, 8)
 ]
@@ -94,8 +98,8 @@ async def _set_booking_config(
 async def _set_working_hours(
     session: AsyncSession,
     *,
-    schedule: list[object],
-    closures: list[object] | None = None,
+    schedule: list[Any],
+    closures: list[Any] | None = None,
 ) -> None:
     """Update working_hours_config singleton schedule/closures directly."""
     params: dict[str, object] = {
@@ -154,7 +158,7 @@ async def _seed_booking_prerequisites(
     make_slot,
     *,
     slot_start: datetime | None = None,
-) -> tuple[object, object, object]:
+) -> tuple[PtPackage, TrainerAvailabilitySlot, Client]:
     """Seed trainer/client/plan/pkg/slot; return (pkg, slot, client)."""
     trainer = await make_trainer()
     client = await make_client()
