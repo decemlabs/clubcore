@@ -650,6 +650,70 @@ const _v26Checks: [
   _OwnerReferralConfigPutBody,
 ] = [true, true, true, true, true, true, true, true]
 
+// --- v3.1 surface (Auth profile/password + Settings persistence — Phases 107-110) ---
+// Fourteen guards: nine path×method combos + five JSON requestBody realisations.
+//
+// Path set (verified against the regenerated openapi.json from Phase 111 Plan 01):
+//   PATCH /api/v1/auth/me                          (PROF-01 — staff profile update)
+//   PATCH /api/v1/auth/me body                     (PROF-01 JSON body realised — ProfileUpdateRequest)
+//   POST  /api/v1/auth/change-password             (PROF-02 — self-service password change)
+//   POST  /api/v1/auth/change-password body        (PROF-02 JSON body realised — ChangePasswordRequest)
+//   GET   /api/v1/gym                              (CFG-01 — staff owner get gym info)
+//   GET   /api/v1/settings/hours                   (CFG-02 — owner get working hours)
+//   PUT   /api/v1/settings/hours                   (CFG-02 — owner update working hours)
+//   PUT   /api/v1/settings/hours body              (CFG-02 JSON body realised — WorkingHoursUpdateRequest)
+//   GET   /api/v1/settings/booking                 (CFG-03 — owner get booking config)
+//   PUT   /api/v1/settings/booking                 (CFG-03 — owner update booking config)
+//   PUT   /api/v1/settings/booking body            (CFG-03 JSON body realised — BookingConfigUpdateRequest)
+//   GET   /api/v1/settings/notifications           (CFG-04 — owner get notification prefs)
+//   PUT   /api/v1/settings/notifications           (CFG-04 — owner update notification prefs)
+//   PUT   /api/v1/settings/notifications body      (CFG-04 JSON body realised — NotificationPrefsUpdateRequest)
+//
+// All PUT and PATCH routes carry application/json bodies → requestBody realises as non-never.
+// GET /api/v1/gym is the new staff owner read (CFG-01; v2.4 only covered the PUT).
+type _StaffAuthMePatch = AssertNonNever<paths['/api/v1/auth/me']['patch']>
+type _StaffAuthMePatchBody = AssertNonNever<
+  paths['/api/v1/auth/me']['patch']['requestBody']
+>
+type _StaffChangePasswordPost = AssertNonNever<paths['/api/v1/auth/change-password']['post']>
+type _StaffChangePasswordPostBody = AssertNonNever<
+  paths['/api/v1/auth/change-password']['post']['requestBody']
+>
+type _OwnerGymInfoGet = AssertNonNever<paths['/api/v1/gym']['get']>
+type _OwnerSettingsHoursGet = AssertNonNever<paths['/api/v1/settings/hours']['get']>
+type _OwnerSettingsHoursPut = AssertNonNever<paths['/api/v1/settings/hours']['put']>
+type _OwnerSettingsHoursPutBody = AssertNonNever<
+  paths['/api/v1/settings/hours']['put']['requestBody']
+>
+type _OwnerSettingsBookingGet = AssertNonNever<paths['/api/v1/settings/booking']['get']>
+type _OwnerSettingsBookingPut = AssertNonNever<paths['/api/v1/settings/booking']['put']>
+type _OwnerSettingsBookingPutBody = AssertNonNever<
+  paths['/api/v1/settings/booking']['put']['requestBody']
+>
+type _OwnerSettingsNotificationsGet = AssertNonNever<paths['/api/v1/settings/notifications']['get']>
+type _OwnerSettingsNotificationsPut = AssertNonNever<paths['/api/v1/settings/notifications']['put']>
+type _OwnerSettingsNotificationsPutBody = AssertNonNever<
+  paths['/api/v1/settings/notifications']['put']['requestBody']
+>
+
+// Static checks for v3.1 surface — each must resolve to true at compile time.
+const _v31Checks: [
+  _StaffAuthMePatch,
+  _StaffAuthMePatchBody,
+  _StaffChangePasswordPost,
+  _StaffChangePasswordPostBody,
+  _OwnerGymInfoGet,
+  _OwnerSettingsHoursGet,
+  _OwnerSettingsHoursPut,
+  _OwnerSettingsHoursPutBody,
+  _OwnerSettingsBookingGet,
+  _OwnerSettingsBookingPut,
+  _OwnerSettingsBookingPutBody,
+  _OwnerSettingsNotificationsGet,
+  _OwnerSettingsNotificationsPut,
+  _OwnerSettingsNotificationsPutBody,
+] = [true, true, true, true, true, true, true, true, true, true, true, true, true, true]
+
 describe('schema.contract', () => {
   it('compiles against the regenerated v1.2 typed paths surface', () => {
     // The real assertions are above (compile-time). This block exists so
@@ -707,5 +771,9 @@ describe('schema.contract', () => {
 
   it('compiles against the regenerated v2.6 Referral surface (Phases 96-98)', () => {
     expect(_v26Checks).toHaveLength(8)
+  })
+
+  it('compiles against the regenerated v3.1 surface (auth profile/password + Settings persistence — Phases 107-110)', () => {
+    expect(_v31Checks).toHaveLength(14)
   })
 })

@@ -388,6 +388,239 @@
         "title": "BookingCancelRequest",
         "type": "object"
       },
+      "BookingConfigResponse": {
+        "description": "GET /api/v1/settings/booking response payload (CFG-03).\n\nWire: camelCase via alias_generator=to_camel on ResponseData base.\nmodel_validate from ORM (from_attributes=True inherited from ContractModel).",
+        "properties": {
+          "bookingAheadDays": {
+            "title": "Bookingaheaddays",
+            "type": "integer"
+          },
+          "cancelWindowEnabled": {
+            "title": "Cancelwindowenabled",
+            "type": "boolean"
+          },
+          "cancelWindowHours": {
+            "title": "Cancelwindowhours",
+            "type": "integer"
+          },
+          "clientSelfBook": {
+            "title": "Clientselfbook",
+            "type": "boolean"
+          },
+          "cutoffMinutes": {
+            "title": "Cutoffminutes",
+            "type": "integer"
+          },
+          "groupLimit": {
+            "title": "Grouplimit",
+            "type": "integer"
+          },
+          "noShowPenaltyEnabled": {
+            "title": "Noshowpenaltyenabled",
+            "type": "boolean"
+          },
+          "noShowPenaltyKopecks": {
+            "title": "Noshowpenaltykopecks",
+            "type": "integer"
+          },
+          "rescheduleSameDay": {
+            "title": "Reschedulesameday",
+            "type": "boolean"
+          },
+          "scheduleStepMinutes": {
+            "title": "Schedulestepminutes",
+            "type": "integer"
+          },
+          "showTrainerWindows": {
+            "title": "Showtrainerwindows",
+            "type": "boolean"
+          },
+          "waitlistAutoTransfer": {
+            "title": "Waitlistautotransfer",
+            "type": "boolean"
+          },
+          "waitlistLimit": {
+            "title": "Waitlistlimit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "scheduleStepMinutes",
+          "bookingAheadDays",
+          "cutoffMinutes",
+          "cancelWindowHours",
+          "cancelWindowEnabled",
+          "rescheduleSameDay",
+          "noShowPenaltyKopecks",
+          "noShowPenaltyEnabled",
+          "groupLimit",
+          "waitlistLimit",
+          "waitlistAutoTransfer",
+          "clientSelfBook",
+          "showTrainerWindows"
+        ],
+        "title": "BookingConfigResponse",
+        "type": "object"
+      },
+      "BookingConfigUpdateRequest": {
+        "additionalProperties": false,
+        "description": "Owner-only partial upsert request body for booking rules (CFG-03).\n\nextra='forbid' (inherited from BackendSchemaBase) rejects unknown keys.\nAll fields optional — partial upsert via exclude_unset semantics.\n\nT-108-05 numeric bounds:\n  schedule_step_minutes: must be one of {15, 30, 60, 90} (schedule granularity enum).\n  booking_ahead_days: 1..365 (at least 1 day, at most 1 year ahead).\n  cutoff_minutes: 0..1440 (0 = no cutoff; 1440 = 24h same-day cutoff).\n  cancel_window_hours: >= 1 (at least 1 hour notice to cancel).\n  group_limit: >= 1 (group class must allow at least one participant).\n  waitlist_limit: >= 0 (0 disables waitlist).\n  no_show_penalty_kopecks: >= 0 (no negative penalties).",
+        "properties": {
+          "bookingAheadDays": {
+            "anyOf": [
+              {
+                "maximum": 365.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bookingaheaddays"
+          },
+          "cancelWindowEnabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelwindowenabled"
+          },
+          "cancelWindowHours": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelwindowhours"
+          },
+          "clientSelfBook": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clientselfbook"
+          },
+          "cutoffMinutes": {
+            "anyOf": [
+              {
+                "maximum": 1440.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cutoffminutes"
+          },
+          "groupLimit": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grouplimit"
+          },
+          "noShowPenaltyEnabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Noshowpenaltyenabled"
+          },
+          "noShowPenaltyKopecks": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Noshowpenaltykopecks"
+          },
+          "rescheduleSameDay": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reschedulesameday"
+          },
+          "scheduleStepMinutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedulestepminutes"
+          },
+          "showTrainerWindows": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Showtrainerwindows"
+          },
+          "waitlistAutoTransfer": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waitlistautotransfer"
+          },
+          "waitlistLimit": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waitlistlimit"
+          }
+        },
+        "title": "BookingConfigUpdateRequest",
+        "type": "object"
+      },
       "BookingCreateRequest": {
         "additionalProperties": false,
         "description": "POST /api/v1/bookings body (Phase 38 BOOK-02 / D-38-02).\n\nThree fields required:\n- slot_id: target slot — must exist + status='active' (server checks).\n- client_id: client to book for — reception/owner can book any client\n  (D-38-09 — gym-staff trust model; audit records actor_user_id).\n- pt_package_id: must reference an active package that the client owns;\n  server cross-checks trainer_id match + validity window + remaining\n  sessions before flipping the slot.\n\n`created_by_user_id` is server-set from `actor.id`; never accepted from\nrequest body (extra='forbid' rejects it structurally).\n`status` is server-set to 'confirmed' on INSERT.",
@@ -672,6 +905,28 @@
         ],
         "title": "BookingStatus",
         "type": "string"
+      },
+      "ChangePasswordRequest": {
+        "additionalProperties": false,
+        "description": "POST /api/v1/auth/change-password request body (PROF-02).\n\n``new_password`` enforces the same 12-char NIST floor as\n``LoginRequest.password`` (AUTH-EP-05 / NIST 800-63B 2024, reuse verbatim).\n``current_password`` requires at least 1 char (non-empty guard; wrong\nvalue surfaces as a domain field error from verify_password, not 422).\n\nWire keys: ``currentPassword`` / ``newPassword`` (camelCase auto-alias).",
+        "properties": {
+          "currentPassword": {
+            "minLength": 1,
+            "title": "Currentpassword",
+            "type": "string"
+          },
+          "newPassword": {
+            "minLength": 12,
+            "title": "Newpassword",
+            "type": "string"
+          }
+        },
+        "required": [
+          "currentPassword",
+          "newPassword"
+        ],
+        "title": "ChangePasswordRequest",
+        "type": "object"
       },
       "ClientAutopayPatchRequest": {
         "additionalProperties": false,
@@ -2407,7 +2662,7 @@
         "type": "string"
       },
       "GymInfoResponse": {
-        "description": "GET /client/gym and PUT /gym response payload (GYM-01/GYM-02).\n\nWire: camelCase via alias_generator=to_camel on ResponseData base.\nmodel_validate from ORM (from_attributes=True inherited from ContractModel).",
+        "description": "GET /client/gym, GET /gym, and PUT /gym response payload (GYM-01/GYM-02/CFG-01).\n\nWire: camelCase via alias_generator=to_camel on ResponseData base.\nmodel_validate from ORM (from_attributes=True inherited from ContractModel).\n\nPhase 108 CFG-01: latitude + longitude nullable columns added additively.",
         "properties": {
           "address": {
             "title": "Address",
@@ -2444,6 +2699,28 @@
             "items": {},
             "title": "Hours",
             "type": "array"
+          },
+          "latitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitude"
+          },
+          "longitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitude"
           },
           "metro": {
             "anyOf": [
@@ -2566,6 +2843,32 @@
               }
             ],
             "title": "Hours"
+          },
+          "latitude": {
+            "anyOf": [
+              {
+                "maximum": 90.0,
+                "minimum": -90.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitude"
+          },
+          "longitude": {
+            "anyOf": [
+              {
+                "maximum": 180.0,
+                "minimum": -180.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitude"
           },
           "metro": {
             "anyOf": [
@@ -3454,6 +3757,105 @@
           "sound"
         ],
         "title": "NotifPrefs",
+        "type": "object"
+      },
+      "NotificationPrefsResponse": {
+        "description": "GET /api/v1/settings/notifications response payload (CFG-04).\n\nWire: camelCase via alias_generator=to_camel on ResponseData base.\nmodel_validate from ORM (from_attributes=True inherited from ContractModel).\n\nmatrix is a JSONB object keyed by notification kind x channel — returned as-is.\nsender_signature is appended to outbound text channels (Telegram/email).\nquiet_hours_start / quiet_hours_end are \"HH:MM\" strings (Europe/Moscow).",
+        "properties": {
+          "matrix": {
+            "additionalProperties": true,
+            "title": "Matrix",
+            "type": "object"
+          },
+          "quietHoursEnd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quiethoursend"
+          },
+          "quietHoursStart": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quiethoursstart"
+          },
+          "senderSignature": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sendersignature"
+          }
+        },
+        "title": "NotificationPrefsResponse",
+        "type": "object"
+      },
+      "NotificationPrefsUpdateRequest": {
+        "additionalProperties": false,
+        "description": "Owner-only partial upsert request body for notification preferences (CFG-04).\n\nextra='forbid' (inherited from BackendSchemaBase) rejects unknown keys.\nAll fields optional — partial upsert via exclude_unset semantics.\n\nT-108-05 bounds:\n  sender_signature: max_length=11 (SMS/Telegram sender ID limit).\n  quiet_hours_start / quiet_hours_end: \"HH:MM\" pattern (Europe/Moscow).",
+        "properties": {
+          "matrix": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matrix"
+          },
+          "quietHoursEnd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quiethoursend"
+          },
+          "quietHoursStart": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quiethoursstart"
+          },
+          "senderSignature": {
+            "anyOf": [
+              {
+                "maxLength": 11,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sendersignature"
+          }
+        },
+        "title": "NotificationPrefsUpdateRequest",
         "type": "object"
       },
       "OnlineRefundRequest": {
@@ -4567,6 +4969,38 @@
         "title": "PayrollPreviewResponse",
         "type": "object"
       },
+      "ProfileUpdateRequest": {
+        "additionalProperties": false,
+        "description": "PATCH /api/v1/auth/me request body (PROF-01).\n\nBoth fields are optional for partial PATCH — the route rejects an all-None\nbody.  Inherits ``extra='forbid'`` from BackendSchemaBase so stray fields\n(e.g. ``theme``) are rejected with 422 — theme is client-only (no\nUser.theme column, D-PROF decision).\n\ncamelCase wire aliases are auto-generated by BackendSchemaBase.\n``full_name`` ↔ ``fullName`` on the wire; ``email`` stays ``email``.",
+        "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "format": "email",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "fullName": {
+            "anyOf": [
+              {
+                "minLength": 2,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fullname"
+          }
+        },
+        "title": "ProfileUpdateRequest",
+        "type": "object"
+      },
       "PtPackageCancelRequest": {
         "additionalProperties": false,
         "description": "POST /api/v1/pt-packages/{id}/cancel body (D-33-10).\n\n``reason`` is REQUIRED — cancel-without-refund is a free-text operator\nnote recording why the package was voided manually (distinct from refund,\nwhich sets the ``'refunded'`` sentinel automatically).",
@@ -5443,6 +5877,18 @@
         "title": "ResponseEnvelope[AttachmentUploadResponse]",
         "type": "object"
       },
+      "ResponseEnvelope_BookingConfigResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/BookingConfigResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[BookingConfigResponse]",
+        "type": "object"
+      },
       "ResponseEnvelope_BookingDetailResponse_": {
         "properties": {
           "data": {
@@ -5754,6 +6200,18 @@
           "data"
         ],
         "title": "ResponseEnvelope[NoneType]",
+        "type": "object"
+      },
+      "ResponseEnvelope_NotificationPrefsResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/NotificationPrefsResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[NotificationPrefsResponse]",
         "type": "object"
       },
       "ResponseEnvelope_OnlineRefundResponse_": {
@@ -6356,6 +6814,18 @@
           "data"
         ],
         "title": "ResponseEnvelope[VisitsReportResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_WorkingHoursResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/WorkingHoursResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[WorkingHoursResponse]",
         "type": "object"
       },
       "ResponseEnvelope_list_ClientCatalogPlanResponse__": {
@@ -7794,6 +8264,72 @@
         ],
         "title": "VisitsReportResponse",
         "type": "object"
+      },
+      "WorkingHoursResponse": {
+        "description": "GET /api/v1/settings/hours response payload (CFG-02).\n\nWire: camelCase via alias_generator=to_camel on ResponseData base.\nmodel_validate from ORM (from_attributes=True inherited from ContractModel).\n\nschedule/breaks/closures are JSONB arrays — structural validation lives on\nthe frontend (UI-SPEC); backend stores and returns arrays as-is.",
+        "properties": {
+          "breaks": {
+            "items": {},
+            "title": "Breaks",
+            "type": "array"
+          },
+          "closures": {
+            "items": {},
+            "title": "Closures",
+            "type": "array"
+          },
+          "schedule": {
+            "items": {},
+            "title": "Schedule",
+            "type": "array"
+          }
+        },
+        "title": "WorkingHoursResponse",
+        "type": "object"
+      },
+      "WorkingHoursUpdateRequest": {
+        "additionalProperties": false,
+        "description": "Owner-only partial upsert request body for working hours (CFG-02).\n\nextra='forbid' (inherited from BackendSchemaBase) rejects unknown keys.\nAll fields optional — partial upsert via exclude_unset semantics in repository.\nStructural validation of schedule/breaks/closures arrays deferred to frontend\n(UI-SPEC); backend is a passthrough store for the JSONB arrays.",
+        "properties": {
+          "breaks": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Breaks"
+          },
+          "closures": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closures"
+          },
+          "schedule": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schedule"
+          }
+        },
+        "title": "WorkingHoursUpdateRequest",
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -8127,6 +8663,34 @@
         ]
       }
     },
+    "/api/v1/auth/change-password": {
+      "post": {
+        "description": "Self-service password change (PROF-02).\n\nVerifies the current password, rehashes with Argon2id, revokes all OTHER\nsession families (T-109-10 — current device stays logged in), and returns\n204 No Content.  Wrong current password → 401 invalid_credentials\n(InvalidPassword handler).\n\nResolves the current refresh-token family from the cc_refresh cookie so\nthat the calling device's session is excluded from revocation.  If the\ncookie is absent or unresolvable, current_family_id falls back to a nil\nUUID (revoke-all fallback — extremely unlikely while access token was valid).\n\nCSRF-gated (T-109-07); auth required (T-109-08).",
+        "operationId": "change_password_endpoint",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Change Password Endpoint",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
     "/api/v1/auth/login": {
       "post": {
         "description": "Authenticate email+password; issue cookies + envelope (AUTH-EP-01..02, AUTH-EP-05).",
@@ -8224,6 +8788,39 @@
           }
         },
         "summary": "Me",
+        "tags": [
+          "Auth"
+        ]
+      },
+      "patch": {
+        "description": "Partially update the authenticated user's own profile (PROF-01).\n\nAccepts an optional subset of {full_name, email}; at least one field must\nbe non-None (all-None body → 422, client bug).  Duplicate email → 409 with\nfields.email (D-109-01-CONFLICT).  Returns the updated MeResponse echo.\n\nCSRF-gated (T-109-07); auth required (T-109-08).",
+        "operationId": "update_me",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_MeResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Update Me",
         "tags": [
           "Auth"
         ]
@@ -10785,6 +11382,26 @@
       }
     },
     "/api/v1/gym": {
+      "get": {
+        "description": "Return the singleton gym-info row for the staff settings form (CFG-01).\n\nGated on require_permission(EDIT, GYM) — reception → 403 (gym card is owner-only\nper CONTEXT line 36; a separate VIEW gate is intentionally not provided).\nGymInfoNotFoundError (404) surfaces when the seed migration has not been run.\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "owner_get_gym_info",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_GymInfoResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get gym facility info for staff form pre-population (owner-only; CFG-01)",
+        "tags": [
+          "Gym"
+        ]
+      },
       "put": {
         "description": "Partial upsert of the singleton gym-info row.\n\nRBAC-04 ordering: require_permission(EDIT, GYM) declared BEFORE verify_csrf.\nReception role → 403 from require_permission before reaching CSRF check (T-86-04).\nT-86-06: verify_csrf guards against cross-site forgery on the owner mutation.\nT-86-07: GymInfoUpdateRequest extra='forbid' → 422 on unknown keys.\nNo try/except — AppError bubbles to _app_error_handler.",
         "operationId": "owner_update_gym_info",
@@ -13556,6 +14173,171 @@
         "summary": "Visits daily CSV download — one row per day with visit count (owner-only; EXP-03)",
         "tags": [
           "Reports"
+        ]
+      }
+    },
+    "/api/v1/settings/booking": {
+      "get": {
+        "description": "Return the singleton booking-config.\n\nrequire_permission(VIEW, SETTINGS) gate: reception → 403.\nSettingsNotFoundError (404) surfaces when seed migration has not been run.\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "owner_get_booking_config",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_BookingConfigResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get booking configuration (owner-only; CFG-03)",
+        "tags": [
+          "Settings"
+        ]
+      },
+      "put": {
+        "description": "Partial upsert of the singleton booking-config.\n\nRBAC-04 ordering: require_permission(EDIT, SETTINGS) declared BEFORE verify_csrf.\nReception → 403 from require_permission before reaching CSRF check (T-108-06).\nT-108-07: verify_csrf guards against cross-site forgery.\nT-108-05: BookingConfigUpdateRequest extra='forbid' + numeric bounds → 422 on invalid input.\nT-108-08: booking_config_updated audit event emitted in service layer.\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "owner_update_booking_config",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookingConfigUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_BookingConfigResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Update booking configuration (owner-only; CFG-03)",
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
+    "/api/v1/settings/hours": {
+      "get": {
+        "description": "Return the singleton working-hours config.\n\nrequire_permission(VIEW, SETTINGS) gate: reception → 403 (VIEW is in OWNER_ONLY per Plan 01).\nSettingsNotFoundError (404) surfaces when seed migration has not been run.\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "owner_get_working_hours",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_WorkingHoursResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get working hours / breaks / closures (owner-only; CFG-02)",
+        "tags": [
+          "Settings"
+        ]
+      },
+      "put": {
+        "description": "Partial upsert of the singleton working-hours config.\n\nRBAC-04 ordering: require_permission(EDIT, SETTINGS) declared BEFORE verify_csrf.\nReception → 403 from require_permission before reaching CSRF check (T-108-06).\nT-108-07: verify_csrf guards against cross-site forgery.\nT-108-05: WorkingHoursUpdateRequest extra='forbid' → 422 on unknown keys.\nT-108-08: working_hours_updated audit event emitted in service layer.\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "owner_update_working_hours",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkingHoursUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_WorkingHoursResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Update working hours / breaks / closures (owner-only; CFG-02)",
+        "tags": [
+          "Settings"
+        ]
+      }
+    },
+    "/api/v1/settings/notifications": {
+      "get": {
+        "description": "Return the singleton notification-prefs config.\n\nrequire_permission(VIEW, SETTINGS) gate: reception → 403.\nSettingsNotFoundError (404) surfaces when seed migration has not been run.\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "owner_get_notification_prefs",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_NotificationPrefsResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get notification preferences (owner-only; CFG-04)",
+        "tags": [
+          "Settings"
+        ]
+      },
+      "put": {
+        "description": "Partial upsert of the singleton notification-prefs config.\n\nRBAC-04 ordering: require_permission(EDIT, SETTINGS) declared BEFORE verify_csrf.\nReception → 403 from require_permission before reaching CSRF check (T-108-06).\nT-108-07: verify_csrf guards against cross-site forgery.\nT-108-05: NotificationPrefsUpdateRequest extra='forbid' + field bounds → 422 on invalid input.\nT-108-08: notification_prefs_updated audit event emitted in service layer.\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "owner_update_notification_prefs",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationPrefsUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_NotificationPrefsResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Update notification preferences (owner-only; CFG-04)",
+        "tags": [
+          "Settings"
         ]
       }
     },

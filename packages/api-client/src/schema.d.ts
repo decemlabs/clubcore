@@ -112,6 +112,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/change-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change Password Endpoint
+         * @description Self-service password change (PROF-02).
+         *
+         *     Verifies the current password, rehashes with Argon2id, revokes all OTHER
+         *     session families (T-109-10 — current device stays logged in), and returns
+         *     204 No Content.  Wrong current password → 401 invalid_credentials
+         *     (InvalidPassword handler).
+         *
+         *     Resolves the current refresh-token family from the cc_refresh cookie so
+         *     that the calling device's session is excluded from revocation.  If the
+         *     cookie is absent or unresolvable, current_family_id falls back to a nil
+         *     UUID (revoke-all fallback — extremely unlikely while access token was valid).
+         *
+         *     CSRF-gated (T-109-07); auth required (T-109-08).
+         */
+        post: operations["change_password_endpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -197,7 +229,17 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update Me
+         * @description Partially update the authenticated user's own profile (PROF-01).
+         *
+         *     Accepts an optional subset of {full_name, email}; at least one field must
+         *     be non-None (all-None body → 422, client bug).  Duplicate email → 409 with
+         *     fields.email (D-109-01-CONFLICT).  Returns the updated MeResponse echo.
+         *
+         *     CSRF-gated (T-109-07); auth required (T-109-08).
+         */
+        patch: operations["update_me"];
         trace?: never;
     };
     "/api/v1/auth/otp/request": {
@@ -1858,7 +1900,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Get gym facility info for staff form pre-population (owner-only; CFG-01)
+         * @description Return the singleton gym-info row for the staff settings form (CFG-01).
+         *
+         *     Gated on require_permission(EDIT, GYM) — reception → 403 (gym card is owner-only
+         *     per CONTEXT line 36; a separate VIEW gate is intentionally not provided).
+         *     GymInfoNotFoundError (404) surfaces when the seed migration has not been run.
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        get: operations["owner_get_gym_info"];
         /**
          * Update gym facility info (owner-only; GYM-02)
          * @description Partial upsert of the singleton gym-info row.
@@ -3273,6 +3324,111 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/settings/booking": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get booking configuration (owner-only; CFG-03)
+         * @description Return the singleton booking-config.
+         *
+         *     require_permission(VIEW, SETTINGS) gate: reception → 403.
+         *     SettingsNotFoundError (404) surfaces when seed migration has not been run.
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        get: operations["owner_get_booking_config"];
+        /**
+         * Update booking configuration (owner-only; CFG-03)
+         * @description Partial upsert of the singleton booking-config.
+         *
+         *     RBAC-04 ordering: require_permission(EDIT, SETTINGS) declared BEFORE verify_csrf.
+         *     Reception → 403 from require_permission before reaching CSRF check (T-108-06).
+         *     T-108-07: verify_csrf guards against cross-site forgery.
+         *     T-108-05: BookingConfigUpdateRequest extra='forbid' + numeric bounds → 422 on invalid input.
+         *     T-108-08: booking_config_updated audit event emitted in service layer.
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        put: operations["owner_update_booking_config"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/hours": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get working hours / breaks / closures (owner-only; CFG-02)
+         * @description Return the singleton working-hours config.
+         *
+         *     require_permission(VIEW, SETTINGS) gate: reception → 403 (VIEW is in OWNER_ONLY per Plan 01).
+         *     SettingsNotFoundError (404) surfaces when seed migration has not been run.
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        get: operations["owner_get_working_hours"];
+        /**
+         * Update working hours / breaks / closures (owner-only; CFG-02)
+         * @description Partial upsert of the singleton working-hours config.
+         *
+         *     RBAC-04 ordering: require_permission(EDIT, SETTINGS) declared BEFORE verify_csrf.
+         *     Reception → 403 from require_permission before reaching CSRF check (T-108-06).
+         *     T-108-07: verify_csrf guards against cross-site forgery.
+         *     T-108-05: WorkingHoursUpdateRequest extra='forbid' → 422 on unknown keys.
+         *     T-108-08: working_hours_updated audit event emitted in service layer.
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        put: operations["owner_update_working_hours"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get notification preferences (owner-only; CFG-04)
+         * @description Return the singleton notification-prefs config.
+         *
+         *     require_permission(VIEW, SETTINGS) gate: reception → 403.
+         *     SettingsNotFoundError (404) surfaces when seed migration has not been run.
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        get: operations["owner_get_notification_prefs"];
+        /**
+         * Update notification preferences (owner-only; CFG-04)
+         * @description Partial upsert of the singleton notification-prefs config.
+         *
+         *     RBAC-04 ordering: require_permission(EDIT, SETTINGS) declared BEFORE verify_csrf.
+         *     Reception → 403 from require_permission before reaching CSRF check (T-108-06).
+         *     T-108-07: verify_csrf guards against cross-site forgery.
+         *     T-108-05: NotificationPrefsUpdateRequest extra='forbid' + field bounds → 422 on invalid input.
+         *     T-108-08: notification_prefs_updated audit event emitted in service layer.
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        put: operations["owner_update_notification_prefs"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/time-off": {
         parameters: {
             query?: never;
@@ -3833,6 +3989,85 @@ export interface components {
             reason: string;
         };
         /**
+         * BookingConfigResponse
+         * @description GET /api/v1/settings/booking response payload (CFG-03).
+         *
+         *     Wire: camelCase via alias_generator=to_camel on ResponseData base.
+         *     model_validate from ORM (from_attributes=True inherited from ContractModel).
+         */
+        BookingConfigResponse: {
+            /** Bookingaheaddays */
+            bookingAheadDays: number;
+            /** Cancelwindowenabled */
+            cancelWindowEnabled: boolean;
+            /** Cancelwindowhours */
+            cancelWindowHours: number;
+            /** Clientselfbook */
+            clientSelfBook: boolean;
+            /** Cutoffminutes */
+            cutoffMinutes: number;
+            /** Grouplimit */
+            groupLimit: number;
+            /** Noshowpenaltyenabled */
+            noShowPenaltyEnabled: boolean;
+            /** Noshowpenaltykopecks */
+            noShowPenaltyKopecks: number;
+            /** Reschedulesameday */
+            rescheduleSameDay: boolean;
+            /** Schedulestepminutes */
+            scheduleStepMinutes: number;
+            /** Showtrainerwindows */
+            showTrainerWindows: boolean;
+            /** Waitlistautotransfer */
+            waitlistAutoTransfer: boolean;
+            /** Waitlistlimit */
+            waitlistLimit: number;
+        };
+        /**
+         * BookingConfigUpdateRequest
+         * @description Owner-only partial upsert request body for booking rules (CFG-03).
+         *
+         *     extra='forbid' (inherited from BackendSchemaBase) rejects unknown keys.
+         *     All fields optional — partial upsert via exclude_unset semantics.
+         *
+         *     T-108-05 numeric bounds:
+         *       schedule_step_minutes: must be one of {15, 30, 60, 90} (schedule granularity enum).
+         *       booking_ahead_days: 1..365 (at least 1 day, at most 1 year ahead).
+         *       cutoff_minutes: 0..1440 (0 = no cutoff; 1440 = 24h same-day cutoff).
+         *       cancel_window_hours: >= 1 (at least 1 hour notice to cancel).
+         *       group_limit: >= 1 (group class must allow at least one participant).
+         *       waitlist_limit: >= 0 (0 disables waitlist).
+         *       no_show_penalty_kopecks: >= 0 (no negative penalties).
+         */
+        BookingConfigUpdateRequest: {
+            /** Bookingaheaddays */
+            bookingAheadDays?: number | null;
+            /** Cancelwindowenabled */
+            cancelWindowEnabled?: boolean | null;
+            /** Cancelwindowhours */
+            cancelWindowHours?: number | null;
+            /** Clientselfbook */
+            clientSelfBook?: boolean | null;
+            /** Cutoffminutes */
+            cutoffMinutes?: number | null;
+            /** Grouplimit */
+            groupLimit?: number | null;
+            /** Noshowpenaltyenabled */
+            noShowPenaltyEnabled?: boolean | null;
+            /** Noshowpenaltykopecks */
+            noShowPenaltyKopecks?: number | null;
+            /** Reschedulesameday */
+            rescheduleSameDay?: boolean | null;
+            /** Schedulestepminutes */
+            scheduleStepMinutes?: number | null;
+            /** Showtrainerwindows */
+            showTrainerWindows?: boolean | null;
+            /** Waitlistautotransfer */
+            waitlistAutoTransfer?: boolean | null;
+            /** Waitlistlimit */
+            waitlistLimit?: number | null;
+        };
+        /**
          * BookingCreateRequest
          * @description POST /api/v1/bookings body (Phase 38 BOOK-02 / D-38-02).
          *
@@ -4001,6 +4236,23 @@ export interface components {
          * @enum {string}
          */
         BookingStatus: "confirmed" | "cancelled" | "no_show" | "completed";
+        /**
+         * ChangePasswordRequest
+         * @description POST /api/v1/auth/change-password request body (PROF-02).
+         *
+         *     ``new_password`` enforces the same 12-char NIST floor as
+         *     ``LoginRequest.password`` (AUTH-EP-05 / NIST 800-63B 2024, reuse verbatim).
+         *     ``current_password`` requires at least 1 char (non-empty guard; wrong
+         *     value surfaces as a domain field error from verify_password, not 422).
+         *
+         *     Wire keys: ``currentPassword`` / ``newPassword`` (camelCase auto-alias).
+         */
+        ChangePasswordRequest: {
+            /** Currentpassword */
+            currentPassword: string;
+            /** Newpassword */
+            newPassword: string;
+        };
         /**
          * ClientAutopayPatchRequest
          * @description PATCH /client/payment-method/autopay body (PAYM-04).
@@ -4910,10 +5162,12 @@ export interface components {
         Gender: "male" | "female";
         /**
          * GymInfoResponse
-         * @description GET /client/gym and PUT /gym response payload (GYM-01/GYM-02).
+         * @description GET /client/gym, GET /gym, and PUT /gym response payload (GYM-01/GYM-02/CFG-01).
          *
          *     Wire: camelCase via alias_generator=to_camel on ResponseData base.
          *     model_validate from ORM (from_attributes=True inherited from ContractModel).
+         *
+         *     Phase 108 CFG-01: latitude + longitude nullable columns added additively.
          */
         GymInfoResponse: {
             /** Address */
@@ -4926,6 +5180,10 @@ export interface components {
             email?: string | null;
             /** Hours */
             hours?: unknown[];
+            /** Latitude */
+            latitude?: number | null;
+            /** Longitude */
+            longitude?: number | null;
             /** Metro */
             metro?: string | null;
             /** Name */
@@ -4966,6 +5224,10 @@ export interface components {
             email?: string | null;
             /** Hours */
             hours?: unknown[] | null;
+            /** Latitude */
+            latitude?: number | null;
+            /** Longitude */
+            longitude?: number | null;
             /** Metro */
             metro?: string | null;
             /** Name */
@@ -5423,6 +5685,52 @@ export interface components {
             sound: boolean;
             /** Trainer */
             trainer: boolean;
+        };
+        /**
+         * NotificationPrefsResponse
+         * @description GET /api/v1/settings/notifications response payload (CFG-04).
+         *
+         *     Wire: camelCase via alias_generator=to_camel on ResponseData base.
+         *     model_validate from ORM (from_attributes=True inherited from ContractModel).
+         *
+         *     matrix is a JSONB object keyed by notification kind x channel — returned as-is.
+         *     sender_signature is appended to outbound text channels (Telegram/email).
+         *     quiet_hours_start / quiet_hours_end are "HH:MM" strings (Europe/Moscow).
+         */
+        NotificationPrefsResponse: {
+            /** Matrix */
+            matrix?: {
+                [key: string]: unknown;
+            };
+            /** Quiethoursend */
+            quietHoursEnd?: string | null;
+            /** Quiethoursstart */
+            quietHoursStart?: string | null;
+            /** Sendersignature */
+            senderSignature?: string | null;
+        };
+        /**
+         * NotificationPrefsUpdateRequest
+         * @description Owner-only partial upsert request body for notification preferences (CFG-04).
+         *
+         *     extra='forbid' (inherited from BackendSchemaBase) rejects unknown keys.
+         *     All fields optional — partial upsert via exclude_unset semantics.
+         *
+         *     T-108-05 bounds:
+         *       sender_signature: max_length=11 (SMS/Telegram sender ID limit).
+         *       quiet_hours_start / quiet_hours_end: "HH:MM" pattern (Europe/Moscow).
+         */
+        NotificationPrefsUpdateRequest: {
+            /** Matrix */
+            matrix?: {
+                [key: string]: unknown;
+            } | null;
+            /** Quiethoursend */
+            quietHoursEnd?: string | null;
+            /** Quiethoursstart */
+            quietHoursStart?: string | null;
+            /** Sendersignature */
+            senderSignature?: string | null;
         };
         /**
          * OnlineRefundRequest
@@ -5904,6 +6212,24 @@ export interface components {
             sessionCount: number;
             /** Totalkopecks */
             totalKopecks: number;
+        };
+        /**
+         * ProfileUpdateRequest
+         * @description PATCH /api/v1/auth/me request body (PROF-01).
+         *
+         *     Both fields are optional for partial PATCH — the route rejects an all-None
+         *     body.  Inherits ``extra='forbid'`` from BackendSchemaBase so stray fields
+         *     (e.g. ``theme``) are rejected with 422 — theme is client-only (no
+         *     User.theme column, D-PROF decision).
+         *
+         *     camelCase wire aliases are auto-generated by BackendSchemaBase.
+         *     ``full_name`` ↔ ``fullName`` on the wire; ``email`` stays ``email``.
+         */
+        ProfileUpdateRequest: {
+            /** Email */
+            email?: string | null;
+            /** Fullname */
+            fullName?: string | null;
         };
         /**
          * PtPackageCancelRequest
@@ -6409,6 +6735,10 @@ export interface components {
         ResponseEnvelope_AttachmentUploadResponse_: {
             data: components["schemas"]["AttachmentUploadResponse"];
         };
+        /** ResponseEnvelope[BookingConfigResponse] */
+        ResponseEnvelope_BookingConfigResponse_: {
+            data: components["schemas"]["BookingConfigResponse"];
+        };
         /** ResponseEnvelope[BookingDetailResponse] */
         ResponseEnvelope_BookingDetailResponse_: {
             data: components["schemas"]["BookingDetailResponse"];
@@ -6513,6 +6843,10 @@ export interface components {
         ResponseEnvelope_NoneType_: {
             /** Data */
             data: null;
+        };
+        /** ResponseEnvelope[NotificationPrefsResponse] */
+        ResponseEnvelope_NotificationPrefsResponse_: {
+            data: components["schemas"]["NotificationPrefsResponse"];
         };
         /** ResponseEnvelope[OnlineRefundResponse] */
         ResponseEnvelope_OnlineRefundResponse_: {
@@ -6709,6 +7043,10 @@ export interface components {
         /** ResponseEnvelope[VisitsReportResponse] */
         ResponseEnvelope_VisitsReportResponse_: {
             data: components["schemas"]["VisitsReportResponse"];
+        };
+        /** ResponseEnvelope[WorkingHoursResponse] */
+        ResponseEnvelope_WorkingHoursResponse_: {
+            data: components["schemas"]["WorkingHoursResponse"];
         };
         /** ResponseEnvelope[list[ClientCatalogPlanResponse]] */
         ResponseEnvelope_list_ClientCatalogPlanResponse__: {
@@ -7529,6 +7867,41 @@ export interface components {
              */
             toDate: string;
         };
+        /**
+         * WorkingHoursResponse
+         * @description GET /api/v1/settings/hours response payload (CFG-02).
+         *
+         *     Wire: camelCase via alias_generator=to_camel on ResponseData base.
+         *     model_validate from ORM (from_attributes=True inherited from ContractModel).
+         *
+         *     schedule/breaks/closures are JSONB arrays — structural validation lives on
+         *     the frontend (UI-SPEC); backend stores and returns arrays as-is.
+         */
+        WorkingHoursResponse: {
+            /** Breaks */
+            breaks?: unknown[];
+            /** Closures */
+            closures?: unknown[];
+            /** Schedule */
+            schedule?: unknown[];
+        };
+        /**
+         * WorkingHoursUpdateRequest
+         * @description Owner-only partial upsert request body for working hours (CFG-02).
+         *
+         *     extra='forbid' (inherited from BackendSchemaBase) rejects unknown keys.
+         *     All fields optional — partial upsert via exclude_unset semantics in repository.
+         *     Structural validation of schedule/breaks/closures arrays deferred to frontend
+         *     (UI-SPEC); backend is a passthrough store for the JSONB arrays.
+         */
+        WorkingHoursUpdateRequest: {
+            /** Breaks */
+            breaks?: unknown[] | null;
+            /** Closures */
+            closures?: unknown[] | null;
+            /** Schedule */
+            schedule?: unknown[] | null;
+        };
     };
     responses: {
         /** @description Unauthorized — invalid or missing session credentials. */
@@ -7708,6 +8081,29 @@ export interface operations {
             422: components["responses"]["422_ValidationError"];
         };
     };
+    change_password_endpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
     login: {
         parameters: {
             query?: never;
@@ -7791,6 +8187,31 @@ export interface operations {
                     "application/json": components["schemas"]["ResponseEnvelope_MeResponse_"];
                 };
             };
+        };
+    };
+    update_me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_MeResponse_"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
         };
     };
     otp_request: {
@@ -9332,6 +9753,26 @@ export interface operations {
             422: components["responses"]["422_ValidationError"];
         };
     };
+    owner_get_gym_info: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_GymInfoResponse_"];
+                };
+            };
+        };
+    };
     owner_update_gym_info: {
         parameters: {
             query?: never;
@@ -10797,6 +11238,141 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    owner_get_booking_config: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_BookingConfigResponse_"];
+                };
+            };
+        };
+    };
+    owner_update_booking_config: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookingConfigUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_BookingConfigResponse_"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    owner_get_working_hours: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_WorkingHoursResponse_"];
+                };
+            };
+        };
+    };
+    owner_update_working_hours: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkingHoursUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_WorkingHoursResponse_"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    owner_get_notification_prefs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_NotificationPrefsResponse_"];
+                };
+            };
+        };
+    };
+    owner_update_notification_prefs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationPrefsUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_NotificationPrefsResponse_"];
+                };
             };
             422: components["responses"]["422_ValidationError"];
         };
