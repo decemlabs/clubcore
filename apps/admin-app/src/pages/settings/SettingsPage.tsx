@@ -111,8 +111,11 @@ export function SettingsPage() {
         <div className="grid items-start gap-7 lg:grid-cols-[224px_minmax(0,1fr)]">
           <SettingsNav groups={data.nav} />
           <div className="flex min-w-0 flex-col gap-[18px]">
-            {/* ProfileSection and SecuritySection self-fetch (Plan 104-04) */}
-            <ProfileSection />
+            {/* ProfileSection: inline-editable (Plan 109-04 PROF-01) */}
+            <ProfileSection
+              registerSave={registerSave('profile')}
+              registerCancel={registerCancel('profile')}
+            />
             <SecuritySection />
             {/* BranchSection, HoursSection, BookingSection wired (Plan 108-05) */}
             <BranchSection
