@@ -564,14 +564,18 @@ async def test_concurrent_create_booking_slot_already_booked_clear_409(
     )
 
     # Audit invariant: exactly 1 booking_created for THIS slot (loser rolled back
-    # before audit emit).  Scoped by resource_id == slot_id so a stale audit row
-    # from a prior run (or another test) cannot cause a false negative.
+    # before audit emit).  WR-04: scope by resource_id IN the booking IDs for this
+    # slot so a stale audit row from a prior run cannot cause a false negative.
+    # NOTE: audit_log.resource_id = booking.id (not slot_id); the scoping subquery
+    # resolves booking IDs for our slot then counts only those audit rows.
     created_count = await session.scalar(
         select(func.count())
         .select_from(AuditLog)
         .where(
             AuditLog.action == "booking_created",
-            AuditLog.resource_id == slot_id,  # WR-04: scope to this slot's bookings only
+            AuditLog.resource_id.in_(  # WR-04: scope to this test's slot's bookings
+                select(Booking.id).where(Booking.slot_id == slot_id)
+            ),
         )
     )
     assert created_count == 1, (
