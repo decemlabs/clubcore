@@ -147,7 +147,11 @@ export function useCheckIn() {
       // Prepend optimistic row only to list queries (paginated lists have .items).
       // byClient queries also have .items so they benefit from the same optimistic prepend.
       for (const [key, data] of allSnapshots) {
-        if (!data) continue;
+        // getQueriesData(visitsKeys.all) also matches the gym-meta query
+        // (visitsKeys.meta() = [...all, '_meta']), whose cached data has no
+        // `.items` — spreading it would throw before mutationFn runs and the
+        // check-in POST would never fire. Skip non-list entries. (BUG-8)
+        if (!data || !Array.isArray(data.items)) continue;
         qc.setQueryData(key, { ...data, items: [optimisticRow, ...data.items] });
       }
 
@@ -162,6 +166,9 @@ export function useCheckIn() {
       // Rollback all optimistic rows across all visits queries (pattern from memberships freeze/unfreeze).
       if (ctx) {
         for (const [key, data] of ctx.allSnapshots) {
+          // Symmetric with onMutate: only list entries were optimistically
+          // mutated, so only those need restoring. (BUG-8)
+          if (!data || !Array.isArray(data.items)) continue;
           qc.setQueryData(key as readonly unknown[], data);
         }
       }
