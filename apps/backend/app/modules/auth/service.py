@@ -27,12 +27,13 @@ from uuid import UUID, uuid4
 import structlog
 from redis.asyncio import Redis
 from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import audit
 from app.core.config import get_settings
 from app.core.dependencies import get_email_dispatcher
-from app.core.exceptions import InvalidAccessToken, InvalidPassword, InvalidSession
+from app.core.exceptions import ConflictError, InvalidAccessToken, InvalidPassword, InvalidSession
 from app.core.pagination import PaginatedData
 from app.core.security import (
     encode_access_token,
@@ -1220,3 +1221,162 @@ async def invalidate_all_families_for_user(
         user_id,
         actor_user_id=actor_user_id,
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase 109 — Profile edit (PROF-01) + self password-change (PROF-02).
+# ---------------------------------------------------------------------------
+
+
+async def update_profile(
+    session: AsyncSession,
+    *,
+    user_id: UUID,
+    full_name: str | None,
+    email: str | None,
+) -> User:
+    """Update the authenticated staff member's own profile (PROF-01).
+
+    Only non-None fields are applied (partial PATCH semantics).  The caller
+    (Plan 02 route) validates that at least one field is present.
+
+    Duplicate-email conflict: the partial UNIQUE on lower(email) WHERE
+    deleted_at IS NULL (migration 0022) raises IntegrityError on flush; it
+    is caught here and re-raised as ConflictError(fields={'email': ...}) so
+    the route returns a 409 field error rather than a 500.
+
+    Audit: emits ``profile_updated`` (resource_type='user') BEFORE commit so
+    the audit row commits atomically with the UPDATE (Pitfall 2).  Payload
+    carries only the changed-field name markers — no raw values (T-109-01).
+    """
+    user: User | None = await session.get(User, user_id)
+    if user is None:
+        raise InvalidSession("user_not_found")
+
+    changed_fields: list[str] = []
+    if full_name is not None:
+        user.full_name = full_name
+        changed_fields.append("full_name")
+    if email is not None:
+        user.email = email
+        changed_fields.append("email")
+
+    try:
+        await session.flush()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise ConflictError(
+            "email_already_in_use",
+            fields={"email": "Этот адрес уже используется"},
+        ) from exc
+
+    await audit.emit(
+        session,
+        "profile_updated",
+        actor_user_id=user_id,
+        resource_type="user",
+        resource_id=user_id,
+        changed_fields=changed_fields,
+    )
+    await session.commit()
+    await session.refresh(user)
+    return user
+
+
+async def revoke_other_sessions_on_password_change(
+    session: AsyncSession,
+    redis: Redis,
+    user_id: UUID,
+    *,
+    current_family_id: UUID,
+) -> int:
+    """Revoke every alive refresh-token family for user_id EXCEPT current_family_id.
+
+    PROF-02 exclude-current variant (T-109-05): the caller's device stays logged
+    in; only other devices / sessions are invalidated.
+
+    Returns the count of DISTINCT families revoked (0 if the user has only one
+    active session — idempotent).
+
+    NO session.commit() here and NO audit emit — change_password owns the atomic
+    UoW boundary and the audit callsite (SVC001 / Pitfall 2 discipline).
+    """
+    # DB UPDATE with RETURNING — DB-authoritative count (mirrors _revoke_all_sessions_no_commit
+    # WR-04 discipline).
+    result = await session.execute(
+        update(RefreshToken)
+        .where(
+            RefreshToken.user_id == user_id,
+            RefreshToken.revoked_at.is_(None),
+            RefreshToken.family_id != current_family_id,
+        )
+        .values(revoked_at=datetime.now(tz=UTC))
+        .returning(RefreshToken.family_id)
+    )
+    revoked_family_ids: set[UUID] = {row.family_id for row in result}
+    revoked_count = len(revoked_family_ids)
+
+    # Redis cleanup — only the revoked families (current family key is untouched).
+    if revoked_family_ids:
+        pipe = redis.pipeline()
+        for fid in revoked_family_ids:
+            pipe.delete(f"auth:session:{user_id}:{fid}")
+            pipe.srem(f"auth:user_sessions:{user_id}", str(fid))
+        await pipe.execute()
+
+    return revoked_count
+
+
+async def change_password(
+    session: AsyncSession,
+    redis: Redis,
+    *,
+    user_id: UUID,
+    current_password: str,
+    new_password: str,
+    current_family_id: UUID,
+) -> int:
+    """Self-service password change (PROF-02).
+
+    1. Loads the User; raises InvalidPassword for wrong current_password or
+       NULL password_hash (timing-equivalent, T-109-03 anti-oracle parity).
+    2. Hashes new_password with Argon2id via hash_password.
+    3. Calls revoke_other_sessions_on_password_change — revokes all alive
+       families EXCEPT current_family_id (T-109-05: current device stays
+       logged in; current token is NOT rotated).
+    4. Emits the ALREADY-LOCKED ``password_changed_revokes_sessions`` event
+       BEFORE commit (Pitfall 2).
+    5. Commits; returns the count of revoked-other families.
+
+    The current_family_id is resolved from the cc_refresh cookie by the route
+    (Plan 02) and passed in as a parameter.
+    """
+    user: User | None = await session.get(User, user_id)
+    if user is None:
+        raise InvalidSession("user_not_found")
+
+    # T-109-03: None password_hash takes the same raise path as a mismatch —
+    # no oracle leakage (invited-but-unaccepted users have NULL hash).
+    if user.password_hash is None:
+        raise InvalidPassword("invalid_credentials")
+    await verify_password(current_password, user.password_hash)
+
+    user.password_hash = await hash_password(new_password)
+
+    revoked_count = await revoke_other_sessions_on_password_change(
+        session,
+        redis,
+        user_id,
+        current_family_id=current_family_id,
+    )
+
+    await audit.emit(
+        session,
+        "password_changed_revokes_sessions",
+        actor_user_id=user_id,
+        resource_type="user",
+        resource_id=user_id,
+        family_count=revoked_count,
+    )
+    await session.commit()
+    return revoked_count
