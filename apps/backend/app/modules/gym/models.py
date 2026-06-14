@@ -10,7 +10,7 @@ so the row is always valid even if fields are omitted at insert time.
 
 from typing import Any
 
-from sqlalchemy import Text, text
+from sqlalchemy import Float, Text, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -35,6 +35,10 @@ class GymInfo(Base, UUIDPkMixin, TimestampMixin):
     metro: Mapped[str | None] = mapped_column(Text, nullable=True)
     phone: Mapped[str | None] = mapped_column(Text, nullable=True)
     email: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Geo coordinates — additive nullable columns (Phase 108 CFG-01)
+    latitude: Mapped[float | None] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # JSONB list columns — server_default '[]'::jsonb ensures a valid empty list
     hours: Mapped[list[Any]] = mapped_column(
