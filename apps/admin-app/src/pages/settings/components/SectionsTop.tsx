@@ -235,7 +235,7 @@ export function SecuritySection() {
             </div>
           ) : (
             sessionsData.items.map((s) => {
-              const isMobile = /mobile/i.test(s.userAgent)
+              const isMobile = /mobile/i.test(s.userAgent ?? '')
               const Icon = isMobile ? Smartphone : Monitor
               const isRevoking = revokingId === s.familyId
 

@@ -16,7 +16,7 @@ export const SessionSchema = z.object({
   familyId: z.string(),
   createdAt: z.string(),
   lastUsedAt: z.string(),
-  userAgent: z.string(),
+  userAgent: z.string().nullable(),
   channel: z.string(), // 'admin_web' | 'api'
   isCurrent: z.boolean(),
 });
