@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.1
 milestone_name: Admin — Fill the Gaps
 status: executing
-stopped_at: Phase 109 UI-SPEC approved
-last_updated: "2026-06-14T18:55:56.121Z"
+stopped_at: Completed 109-03 (FE zod schemas + mutation hooks for profile/password)
+last_updated: "2026-06-14T19:02:09.207Z"
 last_activity: 2026-06-14
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 12
-  completed_plans: 9
+  completed_plans: 10
   percent: 40
 ---
 
@@ -26,8 +26,8 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 109 (Profile & Security — Backend + Wiring) — EXECUTING
-Plan: 2 of 4
-Status: Ready to execute
+Plan: 3 of 4 (plan 03 complete)
+Status: Ready to execute plan 04
 Last activity: 2026-06-14
 
 ## v3.1 Roadmap Summary
@@ -122,6 +122,9 @@ Last activity: 2026-06-14
 - **D-109-01-CONFLICT**: duplicate email caught via IntegrityError on flush; re-raised as ConflictError with fields={'email':...}; route maps to 409 field error
 - **D-109-01-NOOP-REVOKE**: revoke_other_sessions_on_password_change returns 0 when user has only one active family (idempotent)
 - **D-109-01-NULL-HASH**: None password_hash takes same InvalidPassword raise path as mismatch (T-109-03 anti-oracle parity)
+- **D-109-03-SESSIONS-KEY-INLINE**: sessions key `['auth','sessions']` inlined in features/auth/api.ts as literal — avoids cross-feature import (features/auth → features/settings), mirrors settingsKeys.sessions
+- **D-109-03-NO-CONFIRM-ON-WIRE**: neither ProfileUpdateSchema nor ChangePasswordSchema has confirmPassword — confirm is UI-only (Plan 04)
+- **D-109-03-NO-TOAST-IN-HOOKS**: useUpdateProfile/useChangePassword propagate ApiError to callers without swallowing into toasts — component decides UX
 
 ### Phase 104 Decisions
 
@@ -193,7 +196,7 @@ v3.0 in-progress deferrals:
 
 ## Session Continuity
 
-Last session: 2026-06-14T18:55:56.116Z
+Last session: 2026-06-14T19:02:09.202Z
 Stopped at: Phase 109 UI-SPEC approved
 Resume: `/gsd:plan-phase 107` (Admin FE Completion on Existing Backend — PLAN/PTPKG/CLI-04).
 
