@@ -332,7 +332,7 @@ function handleSubmit() {
   if (!reasonTrimmed || !packageId) return
   cancelMutation.mutate(
     { packageId, body: { reason: reasonTrimmed } },
-    { onSuccess: () => { onOpenChange(false); toast.success('Пакет отменён') } },
+    { onSuccess: () => { onOpenChange(false) } }, // useCancelPtPackage owns its success toast (api.ts ~205-208) — do NOT duplicate here
   )
 }
 ```
@@ -503,7 +503,7 @@ className="inline-flex h-9 items-center gap-1.5 rounded-full border-[0.5px] bord
 **RBAC gating** (follow can() pattern from SubscriptionModal dispatcher lines 698–706):
 ```typescript
 // Entry button visible to both owner and reception:
-{can(role, 'sell', 'pt-packages') && (
+{can(role, 'create', 'pt-packages') && (
   <button ... onClick={() => setSellOpen(true)}>Продать пакет</button>
 )}
 ```
@@ -664,11 +664,11 @@ None — all 7 files have direct analogs in the codebase.
 
 1. **PlanFormModal is the most complex file.** It must handle `kind × mode` = 4 permutations, manual Schema.safeParse validation (no @hookform/resolvers per D-101-01-NOHOOKFORM), disabled fields with «Нельзя изменить после создания» hint, and 422 field-error mapping. The SubscriptionModal + ExtendModal together provide the complete JSX template.
 
-2. **PT-package hooks already own their toasts.** `useSellPtPackage`, `useCancelPtPackage`, and `useRefundPtPackage` fire Sonner toasts in `onSuccess`/`onError` (api.ts lines 173–183, 205–224, 244–256). Modal `onSuccess` callbacks should ONLY close the dialog (`onOpenChange(false)`). Only PlanFormModal and the Cancel dialog (which does `toast.success('Пакет отменён')`) need surface-level toasts — but `useCancelPtPackage` already fires `toast.success('Пакет тренировок отменён')` on success, so the modal's own toast would duplicate. Verify exact hook behavior before adding any toast.
+2. **PT-package hooks already own their toasts — all three modals close ONLY, no surface-level toast.** `useSellPtPackage`, `useCancelPtPackage`, and `useRefundPtPackage` each fire their own Sonner success/error toasts (api.ts lines 173–183, 205–224, 244–256; cancel fires `toast.success('Пакет тренировок отменён')`). Every PT-package modal `onSuccess` callback must therefore be ONLY `onOpenChange(false)` — adding any `toast.success(...)` in the modal would double-fire. (PlanFormModal is the lone exception: the plan CRUD hooks do NOT toast, so PlanFormModal owns its own surface-level success toast.)
 
 3. **TrainingsTab needs `useSession` + `can()`** added (not currently imported) to gate the kebab items and «Продать пакет» button visibility.
 
-4. **ProfileHeroReal change is surgical** — only `onConfirm` body changes (lines 160–162). The existing ConfirmPayload structure, title, message, and dropdown item are all correct and must not be modified.
+4. **ProfileHeroReal change is NOT purely surgical — it ADDS an owner-only gate.** The `onConfirm` body changes (lines 160–162) AND a `can(role, 'delete', 'clients')` gate must be ADDED around the «Удалить клиента» dropdown item (+ its preceding separator), which currently renders UNCONDITIONALLY. The file does NOT yet import `useSession` — that import + a derived `role` are new. The existing ConfirmPayload title/message stay unchanged; only the `onConfirm` body and the gating wrapper change.
 
 5. **`usePtPackagePlans` uses `includeArchived` not `active`** (pt-packages/api.ts line 66 comment). For the sell modal, call `usePtPackagePlans()` without the flag to get active-only plans (backend default).
 

@@ -238,7 +238,7 @@ Primary button disabled when `isPending` or required fields empty/invalid.
 
 ### Surface 2: PtPackageSellModal (PTPKG-01)
 
-**Entry point:** «Продать пакет» button in `TrainingsTab` card header (rendered only when `can(role, 'sell', 'pt-packages')` — visible to both owner and reception).
+**Entry point:** «Продать пакет» button in `TrainingsTab` card header (rendered only when `can(role, 'create', 'pt-packages')` — the reception-retained sell pair, so it is visible to both owner and reception). NOTE: `'sell'` is NOT a registered `Action` in `shared/session/registry.ts` and would fail typecheck — use the `'create'` pair, which `can.ts` keeps OUT of `OWNER_ONLY` for pt-packages (returns `true` for both roles).
 
 **Button style:** same `ADD_BTN` class from PlansPage.tsx:
 `inline-flex h-9 items-center gap-1.5 rounded-full border-[0.5px] border-border bg-surface px-3.5 text-[13px] font-semibold text-fg transition-colors hover:border-border-strong`
@@ -379,7 +379,7 @@ Danger button disabled when `isPending || reasonTrimmed.length === 0`.
 2. On success (204): `navigate(ROUTES.clients)` + `toast.success('Клиент удалён')`
 3. On error: `toast.error('Не удалось удалить клиента')` (confirm modal closes automatically)
 
-**RBAC:** «Удалить клиента» `DropdownMenuItem` is HIDDEN for reception via `can(role, 'delete', 'clients')` — this gate already exists in the hero dropdown; only the `onConfirm` body changes.
+**RBAC:** «Удалить клиента» `DropdownMenuItem` must be HIDDEN for reception via `can(role, 'delete', 'clients')`. This gate does NOT yet exist — verified: `ProfileHeroReal.tsx` does not import `useSession` and the delete item currently renders UNCONDITIONALLY. Plan 107-03 ADDS it: a new `useSession` import + derived `role`, and a conditional render wrapping the «Удалить клиента» item (and its preceding `DropdownMenuSeparator`). In addition the `onConfirm` body is replaced with the real `useDeleteClient` mutation.
 
 **Post-delete navigation state:** TanStack Router navigates to `ROUTES.clients`. No residual stale client page.
 
@@ -531,7 +531,7 @@ Reception sees neither the «Отменить пакет» kebab item, the «У�
 | Action | Gate | Visibility |
 |--------|------|------------|
 | Plan create/edit (membership + pt-package) | `can(role, 'edit', 'plans')` | Hidden for reception |
-| PT-package sell | `can(role, 'sell', 'pt-packages')` | Visible to both |
+| PT-package sell | `can(role, 'create', 'pt-packages')` | Visible to both (reception-retained `create` pair; `'sell'` is not a registered Action) |
 | PT-package cancel (kebab item) | `can(role, 'cancel', 'pt-packages')` | Hidden for reception (OWNER_ONLY) |
 | PT-package refund (kebab item) | `can(role, 'refund', 'pt-packages')` | Visible to both |
 | Client delete (dropdown item) | `can(role, 'delete', 'clients')` | Hidden for reception |
