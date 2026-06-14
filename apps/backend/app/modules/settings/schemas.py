@@ -134,7 +134,7 @@ class NotificationPrefsResponse(ResponseData):
     Wire: camelCase via alias_generator=to_camel on ResponseData base.
     model_validate from ORM (from_attributes=True inherited from ContractModel).
 
-    matrix is a JSONB object keyed by notification kind × channel — returned as-is.
+    matrix is a JSONB object keyed by notification kind x channel — returned as-is.
     sender_signature is appended to outbound text channels (Telegram/email).
     quiet_hours_start / quiet_hours_end are "HH:MM" strings (Europe/Moscow).
     """
