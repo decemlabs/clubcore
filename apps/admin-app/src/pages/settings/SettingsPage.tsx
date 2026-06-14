@@ -69,7 +69,7 @@ export function SettingsPage() {
   );
   const blocker = useBlocker(shouldBlock);
 
-  async function handleSave() {
+  async function handleSave(): Promise<boolean> {
     const dirtyIds = Array.from(dirty);
     const results = await Promise.allSettled(
       dirtyIds.map((id) => handlersRef.current.get(id)?.save() ?? Promise.resolve()),
@@ -86,8 +86,10 @@ export function SettingsPage() {
     if (failed.length === 0) {
       toast.success('Настройки сохранены');
       setDirty(new Set());
+      return true;
     } else {
       toast.error('Некоторые изменения не удалось сохранить. Проверьте ошибки в разделах.');
+      return false;
     }
   }
 
@@ -168,8 +170,11 @@ export function SettingsPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    void handleSave().then(() => {
-                      blocker.proceed?.();
+                    void handleSave().then((savedOk) => {
+                      if (savedOk) {
+                        blocker.proceed?.();
+                      }
+                      // else: stay on page — error toast already shown per section
                     });
                   }}
                   className="h-[42px] w-full rounded-xl bg-primary px-4 text-[14px] font-semibold text-[#06120c] transition-opacity hover:opacity-90 sm:w-auto"
