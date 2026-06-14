@@ -22,6 +22,7 @@
 - ✅ **v2.5 Chat / Messaging — Client↔Gym** — Phases 90-95 (shipped 2026-06-08) — see [milestones/v2.5-ROADMAP.md](milestones/v2.5-ROADMAP.md)
 - ✅ **v2.6 Referral System** — Phases 96-99 (shipped 2026-06-08) — see [milestones/v2.6-ROADMAP.md](milestones/v2.6-ROADMAP.md)
 - ✅ **v3.0 Production Admin — Backend Wiring** — Phases 100-106 (shipped 2026-06-14) — see [milestones/v3.0-ROADMAP.md](milestones/v3.0-ROADMAP.md)
+- 🚧 **v3.1 Admin — Fill the Gaps** — Phases 107-111 (in progress)
 
 ## Phases
 
@@ -268,6 +269,74 @@ Full phase details archived in [milestones/v3.0-ROADMAP.md](milestones/v3.0-ROAD
 
 </details>
 
+### 🚧 v3.1 Admin — Fill the Gaps (Phases 107-111)
+
+**Milestone Goal:** Довести staff-админку до полнофункционального состояния — закрыть FE-заглушки на текущем backend, проверить вживую отложенный P102, и добавить минимальный backend для редактируемых Настроек (зал/график/запись/уведомления) + профиля.
+
+**Scope principle (D-V31-SCOPE):** v3.1 сознательно ослабляет v3.0 `D-V30-SCOPE-WIRE` (wire-only) — **новые backend-эндпоинты разрешены**, но минимальны и в рамках single-club; переиспользовать существующее где можно (v2.4 `gym` модуль, notification-диспетчер, уже-готовые PT-package хуки). Because new endpoints land, the milestone OpenAPI contract WILL change (additive, NOT byte-stable) — the handoff phase regenerates artifacts and runs the full gate.
+
+**Backend discipline (carried, all phases that touch backend):** FastAPI modular monolith — raw-SQL cross-module reads / Protocol-slot writes (D-20-MODULE), `client_id`/actor only from principal where relevant (D-20-IDOR), RBAC byte-parity with admin-app `can.ts`/`registry.ts` (CISO-01; extend `Resource`/`OWNER_ONLY` if a new gated resource appears), LOCKED audit events pre-registered before any callsite (INFRA-15), Alembic migrations round-trip clean, money in integer kopecks, all dates/windows Europe/Moscow. Frontend: per-domain Zod seam + TanStack Query + `staffRequest` (cc_* cookies + `X-CSRF-Token`) + `can()`-gating; per-attempt `Idempotency-Key` on sales.
+
+### Phase 107: Admin FE Completion on Existing Backend
+**Goal**: Every remaining staff toast-stub becomes a real, reachable action against an already-shipped endpoint — plan create/edit, PT-package sell/cancel/refund, and client delete from the hero — with no backend or contract change.
+**Depends on**: Nothing (v3.0 admin-app shipped; first phase of v3.1)
+**Requirements**: PLAN-01, PLAN-02, PTPKG-01, PTPKG-02, CLI-04
+**Success Criteria** (what must be TRUE):
+  1. Owner can create AND edit a membership plan from a real form modal (`POST`/`PATCH /api/v1/membership-plans`) with Zod validation, immutable-field rules (durationDays/freezeDaysLimit), and 422 field-error mapping — the toast stub is gone.
+  2. Owner can create AND edit a PT-package plan from a real form modal (`POST`/`PATCH /api/v1/pt-package-plans`) with name editable + other fields immutable per the backend contract — the toast stub is gone.
+  3. Staff can sell a PT-package to a client from a reachable UI (PtPackageScreen in SubscriptionModal or equivalent) — cash, per-attempt `Idempotency-Key` — and an `amount_mismatch` 422 surfaces as a clear state, not a crash.
+  4. Staff can cancel and refund a client's PT-package from reachable TrainingsTab actions (refund owner-only, required reason) using the existing cancel/refund hooks.
+  5. Staff can delete a client directly from the client-page hero — a real owner-gated soft-delete (`DELETE /api/v1/clients/{id}`) behind a confirm — replacing the `toast.info(...)` stub.
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 108: Editable Settings — Backend + Wiring
+**Goal**: Owner can edit the single-club operational settings — gym card, working hours / breaks / closures, online-booking rules, and the client-notification matrix — and the changes persist and are honored by the schedule, the booking window, the client PWA, and the notification dispatcher.
+**Depends on**: Phase 107
+**Requirements**: CFG-01, CFG-02, CFG-03, CFG-04
+**Success Criteria** (what must be TRUE):
+  1. Owner can edit the gym card (name, address, coordinates, contacts, description, amenities, capacity) and changes persist across reload; reception is `403`. Reuse/extend the v2.4 `gym` module (`PUT /gym`) where possible.
+  2. Owner can edit working hours + technical breaks + holiday/closure dates; they persist and the schedule / booking window respects them.
+  3. Owner can edit online-booking rules (schedule step, booking-ahead window, booking cutoff, cancel/reschedule policy + no-show penalty, group limit + waitlist, PT self-booking flags); they persist and apply to the client PWA.
+  4. Owner can edit the client-notification matrix (per-trigger × per-channel toggles) + sender signature + quiet hours; they persist and are honored by the notification dispatcher.
+  5. Each Settings surface is owner-gated in the UI (reception sees a friendly Lock/403 state, not a crash); every new endpoint is RBAC byte-parity safe and added additively to the staff contract.
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 109: Profile & Security — Backend + Wiring
+**Goal**: A staff member can edit their own profile and change their own password from Settings, on real new endpoints, with the existing session-revocation discipline.
+**Depends on**: Phase 108
+**Requirements**: PROF-01, PROF-02
+**Success Criteria** (what must be TRUE):
+  1. Staff can edit their own profile — full name, email, theme — via a new `PATCH /api/v1/auth/me`, replacing the read-only profile (the v3.0 `D-104-04-PROFILE-READONLY` gap closes).
+  2. Profile edits persist and are reflected after reload and in the session-driven sidebar identity.
+  3. Staff can change their own password from Settings (current + new, validated to the existing 12-char NIST policy); a wrong current password surfaces as a clear field error.
+  4. A successful password change revokes the staff member's other sessions per the existing refresh-family-revoke discipline.
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 110: Live Verification — Deferred P102 (Bookings + Payroll)
+**Goal**: The P102 booking lifecycle and trainer payroll that were `data-setup-blocked` at v3.0 close are verified working live against the running stack on seeded data.
+**Depends on**: Phase 109
+**Requirements**: VER-01, VER-02
+**Success Criteria** (what must be TRUE):
+  1. On seeded data against the running stack, the booking lifecycle works end-to-end — create a booking against a slot, cancel it, and complete one via pt-sessions — closing the P102 `data-setup-blocked` deferral.
+  2. A race conflict (slot already taken) surfaces as a clear state, not a crash, when exercised live.
+  3. On seeded data, trainer payroll works end-to-end — comp-config → accrual preview → run → pending→paid — and reception is gated (zero owner-only payroll API calls).
+  4. The seed path/fixtures used for live verification are captured so the walkthrough is repeatable (the v3.0 data-setup blocker does not recur).
+**Plans**: TBD
+
+### Phase 111: OpenAPI Handoff + Milestone Gate
+**Goal**: The changed staff OpenAPI contract is regenerated and forward-guarded, and the full milestone gate passes — closing v3.1.
+**Depends on**: Phase 110
+**Requirements**: HND-01 (milestone-handoff requirement — not one of the 13 feature reqs; see note)
+**Success Criteria** (what must be TRUE):
+  1. `openapi.json` + `packages/api-client/src/schema.d.ts` are regenerated to reflect the new v3.1 routes (`PATCH /auth/me`, password-change, the Settings persistence endpoints) — additively, NOT byte-stable — and a `_v31Checks` `AssertNonNever` forward-guard tuple covers each new path×method.
+  2. The full milestone gate is green: mypy `--strict` + lint-imports + pytest + admin-app `check`/`test`/`build` + Redocly lint; the CISO-01 RBAC byte-parity guard is green.
+  3. All 13 v3.1 feature requirements (PLAN/PTPKG/CLI/CFG/PROF/VER) are verified satisfied with no open blockers.
+**Plans**: TBD
+
+
 ## Backlog
 
 ### Backlog 999.1 — WR-06 restore PT session credit on owner force-cancel (✅ DONE 2026-05-29 — quick task 260529-ny2)
@@ -284,6 +353,21 @@ Full phase details archived in [milestones/v3.0-ROADMAP.md](milestones/v3.0-ROAD
 
 ## Progress
 
+**Current milestone: v3.1 Admin — Fill the Gaps**
+
+**Execution Order:** 107 → 108 → 109 → 110 → 111
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 107. Admin FE Completion on Existing Backend | 0/TBD | Not started | - |
+| 108. Editable Settings — Backend + Wiring | 0/TBD | Not started | - |
+| 109. Profile & Security — Backend + Wiring | 0/TBD | Not started | - |
+| 110. Live Verification — Deferred P102 | 0/TBD | Not started | - |
+| 111. OpenAPI Handoff + Milestone Gate | 0/TBD | Not started | - |
+
+<details>
+<summary>✅ v3.0 Production Admin — Backend Wiring (Phases 100-106) — Progress (SHIPPED 2026-06-14)</summary>
+
 **Execution Order:** 100 → 101 → 102 → 103 → 104 → 105 → 106
 
 | Phase | Plans Complete | Status | Completed |
@@ -295,3 +379,5 @@ Full phase details archived in [milestones/v3.0-ROADMAP.md](milestones/v3.0-ROAD
 | 104. Dashboard, Reports + Settings | 5/5 | Complete   | 2026-06-13 |
 | 105. admin-web Retirement + RBAC Re-home | 1/1 | Complete   | 2026-06-13 |
 | 106. OpenAPI Handoff + Milestone Gate | 2/2 | Complete   | 2026-06-13 |
+
+</details>

@@ -6,7 +6,7 @@ status: planning
 last_updated: "2026-06-14T12:46:32.501Z"
 last_activity: 2026-06-14
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,16 +20,28 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** v3.0 Production Admin — Backend Wiring. Roadmap created (7 phases, 30/30 requirements mapped). Start with `/gsd:plan-phase 100`.
+**Current focus:** v3.1 Admin — Fill the Gaps. Roadmap created (5 phases, 107–111; 13/13 feature requirements mapped + HND-01 handoff). Start with `/gsd:plan-phase 107`.
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 107 — Admin FE Completion on Existing Backend (not started)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-06-14 — Milestone v3.1 started
+Status: Roadmap created — awaiting `/gsd:plan-phase 107`
+Last activity: 2026-06-14 — v3.1 roadmap created (5 phases, 107–111; 13/13 mapped)
 
-## v3.0 Roadmap Summary
+## v3.1 Roadmap Summary
+
+| Phase | Goal | Requirements |
+|-------|------|--------------|
+| 107. Admin FE Completion on Existing Backend | Plan create/edit + PT-package sell/cancel/refund + client-delete-from-hero — real reachable actions vs already-shipped endpoints; no backend/contract change | PLAN-01, PLAN-02, PTPKG-01, PTPKG-02, CLI-04 |
+| 108. Editable Settings — Backend + Wiring | Gym card + working hours/breaks/closures + booking rules + notification matrix persist (new/extended backend) and are honored by schedule/booking-window/PWA/dispatcher | CFG-01, CFG-02, CFG-03, CFG-04 |
+| 109. Profile & Security — Backend + Wiring | `PATCH /auth/me` (name/email/theme) + self password-change (revokes other sessions) — new endpoints | PROF-01, PROF-02 |
+| 110. Live Verification — Deferred P102 | Booking lifecycle (create/cancel/complete) + payroll (comp-config→preview→run→paid) verified live on seeded data | VER-01, VER-02 |
+| 111. OpenAPI Handoff + Milestone Gate | Additive (NOT byte-stable) `openapi.json` + `schema.d.ts` regen + `_v31Checks` guard; full gate green; 13/13 verified | HND-01 (handoff) |
+
+**Coverage:** 13/13 v3.1 feature requirements mapped (107: 5 · 108: 4 · 109: 2 · 110: 2). Handoff HND-01 → Phase 111. **Execution order: 107 → 108 → 109 → 110 → 111.**
+
+## v3.0 Roadmap Summary (shipped 2026-06-14 — historical)
 
 | Phase | Goal | Requirements |
 |-------|------|--------------|
@@ -45,6 +57,17 @@ Last activity: 2026-06-14 — Milestone v3.1 started
 
 ## Accumulated Context
 
+### v3.1 Architecture Context (current milestone)
+
+- **D-V31-SCOPE**: v3.1 relaxes v3.0 `D-V30-SCOPE-WIRE` — new backend endpoints ARE allowed, but minimal + single-club; reuse existing where possible (v2.4 `gym` module `PUT /gym`, notification dispatcher, already-shipped PT-package hooks). Source of scope = the 2026-06-14 admin-app audit (`🩹 stubs` + `🟡 not-live-verified`).
+- **D-V31-CONTRACT-ADDITIVE**: because new routes land (`PATCH /auth/me`, password-change, Settings persistence), the staff OpenAPI contract changes **additively — NOT byte-stable** (unlike v3.0). Phase 111 regenerates `openapi.json` + `schema.d.ts` and adds a `_v31Checks` `AssertNonNever` forward-guard for each new path×method; the staff drift-gate expects a non-empty additive diff, not zero-diff.
+- **Handoff phase is NOT a no-op** (contrast Phase 106): Phase 111 must regenerate artifacts AND run the full gate (mypy --strict + lint-imports + pytest + admin-app check/test/build + Redocly + CISO-01 parity).
+- **Backend discipline carried**: FastAPI modular monolith — raw-SQL reads / Protocol-slot writes (D-20-MODULE), RBAC byte-parity (CISO-01; extend `Resource`/`OWNER_ONLY` only if a new gated resource appears), LOCKED audit events pre-registered before any callsite (INFRA-15), Alembic migrations round-trip clean, money in integer kopecks, all dates/windows Europe/Moscow.
+- **Frontend discipline carried**: per-domain Zod seam + TanStack Query + `staffRequest` (`cc_access`/`cc_refresh` cookies + `clubcore_csrf` → `X-CSRF-Token`) + `can()`-gating; per-attempt `Idempotency-Key` on sales.
+- **Plan-phase investigation flag (108)**: which Settings endpoints already exist vs need building is left for `/gsd:plan-phase 108` to investigate. Assume CFG-01 (gym card) largely reuses the v2.4 `gym` module; CFG-02/03/04 likely need new/extended endpoints. Keep minimal + single-club.
+- **Cookie naming reminder**: real staff cookies are `cc_access`/`cc_refresh` + `clubcore_csrf` (X-CSRF-Token) — some older roadmap prose says `sz_*`; trust the code (memory: staff-cookie-names-cc-not-sz).
+- **VER-01/02 prerequisite**: P102 was `data-setup-blocked` at v3.0 close — Phase 110 must produce repeatable seed fixtures (dev-DB `docker compose down -v` + migrate + seed) so the booking/payroll walkthrough does not re-block.
+
 ### v3.0 Architecture Constraints (pre-locked)
 
 - **D-V30-SCOPE-WIRE**: wire-only — no new backend domains/endpoints; every screen maps to an already-shipped endpoint
@@ -57,7 +80,9 @@ Last activity: 2026-06-14 — Milestone v3.1 started
 
 ### Pending Todos
 
-- Phase 103 complete (all 4 plans). Continue with Phase 104 (Dashboard + Reports + Settings).
+- v3.1 roadmap created (Phases 107–111). Next: `/gsd:plan-phase 107` (Admin FE Completion — plan/PT-package/client-delete stubs → real actions on existing backend).
+- Phase 108 plan must investigate existing-vs-new Settings endpoints before building (reuse v2.4 `gym` `PUT /gym` for CFG-01).
+- Phase 110 needs repeatable seed fixtures so the P102 booking/payroll live-UAT does not re-block (the v3.0 `data-setup-blocked` cause).
 
 ### Phase 101 Decisions
 
@@ -161,10 +186,10 @@ v3.0 in-progress deferrals:
 
 ## Session Continuity
 
-Last session: 2026-06-13T21:44:42.273Z
-Stopped at: Phase 104 Plan 03 complete (RPT-02 Reports page + RPT-03 Audit page wired + «Журнал действий» nav entry)
-Resume: Phase 104 Plan 03 complete. Continue with Phase 104 Plan 04 (Settings — profile/sessions/users admin).
+Last session: 2026-06-14 — v3.1 roadmap created
+Stopped at: v3.1 ROADMAP.md + REQUIREMENTS.md traceability + STATE.md written (5 phases 107–111; 13/13 mapped)
+Resume: `/gsd:plan-phase 107` (Admin FE Completion on Existing Backend — PLAN/PTPKG/CLI-04).
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- v3.1 roadmap is ready. Plan the first phase with `/gsd:plan-phase 107`.

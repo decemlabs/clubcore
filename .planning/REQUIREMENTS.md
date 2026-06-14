@@ -90,25 +90,29 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PLAN-01 | — | Pending |
-| PLAN-02 | — | Pending |
-| PTPKG-01 | — | Pending |
-| PTPKG-02 | — | Pending |
-| CLI-04 | — | Pending |
-| CFG-01 | — | Pending |
-| CFG-02 | — | Pending |
-| CFG-03 | — | Pending |
-| CFG-04 | — | Pending |
-| PROF-01 | — | Pending |
-| PROF-02 | — | Pending |
-| VER-01 | — | Pending |
-| VER-02 | — | Pending |
+| PLAN-01 | Phase 107 | Pending |
+| PLAN-02 | Phase 107 | Pending |
+| PTPKG-01 | Phase 107 | Pending |
+| PTPKG-02 | Phase 107 | Pending |
+| CLI-04 | Phase 107 | Pending |
+| CFG-01 | Phase 108 | Pending |
+| CFG-02 | Phase 108 | Pending |
+| CFG-03 | Phase 108 | Pending |
+| CFG-04 | Phase 108 | Pending |
+| PROF-01 | Phase 109 | Pending |
+| PROF-02 | Phase 109 | Pending |
+| VER-01 | Phase 110 | Pending |
+| VER-02 | Phase 110 | Pending |
+
+> **Handoff (not one of the 13):** HND-01 (OpenAPI regen + full milestone gate) → **Phase 111**. v3.1 adds new routes (`PATCH /auth/me`, password-change, Settings persistence), so the contract changes additively (NOT byte-stable) — Phase 111 regenerates `openapi.json` + `schema.d.ts` with a `_v31Checks` forward-guard and runs the full gate.
 
 **Coverage:**
 - v3.1 requirements: 13 total
-- Mapped to phases: 0 (roadmap pending)
-- Unmapped: 13 ⚠️ (filled by roadmapper)
+- Mapped to phases: 13 ✅ (107: 5 · 108: 4 · 109: 2 · 110: 2)
+- Unmapped: 0
+- Each requirement → exactly one phase (no orphans, no duplicates)
+- Handoff HND-01 → Phase 111 (milestone-discipline requirement, tracked separately)
 
 ---
 *Requirements defined: 2026-06-14*
-*Last updated: 2026-06-14 — v3.1 requirements defined (13 reqs: PLAN/PTPKG/CLI/CFG/PROF/VER)*
+*Last updated: 2026-06-14 — v3.1 requirements defined (13 reqs: PLAN/PTPKG/CLI/CFG/PROF/VER); roadmap created — all 13 mapped to Phases 107–110, handoff HND-01 → Phase 111*
