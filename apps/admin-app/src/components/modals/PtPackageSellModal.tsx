@@ -1,7 +1,9 @@
 /**
  * PtPackageSellModal — PT-package instance sell dialog (Phase 107-02 PTPKG-01).
  *
- * - Plan select populated by usePtPackagePlans() (no args — backend default = active only).
+ * - Plan select populated by usePtPackagePlans({ includeArchived: false }) — an
+ *   explicit active-only request with its own cache key, isolated from PlansPage's
+ *   archived-inclusive list, plus a client-side p.active filter as defense-in-depth (WR-04).
  * - amountKopecks is LOCKED to the selected plan's priceKopecks (operator never types it).
  * - amount_mismatch 422 surfaced as a warn Callout (not a crash).
  * - useSellPtPackage owns its own success + error toasts — modal onSuccess ONLY closes.
@@ -52,7 +54,9 @@ export function PtPackageSellModal({
 }) {
   const [selectedPlanId, setSelectedPlanId] = useState<string>('')
   const [notes, setNotes] = useState('')
-  const plansQuery = usePtPackagePlans()
+  // Request active-only explicitly (distinct cache key from PlansPage's
+  // archived-inclusive usePtPackagePlans()), and never depend on the backend default.
+  const plansQuery = usePtPackagePlans({ includeArchived: false })
   const sellMutation = useSellPtPackage()
 
   useEffect(() => {
@@ -63,7 +67,9 @@ export function PtPackageSellModal({
     }
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const plans = plansQuery.data?.items ?? []
+  // Defense-in-depth: never offer an archived plan for sale, regardless of
+  // what the shared query/backend default returns (WR-04).
+  const plans = (plansQuery.data?.items ?? []).filter((p) => p.active)
   const selectedPlan = plans.find((p) => p.id === selectedPlanId)
   const isPending = sellMutation.isPending
 
