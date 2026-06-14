@@ -1269,10 +1269,18 @@ async def update_profile(
         await session.flush()
     except IntegrityError as exc:
         await session.rollback()
-        raise ConflictError(
-            "email_already_in_use",
-            fields={"email": "Этот адрес уже используется"},
-        ) from exc
+        # WR-02: narrow the catch — only remap the known email-unique constraint.
+        # The partial UNIQUE index is named uq_users_email_active (migration 0022).
+        # Any other IntegrityError (different constraint, unexpected DB error) is
+        # re-raised as-is so it surfaces as a 500 rather than a misleading 409
+        # with fields.email set.
+        orig = str(exc.orig) if exc.orig is not None else ""
+        if "uq_users_email_active" in orig:
+            raise ConflictError(
+                "email_already_in_use",
+                fields={"email": "Этот адрес уже используется"},
+            ) from exc
+        raise
 
     await audit.emit(
         session,
