@@ -47,6 +47,7 @@ import app.modules.gym.models  # Phase 86 GYM-01 / 0058
 import app.modules.notifications.models  # Phase 87 INBOX-01/INBOX-02 / 0060+0061
 import app.modules.messaging.models  # Phase 91 MSG-01 / 0064+0065+0066 — env.py gap fixed
 import app.modules.referrals.models  # Phase 96 REFER-01..07 / 0067+0068 — env.py gap (FK target)
+import app.modules.settings.models  # Phase 108 CFG-02/03/04 / 0070+0071
 import app.core.audit_models  # noqa: F401
 
 # Alembic Config object — provides access to values within alembic.ini.
@@ -137,10 +138,15 @@ def _include_object(
 
 def do_run_migrations(connection: Connection) -> None:
     """Synchronous migration runner invoked via connection.run_sync()."""
+    from sqlalchemy import String
+
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
         include_object=_include_object,  # Pitfall 1: skip raw-DDL GIN trgm indexes
+        # Phase 108: revision IDs exceed Alembic's default VARCHAR(32);
+        # use VARCHAR(255) to accommodate the project's long revision ID naming scheme.
+        version_num_col_type=String(255),
     )
     with context.begin_transaction():
         context.run_migrations()
