@@ -255,9 +255,14 @@ def test_locked_audit_events_has_expected_count() -> None:
     ``('booking_config_updated', 'settings')``,
     ``('notification_prefs_updated', 'settings')``.
     The frozenset total becomes 112 + 4 = 116. See 108-01-SUMMARY.md.
+
+    Phase 109 (INFRA-15 / D-109 profile lock) ADDS 1 v3.1 profile pair
+    pre-registered BEFORE any callsite (Plan 01 implements the emitter):
+    ``('profile_updated', 'user')``.
+    The frozenset total becomes 116 + 1 = 117. See 109-01-SUMMARY.md.
     """
-    assert len(LOCKED_AUDIT_EVENTS) == 116, (
-        "LOCKED_AUDIT_EVENTS size drifted: expected 116 "
+    assert len(LOCKED_AUDIT_EVENTS) == 117, (
+        "LOCKED_AUDIT_EVENTS size drifted: expected 117 "
         "(18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4 + 5 v1.5 + 13 v1.6 + 14 v1.7 "
         "+ 4 v1.9/P58 + 4 v1.9/P59 + 1 pre-P68 + 6 v2.0/P68 + 1 v2.2/P80 booking_rescheduled "
         "+ 1 v2.3/P82 loyalty_accrued + 1 v2.3/P83 loyalty_redeemed "
@@ -265,7 +270,8 @@ def test_locked_audit_events_has_expected_count() -> None:
         "+ 4 v2.5/P90: message_sent + message_read + attachment_uploaded + chat_staff_reply_sent "
         "+ 3 v2.6/P96: referral_code_generated + referral_captured + referral_bonus_accrued "
         "+ 4 v2.7/P108: gym_card_updated + working_hours_updated + booking_config_updated "
-        "+ notification_prefs_updated), "
+        "+ notification_prefs_updated "
+        "+ 1 v3.1/P109: profile_updated), "
         f"got {len(LOCKED_AUDIT_EVENTS)}"
     )
     # v2.3 Phase 82 INFRA-15 / ACCR-01/ACCR-02: +1 loyalty accrual lifecycle pair

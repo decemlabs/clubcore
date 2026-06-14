@@ -21,6 +21,7 @@ Postgres-only — skipped automatically when the database is unreachable.
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
@@ -222,6 +223,39 @@ async def test_concurrent_client_create_booking_partial_unique_at_db_layer(
     db_session_real_commit.add(pkg)
     await db_session_real_commit.commit()
     await db_session_real_commit.refresh(pkg)
+
+    # Phase 111 fix: reset working_hours_config to all-day-open so the slot
+    # time (now+48h) is accepted regardless of time-of-day. The real-commit
+    # session makes this visible to the concurrent HTTP booking requests.
+    _all_days_open = [
+        {"day_of_week": dow, "open_time": "00:00", "close_time": "23:59"}
+        for dow in range(7)
+    ]
+    await db_session_real_commit.execute(
+        text(
+            "UPDATE working_hours_config "
+            "SET schedule = CAST(:schedule AS jsonb), closures = CAST(:closures AS jsonb) "
+            "WHERE id = CAST(:id AS uuid)"
+        ),
+        {
+            "schedule": json.dumps(_all_days_open),
+            "closures": json.dumps([]),
+            "id": "00000000-0000-0000-0000-000000000004",
+        },
+    )
+    await db_session_real_commit.execute(
+        text(
+            "UPDATE booking_config "
+            "SET booking_ahead_days = :ahead, cutoff_minutes = :cutoff "
+            "WHERE id = CAST(:id AS uuid)"
+        ),
+        {
+            "ahead": 365,
+            "cutoff": 0,
+            "id": "00000000-0000-0000-0000-000000000003",
+        },
+    )
+    await db_session_real_commit.commit()
 
     slot_start = datetime.now(tz=UTC) + timedelta(hours=48)
     slot = TrainerAvailabilitySlot(
