@@ -411,7 +411,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1; 110-02 and 110-03 run in parallel)*
 
-- [ ] 110-02-PLAN.md — VER-01 booking lifecycle E2E (create→cancel→complete-via-pt-session) + slot-already-taken race conflict (real-commit) on seeded Postgres
+- [x] 110-02-PLAN.md — VER-01 booking lifecycle E2E (create→cancel→complete-via-pt-session) + slot-already-taken race conflict (real-commit) on seeded Postgres
 - [ ] 110-03-PLAN.md — VER-02 payroll lifecycle E2E (comp-config→preview→run→pending→paid) + accrual snapshot assertions + reception-403 RBAC negative
 
 ### Phase 111: OpenAPI Handoff + Milestone Gate
@@ -452,7 +452,7 @@ Plans:
 | 107. Admin FE Completion on Existing Backend | 3/3 | Complete    | 2026-06-14 |
 | 108. Editable Settings — Backend + Wiring | 5/5 | Complete    | 2026-06-14 |
 | 109. Profile & Security — Backend + Wiring | 4/4 | Complete    | 2026-06-14 |
-| 110. Live Verification — Deferred P102 | 1/3 | In Progress|  |
+| 110. Live Verification — Deferred P102 | 2/3 | In Progress|  |
 | 111. OpenAPI Handoff + Milestone Gate | 0/TBD | Not started | - |
 
 <details>
