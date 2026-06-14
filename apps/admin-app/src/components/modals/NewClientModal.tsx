@@ -100,6 +100,12 @@ export function NewClientModal({
             });
             return;
           }
+          if (err.code === 'phone_exists') {
+            // 409 with no `fields` map — surface a localized inline phone error
+            // instead of the raw backend code «phone_exists». (UX-1)
+            setFieldErrors({ phone: 'Клиент с таким телефоном уже существует' });
+            return;
+          }
           if (err.fields) {
             // 422: backend field errors → inline
             const errs: FieldErrors = {};
