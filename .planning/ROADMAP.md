@@ -432,7 +432,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 111-02-PLAN.md — Run full milestone gate + confirm 13/13 reqs + write 111-GATE-EVIDENCE.md handoff doc
+- [x] 111-02-PLAN.md — Run full milestone gate + confirm 13/13 reqs + write 111-GATE-EVIDENCE.md handoff doc
 
 ## Backlog
 
@@ -460,7 +460,7 @@ Plans:
 | 108. Editable Settings — Backend + Wiring | 5/5 | Complete    | 2026-06-14 |
 | 109. Profile & Security — Backend + Wiring | 4/4 | Complete    | 2026-06-14 |
 | 110. Live Verification — Deferred P102 | 3/3 | Complete    | 2026-06-14 |
-| 111. OpenAPI Handoff + Milestone Gate | 1/2 | In Progress|  |
+| 111. OpenAPI Handoff + Milestone Gate | 2/2 | Complete   | 2026-06-14 |
 
 <details>
 <summary>✅ v3.0 Production Admin — Backend Wiring (Phases 100-106) — Progress (SHIPPED 2026-06-14)</summary>
