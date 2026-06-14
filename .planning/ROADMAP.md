@@ -357,7 +357,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 108-04-PLAN.md — FE data layer: Zod wire+form schemas + 8 TanStack Query hooks (gym/hours/booking/notifications) gated by can()
+- [x] 108-04-PLAN.md — FE data layer: Zod wire+form schemas + 8 TanStack Query hooks (gym/hours/booking/notifications) gated by can()
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -430,7 +430,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 107. Admin FE Completion on Existing Backend | 3/3 | Complete    | 2026-06-14 |
-| 108. Editable Settings — Backend + Wiring | 3/5 | In Progress|  |
+| 108. Editable Settings — Backend + Wiring | 4/5 | In Progress|  |
 | 109. Profile & Security — Backend + Wiring | 0/TBD | Not started | - |
 | 110. Live Verification — Deferred P102 | 0/TBD | Not started | - |
 | 111. OpenAPI Handoff + Milestone Gate | 0/TBD | Not started | - |
