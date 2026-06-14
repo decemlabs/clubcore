@@ -18,6 +18,7 @@ import { usePtPackagesByClient } from '@/features/pt-packages/api'
 import type { PtPackageData } from '@/features/pt-packages/schemas'
 import { useSession } from '@/features/auth/api'
 import { can } from '@/shared/session/can'
+import type { Role } from '@/shared/session/types'
 import { formatKopecks, formatDateRu } from '@/lib/format'
 import { PageError } from '@/components/feedback/PageState'
 import { EmptyState } from '@/components/feedback/EmptyState'
@@ -62,7 +63,7 @@ function PtPackageRow({
   onRefund,
 }: {
   item: PtPackageData
-  role: string
+  role: Role
   onCancel: (item: PtPackageData) => void
   onRefund: (item: PtPackageData) => void
 }) {
@@ -103,7 +104,7 @@ function PtPackageRow({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-[160px]">
           <DropdownMenuItem onSelect={() => onRefund(item)}>Вернуть оплату</DropdownMenuItem>
-          {can(role as Parameters<typeof can>[0], 'cancel', 'pt-packages') && (
+          {can(role, 'cancel', 'pt-packages') && (
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem
