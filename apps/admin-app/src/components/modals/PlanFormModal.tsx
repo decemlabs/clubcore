@@ -81,6 +81,37 @@ function FieldError({ errors, field }: { errors: Record<string, string[] | undef
 }
 
 // ---------------------------------------------------------------------------
+// Helper: numeric coercion guards (WR-01 — reject NaN / non-integer silently)
+// ---------------------------------------------------------------------------
+
+/** Parse an integer field: empty → undefined, non-integer/NaN → NaN (so Zod's
+ *  int() check rejects it with a field error instead of silently coercing). */
+function parseIntField(value: string): number | undefined {
+  if (value === '') return undefined
+  const n = Number(value)
+  return Number.isInteger(n) ? n : NaN
+}
+
+/** Parse a ruble price field → integer kopecks. empty → undefined,
+ *  non-finite → NaN (so Zod's int() check rejects it). */
+function parsePriceKopecks(value: string): number | undefined {
+  if (value === '') return undefined
+  const rub = Number(value)
+  if (!Number.isFinite(rub)) return NaN
+  return Math.round(rub * 100)
+}
+
+/** True when an integer field is either non-empty and a valid integer string. */
+function isIntFieldValid(value: string): boolean {
+  return value !== '' && Number.isInteger(Number(value))
+}
+
+/** True when a ruble-price field holds a finite numeric value. */
+function isPriceFieldValid(value: string): boolean {
+  return value !== '' && Number.isFinite(Number(value))
+}
+
+// ---------------------------------------------------------------------------
 // PlanFormModal
 // ---------------------------------------------------------------------------
 
@@ -152,9 +183,9 @@ export function PlanFormModal({ open, onOpenChange, kind, mode, plan }: PlanForm
       if (mode === 'create') {
         const raw = {
           name: memName.trim(),
-          durationDays: memDurationDays === '' ? undefined : Number(memDurationDays),
-          priceKopecks: memPriceRub === '' ? undefined : Math.round(Number(memPriceRub) * 100),
-          freezeDaysLimit: memFreezeDays === '' ? undefined : Number(memFreezeDays),
+          durationDays: parseIntField(memDurationDays),
+          priceKopecks: parsePriceKopecks(memPriceRub),
+          freezeDaysLimit: parseIntField(memFreezeDays),
           active: memActive,
         }
         const result = MembershipPlanCreateSchema.safeParse(raw)
@@ -214,9 +245,9 @@ export function PlanFormModal({ open, onOpenChange, kind, mode, plan }: PlanForm
       if (mode === 'create') {
         const raw = {
           name: ptName.trim(),
-          sessionCount: ptSessionCount === '' ? undefined : Number(ptSessionCount),
-          priceKopecks: ptPriceRub === '' ? undefined : Math.round(Number(ptPriceRub) * 100),
-          validityDays: ptValidityDays === '' ? undefined : Number(ptValidityDays),
+          sessionCount: parseIntField(ptSessionCount),
+          priceKopecks: parsePriceKopecks(ptPriceRub),
+          validityDays: parseIntField(ptValidityDays),
         }
         const result = PtPackagePlanCreateSchema.safeParse(raw)
         if (!result.success) {
@@ -301,10 +332,14 @@ export function PlanFormModal({ open, onOpenChange, kind, mode, plan }: PlanForm
   const isRequiredValid =
     kind === 'membership'
       ? mode === 'create'
-        ? memName.trim().length > 0 && memDurationDays !== '' && memPriceRub !== ''
+        ? memName.trim().length > 0 &&
+          isIntFieldValid(memDurationDays) &&
+          isPriceFieldValid(memPriceRub)
         : memName.trim().length > 0
       : mode === 'create'
-        ? ptName.trim().length > 0 && ptSessionCount !== '' && ptPriceRub !== ''
+        ? ptName.trim().length > 0 &&
+          isIntFieldValid(ptSessionCount) &&
+          isPriceFieldValid(ptPriceRub)
         : ptName.trim().length > 0
 
   const isEditMode = mode === 'edit'
