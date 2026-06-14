@@ -15,6 +15,8 @@ Deterministic PKs (from migration 0071_seed_settings):
 
 from __future__ import annotations
 
+import uuid as _uuid
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -54,7 +56,10 @@ async def upsert_working_hours(
     config = await get_working_hours(session)
     if config is None:
         # Defensive path — should not occur after migration 0071 seed.
-        config = WorkingHoursConfig()
+        # WR-05: assign the deterministic singleton PK so enforcement reads
+        # via _read_working_hours_config (WHERE id = '...000004') can find
+        # this row. A random UUID would be invisible to the raw-SQL reads.
+        config = WorkingHoursConfig(id=_uuid.UUID(_WORKING_HOURS_CONFIG_PK))
         session.add(config)
     updates = data.model_dump(exclude_unset=True)
     for key, value in updates.items():
@@ -86,7 +91,9 @@ async def upsert_booking_config(
     config = await get_booking_config(session)
     if config is None:
         # Defensive path — should not occur after migration 0071 seed.
-        config = BookingConfig()
+        # WR-05: assign the deterministic singleton PK so enforcement reads
+        # via _read_booking_config (WHERE id = '...000003') can find this row.
+        config = BookingConfig(id=_uuid.UUID(_BOOKING_CONFIG_PK))
         session.add(config)
     updates = data.model_dump(exclude_unset=True)
     for key, value in updates.items():
@@ -118,7 +125,9 @@ async def upsert_notification_prefs(
     config = await get_notification_prefs(session)
     if config is None:
         # Defensive path — should not occur after migration 0071 seed.
-        config = NotificationPrefsConfig()
+        # WR-05: assign the deterministic singleton PK so GET reads (LIMIT 1
+        # fallback) and any future keyed reads both find the same row.
+        config = NotificationPrefsConfig(id=_uuid.UUID(_NOTIFICATION_PREFS_CONFIG_PK))
         session.add(config)
     updates = data.model_dump(exclude_unset=True)
     for key, value in updates.items():
