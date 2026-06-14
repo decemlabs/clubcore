@@ -32,7 +32,7 @@ Resume options:
   - Archive + close: `/gsd-complete-milestone v3.0` then `/gsd-cleanup`
   - Address debt first: see `.planning/v3.0-MILESTONE-AUDIT.md` tech_debt + human_verify_deferred (P101 WR-01 plans-form, live UAT for P101–104, ruff/format tree-wide debt)
   - Live UAT: bring up `docker compose up` and validate the 31 deferred browser items before v3.1 deploy
-Last activity: 2026-06-14 — quick task 260614-hux: fixed 8 admin-app live-UAT bugs (FE schema/format/cache divergences) + phone_exists localization; all verified live in browser. Most P101–P104 deferred live-UAT items now unblocked.
+Last activity: 2026-06-14 — quick task 260614-j2d: closed GAP-1 (membership lifecycle now reachable on the client page — sell/freeze/renew/cancel/refund); sell+freeze+RBAC verified live. (Prior: 260614-hux fixed 8 admin-app live-UAT bugs.)
 
 Progress: [██████████] 100% (7/7 v3.0 work phases; 999.x are historical ledger, not v3.0 work)
 
@@ -134,6 +134,7 @@ Progress: [██████████] 100% (7/7 v3.0 work phases; 999.x are
 | # | Description | Date | Commit | Status | Directory |
 |---|-------------|------|--------|--------|-----------|
 | 260614-hux | Fix v3.0 admin-app live-UAT bugs (8 FE schema/format/cache divergences + phone_exists localization) | 2026-06-14 | e7924fc4 | Verified (typecheck+lint+340 tests green; all 9 live-browser-verified) | [260614-hux-fix-v3-0-admin-app-live-uat-bugs-8-fe-sc](./quick/260614-hux-fix-v3-0-admin-app-live-uat-bugs-8-fe-sc/) |
+| 260614-j2d | GAP-1 — reachable membership lifecycle UI entry points (sell/freeze/renew/cancel/refund) on client page | 2026-06-14 | 126dcb58 | Verified (typecheck+lint+router-smoke green; sell+freeze+RBAC live-verified) | [260614-j2d-wire-membership-lifecycle-ui-entry-point](./quick/260614-j2d-wire-membership-lifecycle-ui-entry-point/) |
 
 ## Deferred Items
 
