@@ -9,6 +9,9 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ROUTES } from '@/app/routes';
+import { useDeleteClient } from '@/features/clients/api';
+import { useSession } from '@/features/auth/api';
+import { can } from '@/shared/session/can';
 import { Initials } from '@/components/ui/initials';
 import { Button } from '@/components/ui/button';
 import {
@@ -52,6 +55,9 @@ const HERO_BTN = 'h-[38px] gap-[7px] rounded-full px-[18px] text-[13.5px] font-s
 export function ProfileHeroReal({ client }: { client: ClientData }) {
   const { open } = useModals();
   const navigate = useNavigate();
+  const session = useSession();
+  const role = session.data?.role ?? 'reception';
+  const deleteClient = useDeleteClient();
 
   const initials = [client.lastName, client.firstName]
     .filter(Boolean)
@@ -147,25 +153,37 @@ export function ProfileHeroReal({ client }: { client: ClientData }) {
               >
                 Экспорт карточки
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-danger focus:text-danger"
-                onSelect={() => {
-                  open('confirm', {
-                    confirm: {
-                      title: 'Удалить клиента?',
-                      message: `«${fullName}» будет помечен как удалённый. Активные абонементы будут аннулированы.`,
-                      tone: 'danger',
-                      confirmLabel: 'Удалить',
-                      onConfirm: () => {
-                        toast.info('Удаление доступно из карточки редактирования');
-                      },
-                    },
-                  });
-                }}
-              >
-                Удалить клиента
-              </DropdownMenuItem>
+              {can(role, 'delete', 'clients') && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-danger focus:text-danger"
+                    onSelect={() => {
+                      open('confirm', {
+                        confirm: {
+                          title: 'Удалить клиента?',
+                          message: `«${fullName}» будет помечен как удалённый. Активные абонементы будут аннулированы.`,
+                          tone: 'danger',
+                          confirmLabel: 'Удалить',
+                          onConfirm: () => {
+                            deleteClient.mutate(client.id, {
+                              onSuccess: () => {
+                                navigate(ROUTES.clients);
+                                toast.success('Клиент удалён');
+                              },
+                              onError: () => {
+                                toast.error('Не удалось удалить клиента');
+                              },
+                            });
+                          },
+                        },
+                      });
+                    }}
+                  >
+                    Удалить клиента
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
