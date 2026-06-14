@@ -403,7 +403,16 @@ Plans:
   3. On seeded data, trainer payroll works end-to-end — comp-config → accrual preview → run → pending→paid — and reception is gated (zero owner-only payroll API calls).
   4. The seed path/fixtures used for live verification are captured so the walkthrough is repeatable (the v3.0 data-setup blocker does not recur).
 
-**Plans**: TBD
+**Plans**: 3 plans (2 waves)
+Plans:
+**Wave 1**
+
+- [ ] 110-01-PLAN.md — Committed repeatable seed (`scripts/seed_p102_walkthrough.py`, idempotent, local-only-guarded) + captured live-HTTP walkthrough script/README (criterion #4)
+
+**Wave 2** *(blocked on Wave 1; 110-02 and 110-03 run in parallel)*
+
+- [ ] 110-02-PLAN.md — VER-01 booking lifecycle E2E (create→cancel→complete-via-pt-session) + slot-already-taken race conflict (real-commit) on seeded Postgres
+- [ ] 110-03-PLAN.md — VER-02 payroll lifecycle E2E (comp-config→preview→run→pending→paid) + accrual snapshot assertions + reception-403 RBAC negative
 
 ### Phase 111: OpenAPI Handoff + Milestone Gate
 
