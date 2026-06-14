@@ -305,14 +305,68 @@ async def db_session_real_commit_p102() -> AsyncIterator[AsyncSession]:
     async with session_factory() as session:
         yield session
 
-    # Cleanup: TRUNCATE every table the race test seeds.  CASCADE handles FK chain.
+    # WR-03: Scoped cleanup — delete only the rows seeded by THIS test, identified
+    # by the deterministic owner email constant.  Deleting globally via TRUNCATE
+    # would wipe data seeded by other integration tests running in the same session.
+    # FK-safe delete order: audit_log / bookings (leaves) → slots / packages /
+    # clients → plans / trainers → user (roots).
     async with engine.begin() as conn:
+        # 1. audit_log rows emitted by this test's owner.
         await conn.execute(
             text(
-                "TRUNCATE users, clients, trainers, pt_package_plans, "
-                "pt_packages, trainer_availability_slots, bookings, audit_log "
-                "RESTART IDENTITY CASCADE"
-            )
+                "DELETE FROM audit_log WHERE actor_user_id = "
+                "(SELECT id FROM users WHERE email = :email)"
+            ),
+            {"email": _RACE_OWNER_EMAIL_P102},
+        )
+        # 2. bookings for slots created by this test's owner.
+        await conn.execute(
+            text(
+                "DELETE FROM bookings WHERE slot_id IN ("
+                "  SELECT id FROM trainer_availability_slots"
+                "  WHERE created_by_user_id = (SELECT id FROM users WHERE email = :email)"
+                ")"
+            ),
+            {"email": _RACE_OWNER_EMAIL_P102},
+        )
+        # 3. trainer_availability_slots created by this test's owner.
+        await conn.execute(
+            text(
+                "DELETE FROM trainer_availability_slots"
+                " WHERE created_by_user_id = (SELECT id FROM users WHERE email = :email)"
+            ),
+            {"email": _RACE_OWNER_EMAIL_P102},
+        )
+        # 4. pt_packages for clients seeded by this test.
+        await conn.execute(
+            text(
+                "DELETE FROM pt_packages WHERE client_id IN ("
+                "  SELECT id FROM clients"
+                "  WHERE created_by_user_id = (SELECT id FROM users WHERE email = :email)"
+                ")"
+            ),
+            {"email": _RACE_OWNER_EMAIL_P102},
+        )
+        # 5. clients seeded by this test.
+        await conn.execute(
+            text(
+                "DELETE FROM clients"
+                " WHERE created_by_user_id = (SELECT id FROM users WHERE email = :email)"
+            ),
+            {"email": _RACE_OWNER_EMAIL_P102},
+        )
+        # 6. pt_package_plans seeded by this test (identified by name prefix).
+        await conn.execute(
+            text("DELETE FROM pt_package_plans WHERE name LIKE 'P102RacePlan-%'"),
+        )
+        # 7. trainers seeded by this test (identified by name prefix).
+        await conn.execute(
+            text("DELETE FROM trainers WHERE full_name LIKE 'P102RaceTrainer-%'"),
+        )
+        # 8. the owner user (root — deleted last).
+        await conn.execute(
+            text("DELETE FROM users WHERE email = :email"),
+            {"email": _RACE_OWNER_EMAIL_P102},
         )
     await engine.dispose()
 
@@ -332,7 +386,6 @@ async def _build_authed_race_client(app: FastAPI) -> AsyncClient:
     return client
 
 
-@pytest.mark.asyncio
 async def test_concurrent_create_booking_slot_already_booked_clear_409(
     db_session_real_commit_p102: AsyncSession,
     app: FastAPI,
@@ -491,12 +544,18 @@ async def test_concurrent_create_booking_slot_already_booked_clear_409(
         f"P102-race: expected slot 'booked', got '{refreshed_slot.status}'"
     )
 
-    # Audit invariant: exactly 1 booking_created (loser rolled back before audit emit).
+    # Audit invariant: exactly 1 booking_created for THIS slot (loser rolled back
+    # before audit emit).  Scoped by resource_id == slot_id so a stale audit row
+    # from a prior run (or another test) cannot cause a false negative.
     created_count = await session.scalar(
         select(func.count())
         .select_from(AuditLog)
-        .where(AuditLog.action == "booking_created")
+        .where(
+            AuditLog.action == "booking_created",
+            AuditLog.resource_id == slot_id,  # WR-04: scope to this slot's bookings only
+        )
     )
     assert created_count == 1, (
-        f"P102-race: expected exactly 1 booking_created audit row, got {created_count}"
+        f"P102-race: expected exactly 1 booking_created audit row for slot {slot_id}, "
+        f"got {created_count}"
     )
