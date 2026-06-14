@@ -378,12 +378,17 @@ Plans:
   4. A successful password change revokes the staff member's other sessions per the existing refresh-family-revoke discipline.
 
 **Plans**: 4 plans in 2 waves
-
 Plans:
+**Wave 1**
+
 - [ ] 109-01-PLAN.md — Backend foundation: profile_updated audit event + ProfileUpdate/ChangePassword schemas + update_profile/change_password/revoke-others-except-current service fns
-- [ ] 109-02-PLAN.md — Backend routes + tests: PATCH /auth/me + POST /auth/change-password (verify_csrf, auth-only) + ASGITransport integration tests
 - [ ] 109-03-PLAN.md — FE foundation: ProfileUpdate/ChangePassword zod schemas + useUpdateProfile/useChangePassword hooks
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 109-02-PLAN.md — Backend routes + tests: PATCH /auth/me + POST /auth/change-password (verify_csrf, auth-only) + ASGITransport integration tests
 - [ ] 109-04-PLAN.md — FE wiring: editable ProfileSection (SaveBar) + ChangePasswordModal + SettingsPage registration (human-verify checkpoint)
+
 **UI hint**: yes
 
 ### Phase 110: Live Verification — Deferred P102 (Bookings + Payroll)
