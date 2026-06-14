@@ -16,7 +16,7 @@
  */
 import { useEffect, useState } from 'react';
 import { cn } from '@/lib/cn';
-import { formatRub, formatDateRu } from '@/lib/format';
+import { formatKopecks, formatDateRu } from '@/lib/format';
 import { useSession } from '@/features/auth/api';
 import { can } from '@/shared/session/can';
 import { usePlans } from '@/features/plans/api';
@@ -170,14 +170,14 @@ function CreateScreen({ open, onOpenChange, clientId, clientName }: ScreenProps)
             <option value="">Выберите тариф…</option>
             {plans.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.name} · {formatRub(p.priceKopecks)}
+                {p.name} · {formatKopecks(p.priceKopecks)}
               </option>
             ))}
           </select>
         )}
       </Field>
       {selectedPlan ? (
-        <StatRow label="К оплате" value={formatRub(selectedPlan.priceKopecks)} accent />
+        <StatRow label="К оплате" value={formatKopecks(selectedPlan.priceKopecks)} accent />
       ) : null}
       <Field label="Заметка" optional>
         <ModalTextarea
@@ -584,7 +584,7 @@ function RefundScreen({ open, onOpenChange, clientName, membershipId, membership
                 Обработка…
               </>
             ) : (
-              `Вернуть ${membership ? formatRub(membership.priceKopecksSnapshot) : ''}`
+              `Вернуть ${membership ? formatKopecks(membership.priceKopecksSnapshot) : ''}`
             )}
           </ModalButton>
         </>
@@ -596,7 +596,7 @@ function RefundScreen({ open, onOpenChange, clientName, membershipId, membership
       </Callout>
       {membership ? (
         <>
-          <StatRow label="Оплачено" value={formatRub(membership.priceKopecksSnapshot)} accent />
+          <StatRow label="Оплачено" value={formatKopecks(membership.priceKopecksSnapshot)} accent />
           {membership.paidAt ? (
             <StatRow label="Дата покупки" value={formatDateRu(membership.paidAt, 'd MMMM yyyy')} />
           ) : null}

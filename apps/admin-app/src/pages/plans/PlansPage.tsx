@@ -30,7 +30,7 @@ import { PlanFilterTabs } from './components/PlanFilterTabs'
 import { SalesChart } from './components/SalesChart'
 import { PromoCard } from './components/PromoCard'
 import { SALES_UNIT_OPTIONS, type SalesUnit } from './components/sales-unit'
-import { formatRub } from '@/lib/format'
+import { formatKopecks } from '@/lib/format'
 import type { MembershipPlanData } from '@/features/plans/schemas'
 import type { PtPackagePlanData } from '@/features/pt-packages/schemas'
 
@@ -81,7 +81,7 @@ function MembershipPlanCard({
 
         <div className="mt-4 flex items-baseline gap-1">
           <span className="text-[34px] font-bold leading-none tabular-nums">
-            {formatRub(plan.priceKopecks)}
+            {formatKopecks(plan.priceKopecks)}
           </span>
           <span className="text-[13px] text-fg-subtle">/ {plan.durationDays} дн.</span>
         </div>
@@ -158,7 +158,7 @@ function PtPackagePlanRow({
         </div>
       </div>
       <div className="whitespace-nowrap text-right">
-        <div className="text-[14px] font-bold tabular-nums">{formatRub(plan.priceKopecks)}</div>
+        <div className="text-[14px] font-bold tabular-nums">{formatKopecks(plan.priceKopecks)}</div>
         <div className="text-[11px] text-fg-subtle">за пакет</div>
       </div>
       <div className="flex items-center gap-1 max-[740px]:hidden">

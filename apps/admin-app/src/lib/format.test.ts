@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest';
-import { pluralRu, formatInt, formatRub, formatTime, formatRelativeRu, mskTodayISO, mskDaysAgoISO } from './format';
+import { pluralRu, formatInt, formatRub, formatKopecks, formatTime, formatRelativeRu, mskTodayISO, mskDaysAgoISO } from './format';
 
 /**
  * Нормализует разделители групп разрядов:
@@ -59,6 +59,18 @@ describe('formatRub', () => {
   it('нормализованный результат для 1234 содержит "1 234"', () => {
     const result = normalizeNbsp(formatRub(1234));
     expect(result).toContain('1 234');
+  });
+});
+
+describe('formatKopecks', () => {
+  it('делит копейки на 100 перед форматированием (500000 коп. → «5 000 ₽»)', () => {
+    const result = normalizeNbsp(formatKopecks(500000));
+    expect(result).toContain('5 000');
+    expect(result).toContain('₽');
+  });
+
+  it('не равно formatRub от тех же копеек (нет 100× ошибки)', () => {
+    expect(normalizeNbsp(formatKopecks(500000))).not.toEqual(normalizeNbsp(formatRub(500000)));
   });
 });
 

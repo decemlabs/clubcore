@@ -27,7 +27,7 @@ import { PaymentsTab } from './components/PaymentsTab';
 import { ChatTab } from './components/ChatTab';
 import { NotesTab } from './components/NotesTab';
 import { Card } from './components/shared';
-import { formatDateRu, formatRub } from '@/lib/format';
+import { formatDateRu, formatKopecks } from '@/lib/format';
 import { cn } from '@/lib/cn';
 
 // Mock data for chat/notes — wired to real backend in a future plan
@@ -113,7 +113,7 @@ function MembershipsSection({ clientId }: { clientId: string }) {
               <div className="mt-0.5 text-[11.5px] tabular-nums text-fg-subtle">
                 до {formatDateRu(m.endDate, 'd MMMM yyyy')}
                 {' · '}
-                {formatRub(m.priceKopecksSnapshot)}
+                {formatKopecks(m.priceKopecksSnapshot)}
               </div>
             </div>
           </div>

@@ -11,7 +11,7 @@
  * those live in SubscriptionModal (101-03 scope).
  */
 import { usePtPackagesByClient } from '@/features/pt-packages/api';
-import { formatRub, formatDateRu } from '@/lib/format';
+import { formatKopecks, formatDateRu } from '@/lib/format';
 import { PageError } from '@/components/feedback/PageState';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -68,7 +68,7 @@ function PtPackageRow({
         </div>
       </div>
       <div className="shrink-0 text-sm font-bold tabular-nums tracking-[-0.2px]">
-        {formatRub(item.amountKopecks)}
+        {formatKopecks(item.amountKopecks)}
       </div>
     </div>
   );

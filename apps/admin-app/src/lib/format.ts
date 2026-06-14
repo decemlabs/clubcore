@@ -11,6 +11,17 @@ export function formatRub(value: number): string {
   return RUB.format(value);
 }
 
+/**
+ * Formats an integer-kopecks money value as RUB. Use this at every call site
+ * that holds a `*Kopecks` value (the backend's money unit) — it divides by 100
+ * before formatting. `formatRub` does NOT divide, so feeding it kopecks renders
+ * 100× too high (5 000 ₽ stored as 500000 → «500 000 ₽»). (BUG-3)
+ * @example formatKopecks(500000) // → «5 000 ₽»
+ */
+export function formatKopecks(kopecks: number): string {
+  return RUB.format(kopecks / 100);
+}
+
 const INT = new Intl.NumberFormat('ru-RU');
 
 export function formatInt(value: number): string {

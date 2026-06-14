@@ -23,7 +23,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { staffRequest, ApiError } from '@/api/client';
-import { formatRub, formatDateRu } from '@/lib/format';
+import { formatKopecks, formatDateRu } from '@/lib/format';
 import { membershipsKeys } from './keys';
 import {
   MembershipsListResponseSchema,
@@ -88,7 +88,7 @@ export function useSellMembership() {
       return MembershipSchema.parse((raw as { data: unknown }).data);
     },
     onSuccess: (data) => {
-      const desc = `Оплата ${formatRub(data.priceKopecksSnapshot)} принята.`;
+      const desc = `Оплата ${formatKopecks(data.priceKopecksSnapshot)} принята.`;
       toast.success('Абонемент оформлен', { description: desc });
       void qc.invalidateQueries({ queryKey: membershipsKeys.lists() });
       void qc.invalidateQueries({ queryKey: membershipsKeys.byClient(data.clientId) });

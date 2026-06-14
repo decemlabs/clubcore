@@ -15,7 +15,7 @@
  * T-101-14-PII-ERR: error rendered via PageError curated copy.
  */
 import { usePaymentsByClient } from '@/features/payments/api';
-import { formatRub, formatDateRu, formatTime } from '@/lib/format';
+import { formatKopecks, formatDateRu, formatTime } from '@/lib/format';
 import { PageError } from '@/components/feedback/PageState';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -60,7 +60,7 @@ function PaymentRow({ item }: { item: PaymentData }) {
         )}
       >
         {isRefund ? '−' : '+'}
-        {formatRub(item.amountKopecks)}
+        {formatKopecks(item.amountKopecks)}
       </div>
     </div>
   );
