@@ -389,11 +389,13 @@ export function ToggleRow({
   sub,
   checked,
   onChange,
+  disabled,
 }: {
   title: string;
   sub: string;
   checked: boolean;
   onChange: (v: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
     <div className="mt-3.5 flex items-center gap-3 rounded-xl border-[0.5px] border-border bg-surface-2 px-3.5 py-2.5">
@@ -401,7 +403,7 @@ export function ToggleRow({
         <div className="text-[13px] font-semibold">{title}</div>
         <div className="mt-px text-[11.5px] text-fg-subtle">{sub}</div>
       </div>
-      <ToggleSwitch checked={checked} onChange={onChange} ariaLabel={title} />
+      <ToggleSwitch checked={checked} onChange={onChange} ariaLabel={title} disabled={disabled} />
     </div>
   );
 }
@@ -411,10 +413,12 @@ export function ToggleSwitch({
   checked,
   onChange,
   ariaLabel,
+  disabled,
 }: {
   checked: boolean;
   onChange: (value: boolean) => void;
   ariaLabel?: string;
+  disabled?: boolean;
 }) {
   return (
     <button
@@ -422,9 +426,10 @@ export function ToggleSwitch({
       role="switch"
       aria-checked={checked}
       aria-label={ariaLabel}
+      disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(
-        'relative h-6 w-10 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-surface',
+        'relative h-6 w-10 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-50',
         checked ? 'bg-primary' : 'bg-border-strong',
       )}
     >

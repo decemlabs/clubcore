@@ -452,6 +452,7 @@ export function PlanFormModal({ open, onOpenChange, kind, mode, plan }: PlanForm
             sub="Тариф виден клиентам и доступен для продажи"
             checked={memActive}
             onChange={setMemActive}
+            disabled={isPending}
           />
         </>
       ) : (
