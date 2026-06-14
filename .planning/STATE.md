@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Production Admin — Backend Wiring
-status: completed
-stopped_at: v3.0 ALL 7 phases complete + milestone gate green + audit tech_debt — AWAITING USER ARCHIVE DECISION (user chose Stop-no-archive 2026-06-14)
-last_updated: "2026-06-14T00:00:00.000Z"
-last_activity: "2026-06-14 — v3.0 complete: Phase 106 gate green (byte-stable contract, mypy/lint-imports/pytest 2867/CISO-01 4-3/admin-app 337/client-pwa 222/Redocly), 30/30 requirements, milestone audit = tech_debt (0 blockers). NOT yet archived — user stopped to review before /gsd-complete-milestone v3.0."
+status: Awaiting next milestone
+stopped_at: Phase 104 Plan 03 complete (RPT-02 Reports page + RPT-03 Audit page wired + «Журнал действий» nav entry)
+last_updated: "2026-06-14T12:15:07.776Z"
+last_activity: 2026-06-14 — Milestone v3.0 completed and archived
 progress:
-  total_phases: 11
+  total_phases: 7
   completed_phases: 7
   total_plans: 24
   completed_plans: 24
-  percent: 64
+  percent: 100
 ---
 
 # Project State
@@ -25,16 +25,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 106 of 106 (OpenAPI Handoff + Milestone Gate) — COMPLETE. **All 7 v3.0 phases (100–106) done.**
-Plan: all plans complete (24/24)
-Status: **v3.0 work + gate COMPLETE; NOT archived.** Milestone audit = `tech_debt` (30/30 requirements satisfied, 0 critical blockers). User chose Stop-no-archive (2026-06-14) to review before archiving.
-Resume options:
-  - Archive + close: `/gsd-complete-milestone v3.0` then `/gsd-cleanup`
-  - Address debt first: see `.planning/v3.0-MILESTONE-AUDIT.md` tech_debt + human_verify_deferred (P101 WR-01 plans-form, live UAT for P101–104, ruff/format tree-wide debt)
-  - Live UAT: bring up `docker compose up` and validate the 31 deferred browser items before v3.1 deploy
-Last activity: 2026-06-14 — Completed quick task 260614-jt7: REV-01 revoke-invitation fixed (Variant B: invitationTokenId in GET /users + FE token id/body; revoke now soft-deletes the pending user so the row disappears); live-browser verified invite→revoke→204→row gone. (Prior same day: deferred live-UAT pass P101/P103/P104 + INV-01/INV-02 commit 5e3b41f1; 260614-hux 8 bug fixes; 260614-j2d GAP-1.)
-
-Progress: [██████████] 100% (7/7 v3.0 work phases; 999.x are historical ledger, not v3.0 work)
+Phase: Milestone v3.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-14 — Milestone v3.0 completed and archived
 
 ## v3.0 Roadmap Summary
 
@@ -161,11 +155,17 @@ v3.0 in-progress deferrals:
 | human-verify | P101 — 9 live-backend UAT items (CRUD round-trips, sell/freeze/refund, role gating) | ✅ verified live 2026-06-14 (see v3.0-UAT-VERIFICATION-PASS.md) |
 | human-verify | P102 — 5 live items (time-off force-cascade, booking-race, 24h cancel, payroll kopecks, reception zero-payroll-calls) | ⏳ data-setup-blocked (schedule renders post-BUG-4; payroll/booking seeding deferred) |
 | human-verify | P103 — 6 live items (check-in + 409 states, reception zero owner-calls, cashbox refund rows, Load no-NaN, Finance tabs) | ✅ verified live 2026-06-14 (duplicate/outside-hours 409 by equivalence) |
-| human-verify | P104 — 11 live items (dashboard KPIs+reception zero-calls, reports + CSV, audit filters/payload, sessions revoke, user invite/deactivate) | ✅ verified live 2026-06-14 (invite needed INV-01/02 fix; REV-01 revoke deferred) |
-| bug | REV-01 — revoke-invitation broken (FE no body → 422 + passes user.id not token id; list omits token id) | deferred → needs backend contract decision (task_50ae4a5a) |
+| human-verify | P104 — 11 live items (dashboard KPIs+reception zero-calls, reports + CSV, audit filters/payload, sessions revoke, user invite/deactivate) | ✅ verified live 2026-06-14 (invite needed INV-01/02 fix; REV-01 revoke fixed — see below) |
+| bug | REV-01 — revoke-invitation broken (FE no body → 422 + passes user.id not token id; list omits token id) | ✅ FIXED + live-verified 2026-06-14 (quick 260614-jt7: Variant B `invitationTokenId` in GET /users + `{reason}` body; revoke also soft-deletes the pending user; commit 83f054f9) |
+
+**Acknowledged at v3.0 milestone close (2026-06-14):** the rows above are accepted as deferred tech-debt / future-milestone work. Outstanding live-UAT after close = P102 payroll/booking data-heavy set (data-setup-blocked, low marginal value over unit tests) + the `2026-06-02-future-milestones-sequence-post-v2-1.md` planning note. All v2.x carry-forwards remain as listed. Milestone audit: `.planning/milestones/v3.0-MILESTONE-AUDIT.md`.
 
 ## Session Continuity
 
 Last session: 2026-06-13T21:44:42.273Z
 Stopped at: Phase 104 Plan 03 complete (RPT-02 Reports page + RPT-03 Audit page wired + «Журнал действий» nav entry)
 Resume: Phase 104 Plan 03 complete. Continue with Phase 104 Plan 04 (Settings — profile/sessions/users admin).
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

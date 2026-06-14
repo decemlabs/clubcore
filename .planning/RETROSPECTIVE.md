@@ -715,3 +715,34 @@ Full-stack referral ("Приведи друга"): a new `app/modules/referrals/
 - Model mix: orchestrator Opus; planners Opus; executors/checkers/reviewers/fixers/integration/UI Sonnet.
 - Execution: fully autonomous discuss→(ui)→plan→execute→review(+auto-fix loop)→verify per phase + milestone audit→complete→cleanup; worktree-isolated parallel waves, merge-back + post-merge gate each wave; branching `none`.
 - Notable: code-review auto-fix loops ran to convergence on 96 (3 iters + 1 manual), 97 (2 iters), 98 (2 iters); the loops found 2 genuinely critical issues the green test suites had masked.
+
+## Milestone: v3.0 — Production Admin — Backend Wiring
+
+**Shipped:** 2026-06-14
+**Phases:** 7 (100–106) | **Plans:** 24 | **Tasks:** 45
+
+### What Was Built
+`apps/admin-app` converted from a mock prototype into the production staff admin on the real FastAPI backend: staff transport (`cc_*` httpOnly cookies + `clubcore_csrf` double-submit, single-flight 401→refresh→retry), a per-domain Zod contract seam, and every staff screen wired to already-shipped endpoints — clients/memberships (+plans, sell/freeze/renew/cancel/refund), schedule/bookings, trainers/payroll, attendance/load, cashbox/finance, dashboard KPIs, four reports + CSV, audit log, settings (profile/sessions) and owner-only user admin. `apps/admin-web` (~982 files / ~21K LOC) deleted, CISO-01 RBAC byte-parity (41 OWNER_ONLY entries) re-homed to admin-app, OpenAPI byte-stable (zero new routes per D-V30-SCOPE-WIRE). Closed out post-milestone with three live-UAT quick-task rounds (260614-hux 8 FE bugs, 260614-j2d GAP-1 membership-lifecycle entry point, 260614-jt7 REV-01 revoke-invitation).
+
+### What Worked
+- **Wire-only discipline held the contract byte-stable** — the milestone added zero backend routes, so `openapi.json`/`schema.d.ts` regenerated to a zero git diff; the staff contract stayed identical to `contract-freeze-v1.11.0`.
+- **Deleting admin-web instead of maintaining a frozen mock-reference** removed a whole class of drift risk; re-homing the parity guard to the one live frontend is simpler to keep green.
+- The deferred live-browser-UAT, once actually run, **found real bugs fast** — and fixing them as scoped quick tasks (with discussion + live verification) kept each fix tight and verified end-to-end.
+
+### What Was Inefficient
+- **Mocked unit tests gave false confidence.** All 7 phases passed unit tests + source review and the milestone gate was green, yet the first live-browser pass surfaced 8 FE Zod-vs-live-wire schema-divergence + money-format bugs (260614-hux), then a structural GAP (no reachable membership-lifecycle entry point, 260614-j2d), then REV-01 (revoke sent no body + the wrong id). Unit tests that mock the transport cannot catch FE-contract-vs-real-wire mismatches — exactly where these hid.
+- **"Wire-only" was treated as low-risk and live-UAT was deferred wholesale** — but wiring IS where contract bugs live. A per-screen smoke against the real stack during each phase would have caught hux/jt7 far earlier than a post-completion sweep.
+
+### Patterns Established
+- **A revoke that surfaces an internal row id should expose it in the corresponding list** — the revoke-invitation endpoint was designed token-row-id-keyed (D-43-19) but the list never returned the id; completing the originally-intended contract (Variant B) beat inventing a new endpoint.
+- **"Revoke a pending invitation" = un-invite** — consuming the token alone left a zombie «Ожидает» row; soft-deleting the placeholder user in the same UoW makes the UI truthful.
+- **Stale planning-doc frontmatter drift is real** — 7 pre-v3.0 quick tasks were flagged "unknown" at close purely for lacking a `status:` key; normalize old templates so audits don't mis-report.
+
+### Key Lessons
+- A "backend-wiring" milestone is **contract-integration work, not plumbing** — schedule at least a thin live round-trip per wired screen before claiming the milestone done; don't let a green mocked suite stand in for it.
+- When the close-time audit surfaces "unstarted" phases, check for the `roadmap.analyze` 999.x backlog-ledger mis-read before forcing — here it was the real cause, fixed durably by relabeling `Phase 999.x` → `Backlog 999.x`.
+
+### Cost Observations
+- Model mix: orchestrator Opus; quick-task executor Sonnet; survey/verification fan-out workflows on the inherited (Opus) main-loop model via Explore agents.
+- This close was driven interactively (not the autonomous per-phase pipeline) — milestone was already shipped/paused; work was: situational survey workflow → close-gate triage → stale-quick-task verification workflow → archive.
+- Notable: two read-only fan-out workflows (4-agent state survey, 7-agent quick-task verification) produced the grounded "what's next" recommendation and cleared the close-gate noise without polluting the main context.

@@ -1,5 +1,36 @@
 # Milestones
 
+## v3.0 Production Admin — Backend Wiring (Shipped: 2026-06-14)
+
+**Phases completed:** 7 phases, 24 plans, 45 tasks
+
+**Key accomplishments:**
+
+- admin-app absorbed into clubcore pnpm workspace as @clubcore/admin-app with Vite dev proxy, ESLint import boundary, VITE_API_MODE chokepoint, and dedicated parallel CI job — all four scripts (typecheck/lint/test/build) green
+- Staff-scoped typed transport with CSRF double-submit, single-flight 401→refresh→retry, authBus pub/sub, and session-expiry-aware QueryClient — all unit-tested with mocked fetch; mockResponse preserved for non-auth domains
+- Per-domain zod contract seam (FND-03) on auth/session: useSession()/useLogin()/useLogout()/password-reset hooks, RequireAuth guard with mid-session 401 redirect, anti-oracle error mapping, twofa hidden, and mock-removal path documented
+- RBAC byte-parity ported to admin-app (41 OWNER_ONLY entries), CISO-01 parity test repointed, ComingSoon placeholder wired to deferred routes, sidebar shows real fullName/role with skeleton and can()-gates Финансы/Отчёты for reception
+- JWT-key-per-attempt membership sell/freeze/unfreeze/renew/cancel/refund lifecycle with optimistic freeze/unfreeze mutations and net-new RefundScreen; PT-package sell/cancel/refund hooks appended.
+- Visits/payments Zod contract layer + by-client hooks wired to real backend; ClientPage activity/trainings/payments tabs on real data with per-tab loading/empty/error isolation; payments read-only (T-101-13-READONLY).
+- Zod wire schemas + TanStack Query mutations with per-attempt Idempotency-Key + owner-only AdaptiveModal with 3 tabs and 409 force-override conflict flow, all TDD-driven.
+- Trainers catalog wired end-to-end: real HTTP layer (Zod schemas + TanStack Query + CRUD mutations), TrainersPage reduced to Roster-only with owner affordances, TrainerHero/OverviewTab wired to real TrainerData, TrainerFormModal wired to PATCH/POST with 409-aware error handling
+- Booking http layer (schemas/keys/queries/mutations), race-safe BookingModal + BookingDetailModal (cancel 24h-window + complete via pt-sessions), calendar merge (slots+bookings → CalendarEvent[] with type discriminator), slot-click routing, owner-only management FAB, OverviewTab today-schedule wired.
+- Payroll feature built end-to-end: Zod schemas + TanStack Query hooks (owner-only, enabled-gated) + wired PayoutsTab with reception Lock gate, comp-config editor (INSERT-only versioned, kopecks/bps conversion), preview→run flow, accruals list, and mark-paid confirm
+- Zod-validated, owner-gated data layer for visits (list/check-in/meta), payments (global ledger), and reports (visits+revenue) with TDD-tested sparse-bucket zero-fill utilities.
+- AttendancePage wired to real paginated visits list with CheckInModal client-picker, optimistic check-in, and 3 distinct 409 Callout states for the ATT-01 reception check-in flow.
+- Owner-gated CashboxPage wired to real /payments ledger with signed refund rows and daily totals; LoadPage wired to zero-filled /reports/visits aggregate; shared DateRangePicker (366-cap + inversion guard); nav Касса+Загруженность gated ownerOnly.
+- FinancePage wired to real /reports/revenue (zero-filled, groupBy day|month, signed netKopecks) and /payments?method=online (paginated) with Lock-EmptyState RBAC guard; mock tabs removed.
+- Blob-download CSV helper + owner-gated clients/trainers report hooks + real paginated audit-log hook with nullable JSONB payload schema.
+- Role-gated dashboard with real per-domain hooks — owner sees full KPI/Occupancy/Revenue/TopTrainers analytics, reception sees only ScheduleToday + ExpiringMemberships with zero owner-only API calls.
+- Owner-only 4-tab Reports page with per-report CSV export, wired Audit page with server-side filters/keyset pagination/CSV + XSS-safe payload render, and «Журнал действий» nav entry.
+- Read-only ProfileSection wired to useSession() + SecuritySection wired to GET /auth/sessions with per-row revoke and self-revoke via authBus→/login
+- Owner-only Users admin wired in Settings→Team: real list (GET /api/v1/users), invite with copy-link (POST /users?includeInviteLink), deactivate/reactivate/delete/revoke-invitation with confirm dialogs and 409 guard toasts; reception sees Lock-EmptyState with zero API calls.
+- admin-web (~982 files / ~21K LOC) deleted, CISO-01 byte-parity guard repointed to admin-app and proven LIVE, lockfile regenerated, all targeted gates green
+- v3.0 staff+client OpenAPI contract confirmed byte-STABLE: both openapi.json and schema.d.ts regenerate byte-identically (zero git diff), proving v3.0 added zero backend routes per D-V30-SCOPE-WIRE; Redocly exits 0; 21/21 api-client tests green
+- v3.0 full 7-gate milestone suite GREEN: backend mypy/lint-imports/alembic/pytest (2867 passed), api-client 21 tests, admin-app 337 tests + build, client-pwa 222 tests + build, Redocly exits 0; CISO-01 RBAC parity 4/4 + 3/3 warm; openapi.json + schema.d.ts byte-stable; 30/30 v3.0 requirements satisfied
+
+---
+
 ## v2.6 Referral System (Shipped: 2026-06-08)
 
 **Phases completed:** 4 phases, 11 plans, 21 tasks
