@@ -111,7 +111,7 @@ CREATE_RESP=$(curl -si -X POST "$BASE_URL/api/v1/bookings" \
 
 CREATE_STATUS=$(echo "$CREATE_RESP" | head -1 | awk '{print $2}')
 CREATE_BODY=$(echo "$CREATE_RESP" | awk 'BEGIN{p=0} /^\r?$/{p=1; next} p{print}')
-BOOKING_ID=$(echo "$CREATE_BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('id',''))" 2>/dev/null || echo "")
+BOOKING_ID=$(echo "$CREATE_BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); d=d.get('data',d); print(d.get('id',''))" 2>/dev/null || echo "")
 
 if [ "$CREATE_STATUS" = "201" ] && [ -n "$BOOKING_ID" ]; then
   echo "PASS: booking created, id=$BOOKING_ID"
@@ -128,11 +128,13 @@ fi
 # --------------------------------------------------------------------------
 echo ""
 echo "--- Step 3: cancel booking ($BOOKING_ID) ---"
+CANCEL_IDEM="$(uuidgen || python3 -c 'import uuid; print(uuid.uuid4())')"
 CANCEL_RESP=$(curl -si -X POST "$BASE_URL/api/v1/bookings/$BOOKING_ID/cancel" \
   -H 'Content-Type: application/json' \
   -H "X-CSRF-Token: $CSRF_TOKEN" \
+  -H "Idempotency-Key: $CANCEL_IDEM" \
   -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
-  -d '{}')
+  -d '{"reason":"P102 walkthrough — cancel leg"}')
 
 CANCEL_STATUS=$(echo "$CANCEL_RESP" | head -1 | awk '{print $2}')
 if [ "$CANCEL_STATUS" = "200" ]; then
@@ -168,7 +170,7 @@ CREATE2_RESP=$(curl -si -X POST "$BASE_URL/api/v1/bookings" \
 
 CREATE2_STATUS=$(echo "$CREATE2_RESP" | head -1 | awk '{print $2}')
 CREATE2_BODY=$(echo "$CREATE2_RESP" | awk 'BEGIN{p=0} /^\r?$/{p=1; next} p{print}')
-BOOKING2_ID=$(echo "$CREATE2_BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('id',''))" 2>/dev/null || echo "")
+BOOKING2_ID=$(echo "$CREATE2_BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); d=d.get('data',d); print(d.get('id',''))" 2>/dev/null || echo "")
 
 if [ "$CREATE2_STATUS" = "201" ] && [ -n "$BOOKING2_ID" ]; then
   echo "PASS: second booking created, id=$BOOKING2_ID"
@@ -185,9 +187,9 @@ echo "--- Step 4b: record completing PT-session ---"
 SESS_IDEM="$(uuidgen || python3 -c 'import uuid; print(uuid.uuid4())')"
 # performedAt within the payroll period (2026-04-15 matches the Payment row's received_at)
 if [ -n "$BOOKING2_ID" ]; then
-  SESS_BODY="{\"ptPackageId\":\"$PT_PACKAGE_ID\",\"performedAt\":\"2026-04-15T10:00:00Z\",\"bookingId\":\"$BOOKING2_ID\"}"
+  SESS_BODY="{\"trainerId\":\"$TRAINER_ID\",\"ptPackageId\":\"$PT_PACKAGE_ID\",\"performedAt\":\"2026-04-15T10:00:00Z\",\"bookingId\":\"$BOOKING2_ID\"}"
 else
-  SESS_BODY="{\"ptPackageId\":\"$PT_PACKAGE_ID\",\"performedAt\":\"2026-04-15T10:00:00Z\"}"
+  SESS_BODY="{\"trainerId\":\"$TRAINER_ID\",\"ptPackageId\":\"$PT_PACKAGE_ID\",\"performedAt\":\"2026-04-15T10:00:00Z\"}"
 fi
 
 SESS_RESP=$(curl -si -X POST "$BASE_URL/api/v1/pt-sessions" \
@@ -226,7 +228,7 @@ PREVIEW_BODY=$(echo "$PREVIEW_RESP" | awk 'BEGIN{p=0} /^\r?$/{p=1; next} p{print
 
 if [ "$PREVIEW_STATUS" = "200" ]; then
   echo "PASS: payroll preview returned $PREVIEW_STATUS"
-  echo "      Preview: $(echo "$PREVIEW_BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'revenue={d.get(\"revenueKopecks\",\"?\")}, sessions={d.get(\"sessionsCount\",\"?\")}' )" 2>/dev/null || echo "$PREVIEW_BODY")"
+  echo "      Preview: $(echo "$PREVIEW_BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); d=d.get('data',d); print(f'revenue={d.get(\"revenueKopecks\",\"?\")}, sessions={d.get(\"sessionsCount\",\"?\")}' )" 2>/dev/null || echo "$PREVIEW_BODY")"
 else
   echo "FAIL: expected 200, got $PREVIEW_STATUS"
   echo "      Body: $PREVIEW_BODY"
@@ -252,10 +254,10 @@ ACCRUAL_RESP=$(curl -si -X POST "$BASE_URL/api/v1/payroll/accruals" \
 
 ACCRUAL_STATUS=$(echo "$ACCRUAL_RESP" | head -1 | awk '{print $2}')
 ACCRUAL_BODY=$(echo "$ACCRUAL_RESP" | awk 'BEGIN{p=0} /^\r?$/{p=1; next} p{print}')
-ACCRUAL_ID=$(echo "$ACCRUAL_BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('id',''))" 2>/dev/null || echo "")
+ACCRUAL_ID=$(echo "$ACCRUAL_BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); d=d.get('data',d); print(d.get('id',''))" 2>/dev/null || echo "")
 
 if [ "$ACCRUAL_STATUS" = "201" ] && [ -n "$ACCRUAL_ID" ]; then
-  ACCRUAL_ACCRUAL_STATUS=$(echo "$ACCRUAL_BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('status','?'))" 2>/dev/null || echo "?")
+  ACCRUAL_ACCRUAL_STATUS=$(echo "$ACCRUAL_BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); d=d.get('data',d); print(d.get('status','?'))" 2>/dev/null || echo "?")
   echo "PASS: accrual created, id=$ACCRUAL_ID, status=$ACCRUAL_ACCRUAL_STATUS"
 elif [ "$ACCRUAL_STATUS" = "409" ]; then
   # Idempotent: accrual for this period already exists (prior walkthrough run).
@@ -268,6 +270,7 @@ elif [ "$ACCRUAL_STATUS" = "409" ]; then
   ACCRUAL_ID=$(echo "$LIST_BODY" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
+d = d.get('data', d) if isinstance(d, dict) else d
 items = d.get('items', d) if isinstance(d, dict) else d
 for item in (items if isinstance(items, list) else []):
     if item.get('status') in ('pending', 'paid'):
@@ -305,7 +308,7 @@ PAID_STATUS=$(echo "$PAID_RESP" | head -1 | awk '{print $2}')
 PAID_BODY=$(echo "$PAID_RESP" | awk 'BEGIN{p=0} /^\r?$/{p=1; next} p{print}')
 
 if [ "$PAID_STATUS" = "200" ]; then
-  PAID_ACCRUAL_STATUS=$(echo "$PAID_BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('status','?'))" 2>/dev/null || echo "?")
+  PAID_ACCRUAL_STATUS=$(echo "$PAID_BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); d=d.get('data',d); print(d.get('status','?'))" 2>/dev/null || echo "?")
   echo "PASS: accrual marked paid, status=$PAID_ACCRUAL_STATUS"
 elif [ "$PAID_STATUS" = "409" ]; then
   echo "PASS: accrual already paid (409 — prior walkthrough run), status=paid"
