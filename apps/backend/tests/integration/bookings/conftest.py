@@ -23,6 +23,7 @@ Includes:
 
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -32,6 +33,7 @@ from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
+import sqlalchemy as sa
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from redis.asyncio import Redis
@@ -53,6 +55,68 @@ OWNER_EMAIL = "book-owner@example.com"
 OWNER_PASSWORD = "hunter22hunter22"  # noqa: S105 -- test password literal (>=12 chars)
 RECEPTION_EMAIL = "book-reception@example.com"
 RECEPTION_PASSWORD = "hunter22hunter22"  # noqa: S105 -- test password literal
+
+# Deterministic singleton PKs from migration 0071_seed_settings.
+_BOOKING_CONFIG_ID = "00000000-0000-0000-0000-000000000003"
+_WORKING_HOURS_CONFIG_ID = "00000000-0000-0000-0000-000000000004"
+
+# All-day schedule for all 7 weekdays — used by permissive booking config reset.
+_ALL_DAYS_OPEN = [
+    {"day_of_week": dow, "open_time": "00:00", "close_time": "23:59"}
+    for dow in range(1, 8)
+]
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def permissive_booking_config(db_session: AsyncSession) -> None:
+    """Reset booking_config and working_hours_config to permissive values before each test.
+
+    Phase 108 Plan 03 added enforcement guards in bookings/service.py that read
+    booking_config and working_hours_config from the DB. Tests that exercise
+    cancel/reschedule/list behavior seed bookings with arbitrary slot timings
+    (including slots close in time or outside normal working hours); they break
+    when the seeded config values from migration 0071 enforce a 60-minute cutoff
+    or Mon-Fri working hours.
+
+    This autouse fixture resets to:
+      booking_ahead_days=365  (allow up to a year ahead)
+      cutoff_minutes=0        (no cutoff — any future slot accepted)
+      cancel_window_hours=24  (preserves migration 0071 default — cancel tests depend on this)
+      working_hours: all 7 days 00:00–23:59 (never blocked by schedule)
+      closures: [] (no closure dates)
+
+    Tests in test_booking_settings_enforcement.py override these values
+    explicitly within each test body and restore them on teardown
+    (their transactions roll back anyway).
+    """
+    # Reset booking_config to permissive values.
+    await db_session.execute(
+        sa.text(  # noqa: TABLE_REF
+            "UPDATE booking_config "
+            "SET booking_ahead_days = :ahead, cutoff_minutes = :cutoff, "
+            "    cancel_window_hours = :cancel_h "
+            "WHERE id = CAST(:id AS uuid)"
+        ),
+        {
+            "ahead": 365,
+            "cutoff": 0,
+            "cancel_h": 24,  # preserve migration 0071 default — cancel window tests depend on 24h
+            "id": _BOOKING_CONFIG_ID,
+        },
+    )
+    # Reset working_hours_config to all-day open (no schedule or closure blocks).
+    await db_session.execute(
+        sa.text(  # noqa: TABLE_REF
+            "UPDATE working_hours_config "
+            "SET schedule = CAST(:schedule AS jsonb), closures = CAST(:closures AS jsonb) "
+            "WHERE id = CAST(:id AS uuid)"
+        ),
+        {
+            "schedule": json.dumps(_ALL_DAYS_OPEN),
+            "closures": json.dumps([]),
+            "id": _WORKING_HOURS_CONFIG_ID,
+        },
+    )
 
 
 @pytest_asyncio.fixture
