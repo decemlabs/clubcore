@@ -202,9 +202,12 @@ export function PlansPage() {
   const deletePlan = useDeletePlan()
   const deletePtPlan = useDeletePtPackagePlan()
 
-  // Permission checks
+  // Permission checks — gate each entry point on the verb of the action it
+  // performs (WR-03): create buttons → 'create', per-card edit → 'edit'.
+  const canCreateMembershipPlans = can(role, 'create', 'membership-plans')
   const canEditMembershipPlans = can(role, 'edit', 'membership-plans')
   const canDeleteMembershipPlans = can(role, 'delete', 'membership-plans')
+  const canCreatePtPackagePlans = can(role, 'create', 'pt-package-plans')
   const canEditPtPackagePlans = can(role, 'edit', 'pt-package-plans')
   const canDeletePtPackagePlans = can(role, 'delete', 'pt-package-plans')
 
@@ -304,7 +307,7 @@ export function PlansPage() {
           title="Тарифы"
           subtitle="Что показывается клиентам при оформлении и продлении"
           action={
-            canEditMembershipPlans ? (
+            canCreateMembershipPlans ? (
               <button type="button" onClick={handleCreatePlan} className={ADD_BTN}>
                 <Plus className="size-3.5" strokeWidth={2.4} />
                 Добавить тариф
@@ -333,7 +336,7 @@ export function PlansPage() {
             title="Тарифов пока нет"
             message="Создайте первый тариф, чтобы продавать абонементы."
             action={
-              canEditMembershipPlans ? (
+              canCreateMembershipPlans ? (
                 <button type="button" onClick={handleCreatePlan} className={ADD_BTN}>
                   <Plus className="size-3.5" strokeWidth={2.4} />
                   Добавить тариф
@@ -406,7 +409,7 @@ export function PlansPage() {
           title="Доп. услуги"
           subtitle="Пакеты персональных тренировок · продаются отдельно"
           action={
-            canEditPtPackagePlans ? (
+            canCreatePtPackagePlans ? (
               <button type="button" onClick={handleCreatePtPlan} className={ADD_BTN}>
                 <Plus className="size-3.5" strokeWidth={2.4} />
                 Добавить услугу
@@ -435,7 +438,7 @@ export function PlansPage() {
             title="Доп. услуг пока нет"
             message="Добавьте первую услугу."
             action={
-              canEditPtPackagePlans ? (
+              canCreatePtPackagePlans ? (
                 <button type="button" onClick={handleCreatePtPlan} className={ADD_BTN}>
                   <Plus className="size-3.5" strokeWidth={2.4} />
                   Добавить услугу
