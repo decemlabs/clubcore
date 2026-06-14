@@ -1,5 +1,5 @@
 /**
- * Auth domain zod contract tests (Phase 100 FND-03).
+ * Auth domain zod contract tests (Phase 100 FND-03; extended Phase 109 PROF-01/02).
  *
  * Pure zod parse assertions — no network, no React.
  * Validates that schemas correctly accept and reject backend wire shapes.
@@ -12,6 +12,8 @@ import {
   ApiErrorEnvelopeSchema,
   PasswordResetRequestSchema,
   PasswordResetConfirmSchema,
+  ProfileUpdateSchema,
+  ChangePasswordSchema,
 } from './schemas'
 
 describe('LoginRequestSchema', () => {
@@ -187,5 +189,97 @@ describe('PasswordResetConfirmSchema', () => {
     })
     // This will still pass if newPassword is missing — zod won't find newPassword
     expect(result.success).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Phase 109 PROF-01/02 — ProfileUpdateSchema + ChangePasswordSchema
+// ---------------------------------------------------------------------------
+
+describe('ProfileUpdateSchema', () => {
+  it('accepts valid fullName (>= 2 chars) and email', () => {
+    const result = ProfileUpdateSchema.safeParse({ fullName: 'Ab', email: 'a@b.co' })
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects fullName shorter than 2 chars', () => {
+    const result = ProfileUpdateSchema.safeParse({ fullName: 'A', email: 'a@b.co' })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.flatten().fieldErrors.fullName).toBeDefined()
+    }
+  })
+
+  it('rejects a malformed email', () => {
+    const result = ProfileUpdateSchema.safeParse({ fullName: 'Иван', email: 'notanemail' })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      const emailErrors = result.error.flatten().fieldErrors.email
+      expect(emailErrors).toBeDefined()
+      expect(emailErrors?.[0]).toBe('Введите корректный адрес почты')
+    }
+  })
+
+  it('has no confirmPassword field in the schema (wire schema — no UI-only confirm)', () => {
+    // The schema must not have a confirm field — confirm is UI-only (Plan 04).
+    // An object with an extra confirmPassword is valid (zod strips unknown fields by default).
+    const result = ProfileUpdateSchema.safeParse({
+      fullName: 'Иван Иванов',
+      email: 'ivan@example.ru',
+      confirmPassword: 'ignored',
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      // confirmPassword must not appear in the parsed output
+      expect('confirmPassword' in result.data).toBe(false)
+    }
+  })
+})
+
+describe('ChangePasswordSchema', () => {
+  it('accepts valid currentPassword (>= 1 char) and newPassword (>= 12 chars)', () => {
+    const result = ChangePasswordSchema.safeParse({
+      currentPassword: 'x',
+      newPassword: 'twelvecharss',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('rejects empty currentPassword with Russian message', () => {
+    const result = ChangePasswordSchema.safeParse({
+      currentPassword: '',
+      newPassword: 'ValidPassword123!',
+    })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      const errors = result.error.flatten().fieldErrors.currentPassword
+      expect(errors).toBeDefined()
+      expect(errors?.[0]).toBe('Введите текущий пароль')
+    }
+  })
+
+  it('rejects newPassword shorter than 12 chars with existing Russian message', () => {
+    const result = ChangePasswordSchema.safeParse({
+      currentPassword: 'anypassword',
+      newPassword: 'short',
+    })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      const errors = result.error.flatten().fieldErrors.newPassword
+      expect(errors).toBeDefined()
+      expect(errors?.[0]).toBe('Пароль должен содержать не менее 12 символов')
+    }
+  })
+
+  it('has no confirmPassword field (wire schema — no UI-only confirm)', () => {
+    const result = ChangePasswordSchema.safeParse({
+      currentPassword: 'validpass',
+      newPassword: 'ValidPassword123!',
+      confirmPassword: 'ignored',
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect('confirmPassword' in result.data).toBe(false)
+    }
   })
 })
