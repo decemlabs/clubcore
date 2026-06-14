@@ -137,13 +137,19 @@ export function useDeleteUser() {
 /**
  * Revoke a pending invitation.
  * POST /api/v1/users/invitations/{token_id}/revoke
+ *
+ * `tokenId` is the password_reset_tokens row id (UserData.invitationTokenId from
+ * the list), NOT the user id. The endpoint declares a required JSON body
+ * (InvitationRevokeRequest), so a non-empty `{ reason }` is always sent — an
+ * empty/absent body 422s (REV-01).
  */
 export function useRevokeInvitation() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (tokenId: string) =>
+    mutationFn: ({ tokenId, reason }: { tokenId: string; reason?: string }) =>
       staffRequest('post', '/api/v1/users/invitations/{token_id}/revoke', {
         params: { token_id: tokenId },
+        body: { reason: reason ?? null },
       }),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: usersKeys.lists() });

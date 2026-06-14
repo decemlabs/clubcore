@@ -608,10 +608,17 @@ function UserRowActions({
                   cancelLabel: 'Отмена',
                   tone: 'danger',
                   onConfirm: () => {
-                    // tokenId = user.id for pending_invitation rows
-                    revokeInv.mutate(user.id, {
-                      onError: () => toast.error('Не удалось выполнить действие. Попробуйте ещё раз.'),
-                    });
+                    if (!user.invitationTokenId) {
+                      toast.error('Не удалось определить приглашение. Обновите страницу.');
+                      return;
+                    }
+                    revokeInv.mutate(
+                      { tokenId: user.invitationTokenId, reason: 'Отозвано владельцем' },
+                      {
+                        onError: () =>
+                          toast.error('Не удалось выполнить действие. Попробуйте ещё раз.'),
+                      },
+                    );
                   },
                 },
               })

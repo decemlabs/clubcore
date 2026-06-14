@@ -21,6 +21,9 @@ export const UserSchema = z.object({
   fullName: z.string(),
   role: z.enum(['owner', 'reception']),
   status: z.enum(['active', 'pending_invitation', 'deactivated']),
+  // password_reset_tokens row id for a live pending invitation (REV-01 Variant B);
+  // null for active/deactivated rows or pending rows whose token has expired.
+  invitationTokenId: z.string().nullable().optional(),
 });
 export type UserData = z.infer<typeof UserSchema>;
 
