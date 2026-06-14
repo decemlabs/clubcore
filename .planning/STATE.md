@@ -32,7 +32,7 @@ Resume options:
   - Archive + close: `/gsd-complete-milestone v3.0` then `/gsd-cleanup`
   - Address debt first: see `.planning/v3.0-MILESTONE-AUDIT.md` tech_debt + human_verify_deferred (P101 WR-01 plans-form, live UAT for P101–104, ruff/format tree-wide debt)
   - Live UAT: bring up `docker compose up` and validate the 31 deferred browser items before v3.1 deploy
-Last activity: 2026-06-14 — deferred live-UAT pass: P101/P103/P104 verified live (v3.0-UAT-VERIFICATION-PASS.md); fixed INV-01/INV-02 (user-invite, commit 5e3b41f1); REV-01 (revoke-invitation, backend decision) deferred → task_50ae4a5a; P102 payroll/booking data-setup-blocked. (Prior: 260614-hux 8 bug fixes, 260614-j2d GAP-1.)
+Last activity: 2026-06-14 — Completed quick task 260614-jt7: REV-01 revoke-invitation fixed (Variant B: invitationTokenId in GET /users + FE token id/body; revoke now soft-deletes the pending user so the row disappears); live-browser verified invite→revoke→204→row gone. (Prior same day: deferred live-UAT pass P101/P103/P104 + INV-01/INV-02 commit 5e3b41f1; 260614-hux 8 bug fixes; 260614-j2d GAP-1.)
 
 Progress: [██████████] 100% (7/7 v3.0 work phases; 999.x are historical ledger, not v3.0 work)
 
@@ -135,6 +135,7 @@ Progress: [██████████] 100% (7/7 v3.0 work phases; 999.x are
 |---|-------------|------|--------|--------|-----------|
 | 260614-hux | Fix v3.0 admin-app live-UAT bugs (8 FE schema/format/cache divergences + phone_exists localization) | 2026-06-14 | e7924fc4 | Verified (typecheck+lint+340 tests green; all 9 live-browser-verified) | [260614-hux-fix-v3-0-admin-app-live-uat-bugs-8-fe-sc](./quick/260614-hux-fix-v3-0-admin-app-live-uat-bugs-8-fe-sc/) |
 | 260614-j2d | GAP-1 — reachable membership lifecycle UI entry points (sell/freeze/renew/cancel/refund) on client page | 2026-06-14 | 126dcb58 | Verified (typecheck+lint+router-smoke green; sell+freeze+RBAC live-verified) | [260614-j2d-wire-membership-lifecycle-ui-entry-point](./quick/260614-j2d-wire-membership-lifecycle-ui-entry-point/) |
+| 260614-jt7 | REV-01 — revoke pending invitation (Variant B: surface invitationTokenId in GET /users + FE sends token id & body; revoke also soft-deletes the pending user) | 2026-06-14 | 83f054f9 | Verified (backend mypy+users-pytest 35 green, api-client+admin-app typecheck/lint/340 green; live-browser invite→revoke→204→row disappeared) | [260614-jt7-fix-rev-01-revoke-invitation-empty-body-](./quick/260614-jt7-fix-rev-01-revoke-invitation-empty-body-/) |
 
 ## Deferred Items
 
