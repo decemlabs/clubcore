@@ -22,8 +22,8 @@
 
 > Хуки `useSellPtPackage` / `useCancelPtPackage` / `useRefundPtPackage` уже бьют в реальные эндпоинты; отсутствует только UI.
 
-- [ ] **PTPKG-01**: Staff can sell a PT-package to a client from the admin (cash, per-attempt `Idempotency-Key`) via a reachable UI (PtPackageScreen in SubscriptionModal or equivalent), surfacing the `amount_mismatch` 422.
-- [ ] **PTPKG-02**: Staff can cancel and refund a client's PT-package from the admin (refund owner-only + required reason), wiring the existing cancel/refund hooks into reachable actions in TrainingsTab.
+- [x] **PTPKG-01**: Staff can sell a PT-package to a client from the admin (cash, per-attempt `Idempotency-Key`) via a reachable UI (PtPackageScreen in SubscriptionModal or equivalent), surfacing the `amount_mismatch` 422.
+- [x] **PTPKG-02**: Staff can cancel and refund a client's PT-package from the admin (refund owner-only + required reason), wiring the existing cancel/refund hooks into reachable actions in TrainingsTab.
 
 ### CLI — Clients (continues v3.0 CLI-01..03)
 
@@ -92,8 +92,8 @@ Which phases cover which requirements. Populated during roadmap creation.
 |-------------|-------|--------|
 | PLAN-01 | Phase 107 | Complete |
 | PLAN-02 | Phase 107 | Complete |
-| PTPKG-01 | Phase 107 | Pending |
-| PTPKG-02 | Phase 107 | Pending |
+| PTPKG-01 | Phase 107 | Complete |
+| PTPKG-02 | Phase 107 | Complete |
 | CLI-04 | Phase 107 | Pending |
 | CFG-01 | Phase 108 | Pending |
 | CFG-02 | Phase 108 | Pending |

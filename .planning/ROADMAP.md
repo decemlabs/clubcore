@@ -289,7 +289,7 @@ Full phase details archived in [milestones/v3.0-ROADMAP.md](milestones/v3.0-ROAD
   5. Staff can delete a client directly from the client-page hero — a real owner-gated soft-delete (`DELETE /api/v1/clients/{id}`) behind a confirm — replacing the `toast.info(...)` stub.
 **Plans**: 3 plans, 1 wave
 - [x] 107-01-PLAN.md — Plan create/edit: shared PlanFormModal (kind×mode, Zod safeParse, immutable-on-edit, 422 mapping) wired into PlansPage [PLAN-01, PLAN-02] · wave 1
-- [ ] 107-02-PLAN.md — PT-package instance UI: PtPackageSellModal (locked amount + amount_mismatch) + cancel/refund required-reason dialogs + TrainingsTab sell button & kebab [PTPKG-01, PTPKG-02] · wave 1
+- [x] 107-02-PLAN.md — PT-package instance UI: PtPackageSellModal (locked amount + amount_mismatch) + cancel/refund required-reason dialogs + TrainingsTab sell button & kebab [PTPKG-01, PTPKG-02] · wave 1
 - [ ] 107-03-PLAN.md — Client delete from hero: real owner-gated useDeleteClient soft-delete + navigate to clients list, toast.info stub removed [CLI-04] · wave 1
 **UI hint**: yes
 
@@ -362,7 +362,7 @@ Full phase details archived in [milestones/v3.0-ROADMAP.md](milestones/v3.0-ROAD
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 107. Admin FE Completion on Existing Backend | 1/3 | In Progress|  |
+| 107. Admin FE Completion on Existing Backend | 2/3 | In Progress|  |
 | 108. Editable Settings — Backend + Wiring | 0/TBD | Not started | - |
 | 109. Profile & Security — Backend + Wiring | 0/TBD | Not started | - |
 | 110. Live Verification — Deferred P102 | 0/TBD | Not started | - |
