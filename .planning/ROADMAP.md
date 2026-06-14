@@ -361,7 +361,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 108-05-PLAN.md — FE section wiring: BranchSection/HoursSection/BookingSection/NotificationsSection + Lock cards + SaveBar + navigate-away guard + human-verify
+- [x] 108-05-PLAN.md — FE section wiring: BranchSection/HoursSection/BookingSection/NotificationsSection + Lock cards + SaveBar + navigate-away guard + human-verify
 
 **UI hint**: yes
 
@@ -430,7 +430,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 107. Admin FE Completion on Existing Backend | 3/3 | Complete    | 2026-06-14 |
-| 108. Editable Settings — Backend + Wiring | 4/5 | In Progress|  |
+| 108. Editable Settings — Backend + Wiring | 5/5 | Complete   | 2026-06-14 |
 | 109. Profile & Security — Backend + Wiring | 0/TBD | Not started | - |
 | 110. Live Verification — Deferred P102 | 0/TBD | Not started | - |
 | 111. OpenAPI Handoff + Milestone Gate | 0/TBD | Not started | - |
