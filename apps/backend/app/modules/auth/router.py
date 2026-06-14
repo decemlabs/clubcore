@@ -30,6 +30,7 @@ import hashlib
 from typing import Annotated, cast
 from uuid import UUID
 
+import structlog
 from fastapi import APIRouter, Depends, Request, Response, status
 from redis.asyncio import Redis
 from sqlalchemy import select
@@ -78,6 +79,8 @@ from app.modules.auth.service import (
     rotate_refresh,
     update_profile,
 )
+
+_log = structlog.get_logger(__name__)
 
 router = APIRouter(tags=["Auth"])
 
@@ -370,6 +373,19 @@ async def change_password_endpoint(
     # use a nil UUID — this means no family is excluded and all alive sessions
     # are revoked.  The authenticated access-cookie was valid so this is an
     # extremely rare edge case (cookie cleared mid-request, etc.).
+    # WR-01: emit a structured warning so operators can observe the degraded path.
+    # When the fallback fires the caller's session will also be revoked (all
+    # families are hit by the nil-UUID exclusion predicate), so this is logged
+    # at WARNING level for operational visibility.
+    if current_family_id is None:
+        _log.warning(
+            "change_password.family_id_unresolved",
+            user_id=str(user.id),
+            note=(
+                "cc_refresh cookie absent or hash not found in DB; "
+                "nil-UUID fallback: ALL sessions (including caller's) will be revoked"
+            ),
+        )
     effective_family_id: UUID = (
         current_family_id if current_family_id is not None else UUID(int=0)
     )
