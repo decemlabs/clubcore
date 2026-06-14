@@ -407,7 +407,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 110-01-PLAN.md — Committed repeatable seed (`scripts/seed_p102_walkthrough.py`, idempotent, local-only-guarded) + captured live-HTTP walkthrough script/README (criterion #4)
+- [x] 110-01-PLAN.md — Committed repeatable seed (`scripts/seed_p102_walkthrough.py`, idempotent, local-only-guarded) + captured live-HTTP walkthrough script/README (criterion #4)
 
 **Wave 2** *(blocked on Wave 1; 110-02 and 110-03 run in parallel)*
 
@@ -452,7 +452,7 @@ Plans:
 | 107. Admin FE Completion on Existing Backend | 3/3 | Complete    | 2026-06-14 |
 | 108. Editable Settings — Backend + Wiring | 5/5 | Complete    | 2026-06-14 |
 | 109. Profile & Security — Backend + Wiring | 4/4 | Complete    | 2026-06-14 |
-| 110. Live Verification — Deferred P102 | 0/TBD | Not started | - |
+| 110. Live Verification — Deferred P102 | 1/3 | In Progress|  |
 | 111. OpenAPI Handoff + Milestone Gate | 0/TBD | Not started | - |
 
 <details>

@@ -43,8 +43,8 @@
 
 ### VER — Live-верификация отложенного P102
 
-- [ ] **VER-01**: The booking lifecycle (create / cancel / complete via pt-sessions) is verified working live against the running stack on seeded data (closes the P102 `data-setup-blocked` deferral).
-- [ ] **VER-02**: Trainer payroll (comp-config → accrual preview → run → pending→paid) is verified working live on seeded data.
+- [x] **VER-01**: The booking lifecycle (create / cancel / complete via pt-sessions) is verified working live against the running stack on seeded data (closes the P102 `data-setup-blocked` deferral).
+- [x] **VER-02**: Trainer payroll (comp-config → accrual preview → run → pending→paid) is verified working live on seeded data.
 
 ---
 
@@ -101,8 +101,8 @@ Which phases cover which requirements. Populated during roadmap creation.
 | CFG-04 | Phase 108 | Complete |
 | PROF-01 | Phase 109 | Complete |
 | PROF-02 | Phase 109 | Complete |
-| VER-01 | Phase 110 | Pending |
-| VER-02 | Phase 110 | Pending |
+| VER-01 | Phase 110 | Complete |
+| VER-02 | Phase 110 | Complete |
 
 > **Handoff (not one of the 13):** HND-01 (OpenAPI regen + full milestone gate) → **Phase 111**. v3.1 adds new routes (`PATCH /auth/me`, password-change, Settings persistence), so the contract changes additively (NOT byte-stable) — Phase 111 regenerates `openapi.json` + `schema.d.ts` with a `_v31Checks` forward-guard and runs the full gate.
 
