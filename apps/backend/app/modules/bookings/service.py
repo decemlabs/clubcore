@@ -39,9 +39,11 @@ Cross-module behaviours used in this module:
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+import re
+from dataclasses import dataclass
+from datetime import UTC, date, datetime, time, timedelta
 from types import ModuleType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -95,6 +97,11 @@ if TYPE_CHECKING:
     from telegram import Bot
 
 _log = structlog.get_logger("bookings.service")
+
+# Phase 108 deterministic PK constants (from migration 0071_seed_settings).
+# These are the singleton row IDs — never change without a new migration.
+_BOOKING_CONFIG_ID = "00000000-0000-0000-0000-000000000003"
+_WORKING_HOURS_CONFIG_ID = "00000000-0000-0000-0000-000000000004"
 
 # Business TZ pin (C-07 / D-38-12). Validity-window comparison MUST happen
 # in Moscow time — a slot at 01:00 Moscow is 22:00 UTC the previous day;
@@ -227,6 +234,221 @@ class SlotTrainerMismatchError(ConflictError):
 
     code = "slot_trainer_mismatch"
     status_code = 409
+
+
+class BookingAheadWindowError(ConflictError):
+    """Raised by create_booking when the slot is further in the future than
+    booking_ahead_days from now (CFG-03 enforcement / Phase 108).
+
+    Guard reads booking_config.booking_ahead_days via raw SQL (no settings import).
+    """
+
+    code = "booking_ahead_window_exceeded"
+    status_code = 409
+
+
+class BookingCutoffError(ConflictError):
+    """Raised by create_booking when the slot starts within cutoff_minutes of
+    now (CFG-03 enforcement / Phase 108).
+
+    Guard reads booking_config.cutoff_minutes via raw SQL (no settings import).
+    """
+
+    code = "booking_cutoff_passed"
+    status_code = 409
+
+
+class OutsideWorkingHoursError(ConflictError):
+    """Raised by create_booking when the slot falls on a closure date or outside
+    the configured working-hours window (CFG-02 enforcement / Phase 108).
+
+    Guard reads working_hours_config via raw SQL (no settings import).
+    Fail-open: absent / empty config does NOT block booking (D-108 T-108-11).
+    """
+
+    code = "outside_working_hours"
+    status_code = 409
+
+
+# ---------------------------------------------------------------------------
+# Phase 108 CFG-02/03 — raw-SQL config readers (modules-independent contract).
+# bookings.service MUST NOT import app.modules.settings — cross-module reads
+# go through raw sa.text() SELECTs (D-54-08 / D-108-T-108-12 mitigation).
+# ZERO new import-linter edges; mirrors the _fetch_trainer_full_name pattern.
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class _BookingConfigSnapshot:
+    """Scalar fields read from booking_config singleton (Phase 108 CFG-03).
+
+    Only the fields consumed by booking-enforcement guards are included here;
+    the full ORM model lives in app.modules.settings.models (not imported).
+    """
+
+    booking_ahead_days: int
+    cutoff_minutes: int
+    cancel_window_hours: int
+
+
+@dataclass
+class _WorkingHoursConfigSnapshot:
+    """JSONB fields read from working_hours_config singleton (Phase 108 CFG-02).
+
+    schedule — list of dicts with {day_of_week, open_time, close_time}.
+    closures — list of ISO date strings ("YYYY-MM-DD") for closed days.
+    """
+
+    schedule: list[Any]
+    closures: list[Any]
+
+
+async def _read_booking_config(  # noqa: SVC001 caller-owns-txn
+    session: AsyncSession,
+) -> _BookingConfigSnapshot | None:
+    """Read booking_config singleton via raw SQL (CFG-03 enforcement).
+
+    Returns None when the row is absent (caller must fall back to constants).
+    Uses TABLE_REF noqa pattern — raw cross-module SELECT per D-54-08.
+    """
+    row = (
+        await session.execute(
+            sa.text(  # noqa: TABLE_REF
+                "SELECT booking_ahead_days, cutoff_minutes, cancel_window_hours "
+                "FROM booking_config "
+                "WHERE id = CAST(:id AS uuid)"
+            ),
+            {"id": _BOOKING_CONFIG_ID},
+        )
+    ).mappings().one_or_none()
+    if row is None:
+        return None
+    return _BookingConfigSnapshot(
+        booking_ahead_days=int(row["booking_ahead_days"]),
+        cutoff_minutes=int(row["cutoff_minutes"]),
+        cancel_window_hours=int(row["cancel_window_hours"]),
+    )
+
+
+async def _read_working_hours_config(  # noqa: SVC001 caller-owns-txn
+    session: AsyncSession,
+) -> _WorkingHoursConfigSnapshot | None:
+    """Read working_hours_config singleton via raw SQL (CFG-02 enforcement).
+
+    Returns None when the row is absent (caller must fail-open — no blocking).
+    Uses TABLE_REF noqa pattern — raw cross-module SELECT per D-54-08.
+    """
+    row = (
+        await session.execute(
+            sa.text(  # noqa: TABLE_REF
+                "SELECT schedule, closures "
+                "FROM working_hours_config "
+                "WHERE id = CAST(:id AS uuid)"
+            ),
+            {"id": _WORKING_HOURS_CONFIG_ID},
+        )
+    ).mappings().one_or_none()
+    if row is None:
+        return None
+    return _WorkingHoursConfigSnapshot(
+        schedule=list(row["schedule"]) if row["schedule"] else [],
+        closures=list(row["closures"]) if row["closures"] else [],
+    )
+
+
+def _is_slot_outside_working_hours(  # noqa: SVC001 caller-owns-txn
+    slot_start_utc: datetime,
+    wh: _WorkingHoursConfigSnapshot,
+) -> bool:
+    """Return True iff the slot falls on a closure date or outside working hours.
+
+    All comparisons are done in Europe/Moscow per C-07 / D-38-12 discipline.
+
+    Fail-open rules (T-108-11 mitigate):
+      - Empty / absent schedule → never block (return False).
+      - Slot's day_of_week not found in schedule → never block.
+      - Malformed entry (missing keys, bad time format) → skip that entry, never block.
+    """
+    slot_msk = slot_start_utc.astimezone(MOSCOW_TZ)
+    slot_date_str = slot_msk.date().isoformat()
+
+    # Closure check: if slot's Moscow date is in the closures list, block it.
+    if slot_date_str in closures_as_set(wh.closures):
+        return True
+
+    # Working-hours check: look up the slot's Moscow day-of-week (1=Mon..7=Sun ISO).
+    slot_iso_weekday = slot_msk.isoweekday()  # 1=Mon, 7=Sun
+
+    if not wh.schedule:
+        # Empty schedule → fail-open (do not block).
+        return False
+
+    for entry in wh.schedule:
+        if not isinstance(entry, dict):
+            continue
+        day = entry.get("day_of_week")
+        # Normalise: accept int 1-7 OR string "1".."7" OR lowercase weekday names
+        # (e.g. "monday") — be defensive about JSON shape from JSONB storage.
+        try:
+            day_int = int(day)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            # Try parsing "monday"/"tuesday" etc.
+            _WEEKDAY_MAP = {
+                "monday": 1, "tuesday": 2, "wednesday": 3,
+                "thursday": 4, "friday": 5, "saturday": 6, "sunday": 7,
+            }
+            day_int = _WEEKDAY_MAP.get(str(day).lower(), -1)
+
+        if day_int != slot_iso_weekday:
+            continue
+
+        # Found a matching schedule entry — validate the time window.
+        open_str = entry.get("open_time") or entry.get("open") or ""
+        close_str = entry.get("close_time") or entry.get("close") or ""
+        try:
+            open_t = _parse_hhmm(open_str)
+            close_t = _parse_hhmm(close_str)
+        except ValueError:
+            # Malformed entry — skip (fail-open).
+            continue
+
+        slot_t = slot_msk.time().replace(second=0, microsecond=0)
+        if open_t <= slot_t < close_t:
+            return False  # Within working hours — allow.
+        return True  # Outside the working-hours window — block.
+
+    # No matching schedule entry for this weekday — fail-open (do not block).
+    return False
+
+
+def closures_as_set(closures: list[Any]) -> frozenset[str]:
+    """Convert the closures JSONB list to a frozenset of ISO date strings.
+
+    Accepts strings ("YYYY-MM-DD") or dicts with a "date" key.
+    Non-conforming entries are silently skipped (fail-open per T-108-11).
+    """
+    result: set[str] = set()
+    for c in closures:
+        if isinstance(c, str):
+            # Validate ISO date format loosely
+            if re.match(r"^\d{4}-\d{2}-\d{2}$", c):
+                result.add(c)
+        elif isinstance(c, dict):
+            d = c.get("date") or c.get("closure_date") or ""
+            if re.match(r"^\d{4}-\d{2}-\d{2}$", str(d)):
+                result.add(str(d))
+    return frozenset(result)
+
+
+def _parse_hhmm(s: str) -> time:
+    """Parse "HH:MM" or "H:MM" into a datetime.time.
+
+    Raises ValueError for non-conforming input (caller handles as fail-open).
+    """
+    parts = str(s).split(":")
+    if len(parts) < 2:
+        raise ValueError(f"Cannot parse time string: {s!r}")
+    return time(int(parts[0]), int(parts[1]), 0)
 
 
 # ---------------------------------------------------------------------------
@@ -616,6 +838,11 @@ async def _dispatch_booking_lifecycle_notification(  # noqa: SVC001 caller-owns-
 # ---------------------------------------------------------------------------
 # Phase 39 CRON-01 — no-show batch helper (D-39-06 single-session, D-39-07
 # SELECT FOR UPDATE OF b; SVC001-exempt: worker owns commit).
+#
+# Phase 108 NOTE: no_show_penalty automation is DEFERRED per D-108 CONTEXT.
+# The booking_config.no_show_penalty_kopecks / no_show_penalty_enabled fields
+# are persisted but NOT automatically charged here. A future phase will add
+# the penalty-charging mechanism (e.g. autopay charge on the no-show cron path).
 # ---------------------------------------------------------------------------
 
 
@@ -1046,6 +1273,28 @@ async def create_booking(
         and pt_package.end_date < slot.start_time.astimezone(MOSCOW_TZ).date()
     ):
         raise PtPackageExpiredBeforeSlotError("pt_package_expired_before_slot")
+
+    # Step 4b — Phase 108 CFG-03/02 enforcement: read booking_config +
+    # working_hours_config via raw SQL (no settings-module import; D-54-08 /
+    # T-108-12 mitigate). These guards run AFTER all pt_package / trainer checks
+    # (so we surface package errors first) but BEFORE the irreversible slot flip
+    # (Step 5). Fail-open: absent config rows do NOT block booking (T-108-11).
+
+    # Guard 1 — Booking-ahead window (booking_ahead_days from booking_config).
+    _bconfig = await _read_booking_config(session)
+    if _bconfig is not None:
+        _ahead_limit = now_utc + timedelta(days=_bconfig.booking_ahead_days)
+        if slot.start_time > _ahead_limit:
+            raise BookingAheadWindowError("booking_ahead_window_exceeded")
+
+        # Guard 2 — Cutoff window (cutoff_minutes from booking_config).
+        if slot.start_time - now_utc < timedelta(minutes=_bconfig.cutoff_minutes):
+            raise BookingCutoffError("booking_cutoff_passed")
+
+    # Guard 3 — Closure / working-hours (working_hours_config).
+    _whconfig = await _read_working_hours_config(session)
+    if _whconfig is not None and _is_slot_outside_working_hours(slot.start_time, _whconfig):
+        raise OutsideWorkingHoursError("outside_working_hours")
 
     # Step 5 — Cross-module raw UPDATE flipping slot active→booked.
     # 0-row return: concurrent winner already took it pre-INSERT (or the
@@ -1544,12 +1793,20 @@ async def cancel_booking(
     # Step 2 — FSM gate (consults BOOKING_STATUS_TRANSITIONS).
     _assert_can_transition(booking, target="cancelled")
 
-    # Step 3 — 24h reception window (D-38-16; compare against slot.start_time).
+    # Step 3 — Reception cancel window (D-38-16; compare against slot.start_time).
+    # Phase 108 CFG-03: read cancel_window_hours from booking_config via raw SQL.
+    # Falls back to CANCEL_WINDOW_HOURS_RECEPTION (24) when the config row is absent
+    # (T-108-11 mitigate — absent config must NEVER error or brick cancel flow).
     now_utc = datetime.now(UTC)
-    if actor.role is Role.RECEPTION and (
-        booking.slot.start_time - now_utc < timedelta(hours=CANCEL_WINDOW_HOURS_RECEPTION)
-    ):
-        raise CancelWindowExpiredError("cancel_window_expired")
+    if actor.role is Role.RECEPTION:
+        _bconfig_cancel = await _read_booking_config(session)
+        _cancel_window_h = (
+            _bconfig_cancel.cancel_window_hours
+            if _bconfig_cancel is not None
+            else CANCEL_WINDOW_HOURS_RECEPTION
+        )
+        if booking.slot.start_time - now_utc < timedelta(hours=_cancel_window_h):
+            raise CancelWindowExpiredError("cancel_window_expired")
 
     # Step 4 — Mutate booking in-place (cancelled_at / cancel_reason).
     booking.status = "cancelled"
@@ -1733,10 +1990,17 @@ async def cancel_booking_for_client(
     _assert_can_transition(booking, target="cancelled")
 
     # Step 3 — Client cancel window (D-70-05 / D-38-16).
-    # Unlike the staff path, there is no Role branch: always apply
-    # CANCEL_WINDOW_HOURS_CLIENT measured against slot.start_time (NOT created_at).
+    # Phase 108 CFG-03: read cancel_window_hours from booking_config via raw SQL.
+    # Falls back to CANCEL_WINDOW_HOURS_CLIENT (24) when the row is absent
+    # (T-108-11 mitigate — absent config must NEVER error or brick cancel flow).
     now_utc = datetime.now(UTC)
-    if booking.slot.start_time - now_utc < timedelta(hours=CANCEL_WINDOW_HOURS_CLIENT):
+    _bconfig_client_cancel = await _read_booking_config(session)
+    _client_cancel_window_h = (
+        _bconfig_client_cancel.cancel_window_hours
+        if _bconfig_client_cancel is not None
+        else CANCEL_WINDOW_HOURS_CLIENT
+    )
+    if booking.slot.start_time - now_utc < timedelta(hours=_client_cancel_window_h):
         raise CancelWindowExpiredError("cancel_window_expired")
 
     # Step 4 — Mutate booking in-place (cancelled_at / cancel_reason).
@@ -1928,10 +2192,17 @@ async def reschedule_booking_for_client(
             raise BookingNotFoundError("booking_not_found")
         return _booking_response_from_orm(current)
 
-    # Step 3 — Reschedule window: 24h against ORIGINAL slot start (RESCH-01 / T-80-07).
-    # Unlike the client cancel path, the window is measured against the original
-    # slot's start_time (NOT created_at or now).
-    if booking.slot.start_time - now_utc < timedelta(hours=CANCEL_WINDOW_HOURS_CLIENT):
+    # Step 3 — Reschedule window: against ORIGINAL slot start (RESCH-01 / T-80-07).
+    # Phase 108 CFG-03: read cancel_window_hours from booking_config via raw SQL.
+    # Falls back to CANCEL_WINDOW_HOURS_CLIENT (24) when the row is absent
+    # (T-108-11 mitigate — absent config must NEVER error or brick reschedule flow).
+    _bconfig_resch = await _read_booking_config(session)
+    _resch_window_h = (
+        _bconfig_resch.cancel_window_hours
+        if _bconfig_resch is not None
+        else CANCEL_WINDOW_HOURS_CLIENT
+    )
+    if booking.slot.start_time - now_utc < timedelta(hours=_resch_window_h):
         raise RescheduleWindowExpiredError("reschedule_window_expired")
 
     # Step 4 — Resolve new slot (mirror create_booking_for_client:1300-1306).
