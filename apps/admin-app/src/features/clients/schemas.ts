@@ -30,7 +30,9 @@ export const ClientSchema = z.object({
   gender: z.enum(['male', 'female']).nullable().optional(),
   tags: z.array(z.string()),
   notes: z.string().nullable().optional(),
-  telegramUserId: z.string().nullable().optional(),
+  // Backend column is telegram_user_id: int | None → serialized as a JSON number.
+  // Accept number | string to tolerate the live wire shape (BUG-1).
+  telegramUserId: z.union([z.number(), z.string()]).nullable().optional(),
   createdAt: z.string(),
 });
 export type ClientData = z.infer<typeof ClientSchema>;
