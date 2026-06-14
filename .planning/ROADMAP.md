@@ -381,7 +381,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 109-01-PLAN.md — Backend foundation: profile_updated audit event + ProfileUpdate/ChangePassword schemas + update_profile/change_password/revoke-others-except-current service fns
+- [x] 109-01-PLAN.md — Backend foundation: profile_updated audit event + ProfileUpdate/ChangePassword schemas + update_profile/change_password/revoke-others-except-current service fns
 - [ ] 109-03-PLAN.md — FE foundation: ProfileUpdate/ChangePassword zod schemas + useUpdateProfile/useChangePassword hooks
 
 **Wave 2** *(blocked on Wave 1 completion)*
@@ -442,7 +442,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 107. Admin FE Completion on Existing Backend | 3/3 | Complete    | 2026-06-14 |
 | 108. Editable Settings — Backend + Wiring | 5/5 | Complete    | 2026-06-14 |
-| 109. Profile & Security — Backend + Wiring | 0/TBD | Not started | - |
+| 109. Profile & Security — Backend + Wiring | 1/4 | In Progress|  |
 | 110. Live Verification — Deferred P102 | 0/TBD | Not started | - |
 | 111. OpenAPI Handoff + Milestone Gate | 0/TBD | Not started | - |
 

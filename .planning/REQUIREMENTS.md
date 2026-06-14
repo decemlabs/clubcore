@@ -38,8 +38,8 @@
 
 ### PROF — Профиль & безопасность
 
-- [ ] **PROF-01**: Staff can edit their own profile (full name, email, theme) via a new `PATCH /api/v1/auth/me` — replacing the read-only profile.
-- [ ] **PROF-02**: Staff can change their own password from Settings (current + new password, validated; revokes other sessions per existing discipline).
+- [x] **PROF-01**: Staff can edit their own profile (full name, email, theme) via a new `PATCH /api/v1/auth/me` — replacing the read-only profile.
+- [x] **PROF-02**: Staff can change their own password from Settings (current + new password, validated; revokes other sessions per existing discipline).
 
 ### VER — Live-верификация отложенного P102
 
@@ -99,8 +99,8 @@ Which phases cover which requirements. Populated during roadmap creation.
 | CFG-02 | Phase 108 | Complete |
 | CFG-03 | Phase 108 | Complete |
 | CFG-04 | Phase 108 | Complete |
-| PROF-01 | Phase 109 | Pending |
-| PROF-02 | Phase 109 | Pending |
+| PROF-01 | Phase 109 | Complete |
+| PROF-02 | Phase 109 | Complete |
 | VER-01 | Phase 110 | Pending |
 | VER-02 | Phase 110 | Pending |
 
