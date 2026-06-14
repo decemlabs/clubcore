@@ -31,7 +31,8 @@ import {
   Toggle,
 } from '@/components/settings/controls'
 import { can } from '@/shared/session/can'
-import { useSession } from '@/features/auth/api'
+import { useSession, useUpdateProfile, ApiError } from '@/features/auth/api'
+import { ProfileUpdateSchema } from '@/features/auth/schemas'
 import {
   useSessions,
   useRevokeSession,
@@ -42,7 +43,6 @@ import {
   useUpdateWorkingHours,
   useBookingConfig,
   useUpdateBookingConfig,
-  ApiError,
 } from '@/features/settings/api'
 import {
   GymInfoUpdateSchema,
@@ -53,6 +53,7 @@ import {
 } from '@/features/settings/schemas'
 import { useSettingsDirty } from '@/components/settings/context'
 import { formatRelativeRu, getInitials } from '@/lib/format'
+import { ChangePasswordModal } from './ChangePasswordModal'
 
 const ID_PROFILE = 'profile'
 const ID_SECURITY = 'security'
@@ -91,25 +92,120 @@ function ActionPill({ icon: Icon, children }: { icon?: typeof Check; children: R
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ProfileSection (read-only, Phase 104)
+// ProfileSection — inline-editable full_name + email (Phase 109 PROF-01)
+//
+// Mirrors BranchSection: registerSave/registerCancel props, serverDataRef,
+// fieldErrors state, markDirty(ID_PROFILE), patch() helper.
+// Avatar still reads server data (session.data.fullName) until after successful
+// save + authKeys.me invalidation — per UI-SPEC: "full_name field does NOT
+// accept the value as the label for the Initials avatar until after successful
+// save + query invalidation."
+// No theme in PATCH body — theme stays client-only (D-109-CONTEXT).
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function ProfileSection() {
-  const { data, isPending, isError, refetch } = useSession()
+const ROLE_LABEL: Record<string, string> = {
+  owner: 'Владелец',
+  reception: 'Ресепшн',
+}
 
-  const ROLE_LABEL: Record<string, string> = {
-    owner: 'Владелец',
-    reception: 'Ресепшн',
+export function ProfileSection({
+  registerSave,
+  registerCancel,
+}: {
+  registerSave?: (fn: () => Promise<void>) => void
+  registerCancel?: (fn: () => void) => void
+}) {
+  const session = useSession()
+  const { markDirty } = useSettingsDirty()
+  const updateProfile = useUpdateProfile()
+
+  const [form, setForm] = useState({ fullName: '', email: '' })
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const serverDataRef = useRef<{ fullName: string; email: string } | null>(null)
+
+  // Seed form + serverDataRef when server data arrives
+  useEffect(() => {
+    if (session.data) {
+      const snapshot = { fullName: session.data.fullName, email: session.data.email }
+      serverDataRef.current = snapshot
+      setForm(snapshot)
+    }
+  }, [session.data])
+
+  function patch(partial: Partial<typeof form>) {
+    setForm((prev) => ({ ...prev, ...partial }))
+    markDirty(ID_PROFILE)
   }
+
+  async function handleSave() {
+    // Build partial body — only send fields that have actually changed
+    const current = serverDataRef.current
+    const body: Partial<{ fullName: string; email: string }> = {}
+    if (!current || form.fullName !== current.fullName) body.fullName = form.fullName
+    if (!current || form.email !== current.email) body.email = form.email
+
+    // Client-side validation via ProfileUpdateSchema
+    const result = ProfileUpdateSchema.safeParse({ fullName: form.fullName, email: form.email })
+    if (!result.success) {
+      const errs: Record<string, string> = {}
+      for (const issue of result.error.issues) {
+        const key = issue.path[0]
+        if (key) errs[String(key)] = issue.message
+      }
+      setFieldErrors(errs)
+      throw new Error('Validation failed')
+    }
+    setFieldErrors({})
+
+    return new Promise<void>((resolve, reject) => {
+      updateProfile.mutate(body, {
+        onSuccess: () => {
+          serverDataRef.current = { fullName: form.fullName, email: form.email }
+          // Toast "Профиль обновлён" per UI-SPEC section A success state
+          toast.success('Профиль обновлён')
+          // authKeys.me is invalidated by the hook → sidebar/header refreshes
+          resolve()
+        },
+        onError: (err) => {
+          if (err instanceof ApiError && err.fields?.email) {
+            setFieldErrors({ email: 'Email уже занят' })
+          } else if (err instanceof ApiError && err.fields) {
+            const errs: Record<string, string> = {}
+            for (const [k, v] of Object.entries(err.fields)) {
+              errs[k] = String(v)
+            }
+            setFieldErrors(errs)
+          } else {
+            toast.error('Не удалось сохранить. Попробуйте ещё раз.')
+          }
+          reject(err)
+        },
+      })
+    })
+  }
+
+  function handleCancel() {
+    if (serverDataRef.current) {
+      setForm(serverDataRef.current)
+    }
+    setFieldErrors({})
+  }
+
+  // Register save/cancel handlers with SettingsPage on every form change
+  // (same pattern as BranchSection — eslint-disable for exhaustive deps)
+  useEffect(() => {
+    registerSave?.(handleSave)
+    registerCancel?.(handleCancel)
+  }, [form]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <SectionCard
       id={ID_PROFILE}
       icon={Building2}
       title="Профиль"
-      desc="Личные данные. Редактирование недоступно — обратитесь к владельцу."
+      desc="Личные данные. Имя и email можно изменить."
     >
-      {isPending ? (
+      {session.isPending ? (
         <div className="flex items-center gap-4 py-4">
           <Skeleton className="size-16 rounded-full" />
           <div className="flex flex-col gap-2">
@@ -117,12 +213,12 @@ export function ProfileSection() {
             <Skeleton className="h-3 w-36" />
           </div>
         </div>
-      ) : isError || !data ? (
+      ) : session.isError || !session.data ? (
         <div className="py-4 text-[12px] text-fg-muted">
           Не удалось загрузить профиль.{' '}
           <button
             type="button"
-            onClick={() => void refetch()}
+            onClick={() => void session.refetch()}
             className="font-semibold text-fg hover:underline"
           >
             Повторить
@@ -131,32 +227,58 @@ export function ProfileSection() {
       ) : (
         <>
           <SettingRow first label="Имя и должность">
-            <div className="flex items-center gap-3">
+            {/* Avatar reads server data until authKeys.me invalidation completes */}
+            <div className="flex items-center gap-3 pb-3">
               <Initials
-                initials={getInitials(data.fullName)}
+                initials={getInitials(session.data.fullName)}
                 color="linear-gradient(135deg,#2dd4a4,#059669)"
                 className="size-16 text-[20px]"
               />
               <div className="min-w-0">
-                <div className="text-[14px] font-bold text-fg">{data.fullName}</div>
-                <div className="mt-0.5 text-[13px] text-fg-muted">{data.email}</div>
-                <div className="mt-1.5">
-                  <span
-                    className={cn(
-                      'inline-flex h-[22px] items-center rounded-full px-2.5 text-[11.5px] font-semibold',
-                      data.role === 'owner'
-                        ? 'bg-primary-soft text-primary-deep dark:text-primary'
-                        : 'bg-surface-3 text-fg-muted',
-                    )}
-                  >
-                    {ROLE_LABEL[data.role] ?? data.role}
-                  </span>
-                </div>
+                <span
+                  className={cn(
+                    'inline-flex h-[22px] items-center rounded-full px-2.5 text-[11.5px] font-semibold',
+                    session.data.role === 'owner'
+                      ? 'bg-primary-soft text-primary-deep dark:text-primary'
+                      : 'bg-surface-3 text-fg-muted',
+                  )}
+                >
+                  {ROLE_LABEL[session.data.role] ?? session.data.role}
+                </span>
               </div>
             </div>
-            <p className="mt-3 text-[11.5px] text-fg-subtle">
-              Для изменения данных обратитесь к владельцу.
-            </p>
+            <div className="flex flex-col gap-2">
+              <div>
+                <label className="mb-1.5 block text-[12px] font-semibold text-fg-muted">
+                  Имя и фамилия
+                </label>
+                <input
+                  type="text"
+                  placeholder="Имя и фамилия"
+                  value={form.fullName}
+                  onChange={(e) => patch({ fullName: e.target.value })}
+                  className={FIELD}
+                />
+                {fieldErrors.fullName ? (
+                  <div className="mt-1 text-[11px] text-danger">{fieldErrors.fullName}</div>
+                ) : null}
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[12px] font-semibold text-fg-muted">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  placeholder="email@example.com"
+                  value={form.email}
+                  onChange={(e) => patch({ email: e.target.value })}
+                  className={FIELD}
+                />
+                {fieldErrors.email ? (
+                  <div className="mt-1 text-[11px] text-danger">{fieldErrors.email}</div>
+                ) : null}
+              </div>
+            </div>
           </SettingRow>
           <SettingRow label="Тема оформления" hint="Смена между светлой и тёмной темой.">
             <ThemeToggle />
@@ -182,6 +304,7 @@ export function SecuritySection() {
   const revokeSession = useRevokeSession()
   const revokeCurrentSession = useRevokeCurrentSession()
   const [revokingId, setRevokingId] = useState<string | null>(null)
+  const [pwModalOpen, setPwModalOpen] = useState(false)
   const { open } = useModals()
 
   const currentSession = sessionsData?.items.find((s) => s.isCurrent)
@@ -222,6 +345,8 @@ export function SecuritySection() {
   }
 
   return (
+    <>
+    <ChangePasswordModal open={pwModalOpen} onClose={() => setPwModalOpen(false)} />
     <SectionCard
       id={ID_SECURITY}
       icon={Lock}
@@ -234,7 +359,7 @@ export function SecuritySection() {
         label="Пароль"
         hint="Последняя смена — 47 дней назад. Рекомендуем менять каждые 90 дней."
       >
-        <GhostBtn>Сменить пароль</GhostBtn>
+        <GhostBtn onClick={() => setPwModalOpen(true)}>Сменить пароль</GhostBtn>
       </SettingRow>
       <SettingRow
         label="Двухфакторная аутентификация"
@@ -338,6 +463,7 @@ export function SecuritySection() {
         ) : null}
       </SettingRow>
     </SectionCard>
+    </>
   )
 }
 
