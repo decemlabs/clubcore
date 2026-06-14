@@ -292,6 +292,10 @@ LOCKED_AUDIT_EVENTS: frozenset[tuple[str, str]] = frozenset(
         # the audit row is forensic-only.
         ("refresh_failed", "session"),
         ("password_changed_revokes_sessions", "user"),
+        # Phase 109 PROF-01 — staff self-profile edit (full_name / email).
+        # Payload carries `changed_fields: list[str]` markers ONLY — no password,
+        # no hash, no raw email value (T-109-01).
+        ("profile_updated", "user"),
         ("telegram_deep_link_issued", "otp"),
         ("otp_issued", "otp"),
         ("otp_consumed", "otp"),
