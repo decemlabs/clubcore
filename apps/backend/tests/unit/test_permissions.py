@@ -13,8 +13,8 @@ def test_owner_only_is_frozenset_instance() -> None:
     assert isinstance(OWNER_ONLY, frozenset)
 
 
-def test_owner_only_has_exactly_forty_one_entries() -> None:
-    # Mirrors apps/admin-web/src/shared/session/can.ts.
+def test_owner_only_has_exactly_forty_two_entries() -> None:
+    # Mirrors apps/admin-app/src/shared/session/can.ts.
     # Composition: 9 v1.1 + 6 v1.2 INFRA-08 + 11 v1.4 INFRA-19
     #              - 1 v1.4 Phase 34 D-34-09a removal of `(CANCEL, PT_SESSIONS)`
     #              + 4 v1.5 Phase 37 INFRA-27 SCHEDULE_SLOTS write pairs
@@ -27,9 +27,10 @@ def test_owner_only_has_exactly_forty_one_entries() -> None:
     #                LIST). (EDIT, COMPENSATION) collapsed into (CREATE, COMPENSATION)
     #                per D-58-15 Claude's Discretion (INSERT-only versioned model).
     #              + 1 v2.4 Phase 86 GYM-02 (EDIT on GYM — gym-info owner-only write).
+    #              + 1 v2.7 Phase 108 CFG-02/03/04 (EDIT on SETTINGS — settings write).
     # tests/integration/test_rbac_parity.py covers the cross-codebase mirror;
     # this assertion is the structural-only drift tripwire.
-    assert len(OWNER_ONLY) == 41
+    assert len(OWNER_ONLY) == 42
 
 
 def test_role_value_set() -> None:
@@ -195,6 +196,9 @@ def test_specific_owner_only_membership() -> None:
             # Phase 86 GYM-02 - v2.4 gym-info owner-only write
             # (reception denied EDIT on gym; enforced at router level in Plan 02).
             (Action.EDIT, Resource.GYM),
+            # Phase 108 CFG-02/03/04 - v2.7 settings write
+            # (reception denied EDIT on settings; enforced at router level).
+            (Action.EDIT, Resource.SETTINGS),
         }
     )
     assert expected == OWNER_ONLY

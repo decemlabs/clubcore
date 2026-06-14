@@ -144,6 +144,10 @@ OWNER_ONLY: frozenset[tuple[Action, Resource]] = frozenset(
         # Phase 86 GYM-02 — gym-info owner-only write (T-86-02 mitigation).
         # Reception is denied EDIT on gym-info content; 403 enforced at router.
         (Action.EDIT, Resource.GYM),
+        # Phase 108 CFG-02/03/04 — settings write; owner-only, additive.
+        # Resource.SETTINGS already exists in the enum (value "settings").
+        # (VIEW, SETTINGS) is already in OWNER_ONLY above — only the EDIT pair is new.
+        (Action.EDIT, Resource.SETTINGS),
     }
 )
 

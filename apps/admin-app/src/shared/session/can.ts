@@ -76,6 +76,9 @@ export const OWNER_ONLY: ReadonlyArray<{ action: Action; resource: Resource }> =
   { action: 'list', resource: 'payroll' },
   // v2.4 (Phase 86 GYM-02 — gym-info owner-only write; mirror permissions.py (Action.EDIT, Resource.GYM)).
   { action: 'edit', resource: 'gym' },
+  // v2.7 (Phase 108 CFG-02/03/04 — settings write; mirror permissions.py (Action.EDIT, Resource.SETTINGS)).
+  // (Action.VIEW, Resource.SETTINGS) already exists at line 17 — only EDIT is new.
+  { action: 'edit', resource: 'settings' },
 ]
 
 export function can(role: Role, action: Action, resource: Resource): boolean {

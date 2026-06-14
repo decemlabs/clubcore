@@ -483,6 +483,16 @@ LOCKED_AUDIT_EVENTS: frozenset[tuple[str, str]] = frozenset(
         # v2.6 (Phase 97 lock — INFRA-15; referral bonus accrual. Pre-registered BEFORE
         # the payment.succeeded webhook callsite per INFRA-15 discipline.)
         ("referral_bonus_accrued", "referral"),
+        # v2.7 (Phase 108 lock — INFRA-15; settings domain. Pre-registered BEFORE any
+        # service callsite per INFRA-15 discipline. Callsites land in Plan 02.)
+        # CFG-01: gym card updated (extends existing gym resource).
+        ("gym_card_updated", "gym"),
+        # CFG-02: working hours / breaks / closures updated.
+        ("working_hours_updated", "settings"),
+        # CFG-03: booking rules updated.
+        ("booking_config_updated", "settings"),
+        # CFG-04: notification matrix / prefs updated.
+        ("notification_prefs_updated", "settings"),
     }
 )
 

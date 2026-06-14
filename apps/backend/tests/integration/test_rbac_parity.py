@@ -1,10 +1,11 @@
 """TEST-06: backend permissions ⇔ frontend can.ts/registry.ts parity (Phase 6 D-13, D-14, D-15).
 
-Three set-equalities (D-13; counts updated through Phase 86 GYM-02):
-  1. OWNER_ONLY pairs (41 entries: 9 v1.1 + 6 v1.2 + 10 v1.4 + 4 v1.5 + 4 v1.6
+Three set-equalities (D-13; counts updated through Phase 108 CFG-02/03/04):
+  1. OWNER_ONLY pairs (42 entries: 9 v1.1 + 6 v1.2 + 10 v1.4 + 4 v1.5 + 4 v1.6
      + 2 v1.8 Phase 54 INFRA-42 (VIEW|LIST on AUDIT_LOG)
      + 5 v1.9 Phase 58 INFRA-15/D-58-15 (payroll/compensation write pairs)
-     + 1 v2.4 Phase 86 GYM-02 (EDIT on GYM)) — backend
+     + 1 v2.4 Phase 86 GYM-02 (EDIT on GYM)
+     + 1 v2.7 Phase 108 CFG-02/03/04 (EDIT on SETTINGS)) — backend
      frozenset == frontend can.ts array.
   2. Resource StrEnum values — backend == frontend Resource union.
   3. Action StrEnum values — backend == frontend Action union.
@@ -145,8 +146,8 @@ def test_action_values_match() -> None:
     )
 
 
-def test_owner_only_count_is_forty_one() -> None:
-    """Sanity belt — `OWNER_ONLY` is exactly 41 entries.
+def test_owner_only_count_is_forty_two() -> None:
+    """Sanity belt — `OWNER_ONLY` is exactly 42 entries.
 
     Breakdown: 9 v1.1 + 6 v1.2 INFRA-08 + 11 v1.4 INFRA-19 - 1 D-34-09a
     + 4 v1.5 INFRA-27 (CREATE|EDIT|DELETE|CANCEL on SCHEDULE_SLOTS)
@@ -154,7 +155,8 @@ def test_owner_only_count_is_forty_one() -> None:
     + 2 v1.8 Phase 54 INFRA-42 (VIEW|LIST on AUDIT_LOG)
     + 5 v1.9 Phase 58 INFRA-15 / D-58-15
       (CREATE|COMPENSATION, CREATE|PAYROLL, EDIT|PAYROLL, REFUND|PAYROLL, LIST|PAYROLL)
-    + 1 v2.4 Phase 86 GYM-02 (EDIT on GYM).
+    + 1 v2.4 Phase 86 GYM-02 (EDIT on GYM)
+    + 1 v2.7 Phase 108 CFG-02/03/04 (EDIT on SETTINGS).
     """
-    assert len(OWNER_ONLY) == 41
-    assert len(_parse_owner_only_pairs()) == 41
+    assert len(OWNER_ONLY) == 42
+    assert len(_parse_owner_only_pairs()) == 42

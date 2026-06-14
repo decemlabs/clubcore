@@ -247,15 +247,25 @@ def test_locked_audit_events_has_expected_count() -> None:
     ``('referral_captured', 'referral')``,
     ``('referral_bonus_accrued', 'referral')``.
     The frozenset total becomes 109 + 3 = 112. See 96-*-SUMMARY.md.
+
+    Phase 108 (INFRA-15 / D-108 settings lock) ADDS 4 v2.7 settings pairs
+    pre-registered BEFORE any callsite (Plan 02 implements the emitters):
+    ``('gym_card_updated', 'gym')``,
+    ``('working_hours_updated', 'settings')``,
+    ``('booking_config_updated', 'settings')``,
+    ``('notification_prefs_updated', 'settings')``.
+    The frozenset total becomes 112 + 4 = 116. See 108-01-SUMMARY.md.
     """
-    assert len(LOCKED_AUDIT_EVENTS) == 112, (
-        "LOCKED_AUDIT_EVENTS size drifted: expected 112 "
+    assert len(LOCKED_AUDIT_EVENTS) == 116, (
+        "LOCKED_AUDIT_EVENTS size drifted: expected 116 "
         "(18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4 + 5 v1.5 + 13 v1.6 + 14 v1.7 "
         "+ 4 v1.9/P58 + 4 v1.9/P59 + 1 pre-P68 + 6 v2.0/P68 + 1 v2.2/P80 booking_rescheduled "
         "+ 1 v2.3/P82 loyalty_accrued + 1 v2.3/P83 loyalty_redeemed "
         "+ 2 v2.3/P84: autopay_charge_initiated + autopay_charge_failed (APAY-01/APAY-03, INFRA-15) "
         "+ 4 v2.5/P90: message_sent + message_read + attachment_uploaded + chat_staff_reply_sent "
-        "+ 3 v2.6/P96: referral_code_generated + referral_captured + referral_bonus_accrued), "
+        "+ 3 v2.6/P96: referral_code_generated + referral_captured + referral_bonus_accrued "
+        "+ 4 v2.7/P108: gym_card_updated + working_hours_updated + booking_config_updated "
+        "+ notification_prefs_updated), "
         f"got {len(LOCKED_AUDIT_EVENTS)}"
     )
     # v2.3 Phase 82 INFRA-15 / ACCR-01/ACCR-02: +1 loyalty accrual lifecycle pair
