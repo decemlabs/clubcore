@@ -23,7 +23,7 @@ describe('can()', () => {
     expect(can('reception', 'delete', 'clients')).toBe(false)
   })
 
-  it('reception is denied all 41 OWNER_ONLY pairs', () => {
+  it('reception is denied all 42 OWNER_ONLY pairs', () => {
     for (const { action, resource } of OWNER_ONLY) {
       expect(can('reception', action, resource)).toBe(false)
     }
@@ -44,10 +44,11 @@ describe('can()', () => {
     expect(can('reception', 'view', 'schedule')).toBe(true)
   })
 
-  it('OWNER_ONLY matrix contains exactly 41 unique entries', () => {
+  it('OWNER_ONLY matrix contains exactly 42 unique entries', () => {
+    // v2.7 (Phase 108-01): added { action: 'edit', resource: 'settings' } — count 41 → 42
     const pairs = new Set(OWNER_ONLY.map((e) => `${e.action}|${e.resource}`))
-    expect(pairs.size).toBe(41)
-    expect(OWNER_ONLY.length).toBe(41)
+    expect(pairs.size).toBe(42)
+    expect(OWNER_ONLY.length).toBe(42)
   })
 })
 
