@@ -123,6 +123,10 @@ export function appendQuery(url: string, query?: Record<string, string | number 
   if (!query) return url
   const sp = new URLSearchParams()
   for (const [k, v] of Object.entries(query)) {
+    // Skip undefined/null so optional params (e.g. an unselected trainerId for the
+    // "all trainers" view) are OMITTED rather than serialized as the literal string
+    // "undefined" — which the backend 422s. (BUG-4)
+    if (v === undefined || v === null) continue
     sp.set(k, String(v))
   }
   const qs = sp.toString()
