@@ -1,5 +1,5 @@
 /**
- * Auth domain zod contract layer (Phase 100 FND-03).
+ * Auth domain zod contract layer (Phase 100 FND-03; Phase 109 PROF-01/02).
  *
  * These schemas define the verified wire shapes for the auth/session domain:
  *  - LoginRequestSchema: mirrors backend LoginRequest (password min_length=12)
@@ -8,6 +8,8 @@
  *  - ApiErrorEnvelopeSchema: top-level {code,message,fields?} (NOT wrapped in data)
  *  - PasswordResetRequestSchema: POST /auth/password-reset/request
  *  - PasswordResetConfirmSchema: POST /auth/password-reset/confirm — body key is `newPassword`
+ *  - ProfileUpdateSchema: PATCH /auth/me client validation — {fullName, email} (Phase 109 PROF-01)
+ *  - ChangePasswordSchema: POST /auth/change-password wire body — {currentPassword, newPassword} (Phase 109 PROF-02)
  *
  * Backend wire format is camelCase (alias_generator=to_camel on ContractModel).
  * CRITICAL: the confirm body uses `newPassword` (wire camelCase of `new_password`).
@@ -91,3 +93,43 @@ export const PasswordResetConfirmSchema = z.object({
   newPassword: z.string().min(12, 'Пароль должен содержать не менее 12 символов'),
 })
 export type PasswordResetConfirm = z.infer<typeof PasswordResetConfirmSchema>
+
+// ---------------------------------------------------------------------------
+// Profile update (Phase 109 PROF-01)
+// ---------------------------------------------------------------------------
+
+/**
+ * Client-side validation schema for PATCH /api/v1/auth/me.
+ *
+ * Wire body is camelCase: { fullName, email } — mirrors backend ProfileUpdateRequest
+ * (alias_generator=to_camel). The PATCH is semantically partial on the server
+ * (backend accepts omitted fields), but this schema validates both fields as required
+ * because the ProfileSection SaveBar form always submits both (the user fills both
+ * fields before saving). If a truly partial PATCH is needed in the future, extend here.
+ *
+ * NOTE: no `confirmPassword` — confirm-password is a UI-only concern in Plan 04.
+ */
+export const ProfileUpdateSchema = z.object({
+  fullName: z.string().min(2, 'Имя должно содержать не менее 2 символов'),
+  email: z.string().email('Введите корректный адрес почты'),
+})
+export type ProfileUpdate = z.infer<typeof ProfileUpdateSchema>
+
+// ---------------------------------------------------------------------------
+// Change password (Phase 109 PROF-02)
+// ---------------------------------------------------------------------------
+
+/**
+ * Wire body schema for POST /api/v1/auth/change-password.
+ *
+ * Keys are camelCase matching the backend ChangePasswordRequest wire format.
+ * The 12-char floor reuses the SAME message as PasswordResetConfirmSchema above
+ * so Russian copy is consistent across all password-entry flows.
+ *
+ * NOTE: no `confirmPassword` field — mismatch check is a UI-only concern in Plan 04.
+ */
+export const ChangePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Введите текущий пароль'),
+  newPassword: z.string().min(12, 'Пароль должен содержать не менее 12 символов'),
+})
+export type ChangePassword = z.infer<typeof ChangePasswordSchema>
