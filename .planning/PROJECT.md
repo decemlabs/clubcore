@@ -18,6 +18,22 @@ clubcore — CRM для тренажёрного зала (переименов�
 
 Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
 
+## Current Milestone: v3.1 Admin — Fill the Gaps
+
+**Goal:** Довести staff-админку до полнофункционального состояния — закрыть FE-заглушки на текущем backend, проверить вживую отложенный P102, и добавить минимальный backend для редактируемых Настроек (зал/график/запись/уведомления) + профиля.
+
+**Target features:**
+- **Тарифы create/edit** — реальные модалки + мутации для membership-plans и pt-package-plans (вместо toast-заглушек; backend уже есть).
+- **PT-пакеты (instances) UI** — продажа (PtPackageScreen в SubscriptionModal) + cancel/refund в TrainingsTab (хуки готовы, нужен UI).
+- **Client delete из hero-дропдауна** — рабочая мутация вместо заглушки (backend есть, owner-gated).
+- **Live-UAT P102** — брони (create/cancel/complete) + payroll (comp-config/preview/run/mark-paid) на сидированных данных.
+- **Настройки → persist** (новый/расширенный backend): Филиал (карточка зала, возможно через v2.4 `PUT /gym`), График работы (+перерывы/праздники), Запись и слоты (правила онлайн-записи), Уведомления (матрица триггер×канал + подпись + тихие часы, привязка к notification-диспетчеру).
+- **Профиль:** `PATCH /auth/me` (ФИО/email/тема) + смена пароля.
+
+**Key context:** v3.1 сознательно ослабляет wire-only-принцип v3.0 — **разрешены новые backend-эндпоинты**, но минимально и в рамках single-club; переиспользовать существующее где можно (gym-модуль v2.4, notification-диспетчер). Нумерация фаз продолжается с **107**.
+
+**Out of scope (явно):** production deploy/hardening (k8s, live ЮKassa leg, RU email/SMS deliverability, secrets/мониторинг) → v3.2+; настройки Платежи-эквайринг / Биллинг / Интеграции / Брендинг client-app; 2FA; client Chat/Notes; multi-branch (остаётся hide-for-future, D-V30-BRANCH).
+
 ## Last Shipped Milestone: v3.0 Production Admin — Backend Wiring
 
 **✅ SHIPPED 2026-06-14** (Phases 100–106, 24 plans, 45 tasks; tag `v3.0`; audit `tech_debt`, 0 blockers, 30/30 requirements). `apps/admin-app` превращён из mock-прототипа в боевую staff-админку на реальном FastAPI backend (`cc_*` session-cookies + CSRF); `apps/admin-web` (~982 файла / ~21K LOC) удалён; CISO-01 RBAC-паритет перенесён в admin-app (41 entry); OpenAPI байт-стабилен (zero new routes per D-V30-SCOPE-WIRE). Live-browser UAT отложен per D-V30-VERSION (v3.0 = wiring; production deploy → v3.1+), но большая часть проверена ad-hoc 2026-06-14 (quick-задачи 260614-hux 8 багов / 260614-j2d GAP-1 / 260614-jt7 REV-01 revoke-invitation, все live-verified). Full audit: `.planning/milestones/v3.0-MILESTONE-AUDIT.md`.
@@ -708,6 +724,9 @@ This document evolves at phase transitions and milestone boundaries.
 2. Core Value check — still the right priority?
 3. Audit Out of Scope — reasons still valid?
 4. Update Context with current state
+
+---
+*Last updated: 2026-06-14 — **started milestone v3.1 Admin — Fill the Gaps.** Scope: close FE stubs on the existing backend (тарифы create/edit, PT-package instance sell/cancel/refund UI, client delete from the hero dropdown), live-verify the deferred P102 (bookings + payroll on seeded data), and add minimal backend for editable Settings (gym card / working hours / booking rules / client-notification matrix) + profile (PATCH /auth/me + password change). New backend endpoints are explicitly allowed (relaxes v3.0 D-V30-SCOPE-WIRE) but minimal + single-club; reuse existing where possible (v2.4 gym module, notification dispatcher). Out of scope: production deploy/hardening → v3.2+; payments-acquiring / billing / integrations / client-app branding settings; 2FA; client chat/notes; multi-branch (hide-for-future). Phases continue from 106 → start at 107. REQUIREMENTS.md recreated fresh.*
 
 ---
 *Last updated: 2026-06-14 — **v3.0 Production Admin — Backend Wiring SHIPPED** (Phases 100–106, 24 plans, 45 tasks; tag `v3.0`; audit `tech_debt`, 0 blockers, 30/30 requirements). `apps/admin-app` is now the production staff admin on the real backend (`cc_*` httpOnly cookies + `clubcore_csrf` double-submit, RBAC byte-parity re-homed, 41 OWNER_ONLY entries); `apps/admin-web` deleted (~982 files / ~21K LOC); OpenAPI byte-stable (zero new routes per D-V30-SCOPE-WIRE). Live-UAT largely closed ad-hoc on 2026-06-14 (260614-hux 8 FE schema/format bugs, 260614-j2d GAP-1 membership-lifecycle entry point, 260614-jt7 REV-01 revoke-invitation — all browser-verified); remaining P102 payroll/booking data-heavy items + 1 planning note deferred to v3.1 per D-V30-VERSION. REQUIREMENTS.md archived to `.planning/milestones/v3.0-REQUIREMENTS.md` + removed (fresh at next `/gsd:new-milestone`). Next: v3.1 (production deploy / hardening) or product GAPs.*

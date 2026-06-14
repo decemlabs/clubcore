@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v3.0
-milestone_name: Production Admin — Backend Wiring
-status: Awaiting next milestone
-stopped_at: Phase 104 Plan 03 complete (RPT-02 Reports page + RPT-03 Audit page wired + «Журнал действий» nav entry)
-last_updated: "2026-06-14T12:15:07.776Z"
-last_activity: 2026-06-14 — Milestone v3.0 completed and archived
+milestone: v3.1
+milestone_name: Admin — Fill the Gaps
+status: planning
+last_updated: "2026-06-14T12:46:32.501Z"
+last_activity: 2026-06-14
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 24
-  completed_plans: 24
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: Milestone v3.0 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-14 — Milestone v3.0 completed and archived
+Status: Defining requirements
+Last activity: 2026-06-14 — Milestone v3.1 started
 
 ## v3.0 Roadmap Summary
 
