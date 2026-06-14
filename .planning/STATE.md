@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v3.1
 milestone_name: Admin — Fill the Gaps
-status: executing
-stopped_at: Completed 109-02 (PATCH /auth/me + POST /auth/change-password routes + integration tests)
-last_updated: "2026-06-14T19:12:52.524Z"
+status: verifying
+stopped_at: Completed 109-04 (ProfileSection editable + ChangePasswordModal — Phase 109 all 4 plans complete; browser-UAT deferred)
+last_updated: "2026-06-14T19:20:23.641Z"
 last_activity: 2026-06-14
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 12
-  completed_plans: 11
-  percent: 40
+  completed_plans: 12
+  percent: 60
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md
 
 Phase: 109 (Profile & Security — Backend + Wiring) — EXECUTING
 Plan: 4 of 4 (plan 03 complete)
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-14
 
 ## v3.1 Roadmap Summary
@@ -128,6 +128,9 @@ Last activity: 2026-06-14
 - **D-109-02-204-SHAPE**: change-password returns 204 No Content (response_model=None, status_code=HTTP_204_NO_CONTENT) — no ResponseEnvelope wrapper; FE 204 contract requires empty body
 - **D-109-02-ALL-NONE-422**: PATCH /me with both full_name and email None raises ValidationAppError(422) inline in the route — a no-op PATCH is a client bug
 - **D-109-02-NIL-UUID-FALLBACK**: if cc_refresh cookie is absent or unresolvable, effective_family_id falls back to UUID(int=0) — revoke-all fallback; extremely rare while access token was valid
+- **D-109-04-PARTIAL-PATCH**: ProfileSection handleSave sends only changed fields to PATCH /auth/me by comparing against serverDataRef.current — avoids unnecessary full-body PATCH
+- **D-109-04-INVALID-CREDS**: wrong current password discriminated by err.code === 'invalid_credentials' (HTTP 401) mapped to inline 'Неверный текущий пароль' (T-109-19 anti-oracle)
+- **D-109-04-PROFILE-TOAST**: section-specific 'Профиль обновлён' toast in ProfileSection.handleSave onSuccess per UI-SPEC section A; SettingsPage aggregate toast still fires when multiple sections saved together
 
 ### Phase 104 Decisions
 
@@ -199,7 +202,7 @@ v3.0 in-progress deferrals:
 
 ## Session Continuity
 
-Last session: 2026-06-14T19:12:52.519Z
+Last session: 2026-06-14T19:20:23.636Z
 Stopped at: Phase 109 UI-SPEC approved
 Resume: `/gsd:plan-phase 107` (Admin FE Completion on Existing Backend — PLAN/PTPKG/CLI-04).
 

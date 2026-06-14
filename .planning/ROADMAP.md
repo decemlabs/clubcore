@@ -387,7 +387,7 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [x] 109-02-PLAN.md — Backend routes + tests: PATCH /auth/me + POST /auth/change-password (verify_csrf, auth-only) + ASGITransport integration tests
-- [ ] 109-04-PLAN.md — FE wiring: editable ProfileSection (SaveBar) + ChangePasswordModal + SettingsPage registration (human-verify checkpoint)
+- [x] 109-04-PLAN.md — FE wiring: editable ProfileSection (SaveBar) + ChangePasswordModal + SettingsPage registration (human-verify checkpoint)
 
 **UI hint**: yes
 
@@ -442,7 +442,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 107. Admin FE Completion on Existing Backend | 3/3 | Complete    | 2026-06-14 |
 | 108. Editable Settings — Backend + Wiring | 5/5 | Complete    | 2026-06-14 |
-| 109. Profile & Security — Backend + Wiring | 3/4 | In Progress|  |
+| 109. Profile & Security — Backend + Wiring | 4/4 | Complete   | 2026-06-14 |
 | 110. Live Verification — Deferred P102 | 0/TBD | Not started | - |
 | 111. OpenAPI Handoff + Milestone Gate | 0/TBD | Not started | - |
 
