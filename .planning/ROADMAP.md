@@ -426,7 +426,12 @@ Plans:
   3. All 13 v3.1 feature requirements (PLAN/PTPKG/CLI/CFG/PROF/VER) are verified satisfied with no open blockers.
 
 **Plans**: 2 plans
+**Wave 1**
+
 - [ ] 111-01-PLAN.md — Regen openapi.json + schema.d.ts + add _v31Checks forward-guard + commit
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 111-02-PLAN.md — Run full milestone gate + confirm 13/13 reqs + write 111-GATE-EVIDENCE.md handoff doc
 
 ## Backlog
