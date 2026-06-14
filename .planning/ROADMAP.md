@@ -345,12 +345,22 @@ Full phase details archived in [milestones/v3.0-ROADMAP.md](milestones/v3.0-ROAD
   5. Each Settings surface is owner-gated in the UI (reception sees a friendly Lock/403 state, not a crash); every new endpoint is RBAC byte-parity safe and added additively to the staff contract.
 
 **Plans**: 5 plans (4 waves)
-
 Plans:
+**Wave 1**
+
 - [ ] 108-01-PLAN.md — Backend foundation: RBAC (EDIT,SETTINGS) byte-parity + 4 LOCKED audit events + 3 settings singleton models + gym lat/lng + migrations 0070/0071
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 108-02-PLAN.md — Settings endpoints (hours/booking/notifications GET+PUT, RBAC+CSRF+audit) + staff GET /api/v1/gym + lat/lng (CFG-01 backend complete)
 - [ ] 108-03-PLAN.md — Enforcement: bookings.service reads booking_config + working_hours/closures; notifications dispatcher matrix gate + quiet hours + always-on (raw-SQL cross-module reads)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 108-04-PLAN.md — FE data layer: Zod wire+form schemas + 8 TanStack Query hooks (gym/hours/booking/notifications) gated by can()
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 108-05-PLAN.md — FE section wiring: BranchSection/HoursSection/BookingSection/NotificationsSection + Lock cards + SaveBar + navigate-away guard + human-verify
 
 **UI hint**: yes
