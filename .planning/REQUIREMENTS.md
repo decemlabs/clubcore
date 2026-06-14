@@ -15,8 +15,8 @@
 
 > Сейчас кнопки «Создать»/«Редактировать» — toast-заглушки; backend (`/membership-plans`, `/pt-package-plans` POST/PATCH) уже существует.
 
-- [ ] **PLAN-01**: Owner can create AND edit a membership plan through a real form modal (`POST` / `PATCH /api/v1/membership-plans`), with Zod validation, immutable-field rules (durationDays/freezeDaysLimit), and 422 field-error mapping — replacing the toast stub.
-- [ ] **PLAN-02**: Owner can create AND edit a PT-package plan through a real form modal (`POST` / `PATCH /api/v1/pt-package-plans`), name editable + other fields immutable per backend contract — replacing the toast stub.
+- [x] **PLAN-01**: Owner can create AND edit a membership plan through a real form modal (`POST` / `PATCH /api/v1/membership-plans`), with Zod validation, immutable-field rules (durationDays/freezeDaysLimit), and 422 field-error mapping — replacing the toast stub.
+- [x] **PLAN-02**: Owner can create AND edit a PT-package plan through a real form modal (`POST` / `PATCH /api/v1/pt-package-plans`), name editable + other fields immutable per backend contract — replacing the toast stub.
 
 ### PTPKG — PT-пакеты (instances)
 
@@ -90,8 +90,8 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PLAN-01 | Phase 107 | Pending |
-| PLAN-02 | Phase 107 | Pending |
+| PLAN-01 | Phase 107 | Complete |
+| PLAN-02 | Phase 107 | Complete |
 | PTPKG-01 | Phase 107 | Pending |
 | PTPKG-02 | Phase 107 | Pending |
 | CLI-04 | Phase 107 | Pending |
