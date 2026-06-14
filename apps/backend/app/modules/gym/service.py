@@ -1,12 +1,11 @@
 """Gym-info service — orchestration between router and repository (Phase 86 GYM-01/GYM-02).
 
 Read path: get_gym_info raises GymInfoNotFoundError (404) if the seed row is absent.
-Write path: update_gym_info upserts the singleton, flushes and commits.
+Write path: update_gym_info upserts the singleton, emits LOCKED audit event, flushes and commits.
 
-No audit emit on singleton upsert — gym-info is owner-only configuration content,
-not a business event. A future audit trail for content CMS edits can be added without
-changing the caller contract (additive). This is consistent with the singleton pattern:
-there is no meaningful diff to record per-field beyond the PUT payload itself.
+Phase 108 CFG-01: gym_card_updated LOCKED audit event is now emitted on update.
+The event was pre-registered in Plan 01 per INFRA-15 discipline. The actor argument
+(previously unused) is now consumed by the audit emit.
 
 D-03 caller-owns-txn: flush + commit live HERE (service layer), not in repository.
 """
@@ -15,6 +14,7 @@ from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import audit
 from app.core.dependencies import CurrentUser
 from app.core.exceptions import NotFoundError
 from app.modules.gym import repository
@@ -45,12 +45,19 @@ async def update_gym_info(
     actor: CurrentUser,
     data: GymInfoUpdateRequest,
 ) -> GymInfoResponse:
-    """Upsert singleton. Caller-owns-txn: flush + commit here (singleton write, D-03).
+    """Upsert singleton. Emits LOCKED audit event. Caller-owns-txn: flush + commit here (D-03).
 
-    actor is accepted for future audit emission or logging — not used in v2.4
-    (no audit events for content CMS edits per design rationale above).
+    Phase 108 CFG-01: gym_card_updated LOCKED audit event emitted before commit per INFRA-15.
+    The event was pre-registered in Plan 01; this is the first callsite.
     """
     gym = await repository.upsert_singleton(session, data)
+    await audit.emit(
+        session,
+        "gym_card_updated",
+        actor_user_id=actor.id,
+        resource_type="gym",
+        changed_fields=list(data.model_dump(exclude_unset=True).keys()),
+    )
     await session.flush()
     await session.commit()
     return GymInfoResponse.model_validate(gym)

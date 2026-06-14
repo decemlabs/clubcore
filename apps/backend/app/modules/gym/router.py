@@ -1,11 +1,17 @@
-"""Gym-info router — client read + owner write endpoints (Phase 86 GYM-01/GYM-02).
+"""Gym-info router — client read + owner write + staff read endpoints (Phase 86/108).
 
-Two APIRouter instances in one file:
+Three APIRouter instances in one file:
   client_router: GET /api/v1/client/gym   — require_client gate (GYM-01)
-  owner_router:  PUT /api/v1/gym          — require_permission(EDIT, GYM) + verify_csrf (GYM-02)
+  owner_router:  GET /api/v1/gym          — require_permission(EDIT, GYM) staff read (CFG-01)
+                 PUT /api/v1/gym          — require_permission(EDIT, GYM) + verify_csrf (GYM-02)
 
 RBAC-04 ordering: in owner_update_gym_info, require_permission is declared BEFORE
 verify_csrf so reception fails at 403 before reaching the CSRF check.
+
+Phase 108 CFG-01: staff GET added for form pre-population. Gated on EDIT, Resource.GYM
+so reception gets 403 (gym card is fully owner-scoped per CONTEXT line 36).
+A GET-only gate (VIEW, GYM) is intentionally NOT used — the gym card is owner-only
+end to end. This is consistent with the locked CONTEXT decision.
 
 No try/except — AppError subclasses (including GymInfoNotFoundError) bubble to
 _app_error_handler in app/main.py.
@@ -54,6 +60,27 @@ async def client_get_gym_info(
 
 
 owner_router = APIRouter(tags=["Gym"])
+
+
+@owner_router.get(
+    "",
+    response_model=ResponseEnvelope[GymInfoResponse],
+    operation_id="owner_get_gym_info",
+    summary="Get gym facility info for staff form pre-population (owner-only; CFG-01)",
+)
+async def owner_get_gym_info(
+    actor: Annotated[CurrentUser, Depends(require_permission(Action.EDIT, Resource.GYM))],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[GymInfoResponse]:
+    """Return the singleton gym-info row for the staff settings form (CFG-01).
+
+    Gated on require_permission(EDIT, GYM) — reception → 403 (gym card is owner-only
+    per CONTEXT line 36; a separate VIEW gate is intentionally not provided).
+    GymInfoNotFoundError (404) surfaces when the seed migration has not been run.
+    No try/except — AppError bubbles to _app_error_handler.
+    """
+    result = await service.get_gym_info(session)
+    return envelope(result)
 
 
 @owner_router.put(
