@@ -334,13 +334,17 @@ function InviteModal({ open, onClose }: { open: boolean; onClose: () => void }) 
           setState({
             phase: 'success',
             email: data.email,
-            inviteLinkUrl: data.inviteLinkUrl,
-            invitationExpiresAt: data.invitationExpiresAt,
+            inviteLinkUrl: data.inviteLinkUrl ?? undefined,
+            invitationExpiresAt: data.invitationExpiresAt ?? undefined,
           });
         },
-        onError: () => {
+        onError: (err) => {
           setState({ ...state, submitting: false });
-          toast.error('Не удалось отправить приглашение. Попробуйте ещё раз.');
+          if (err instanceof ApiError && err.code === 'email_already_active') {
+            toast.error('Сотрудник с таким email уже существует');
+          } else {
+            toast.error('Не удалось отправить приглашение. Попробуйте ещё раз.');
+          }
         },
       },
     );

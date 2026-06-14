@@ -44,10 +44,14 @@ export const UsersListResponseSchema = z.object({
 export const UserInviteResponseSchema = z.object({
   id: z.string(),
   email: z.string(),
-  fullName: z.string(),
+  // The real POST /users invite response omits fullName and returns
+  // inviteLinkUrl: null when delivery is by email — so fullName is optional and
+  // the URL/expiry are nullable. A required fullName + non-null URL made the 201
+  // success response throw → the invite always showed a generic error. (INV-01)
+  fullName: z.string().optional(),
   role: z.enum(['owner', 'reception']),
-  inviteLinkUrl: z.string().optional(),
-  invitationExpiresAt: z.string().optional(),
+  inviteLinkUrl: z.string().nullable().optional(),
+  invitationExpiresAt: z.string().nullable().optional(),
 });
 export type UserInviteData = z.infer<typeof UserInviteResponseSchema>;
 
