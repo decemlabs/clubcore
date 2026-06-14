@@ -210,11 +210,11 @@ export function PlanFormModal({ open, onOpenChange, kind, mode, plan }: PlanForm
           },
         })
       } else {
-        // edit — durationDays omitted from schema
+        // edit — durationDays, priceKopecks, freezeDaysLimit are immutable
+        // (D-101-02). Send ONLY the genuinely-mutable fields so the disabled
+        // prefill can never round-trip a stale price/freeze value (WR-02).
         const raw = {
           name: memName.trim() || undefined,
-          priceKopecks: memPriceRub === '' ? undefined : Math.round(Number(memPriceRub) * 100),
-          freezeDaysLimit: memFreezeDays === '' ? undefined : Number(memFreezeDays),
           active: memActive,
         }
         const result = MembershipPlanUpdateSchema.safeParse(raw)
