@@ -318,3 +318,54 @@ async def test_patch_me_writes_profile_updated_audit_row(
     payload_str = str(payload)
     assert "password" not in payload_str.lower(), f"Audit payload leaks 'password': {payload}"
     assert new_name not in payload_str, f"Audit payload leaks raw fullName value: {payload}"
+
+
+# ---------------------------------------------------------------------------
+# Test 8: mixed-case email update — stored lowercased, login still works (CR-01)
+# ---------------------------------------------------------------------------
+
+
+async def test_patch_me_mixed_case_email_stored_lowercase_login_succeeds(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+    seeded_owner: User,
+) -> None:
+    """CR-01: PATCH email with mixed-case address → stored as lowercase;
+    subsequent login with the lowercased email succeeds (no self-lockout).
+
+    authenticate() always lowercases the submitted email before the SQL lookup,
+    so update_profile must store the canonical lowercase form to match.
+    """
+    await _login(async_client)
+
+    # Mixed-case address — the local part has uppercase letters.
+    mixed_case_email = f"MixedCase-{uuid4().hex[:6]}@Example.COM"
+    expected_stored = mixed_case_email.lower()
+
+    r = await async_client.patch(
+        "/api/v1/auth/me",
+        json={"email": mixed_case_email},
+        headers={"X-CSRF-Token": async_client.cookies["clubcore_csrf"]},
+    )
+    assert r.status_code == 200, r.text
+
+    # The response must echo the stored (lowercased) value.
+    data = r.json()["data"]
+    assert data["email"] == expected_stored, (
+        f"PATCH response must echo lowercased email, got: {data['email']!r}"
+    )
+
+    # DB value must be lowercase.
+    await db_session.refresh(seeded_owner)
+    assert seeded_owner.email == expected_stored, (
+        f"DB User.email must be stored lowercase, got: {seeded_owner.email!r}"
+    )
+
+    # Login with the lowercased email must succeed (no self-lockout).
+    login_r = await async_client.post(
+        "/api/v1/auth/login",
+        json={"email": expected_stored, "password": PROF_OWNER_PASSWORD},
+    )
+    assert login_r.status_code == 200, (
+        f"Login with lowercased email must succeed after mixed-case PATCH: {login_r.text}"
+    )

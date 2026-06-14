@@ -1258,7 +1258,11 @@ async def update_profile(
         user.full_name = full_name
         changed_fields.append("full_name")
     if email is not None:
-        user.email = email
+        # Normalise to lowercase to match authenticate() lookup (CR-01).
+        # email-validator 2.x lowercases the domain but preserves local-part
+        # case; we must store the fully-lowercased form so the login query
+        # (which always does email.lower() before the SQL lookup) finds the row.
+        user.email = email.lower()
         changed_fields.append("email")
 
     try:
