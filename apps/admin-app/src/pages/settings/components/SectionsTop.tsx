@@ -138,13 +138,9 @@ export function ProfileSection({
   }
 
   async function handleSave() {
-    // Build partial body — only send fields that have actually changed
-    const current = serverDataRef.current
-    const body: Partial<{ fullName: string; email: string }> = {}
-    if (!current || form.fullName !== current.fullName) body.fullName = form.fullName
-    if (!current || form.email !== current.email) body.email = form.email
-
-    // Client-side validation via ProfileUpdateSchema
+    // Client-side validation via ProfileUpdateSchema — validate first, then
+    // build the partial body from the validated result so future schema fields
+    // are automatically included rather than silently dropped (IN-01).
     const result = ProfileUpdateSchema.safeParse({ fullName: form.fullName, email: form.email })
     if (!result.success) {
       const errs: Record<string, string> = {}
@@ -156,6 +152,13 @@ export function ProfileSection({
       throw new Error('Validation failed')
     }
     setFieldErrors({})
+
+    // Build partial body from validated data — only send fields that have
+    // actually changed relative to the last-known server snapshot.
+    const current = serverDataRef.current
+    const body: Partial<{ fullName: string; email: string }> = {}
+    if (!current || result.data.fullName !== current.fullName) body.fullName = result.data.fullName
+    if (!current || result.data.email !== current.email) body.email = result.data.email
 
     return new Promise<void>((resolve, reject) => {
       updateProfile.mutate(body, {
