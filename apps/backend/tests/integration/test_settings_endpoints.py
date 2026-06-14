@@ -418,7 +418,8 @@ async def test_owner_put_notification_prefs_round_trip(
     db_session: AsyncSession,
 ) -> None:
     """Owner PUT /api/v1/settings/notifications → 200; GET reflects updated value."""
-    new_signature = "MyGym"
+    # WR-02: sender_signature must be uppercase Latin only — use valid value.
+    new_signature = "MYGYM"
 
     put_r = await http_client_owner.put(
         "/api/v1/settings/notifications",
@@ -440,7 +441,7 @@ async def test_owner_put_notification_prefs_emits_audit_event(
     """Owner PUT /api/v1/settings/notifications emits notification_prefs_updated audit event."""
     await http_client_owner.put(
         "/api/v1/settings/notifications",
-        json={"senderSignature": "Test"},
+        json={"senderSignature": "TEST"},  # WR-02: must be uppercase Latin only
         headers=_csrf(http_client_owner),
     )
     rows = await _audit_rows(db_session, "notification_prefs_updated", "settings")

@@ -17,6 +17,10 @@ from pydantic import Field, field_validator
 from app.core.schemas import BackendSchemaBase, ResponseData
 
 _HH_MM_PATTERN = re.compile(r"^\d{2}:\d{2}$")
+# WR-02: sender_signature must be 0-11 uppercase Latin characters only,
+# matching the frontend NotificationPrefsUpdateSchema regex constraint.
+# Stored values that cannot pass this pattern would be uneditable in the form.
+_SENDER_SIG_RE = re.compile(r"^[A-Z]{0,11}$")
 
 _VALID_SCHEDULE_STEPS = {15, 30, 60, 90}
 
@@ -160,6 +164,20 @@ class NotificationPrefsUpdateRequest(BackendSchemaBase):
     sender_signature: str | None = Field(default=None, max_length=11)
     quiet_hours_start: str | None = None
     quiet_hours_end: str | None = None
+
+    @field_validator("sender_signature")
+    @classmethod
+    def validate_sender_signature(cls, v: str | None) -> str | None:
+        """WR-02: sender_signature must be 0-11 uppercase Latin characters only.
+
+        Mirrors the frontend NotificationPrefsUpdateSchema regex (/^[A-Z]*$/).
+        Without this gate, values like "abc" or "12345" could be stored via
+        the API directly, making the form unable to display them without a
+        validation error.
+        """
+        if v is not None and not _SENDER_SIG_RE.match(v):
+            raise ValueError("sender_signature must be 0-11 uppercase Latin characters")
+        return v
 
     @field_validator("quiet_hours_start", "quiet_hours_end")
     @classmethod
