@@ -348,7 +348,7 @@ Full phase details archived in [milestones/v3.0-ROADMAP.md](milestones/v3.0-ROAD
 Plans:
 **Wave 1**
 
-- [ ] 108-01-PLAN.md — Backend foundation: RBAC (EDIT,SETTINGS) byte-parity + 4 LOCKED audit events + 3 settings singleton models + gym lat/lng + migrations 0070/0071
+- [x] 108-01-PLAN.md — Backend foundation: RBAC (EDIT,SETTINGS) byte-parity + 4 LOCKED audit events + 3 settings singleton models + gym lat/lng + migrations 0070/0071
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -430,7 +430,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 107. Admin FE Completion on Existing Backend | 3/3 | Complete    | 2026-06-14 |
-| 108. Editable Settings — Backend + Wiring | 0/TBD | Not started | - |
+| 108. Editable Settings — Backend + Wiring | 1/5 | In Progress|  |
 | 109. Profile & Security — Backend + Wiring | 0/TBD | Not started | - |
 | 110. Live Verification — Deferred P102 | 0/TBD | Not started | - |
 | 111. OpenAPI Handoff + Milestone Gate | 0/TBD | Not started | - |

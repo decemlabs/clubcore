@@ -31,10 +31,10 @@
 
 ### CFG — Настройки (persist; новый/расширенный backend)
 
-- [ ] **CFG-01**: Owner can edit the gym card (name, address, coordinates, contacts, description, amenities, capacity) and changes persist; reception is 403. Reuse/extend the v2.4 `gym` module (`PUT /gym`) where possible.
-- [ ] **CFG-02**: Owner can edit working hours + technical breaks + holiday/closure dates and they persist; the schedule / booking window respects them.
-- [ ] **CFG-03**: Owner can edit online-booking rules (schedule step, booking-ahead window, booking cutoff, cancel/reschedule policy + no-show penalty, group limit + waitlist, PT self-booking flags) and they persist + apply to the client PWA.
-- [ ] **CFG-04**: Owner can edit the client-notification matrix (per-trigger × per-channel toggles) + sender signature + quiet hours; the settings persist and are honored by the notification dispatcher.
+- [x] **CFG-01**: Owner can edit the gym card (name, address, coordinates, contacts, description, amenities, capacity) and changes persist; reception is 403. Reuse/extend the v2.4 `gym` module (`PUT /gym`) where possible.
+- [x] **CFG-02**: Owner can edit working hours + technical breaks + holiday/closure dates and they persist; the schedule / booking window respects them.
+- [x] **CFG-03**: Owner can edit online-booking rules (schedule step, booking-ahead window, booking cutoff, cancel/reschedule policy + no-show penalty, group limit + waitlist, PT self-booking flags) and they persist + apply to the client PWA.
+- [x] **CFG-04**: Owner can edit the client-notification matrix (per-trigger × per-channel toggles) + sender signature + quiet hours; the settings persist and are honored by the notification dispatcher.
 
 ### PROF — Профиль & безопасность
 
@@ -95,10 +95,10 @@ Which phases cover which requirements. Populated during roadmap creation.
 | PTPKG-01 | Phase 107 | Complete |
 | PTPKG-02 | Phase 107 | Complete |
 | CLI-04 | Phase 107 | Complete |
-| CFG-01 | Phase 108 | Pending |
-| CFG-02 | Phase 108 | Pending |
-| CFG-03 | Phase 108 | Pending |
-| CFG-04 | Phase 108 | Pending |
+| CFG-01 | Phase 108 | Complete |
+| CFG-02 | Phase 108 | Complete |
+| CFG-03 | Phase 108 | Complete |
+| CFG-04 | Phase 108 | Complete |
 | PROF-01 | Phase 109 | Pending |
 | PROF-02 | Phase 109 | Pending |
 | VER-01 | Phase 110 | Pending |
