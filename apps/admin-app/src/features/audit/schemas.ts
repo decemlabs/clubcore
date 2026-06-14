@@ -12,8 +12,10 @@ import { z } from 'zod';
 export const AuditEventSchema = z.object({
   id: z.string(),
   createdAt: z.string(),
-  actorUserId: z.string(),
-  actorEmailSnapshot: z.string(),
+  // System-generated events (e.g. loyalty_accrued) have no actor, and
+  // login_success rows omit the email snapshot — both arrive as null. (BUG-6)
+  actorUserId: z.string().nullable(),
+  actorEmailSnapshot: z.string().nullable(),
   action: z.string(),
   resourceType: z.string(),
   resourceId: z.string().nullable(),

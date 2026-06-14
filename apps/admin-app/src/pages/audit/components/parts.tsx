@@ -104,7 +104,7 @@ export function RealAuditRow({
   event: AuditEvent;
   onClick: () => void;
 }) {
-  const initials = event.actorEmailSnapshot.charAt(0).toUpperCase();
+  const initials = (event.actorEmailSnapshot ?? 'Система').charAt(0).toUpperCase();
   const time = formatTime(event.createdAt);
   const actionLabel = getActionLabel(event.action);
   const resourceIdDisplay = event.resourceId
@@ -128,7 +128,7 @@ export function RealAuditRow({
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline gap-2">
           <span className="truncate text-[13px] font-semibold text-fg">
-            {event.actorEmailSnapshot}
+            {event.actorEmailSnapshot ?? 'Система'}
           </span>
           <span
             className="shrink-0 text-[11.5px] tabular-nums text-fg-muted"

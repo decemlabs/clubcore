@@ -59,7 +59,7 @@ export function AuditDetailModal({
       }
     >
       <div className="grid grid-cols-1 gap-2.5 min-[440px]:grid-cols-2">
-        <MetaTile k="Сотрудник" v={event.actorEmailSnapshot} />
+        <MetaTile k="Сотрудник" v={event.actorEmailSnapshot ?? 'Система'} />
         <MetaTile k="Дата и время" v={`${dateLabel}, ${timeLabel}`} />
         {event.resourceType ? (
           <MetaTile k="Тип ресурса" v={event.resourceType} />
