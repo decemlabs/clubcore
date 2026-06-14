@@ -33,6 +33,7 @@ import { SALES_UNIT_OPTIONS, type SalesUnit } from './components/sales-unit'
 import { formatKopecks } from '@/lib/format'
 import type { MembershipPlanData } from '@/features/plans/schemas'
 import type { PtPackagePlanData } from '@/features/pt-packages/schemas'
+import { PlanFormModal } from '@/components/modals/PlanFormModal'
 
 const ADD_BTN =
   'inline-flex h-9 items-center gap-1.5 rounded-full border-[0.5px] border-border bg-surface px-3.5 text-[13px] font-semibold text-fg transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
@@ -197,7 +198,7 @@ export function PlansPage() {
   const plansQuery = usePlans()
   const ptPackagesQuery = usePtPackagePlans()
 
-  // Mutations — delete only in this plan (create/update stubs wired via toast; full modals in future plan)
+  // Mutations — delete plans; create/update wired via PlanFormModal (Phase 107-01)
   const deletePlan = useDeletePlan()
   const deletePtPlan = useDeletePtPackagePlan()
 
@@ -212,6 +213,12 @@ export function PlansPage() {
 
   const [tab, setTab] = useState<PlanTab>('tariffs')
   const [salesUnit, setSalesUnit] = useState<SalesUnit>('count')
+  const [planFormModal, setPlanFormModal] = useState<{
+    open: boolean
+    kind: 'membership' | 'pt-package'
+    mode: 'create' | 'edit'
+    plan?: MembershipPlanData | PtPackagePlanData
+  }>({ open: false, kind: 'membership', mode: 'create' })
 
   const tariffsRef = useRef<HTMLElement>(null)
   const promosRef = useRef<HTMLElement>(null)
@@ -229,15 +236,11 @@ export function PlansPage() {
 
   // ── Plan CRUD handlers ──────────────────────────────────────────────────
 
-  const handleCreatePlan = () => {
-    // Full create modal wired in a future plan — stub toast for now
-    toast('Создание тарифа')
-  }
+  const handleCreatePlan = () =>
+    setPlanFormModal({ open: true, kind: 'membership', mode: 'create' })
 
-  const handleEditPlan = (plan: MembershipPlanData) => {
-    // Full edit modal wired in a future plan — stub toast for now
-    toast(`Редактирование тарифа «${plan.name}»`)
-  }
+  const handleEditPlan = (plan: MembershipPlanData) =>
+    setPlanFormModal({ open: true, kind: 'membership', mode: 'edit', plan })
 
   const handleDeletePlan = (plan: MembershipPlanData) => {
     deletePlan.mutate(plan.id, {
@@ -254,13 +257,11 @@ export function PlansPage() {
     })
   }
 
-  const handleCreatePtPlan = () => {
-    toast('Добавление услуги')
-  }
+  const handleCreatePtPlan = () =>
+    setPlanFormModal({ open: true, kind: 'pt-package', mode: 'create' })
 
-  const handleEditPtPlan = (plan: PtPackagePlanData) => {
-    toast(`Редактирование услуги «${plan.name}»`)
-  }
+  const handleEditPtPlan = (plan: PtPackagePlanData) =>
+    setPlanFormModal({ open: true, kind: 'pt-package', mode: 'edit', plan })
 
   const handleDeletePtPlan = (plan: PtPackagePlanData) => {
     deletePtPlan.mutate(plan.id, {
@@ -463,6 +464,14 @@ export function PlansPage() {
           </div>
         )}
       </section>
+
+      <PlanFormModal
+        open={planFormModal.open}
+        onOpenChange={(open) => setPlanFormModal((s) => ({ ...s, open }))}
+        kind={planFormModal.kind}
+        mode={planFormModal.mode}
+        plan={planFormModal.plan}
+      />
     </div>
   )
 }
