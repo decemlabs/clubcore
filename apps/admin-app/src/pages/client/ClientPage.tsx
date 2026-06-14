@@ -29,6 +29,20 @@ import { NotesTab } from './components/NotesTab';
 import { Card } from './components/shared';
 import { formatDateRu, formatKopecks } from '@/lib/format';
 import { cn } from '@/lib/cn';
+import { useModals } from '@/components/modals/modals-context';
+import { useSession } from '@/features/auth/api';
+import { can } from '@/shared/session/can';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { CreditCard, MoreHorizontal } from '@/components/icons';
+import type { MembershipData } from '@/features/memberships/schemas';
+import type { SubscriptionScreen } from '@/components/modals/modals-context';
 
 // Mock data for chat/notes — wired to real backend in a future plan
 import { clientDetail } from '@/mocks/client-detail';
@@ -51,8 +65,24 @@ const MEMBERSHIP_STATUS_TONE: Record<string, string> = {
   cancelled: 'bg-danger-soft text-danger',
 };
 
-function MembershipsSection({ clientId }: { clientId: string }) {
+/** Build the SubscriptionModal membership payload from the flat wire shape. */
+function toMembershipPayload(m: MembershipData) {
+  return {
+    id: m.id,
+    clientId: m.clientId,
+    priceKopecksSnapshot: m.priceKopecksSnapshot,
+    paidAt: m.paidAt,
+    planNameSnapshot: m.planNameSnapshot,
+    endDate: m.endDate,
+    freezeDaysRemaining: m.freezeDaysRemaining,
+    currentFreezePeriod: m.currentFreezePeriod,
+  };
+}
+
+function MembershipsSection({ clientId, clientName }: { clientId: string; clientName: string }) {
   const { data, isPending, isError, refetch } = useMembershipsByClient(clientId);
+  const { open } = useModals();
+  const role = useSession().data?.role ?? 'reception';
 
   if (isPending) {
     return (
@@ -81,6 +111,17 @@ function MembershipsSection({ clientId }: { clientId: string }) {
           className="py-10"
           title="Нет активных абонементов"
           message="Активные абонементы клиента появятся здесь."
+          action={
+            <Button
+              className="mt-1 gap-2 rounded-full"
+              onClick={() =>
+                open('subscription', { subscription: { screen: 'create', clientId, clientName } })
+              }
+            >
+              <CreditCard className="size-[15px]" />
+              Оформить абонемент
+            </Button>
+          }
         />
       </Card>
     );
@@ -91,6 +132,17 @@ function MembershipsSection({ clientId }: { clientId: string }) {
       {active.map((m) => {
         const tone = MEMBERSHIP_STATUS_TONE[m.status] ?? 'bg-surface-3 text-fg-muted';
         const statusLabel = MEMBERSHIP_STATUS_LABEL[m.status] ?? m.status;
+        const isFrozen = m.status === 'frozen';
+        const openScreen = (screen: SubscriptionScreen) =>
+          open('subscription', {
+            subscription: {
+              screen,
+              clientId,
+              clientName,
+              membershipId: m.id,
+              membership: toMembershipPayload(m),
+            },
+          });
         return (
           <div
             key={m.id}
@@ -116,6 +168,39 @@ function MembershipsSection({ clientId }: { clientId: string }) {
                 {formatKopecks(m.priceKopecksSnapshot)}
               </div>
             </div>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  aria-label="Действия с абонементом"
+                  className="size-[34px] shrink-0 rounded-full"
+                >
+                  <MoreHorizontal className="size-[15px]" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[190px]">
+                <DropdownMenuItem onSelect={() => openScreen('renew')}>Продлить</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => openScreen(isFrozen ? 'unfreeze' : 'freeze')}>
+                  {isFrozen ? 'Разморозить' : 'Заморозить'}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => openScreen('refund')}>
+                  Оформить возврат
+                </DropdownMenuItem>
+                {can(role, 'cancel', 'memberships') ? (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="text-danger focus:text-danger"
+                      onSelect={() => openScreen('cancel')}
+                    >
+                      Отменить абонемент
+                    </DropdownMenuItem>
+                  </>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         );
       })}
@@ -135,13 +220,17 @@ export function ClientPage() {
   if (isPending) return <PageLoading />;
   if (isError || !client) return <PageError onRetry={() => void refetch()} />;
 
+  const clientName = [client.lastName, client.firstName, client.middleName]
+    .filter(Boolean)
+    .join(' ');
+
   return (
     <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-4 px-4 pb-10 pt-5 sm:px-6 sm:pb-12 sm:pt-6 lg:px-7">
       {/* Profile head — real data from GET /api/v1/clients/{client_id} (101-01) */}
       <ProfileHeroReal client={client} />
 
       {/* Active memberships section — real data from useMembershipsByClient (101-03) */}
-      <MembershipsSection clientId={clientId} />
+      <MembershipsSection clientId={clientId} clientName={clientName} />
 
       {/* Tabs — activity/trainings/payments on real data (101-04) */}
       <section className="@container flex min-w-0 flex-col gap-4">
