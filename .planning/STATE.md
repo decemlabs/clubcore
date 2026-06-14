@@ -32,7 +32,7 @@ Resume options:
   - Archive + close: `/gsd-complete-milestone v3.0` then `/gsd-cleanup`
   - Address debt first: see `.planning/v3.0-MILESTONE-AUDIT.md` tech_debt + human_verify_deferred (P101 WR-01 plans-form, live UAT for P101–104, ruff/format tree-wide debt)
   - Live UAT: bring up `docker compose up` and validate the 31 deferred browser items before v3.1 deploy
-Last activity: 2026-06-14 — quick task 260614-j2d: closed GAP-1 (membership lifecycle now reachable on the client page — sell/freeze/renew/cancel/refund); sell+freeze+RBAC verified live. (Prior: 260614-hux fixed 8 admin-app live-UAT bugs.)
+Last activity: 2026-06-14 — deferred live-UAT pass: P101/P103/P104 verified live (v3.0-UAT-VERIFICATION-PASS.md); fixed INV-01/INV-02 (user-invite, commit 5e3b41f1); REV-01 (revoke-invitation, backend decision) deferred → task_50ae4a5a; P102 payroll/booking data-setup-blocked. (Prior: 260614-hux 8 bug fixes, 260614-j2d GAP-1.)
 
 Progress: [██████████] 100% (7/7 v3.0 work phases; 999.x are historical ledger, not v3.0 work)
 
@@ -157,10 +157,11 @@ v3.0 in-progress deferrals:
 |----------|------|--------|
 | feature | P101 WR-01 — Plans create/edit form modals (list/gating/delete/API-hooks done; forms are toast stubs) | deferred → follow-up (user-accepted 2026-06-13) |
 | human-verify | P100 — login round-trip + 401 redirect | ✅ validated live 2026-06-13 |
-| human-verify | P101 — 9 live-backend UAT items (CRUD round-trips, sell/freeze/refund, role gating) | deferred → batch-validate at Phase 106 gate |
-| human-verify | P102 — 5 live items (time-off force-cascade, booking-race calendar refresh, 24h cancel window, payroll kopecks round-trip, reception zero-payroll-calls) | deferred → batch-validate at Phase 106 gate |
-| human-verify | P103 — 6 live items (check-in round-trip + 3 409 states, reception zero owner-calls, cashbox refund rows, Load no-NaN, Finance tabs) | deferred → batch-validate at Phase 106 gate |
-| human-verify | P104 — 11 live items (dashboard KPIs+reception zero-calls, 4 reports + CSV downloads, audit filters/pagination/payload, sessions revoke+self-revoke, user invite/deactivate 409s) | deferred → batch-validate at Phase 106 gate |
+| human-verify | P101 — 9 live-backend UAT items (CRUD round-trips, sell/freeze/refund, role gating) | ✅ verified live 2026-06-14 (see v3.0-UAT-VERIFICATION-PASS.md) |
+| human-verify | P102 — 5 live items (time-off force-cascade, booking-race, 24h cancel, payroll kopecks, reception zero-payroll-calls) | ⏳ data-setup-blocked (schedule renders post-BUG-4; payroll/booking seeding deferred) |
+| human-verify | P103 — 6 live items (check-in + 409 states, reception zero owner-calls, cashbox refund rows, Load no-NaN, Finance tabs) | ✅ verified live 2026-06-14 (duplicate/outside-hours 409 by equivalence) |
+| human-verify | P104 — 11 live items (dashboard KPIs+reception zero-calls, reports + CSV, audit filters/payload, sessions revoke, user invite/deactivate) | ✅ verified live 2026-06-14 (invite needed INV-01/02 fix; REV-01 revoke deferred) |
+| bug | REV-01 — revoke-invitation broken (FE no body → 422 + passes user.id not token id; list omits token id) | deferred → needs backend contract decision (task_50ae4a5a) |
 
 ## Session Continuity
 
