@@ -179,6 +179,100 @@ async def test_revoke_invitation_flips_consumed_and_emits_audit(
     assert audit_row.payload["reason"] == "wrong email address"
 
 
+async def test_users_list_exposes_invitation_token_id(
+    db_session: AsyncSession,
+    authed_client_owner: AsyncClient,
+) -> None:
+    """REV-01 Variant B — GET /users returns invitationTokenId for pending invites, null for active.
+
+    The list-item ``invitationTokenId`` is the live ``password_reset_tokens``
+    row id (D-43-19) that the revoke endpoint resolves by. It MUST equal the
+    issued token id for a freshly-invited pending user and be null for an
+    active user (the seeded owner).
+    """
+    r_create = await authed_client_owner.post(
+        "/api/v1/users",
+        json={
+            "email": "listed-pending@example.com",
+            "fullName": "Listed Pending",
+            "role": "reception",
+        },
+        headers=_csrf_headers(authed_client_owner),
+    )
+    assert r_create.status_code == 201, r_create.text
+    pending_user_id = r_create.json()["data"]["id"]
+
+    # The issued invitation token row id (consumed_at IS NULL — fresh).
+    token_row = await db_session.scalar(
+        select(PasswordResetToken).where(
+            PasswordResetToken.user_id == UUID(pending_user_id),
+            PasswordResetToken.purpose == "invitation",
+            PasswordResetToken.consumed_at.is_(None),
+        )
+    )
+    assert token_row is not None
+    expected_token_id = str(token_row.id)
+
+    r_list = await authed_client_owner.get("/api/v1/users?pageSize=100")
+    assert r_list.status_code == 200, r_list.text
+    items = r_list.json()["data"]["items"]
+    by_id = {item["id"]: item for item in items}
+
+    pending_item = by_id[pending_user_id]
+    assert pending_item["status"] == "pending_invitation"
+    assert pending_item["invitationTokenId"] == expected_token_id
+
+    # The seeded owner is an active user → invitationTokenId is null.
+    active_items = [i for i in items if i["status"] == "active"]
+    assert active_items, "expected at least one active user (the seeded owner) in the list"
+    assert all(i["invitationTokenId"] is None for i in active_items)
+
+
+async def test_revoke_invitation_using_listed_token_id(
+    authed_client_owner: AsyncClient,
+) -> None:
+    """REV-01 Variant B happy path — revoke using the token id surfaced by GET /users.
+
+    Mirrors the real FE flow: read ``invitationTokenId`` from the list, POST a
+    non-empty ``{ reason }`` body to the revoke endpoint, expect 204.
+    """
+    r_create = await authed_client_owner.post(
+        "/api/v1/users",
+        json={
+            "email": "revoke-via-list@example.com",
+            "fullName": "Revoke Via List",
+            "role": "reception",
+        },
+        headers=_csrf_headers(authed_client_owner),
+    )
+    assert r_create.status_code == 201, r_create.text
+    pending_user_id = r_create.json()["data"]["id"]
+
+    r_list = await authed_client_owner.get("/api/v1/users?pageSize=100")
+    assert r_list.status_code == 200, r_list.text
+    pending_item = next(
+        i for i in r_list.json()["data"]["items"] if i["id"] == pending_user_id
+    )
+    token_id = pending_item["invitationTokenId"]
+    assert token_id is not None
+
+    r_revoke = await authed_client_owner.post(
+        f"/api/v1/users/invitations/{token_id}/revoke",
+        json={"reason": "Отозвано владельцем"},
+        headers=_csrf_headers(authed_client_owner),
+    )
+    assert r_revoke.status_code == 204, r_revoke.text
+
+    # After revoke the pending row's token is consumed → it no longer surfaces
+    # a live invitationTokenId in the list.
+    r_list_after = await authed_client_owner.get("/api/v1/users?pageSize=100")
+    assert r_list_after.status_code == 200, r_list_after.text
+    pending_after = next(
+        i for i in r_list_after.json()["data"]["items"] if i["id"] == pending_user_id
+    )
+    assert pending_after["invitationTokenId"] is None
+
+
 async def test_revoke_already_consumed_invitation_returns_409(
     db_session: AsyncSession,
     authed_client_owner: AsyncClient,
