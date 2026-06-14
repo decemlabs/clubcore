@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/cn';
 import { Initials } from '@/components/ui/initials';
@@ -41,9 +41,17 @@ import {
   useRevokeInvitation,
   ApiError,
 } from '@/features/users/api';
+import {
+  useNotificationPrefs,
+  useUpdateNotificationPrefs,
+} from '@/features/settings/api';
 import type { UserData } from '@/features/users/schemas';
 import { can } from '@/shared/session/can';
 import { formatDateRu, getInitials } from '@/lib/format';
+import {
+  NotificationPrefsUpdateSchema,
+} from '@/features/settings/schemas';
+import { useSettingsDirty } from '@/components/settings/context';
 import {
   Chip,
   GhostBtn,
@@ -51,7 +59,6 @@ import {
   RadioGroup,
   SectionCard,
   SettingRow,
-  TextField,
   Toggle,
 } from '@/components/settings/controls';
 
@@ -71,13 +78,175 @@ const ROLE_LABEL: Record<'owner' | 'reception', string> = {
 
 const MATRIX_COLS = 'grid grid-cols-[minmax(0,1fr)_56px_56px_56px_56px] items-center gap-2';
 
-export function NotificationsSection({ data }: { data: SettingsData }) {
+type TriggerDef = {
+  kind: string;
+  label: string;
+  sub: string;
+  alwaysOn?: boolean;
+};
+
+// Notification triggers always displayed (fallback when backend matrix is empty).
+// _ALWAYS_ON_KINDS per Phase 108-03: payment_succeeded, autopay_charge_failed.
+const DEFAULT_TRIGGERS: TriggerDef[] = [
+  { kind: 'booking_confirmed', label: 'Подтверждение записи', sub: 'В течение минуты после брони слота.' },
+  { kind: 'booking_reminder', label: 'Напоминание за 2 часа', sub: 'Перед началом ПТ или групповой.' },
+  { kind: 'waitlist_promoted', label: 'Слот занят — лист ожидания', sub: 'Клиенту в вейтлисте дали место.' },
+  { kind: 'membership_expiring', label: 'Абонемент истекает', sub: 'За 7, 3 и 1 день до конца.' },
+  { kind: 'payment_succeeded', label: 'Чек об оплате', sub: '54-ФЗ. Отключить нельзя.', alwaysOn: true },
+  { kind: 'autopay_charge_failed', label: 'Ошибка автооплаты', sub: 'Клиент должен знать об отклонении платежа.', alwaysOn: true },
+  { kind: 'booking_survey', label: 'Опрос «Как тренировка?»', sub: 'Через 30 мин после посещения.' },
+  { kind: 'marketing', label: 'Маркетинг и акции', sub: 'Не чаще 1 раза в неделю; «тихие часы» применяются.' },
+];
+
+type Channel = 'push' | 'email' | 'sms' | 'tg';
+type TriggerRow = { kind: string; push: boolean; email: boolean; sms: boolean; tg: boolean };
+
+function buildMatrixState(matrix: Record<string, unknown>): TriggerRow[] {
+  return DEFAULT_TRIGGERS.map(({ kind }) => {
+    const entry = (matrix[kind] ?? {}) as Record<string, boolean>;
+    return {
+      kind,
+      push: entry.push ?? true,
+      email: entry.email ?? false,
+      sms: entry.sms ?? false,
+      tg: entry.tg ?? false,
+    };
+  });
+}
+
+function matrixStateToRecord(rows: TriggerRow[]): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const row of rows) {
+    result[row.kind] = { push: row.push, email: row.email, sms: row.sms, tg: row.tg };
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// NotificationsSection — CFG-04 (wired Phase 108-05)
+// ---------------------------------------------------------------------------
+
+export function NotificationsSection({
+  registerSave,
+  registerCancel,
+}: {
+  registerSave?: (fn: () => Promise<void>) => void;
+  registerCancel?: (fn: () => void) => void;
+}) {
+  const session = useSession();
+  const role = session.data?.role ?? 'reception';
+  const { markDirty } = useSettingsDirty();
+
+  const notifsQuery = useNotificationPrefs(role);
+  const updateNotifs = useUpdateNotificationPrefs();
+
+  const [matrixRows, setMatrixRows] = useState<TriggerRow[]>(() =>
+    DEFAULT_TRIGGERS.map(({ kind }) => ({ kind, push: true, email: false, sms: false, tg: false })),
+  );
+  const [senderSignature, setSenderSignature] = useState('');
+  const [signatureError, setSignatureError] = useState('');
+  const [quietStart, setQuietStart] = useState('22:00');
+  const [quietEnd, setQuietEnd] = useState('10:00');
+
+  const serverStateRef = useRef<{
+    matrixRows: TriggerRow[];
+    senderSignature: string;
+    quietStart: string;
+    quietEnd: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (notifsQuery.data) {
+      const rows = buildMatrixState(notifsQuery.data.matrix as Record<string, unknown>);
+      const sig = notifsQuery.data.senderSignature ?? '';
+      const qs = notifsQuery.data.quietHoursStart ?? '22:00';
+      const qe = notifsQuery.data.quietHoursEnd ?? '10:00';
+      serverStateRef.current = { matrixRows: rows, senderSignature: sig, quietStart: qs, quietEnd: qe };
+      setMatrixRows(rows);
+      setSenderSignature(sig);
+      setQuietStart(qs);
+      setQuietEnd(qe);
+    }
+  }, [notifsQuery.data]);
+
+  function dirty() {
+    markDirty(ID_NOTIF);
+  }
+
+  function toggleCell(kind: string, channel: Channel) {
+    setMatrixRows((prev) =>
+      prev.map((row) =>
+        row.kind === kind ? { ...row, [channel]: !row[channel] } : row,
+      ),
+    );
+    dirty();
+  }
+
+  async function handleSave() {
+    const body = {
+      matrix: matrixStateToRecord(matrixRows),
+      senderSignature: senderSignature || null,
+      quietHoursStart: quietStart || null,
+      quietHoursEnd: quietEnd || null,
+    };
+    const result = NotificationPrefsUpdateSchema.safeParse(body);
+    if (!result.success) {
+      const firstIssue = result.error.issues[0];
+      const field = firstIssue?.path[0];
+      if (field === 'senderSignature') {
+        setSignatureError(firstIssue?.message ?? 'Ошибка')
+      }
+      throw new Error(result.error.message);
+    }
+    setSignatureError('');
+    return new Promise<void>((resolve, reject) => {
+      updateNotifs.mutate(result.data, {
+        onSuccess: () => {
+          if (serverStateRef.current) {
+            serverStateRef.current = { matrixRows, senderSignature, quietStart, quietEnd };
+          }
+          resolve();
+        },
+        onError: (err) => reject(err),
+      });
+    });
+  }
+
+  function handleCancel() {
+    if (serverStateRef.current) {
+      setMatrixRows(serverStateRef.current.matrixRows);
+      setSenderSignature(serverStateRef.current.senderSignature);
+      setQuietStart(serverStateRef.current.quietStart);
+      setQuietEnd(serverStateRef.current.quietEnd);
+    }
+    setSignatureError('');
+  }
+
+  useEffect(() => {
+    registerSave?.(handleSave);
+    registerCancel?.(handleCancel);
+  }, [matrixRows, senderSignature, quietStart, quietEnd]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const headers = [
     { label: 'Push', Icon: Bell },
     { label: 'Email', Icon: Mail },
     { label: 'SMS', Icon: MessageSquare },
     { label: 'TG-бот', Icon: Send },
-  ];
+  ] as const;
+
+  const enabledCount = matrixRows.reduce(
+    (n, row) =>
+      n +
+      (row.push ? 1 : 0) +
+      (row.email ? 1 : 0) +
+      (row.sms ? 1 : 0) +
+      (row.tg ? 1 : 0),
+    0,
+  );
+
+  const FIELD_TIME =
+    'h-8 w-[72px] rounded-lg border-[0.5px] border-border-strong bg-surface-2 px-2 text-center text-[12.5px] tabular-nums outline-none focus:border-fg-subtle';
+
   return (
     <SectionCard
       id={ID_NOTIF}
@@ -87,69 +256,169 @@ export function NotificationsSection({ data }: { data: SettingsData }) {
       action={
         <span className="inline-flex h-[30px] items-center gap-1.5 rounded-full border-[0.5px] border-border bg-surface-2 px-3 text-[12px] font-semibold text-fg">
           <Check className="size-3.5" />
-          26 / 28 включены
+          {enabledCount} включены
         </span>
       }
     >
-      <div className="overflow-x-auto pt-2 [scrollbar-width:thin]">
-        <div className="min-w-[540px]">
-          <div className={cn(MATRIX_COLS, 'border-b-[0.5px] border-border pb-2')}>
-            <span />
-            {headers.map(({ label, Icon }) => (
-              <span
-                key={label}
-                className="flex flex-col items-center gap-0.5 text-[10.5px] font-semibold text-fg-muted"
-              >
-                <Icon className="size-3.5" />
-                {label}
-              </span>
-            ))}
-          </div>
-          {data.channels.map((c, i) => (
-            <div
-              key={c.trigger}
-              className={cn(MATRIX_COLS, i > 0 && 'border-t-[0.5px] border-border', 'py-2.5')}
-            >
-              <div className="min-w-0">
-                <div className="text-[13px] font-semibold">{c.trigger}</div>
-                <div className="text-[11px] text-fg-subtle">{c.sub}</div>
+      {!can(role, 'edit', 'settings') ? (
+        <EmptyState
+          icon={Lock}
+          title="Недостаточно прав"
+          message="Этот раздел доступен только владельцу. Обратитесь к владельцу клуба."
+          className="py-12"
+        />
+      ) : notifsQuery.isPending ? (
+        <div className="flex flex-col gap-2 pt-2">
+          <Skeleton className="h-[38px] w-full rounded-lg bg-surface-3" />
+          <Skeleton className="h-[38px] w-full rounded-lg bg-surface-3" />
+          <Skeleton className="h-[38px] w-full rounded-lg bg-surface-3" />
+          <Skeleton className="h-[38px] w-full rounded-lg bg-surface-3" />
+        </div>
+      ) : notifsQuery.isError ? (
+        <div className="py-4 text-[12px] text-fg-muted">
+          Не удалось загрузить настройки.{' '}
+          <button
+            type="button"
+            onClick={() => void notifsQuery.refetch()}
+            className="font-semibold text-fg hover:underline"
+          >
+            Повторить
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="overflow-x-auto pt-2 [scrollbar-width:thin]">
+            <div className="min-w-[540px]">
+              <div className={cn(MATRIX_COLS, 'border-b-[0.5px] border-border pb-2')}>
+                <span />
+                {headers.map(({ label, Icon }) => (
+                  <span
+                    key={label}
+                    className="flex flex-col items-center gap-0.5 text-[10.5px] font-semibold text-fg-muted"
+                  >
+                    <Icon className="size-3.5" />
+                    {label}
+                  </span>
+                ))}
               </div>
-              <div className="flex justify-center">
-                <Toggle defaultChecked={c.push} sectionId={ID_NOTIF} />
-              </div>
-              <div className="flex justify-center">
-                <Toggle defaultChecked={c.email} disabled={c.emailLocked} sectionId={ID_NOTIF} />
-              </div>
-              <div className="flex justify-center">
-                <Toggle defaultChecked={c.sms} sectionId={ID_NOTIF} />
-              </div>
-              <div className="flex justify-center">
-                <Toggle defaultChecked={c.tg} sectionId={ID_NOTIF} />
-              </div>
+              {DEFAULT_TRIGGERS.map((trigger, i) => {
+                const row = matrixRows.find((r) => r.kind === trigger.kind) ?? {
+                  kind: trigger.kind,
+                  push: true,
+                  email: false,
+                  sms: false,
+                  tg: false,
+                };
+                const isAlwaysOn = trigger.alwaysOn === true;
+                const channels: Channel[] = ['push', 'email', 'sms', 'tg'];
+                return (
+                  <div
+                    key={trigger.kind}
+                    className={cn(
+                      MATRIX_COLS,
+                      i > 0 && 'border-t-[0.5px] border-border',
+                      'py-2.5',
+                    )}
+                  >
+                    <div className="min-w-0">
+                      <div className="text-[13px] font-semibold">{trigger.label}</div>
+                      <div className="text-[11px] text-fg-subtle">{trigger.sub}</div>
+                      {isAlwaysOn ? (
+                        <div className="text-[10.5px] text-fg-subtle">
+                          Нельзя отключить (всегда включено)
+                        </div>
+                      ) : null}
+                    </div>
+                    {channels.map((ch) => (
+                      <div key={ch} className="flex justify-center">
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={row[ch]}
+                          disabled={isAlwaysOn}
+                          onClick={() => {
+                            if (!isAlwaysOn) toggleCell(trigger.kind, ch);
+                          }}
+                          className={cn(
+                            'relative h-5 w-9 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                            row[ch] ? 'bg-primary' : 'bg-surface-3',
+                            isAlwaysOn ? 'cursor-not-allowed opacity-65' : 'cursor-pointer',
+                          )}
+                          title={
+                            isAlwaysOn
+                              ? 'Нельзя отключить — системное уведомление'
+                              : row[ch]
+                                ? 'Выключить'
+                                : 'Включить'
+                          }
+                        >
+                          <span
+                            className={cn(
+                              'absolute top-0.5 size-4 rounded-full bg-white shadow-sm transition-[left]',
+                              row[ch] ? 'left-[18px]' : 'left-0.5',
+                            )}
+                          />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
             </div>
-          ))}
-        </div>
-      </div>
-      <SettingRow label="Подпись отправителя" hint="Виден в SMS и push.">
-        <TextField defaultValue="MOY ZAL" sectionId={ID_NOTIF} />
-        <div className="mt-1 text-[11px] text-fg-subtle">
-          до 11 латинских символов · зарегистрирован в МТС, МегаФон, Билайн, Т2
-        </div>
-      </SettingRow>
-      <SettingRow label="Тихие часы" hint="В это время push не отправляются, кроме срочных.">
-        <div className="flex flex-wrap items-center gap-2 text-[12px] text-fg-muted">
-          <input
-            defaultValue="22:00"
-            className="h-8 w-[72px] rounded-lg border-[0.5px] border-border-strong bg-surface-2 px-2 text-center text-[12.5px] tabular-nums outline-none focus:border-fg-subtle"
-          />
-          —
-          <input
-            defaultValue="10:00"
-            className="h-8 w-[72px] rounded-lg border-[0.5px] border-border-strong bg-surface-2 px-2 text-center text-[12.5px] tabular-nums outline-none focus:border-fg-subtle"
-          />
-          по часовому поясу клиента
-        </div>
-      </SettingRow>
+          </div>
+          <SettingRow label="Подпись отправителя" hint="Виден в SMS и push.">
+            <div>
+              <input
+                type="text"
+                value={senderSignature}
+                onChange={(e) => {
+                  const val = e.target.value.toUpperCase().slice(0, 11);
+                  setSenderSignature(val);
+                  setSignatureError('');
+                  dirty();
+                }}
+                placeholder="MOY ZAL"
+                maxLength={11}
+                className="h-[38px] w-full rounded-[10px] border-[0.5px] border-border-strong bg-surface-2 px-3 text-[13.5px] font-mono uppercase text-fg outline-none transition-colors placeholder:text-fg-subtle focus:border-fg-subtle focus:bg-surface sm:w-48"
+              />
+              {signatureError ? (
+                <div className="mt-1 text-[11px] text-danger">{signatureError}</div>
+              ) : (
+                <div className="mt-1 text-[11px] text-fg-subtle">
+                  до 11 латинских заглавных символов · зарегистрирован у операторов
+                </div>
+              )}
+            </div>
+          </SettingRow>
+          <SettingRow
+            label="Тихие часы"
+            hint="В это время push не отправляются, кроме срочных. Часовой пояс — Europe/Moscow."
+          >
+            <div className="flex flex-wrap items-center gap-2 text-[12px] text-fg-muted">
+              <input
+                type="time"
+                value={quietStart}
+                onChange={(e) => {
+                  setQuietStart(e.target.value);
+                  dirty();
+                }}
+                className={FIELD_TIME}
+              />
+              —
+              <input
+                type="time"
+                value={quietEnd}
+                onChange={(e) => {
+                  setQuietEnd(e.target.value);
+                  dirty();
+                }}
+                className={FIELD_TIME}
+              />
+              по часовому поясу Europe/Moscow
+            </div>
+          </SettingRow>
+        </>
+      )}
     </SectionCard>
   );
 }
