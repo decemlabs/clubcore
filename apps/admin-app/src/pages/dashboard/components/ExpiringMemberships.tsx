@@ -42,7 +42,7 @@ function ExpiringRow({ item, first }: { item: MembershipData; first: boolean }) 
   const { open } = useModals();
   const days = daysUntil(item.endDate);
   const urgency = days <= 2 ? 'text-danger' : days <= 5 ? 'text-warning' : 'text-fg';
-  const planName = item.planSnapshot.name;
+  const planName = item.planNameSnapshot;
   // CR-03: clientId is UUIDv4 — use planName for initials until clientFullName is on the wire.
   const initials = getInitials(planName);
   const color = colorForId(item.clientId);

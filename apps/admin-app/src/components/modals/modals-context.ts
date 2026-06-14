@@ -76,9 +76,9 @@ export interface OpenOptions {
     membership?: {
       id: string;
       clientId: string;
-      paidAmountKopecks: number;
+      priceKopecksSnapshot: number;
       paidAt?: string | null;
-      planSnapshot: { name: string };
+      planNameSnapshot: string;
       endDate: string;
       freezeDaysRemaining?: number | null;
       currentFreezePeriod?: {

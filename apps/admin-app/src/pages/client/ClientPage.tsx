@@ -99,7 +99,7 @@ function MembershipsSection({ clientId }: { clientId: string }) {
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <div className="truncate text-[13.5px] font-semibold tracking-[-0.1px]">
-                  {m.planSnapshot.name}
+                  {m.planNameSnapshot}
                 </div>
                 <span
                   className={cn(
@@ -113,7 +113,7 @@ function MembershipsSection({ clientId }: { clientId: string }) {
               <div className="mt-0.5 text-[11.5px] tabular-nums text-fg-subtle">
                 до {formatDateRu(m.endDate, 'd MMMM yyyy')}
                 {' · '}
-                {formatRub(m.paidAmountKopecks)}
+                {formatRub(m.priceKopecksSnapshot)}
               </div>
             </div>
           </div>

@@ -88,7 +88,7 @@ export function useSellMembership() {
       return MembershipSchema.parse((raw as { data: unknown }).data);
     },
     onSuccess: (data) => {
-      const desc = `Оплата ${formatRub(data.paidAmountKopecks)} принята.`;
+      const desc = `Оплата ${formatRub(data.priceKopecksSnapshot)} принята.`;
       toast.success('Абонемент оформлен', { description: desc });
       void qc.invalidateQueries({ queryKey: membershipsKeys.lists() });
       void qc.invalidateQueries({ queryKey: membershipsKeys.byClient(data.clientId) });

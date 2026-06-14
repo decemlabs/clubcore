@@ -2,7 +2,9 @@
  * Memberships domain Zod contract layer (Phase 101-03).
  *
  * Wire shapes mirror the backend camelCase alias_generator.
- * MembershipSchema embeds planSnapshot via MembershipPlanSchema (from plans domain).
+ * MembershipSchema is FLAT (BUG-2): the backend serializes the plan snapshot as
+ * inline fields (planNameSnapshot/durationDaysSnapshot/priceKopecksSnapshot/…),
+ * not a nested planSnapshot object.
  * All mutation schemas enforce business rules client-side as defense-in-depth;
  * the backend is the authority.
  *
@@ -11,7 +13,6 @@
  *   - Refund: reception+owner (B-07), reason REQUIRED 1-200 chars, full-only.
  */
 import { z } from 'zod';
-import { MembershipPlanSchema } from '../plans/schemas';
 
 // ---------------------------------------------------------------------------
 // Freeze period (embedded in Membership when frozen)
@@ -33,18 +34,25 @@ export type FreezePeriodData = z.infer<typeof FreezePeriodSchema>;
 export const MembershipSchema = z.object({
   id: z.string(),
   clientId: z.string(),
+  planId: z.string(),
   status: z.enum(['active', 'frozen', 'expired', 'cancelled']),
-  planSnapshot: MembershipPlanSchema,
-  paidAmountKopecks: z.number(),
-  paidAt: z.string().nullable().optional(),
+  planNameSnapshot: z.string(),
+  durationDaysSnapshot: z.number(),
+  priceKopecksSnapshot: z.number(),
   startDate: z.string(),
   endDate: z.string(),
+  cancelledAt: z.string().nullable().optional(),
+  cancelReason: z.string().nullable().optional(),
+  cancellationReason: z.string().nullable().optional(),
+  paidAt: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string().nullable().optional(),
+  freezeDaysLimitSnapshot: z.number(),
   freezeDaysUsed: z.number(),
   freezeDaysRemaining: z.number().nullable().optional(),
   currentFreezePeriod: FreezePeriodSchema.nullable().optional(),
   previousMembershipId: z.string().nullable().optional(),
-  notes: z.string().nullable().optional(),
-  createdAt: z.string(),
 });
 export type MembershipData = z.infer<typeof MembershipSchema>;
 

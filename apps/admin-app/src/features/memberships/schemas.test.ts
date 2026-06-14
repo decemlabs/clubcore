@@ -18,38 +18,37 @@ import { PtPackageCancelSchema, PtPackageSellSchema } from '../pt-packages/schem
 // ---------------------------------------------------------------------------
 
 describe('MembershipSchema', () => {
-  const validPlanSnapshot = {
-    id: 'plan-1',
-    name: '1 месяц',
-    durationDays: 30,
-    priceKopecks: 350000,
-    freezeDaysLimit: 10,
-    active: true,
-    createdAt: '2026-01-01T00:00:00Z',
-  }
-
+  // Flat wire shape (BUG-2): backend serializes plan snapshot as inline fields.
   const validMembership = {
     id: 'mem-1',
     clientId: 'client-1',
+    planId: 'plan-1',
     status: 'active' as const,
-    planSnapshot: validPlanSnapshot,
-    paidAmountKopecks: 350000,
-    paidAt: '2026-04-01T10:00:00Z',
+    planNameSnapshot: '1 месяц',
+    durationDaysSnapshot: 30,
+    priceKopecksSnapshot: 350000,
     startDate: '2026-04-01',
     endDate: '2026-05-01',
+    cancelledAt: null,
+    cancelReason: null,
+    cancellationReason: null,
+    paidAt: '2026-04-01T10:00:00Z',
+    notes: null,
+    createdAt: '2026-04-01T10:00:00Z',
+    updatedAt: '2026-04-01T10:00:00Z',
+    freezeDaysLimitSnapshot: 10,
     freezeDaysUsed: 0,
     freezeDaysRemaining: 10,
     currentFreezePeriod: null,
     previousMembershipId: null,
-    notes: null,
-    createdAt: '2026-04-01T10:00:00Z',
   }
 
-  it('parses a valid membership with planSnapshot', () => {
+  it('parses a valid membership with flat plan snapshot fields', () => {
     const result = MembershipSchema.parse(validMembership)
     expect(result.id).toBe('mem-1')
-    expect(result.planSnapshot.name).toBe('1 месяц')
-    expect(result.planSnapshot.durationDays).toBe(30)
+    expect(result.planNameSnapshot).toBe('1 месяц')
+    expect(result.priceKopecksSnapshot).toBe(350000)
+    expect(result.durationDaysSnapshot).toBe(30)
   })
 
   it('validates status enum values', () => {
@@ -87,11 +86,14 @@ describe('MembershipSchema', () => {
     const minimal = {
       id: 'mem-2',
       clientId: 'client-1',
+      planId: 'plan-1',
       status: 'active' as const,
-      planSnapshot: validPlanSnapshot,
-      paidAmountKopecks: 350000,
+      planNameSnapshot: '1 месяц',
+      durationDaysSnapshot: 30,
+      priceKopecksSnapshot: 350000,
       startDate: '2026-04-01',
       endDate: '2026-05-01',
+      freezeDaysLimitSnapshot: 10,
       freezeDaysUsed: 0,
       createdAt: '2026-04-01T10:00:00Z',
     }

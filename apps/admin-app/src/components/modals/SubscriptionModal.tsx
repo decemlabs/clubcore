@@ -51,9 +51,9 @@ import { Callout, Field, IconChip, ModalButton, ModalTextarea, StatRow } from '.
 type MembershipPayload = {
   id: string;
   clientId: string;
-  paidAmountKopecks: number;
+  priceKopecksSnapshot: number;
   paidAt?: string | null;
-  planSnapshot: { name: string };
+  planNameSnapshot: string;
   endDate: string;
   freezeDaysRemaining?: number | null;
   currentFreezePeriod?: {
@@ -233,7 +233,7 @@ function RenewScreen({
       title="Продлить абонемент"
       description={
         membership
-          ? `${clientName ?? ''} · «${membership.planSnapshot.name}»`
+          ? `${clientName ?? ''} · «${membership.planNameSnapshot}»`
           : (clientName ?? undefined)
       }
       footerActions={
@@ -311,7 +311,7 @@ function FreezeScreen({
       title="Заморозить абонемент"
       description={
         membership
-          ? `${clientName ?? ''} · «${membership.planSnapshot.name}»`
+          ? `${clientName ?? ''} · «${membership.planNameSnapshot}»`
           : 'Срок продлится на дни заморозки'
       }
       footerActions={
@@ -390,7 +390,7 @@ function UnfreezeScreen({
       title="Разморозить абонемент"
       description={
         membership
-          ? `${clientName ?? ''} · «${membership.planSnapshot.name}»`
+          ? `${clientName ?? ''} · «${membership.planNameSnapshot}»`
           : (clientName ?? undefined)
       }
       footerActions={
@@ -480,7 +480,7 @@ function CancelScreen({
       title="Отменить абонемент?"
       description={
         membership
-          ? `${clientName ?? ''} · «${membership.planSnapshot.name}»`
+          ? `${clientName ?? ''} · «${membership.planNameSnapshot}»`
           : (clientName ?? undefined)
       }
       footerActions={
@@ -565,7 +565,7 @@ function RefundScreen({ open, onOpenChange, clientName, membershipId, membership
       title="Оформить возврат"
       description={
         membership
-          ? `${clientName ?? ''} · «${membership.planSnapshot.name}»`
+          ? `${clientName ?? ''} · «${membership.planNameSnapshot}»`
           : (clientName ?? undefined)
       }
       footerActions={
@@ -584,7 +584,7 @@ function RefundScreen({ open, onOpenChange, clientName, membershipId, membership
                 Обработка…
               </>
             ) : (
-              `Вернуть ${membership ? formatRub(membership.paidAmountKopecks) : ''}`
+              `Вернуть ${membership ? formatRub(membership.priceKopecksSnapshot) : ''}`
             )}
           </ModalButton>
         </>
@@ -596,7 +596,7 @@ function RefundScreen({ open, onOpenChange, clientName, membershipId, membership
       </Callout>
       {membership ? (
         <>
-          <StatRow label="Оплачено" value={formatRub(membership.paidAmountKopecks)} accent />
+          <StatRow label="Оплачено" value={formatRub(membership.priceKopecksSnapshot)} accent />
           {membership.paidAt ? (
             <StatRow label="Дата покупки" value={formatDateRu(membership.paidAt, 'd MMMM yyyy')} />
           ) : null}
