@@ -425,7 +425,9 @@ Plans:
   2. The full milestone gate is green: mypy `--strict` + lint-imports + pytest + admin-app `check`/`test`/`build` + Redocly lint; the CISO-01 RBAC byte-parity guard is green.
   3. All 13 v3.1 feature requirements (PLAN/PTPKG/CLI/CFG/PROF/VER) are verified satisfied with no open blockers.
 
-**Plans**: TBD
+**Plans**: 2 plans
+- [ ] 111-01-PLAN.md — Regen openapi.json + schema.d.ts + add _v31Checks forward-guard + commit
+- [ ] 111-02-PLAN.md — Run full milestone gate + confirm 13/13 reqs + write 111-GATE-EVIDENCE.md handoff doc
 
 ## Backlog
 
@@ -453,7 +455,7 @@ Plans:
 | 108. Editable Settings — Backend + Wiring | 5/5 | Complete    | 2026-06-14 |
 | 109. Profile & Security — Backend + Wiring | 4/4 | Complete    | 2026-06-14 |
 | 110. Live Verification — Deferred P102 | 3/3 | Complete    | 2026-06-14 |
-| 111. OpenAPI Handoff + Milestone Gate | 0/TBD | Not started | - |
+| 111. OpenAPI Handoff + Milestone Gate | 0/2 | Not started | - |
 
 <details>
 <summary>✅ v3.0 Production Admin — Backend Wiring (Phases 100-106) — Progress (SHIPPED 2026-06-14)</summary>
