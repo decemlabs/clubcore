@@ -68,10 +68,18 @@ echo ""
 # Extract the clubcore_csrf cookie value for use as X-CSRF-Token header.
 # --------------------------------------------------------------------------
 echo "--- Step 1: dev-login ---"
+# Build JSON via Python so special characters in email/password are correctly
+# escaped (CR-02: raw shell interpolation produces malformed JSON on " or \).
+LOGIN_BODY=$(python3 -c "
+import json, os
+print(json.dumps({
+    'email': os.environ['SEED_OWNER_EMAIL'],
+    'password': os.environ['SEED_OWNER_PASSWORD'],
+}))")
 LOGIN_RESPONSE=$(curl -si -X POST "$BASE_URL/api/v1/auth/login" \
   -H 'Content-Type: application/json' \
   -c "$COOKIE_JAR" \
-  -d "{\"email\":\"$SEED_OWNER_EMAIL\",\"password\":\"$SEED_OWNER_PASSWORD\"}")
+  -d "$LOGIN_BODY")
 
 LOGIN_STATUS=$(echo "$LOGIN_RESPONSE" | head -1 | awk '{print $2}')
 # Extract clubcore_csrf from Netscape cookie-jar file (column 6 = name, column 7 = value)
@@ -165,10 +173,11 @@ BOOKING2_ID=$(echo "$CREATE2_BODY" | python3 -c "import sys,json; d=json.load(sy
 if [ "$CREATE2_STATUS" = "201" ] && [ -n "$BOOKING2_ID" ]; then
   echo "PASS: second booking created, id=$BOOKING2_ID"
 else
-  # Slot might still be 'booked' (not reset to active after cancel in some FSMs).
-  # If so, record the PT-session without a bookingId (completes via package only).
-  echo "INFO: second booking returned $CREATE2_STATUS — recording PT-session without bookingId"
-  BOOKING2_ID=""
+  # IN-02: fail hard — if the slot was not restored to 'active' after cancel
+  # the complete-via-pt-session leg is never tested, masking an FSM regression.
+  echo "FAIL: slot not restored to 'active' after cancel (got $CREATE2_STATUS) — FSM regression"
+  echo "      Body: $CREATE2_BODY"
+  exit 1
 fi
 
 echo ""
@@ -311,5 +320,5 @@ echo "=== P102 Walkthrough COMPLETE (all steps PASS) ==="
 echo ""
 echo "Summary:"
 echo "  booking_id  = ${BOOKING_ID:-n/a}"
-echo "  booking2_id = ${BOOKING2_ID:-n/a (slot not re-bookable)}"
+echo "  booking2_id = ${BOOKING2_ID:-n/a}"
 echo "  accrual_id  = ${ACCRUAL_ID:-n/a}"
