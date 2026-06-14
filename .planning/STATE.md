@@ -32,7 +32,7 @@ Resume options:
   - Archive + close: `/gsd-complete-milestone v3.0` then `/gsd-cleanup`
   - Address debt first: see `.planning/v3.0-MILESTONE-AUDIT.md` tech_debt + human_verify_deferred (P101 WR-01 plans-form, live UAT for P101–104, ruff/format tree-wide debt)
   - Live UAT: bring up `docker compose up` and validate the 31 deferred browser items before v3.1 deploy
-Last activity: 2026-06-14 — v3.0 milestone gate green + audit tech_debt; awaiting archive decision.
+Last activity: 2026-06-14 — quick task 260614-hux: fixed 8 admin-app live-UAT bugs (FE schema/format/cache divergences) + phone_exists localization; all verified live in browser. Most P101–P104 deferred live-UAT items now unblocked.
 
 Progress: [██████████] 100% (7/7 v3.0 work phases; 999.x are historical ledger, not v3.0 work)
 
@@ -128,6 +128,12 @@ Progress: [██████████] 100% (7/7 v3.0 work phases; 999.x are
 ### Blockers/Concerns
 
 - Dev DB carry-over: stale `ix_referral_codes_client_id` (migration 0067 amended in place) + possibly polluted `referral_config`. Run `docker compose down -v` + migrate + seed before Phase 106 manual verification. (Non-blocking for test suites — they rebuild schema.)
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Status | Directory |
+|---|-------------|------|--------|--------|-----------|
+| 260614-hux | Fix v3.0 admin-app live-UAT bugs (8 FE schema/format/cache divergences + phone_exists localization) | 2026-06-14 | e7924fc4 | Verified (typecheck+lint+340 tests green; all 9 live-browser-verified) | [260614-hux-fix-v3-0-admin-app-live-uat-bugs-8-fe-sc](./quick/260614-hux-fix-v3-0-admin-app-live-uat-bugs-8-fe-sc/) |
 
 ## Deferred Items
 
