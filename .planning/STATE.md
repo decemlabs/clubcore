@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Production Admin — Backend Wiring
 status: completed
-stopped_at: Phase 104 Plan 03 complete (RPT-02 Reports page + RPT-03 Audit page wired + «Журнал действий» nav entry)
-last_updated: "2026-06-13T21:44:42.277Z"
-last_activity: "2026-06-13 — Phase 105 Plan 01 complete: apps/admin-web deleted (~982 files), CISO-01 byte-parity guard repointed admin-web → admin-app, lockfile regenerated, all targeted gates green (mypy/ruff/lint-imports/admin-app typecheck+lint+337 tests/rbac_parity 4/4)"
+stopped_at: v3.0 ALL 7 phases complete + milestone gate green + audit tech_debt — AWAITING USER ARCHIVE DECISION (user chose Stop-no-archive 2026-06-14)
+last_updated: "2026-06-14T00:00:00.000Z"
+last_activity: "2026-06-14 — v3.0 complete: Phase 106 gate green (byte-stable contract, mypy/lint-imports/pytest 2867/CISO-01 4-3/admin-app 337/client-pwa 222/Redocly), 30/30 requirements, milestone audit = tech_debt (0 blockers). NOT yet archived — user stopped to review before /gsd-complete-milestone v3.0."
 progress:
   total_phases: 11
   completed_phases: 7
@@ -25,12 +25,16 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 105 of 106 (admin-web Retirement + RBAC Re-home) — COMPLETE
-Plan: 1/1 complete
-Status: Phase 105 complete. All requirements: ADMW-01 (admin-web deleted, lockfile regenerated), ADMW-02 (CISO-01 guard repointed admin-app, guard LIVE), ADMW-03 (openapi.json + schema.d.ts byte-unchanged, no drift). Next: Phase 106 (OpenAPI Handoff + Milestone Gate).
-Last activity: 2026-06-13 — Phase 105 Plan 01 complete: apps/admin-web deleted (~982 files), CISO-01 byte-parity guard repointed admin-web → admin-app, lockfile regenerated, all targeted gates green (mypy/ruff/lint-imports/admin-app typecheck+lint+337 tests/rbac_parity 4/4)
+Phase: 106 of 106 (OpenAPI Handoff + Milestone Gate) — COMPLETE. **All 7 v3.0 phases (100–106) done.**
+Plan: all plans complete (24/24)
+Status: **v3.0 work + gate COMPLETE; NOT archived.** Milestone audit = `tech_debt` (30/30 requirements satisfied, 0 critical blockers). User chose Stop-no-archive (2026-06-14) to review before archiving.
+Resume options:
+  - Archive + close: `/gsd-complete-milestone v3.0` then `/gsd-cleanup`
+  - Address debt first: see `.planning/v3.0-MILESTONE-AUDIT.md` tech_debt + human_verify_deferred (P101 WR-01 plans-form, live UAT for P101–104, ruff/format tree-wide debt)
+  - Live UAT: bring up `docker compose up` and validate the 31 deferred browser items before v3.1 deploy
+Last activity: 2026-06-14 — v3.0 milestone gate green + audit tech_debt; awaiting archive decision.
 
-Progress: [██████████] 100%
+Progress: [██████████] 100% (7/7 v3.0 work phases; 999.x are historical ledger, not v3.0 work)
 
 ## v3.0 Roadmap Summary
 
