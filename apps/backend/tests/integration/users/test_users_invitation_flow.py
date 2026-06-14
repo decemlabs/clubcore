@@ -234,7 +234,8 @@ async def test_revoke_invitation_using_listed_token_id(
     """REV-01 Variant B happy path — revoke using the token id surfaced by GET /users.
 
     Mirrors the real FE flow: read ``invitationTokenId`` from the list, POST a
-    non-empty ``{ reason }`` body to the revoke endpoint, expect 204.
+    non-empty ``{ reason }`` body to the revoke endpoint, expect 204, then the
+    placeholder user is soft-deleted and the row disappears from the list.
     """
     r_create = await authed_client_owner.post(
         "/api/v1/users",
@@ -263,14 +264,14 @@ async def test_revoke_invitation_using_listed_token_id(
     )
     assert r_revoke.status_code == 204, r_revoke.text
 
-    # After revoke the pending row's token is consumed → it no longer surfaces
-    # a live invitationTokenId in the list.
+    # REV-01 — revoking a pending invitation un-invites the user: the
+    # placeholder row is soft-deleted and no longer appears in GET /users.
     r_list_after = await authed_client_owner.get("/api/v1/users?pageSize=100")
     assert r_list_after.status_code == 200, r_list_after.text
-    pending_after = next(
-        i for i in r_list_after.json()["data"]["items"] if i["id"] == pending_user_id
+    ids_after = {i["id"] for i in r_list_after.json()["data"]["items"]}
+    assert pending_user_id not in ids_after, (
+        "revoked pending user must disappear from the team list (soft-deleted)"
     )
-    assert pending_after["invitationTokenId"] is None
 
 
 async def test_revoke_already_consumed_invitation_returns_409(

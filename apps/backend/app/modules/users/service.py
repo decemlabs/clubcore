@@ -399,6 +399,19 @@ async def revoke_invitation(
     "already accepted". Both the pre-check and the race-loss against
     atomic_consume_invitation_token_by_id (now filtered on expires_at > now())
     fall back to the same domain error.
+
+    REV-01 (quick 260614-jt7) — revoking a pending invitation also soft-deletes
+    the placeholder user in the SAME UoW so the owner's team list no longer
+    shows a zombie "Ожидает" row with no live invitation ("отозвать" =
+    "разпригласить"). By the time we reach the soft-delete the token was just
+    consumed from an unconsumed + unexpired state, so ``token.user_id`` is
+    necessarily still a ``pending_invitation`` user (an accepted invite would
+    have raised 409 above). A pending user is never the actor and never an
+    active owner, so the active-user self / last-owner guards from
+    ``soft_delete_user`` do not apply — the repository soft-delete is invoked
+    directly. The single ``user_invitation_revoked`` audit row (with
+    ``revoked_user_id``) is the forensic record of the removal; no separate
+    ``user_soft_deleted`` event is emitted for this placeholder cleanup.
     """
     token = await repository.get_invitation_token_by_id(session, token_id)
     if token is None:
@@ -428,5 +441,16 @@ async def revoke_invitation(
         invitation_token_id=str(token_id),
         reason=reason,
     )
+
+    # REV-01 — un-invite the placeholder user (see docstring). Direct repository
+    # soft-delete: deleted_at=now, is_active=False, deactivated_by=actor. The
+    # token row itself is left intact (consumed) so the double-revoke 409 path
+    # and the audit chain stay valid.
+    await repository.soft_delete_user(
+        session,
+        target_user_id=token.user_id,
+        actor_user_id=actor.id,
+    )
+
     await session.flush()
     await session.commit()
