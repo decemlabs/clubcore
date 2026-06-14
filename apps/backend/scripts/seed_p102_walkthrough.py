@@ -33,6 +33,9 @@ Entities seeded (in dependency order):
     5. PtPackage        — trainer-matched, active, sessions_remaining=5, validity covers slot
     6. TrainerCompConfig — 10% commission + 500 ₽/session fee, effective 2026-01-01
     7. Payment          — subject_kind='pt_package', POSITIVE amount (payroll revenue)
+    8. PtSession        — non-cancelled, performed_at=2026-04-15 UTC (inside payroll period)
+                          Links PACKAGE_ID + TRAINER_ID so payroll EXISTS subquery returns >0
+                          rows and revenue/accrual are non-zero (fixes false-positive walkthrough).
 """
 
 from __future__ import annotations
@@ -55,6 +58,7 @@ from app.modules.clients.models import Client
 from app.modules.payments.models import Payment
 from app.modules.payroll.models import TrainerCompConfig
 from app.modules.pt_packages.models import PtPackage, PtPackagePlan
+from app.modules.pt_sessions.models import PtSession
 from app.modules.schedule.models import TrainerAvailabilitySlot
 from app.modules.trainers.models import Trainer
 
@@ -74,6 +78,7 @@ CLIENT_ID = uuid.uuid5(_NS, "p102-walkthrough:client")
 PACKAGE_ID = uuid.uuid5(_NS, "p102-walkthrough:package")
 COMP_CONFIG_ID = uuid.uuid5(_NS, "p102-walkthrough:comp-config")
 PAYMENT_ID = uuid.uuid5(_NS, "p102-walkthrough:payment")
+PT_SESSION_ID = uuid.uuid5(_NS, "p102-walkthrough:pt-session")
 
 # Slot anchor: Monday 10:00 MSK → next Monday relative to seed-time (always future).
 # Mirrors test_booking_race.py:207-214 «next Monday» math so the slot is guaranteed
@@ -146,14 +151,9 @@ async def _run() -> int:
                 .order_by(User.created_at)
             )
             if owner is None:
-                # Fall back to any owner if the email doesn't match exactly
-                owner = await session.scalar(
-                    select(User).where(User.role == Role.OWNER).order_by(User.created_at)
-                )
-            if owner is None:
                 print(
-                    "ERROR: no owner user found. Run "
-                    "`uv run python -m scripts.seed_demo_data` first.",
+                    f"ERROR: no owner with email '{email}' found. "
+                    "Run `uv run python -m scripts.seed_demo_data` first.",
                     file=sys.stderr,
                 )
                 return 1
@@ -272,6 +272,29 @@ async def _run() -> int:
             )
             await session.execute(payment_stmt)
 
+            # 8. PtSession — links the package to the period for payroll revenue
+            # attribution.  The payroll repository's fetch_trainer_session_revenue
+            # uses an EXISTS subquery that requires at least one non-cancelled
+            # pt_session in the period for PACKAGE_ID; without this row the EXISTS
+            # returns no rows and commission_revenue_kopecks = 0 (false positive).
+            # performed_at = _PAYMENT_AT (2026-04-15 10:00 UTC) is inside the
+            # standard walkthrough payroll window 2026-04-01..2026-04-30.
+            session_stmt = (
+                pg_insert(PtSession)
+                .values(
+                    id=PT_SESSION_ID,
+                    pt_package_id=PACKAGE_ID,
+                    trainer_id=TRAINER_ID,
+                    client_id=CLIENT_ID,
+                    performed_at=_PAYMENT_AT,
+                    performed_by_user_id=owner.id,
+                    trainer_name_snapshot="P102 Walkthrough Trainer",
+                    cancelled_at=None,
+                )
+                .on_conflict_do_nothing(index_elements=["id"])
+            )
+            await session.execute(session_stmt)
+
             await session.commit()
 
     finally:
@@ -286,7 +309,12 @@ async def _run() -> int:
     print(f"  pt_package_id    = {PACKAGE_ID}")
     print(f"  comp_config_id   = {COMP_CONFIG_ID}")
     print(f"  payment_id       = {PAYMENT_ID}")
-    print(f"  slot_start (UTC) = {slot_start.isoformat()}")
+    print(f"  pt_session_id    = {PT_SESSION_ID}")
+    # NOTE: slot_start is recomputed each run; the DB row is written only on the
+    # first run (ON CONFLICT DO NOTHING), so on idempotent re-runs the printed
+    # value may differ from the stored DB value.  Use SLOT_ID (above) as the
+    # canonical reference — not slot_start — when configuring the walkthrough.
+    print(f"  slot_start (UTC) = {slot_start.isoformat()} (computed this run; may differ from DB on re-runs)")
     return 0
 
 
