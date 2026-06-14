@@ -60,6 +60,7 @@ class UserListItemResponse(ResponseData):
     deactivated_at: datetime | None
     deactivated_by_user_id: UUID | None
     invitation_expires_at: datetime | None
+    invitation_token_id: UUID | None = None
 
     @computed_field  # type: ignore[prop-decorator]
     @property

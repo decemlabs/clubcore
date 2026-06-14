@@ -7500,6 +7500,18 @@
             ],
             "title": "Invitationexpiresat"
           },
+          "invitationTokenId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invitationtokenid"
+          },
           "isActive": {
             "title": "Isactive",
             "type": "boolean"

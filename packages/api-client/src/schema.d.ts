@@ -7370,6 +7370,8 @@ export interface components {
             id: string;
             /** Invitationexpiresat */
             invitationExpiresAt: string | null;
+            /** Invitationtokenid */
+            invitationTokenId?: string | null;
             /** Isactive */
             isActive: boolean;
             /**

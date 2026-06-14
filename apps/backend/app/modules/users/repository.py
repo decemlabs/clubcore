@@ -83,13 +83,16 @@ async def list_alive(
 
     Sort: ``created_at DESC, id DESC`` (mirrors v1.2 clients list convention).
 
-    For each user, LEFT JOIN to ``password_reset_tokens`` (latest active
+    For each user, LEFT JOIN to ``password_reset_tokens`` (the single active
     invitation):
       ``ON pt.user_id = u.id AND pt.purpose='invitation'``
       ``AND pt.consumed_at IS NULL AND pt.expires_at > now()``
-    Aggregated via ``MAX(pt.expires_at)`` so the join is GROUP BY-safe and
-    populates ``invitation_expires_at`` on the response model. ``None`` for
-    rows without an active invitation (D-43-10).
+    The partial UNIQUE ``(user_id, purpose) WHERE consumed_at IS NULL``
+    (D-41-05) guarantees at most one active invitation per user, so the join
+    cannot fan out — the row id (``invitation_token_id``, D-43-19) and
+    ``expires_at`` (``invitation_expires_at``) are selected directly without a
+    ``MAX``/``GROUP BY`` aggregation. Both are ``None`` for rows without an
+    active invitation (D-43-10).
 
     Returns ``PaginatedData[UserListItemResponse]`` constructed via
     ``model_construct`` (mirrors clients repository — skips re-validation since
@@ -107,25 +110,27 @@ async def list_alive(
         total_stmt = total_stmt.where(and_(*predicates))
     total = await session.scalar(total_stmt) or 0
 
-    # Subquery for active invitation expires_at per user.
+    # Subquery for the single active invitation (id + expires_at) per user.
+    # ≤1 active invitation per user (D-41-05 partial unique) → select directly,
+    # no MAX/GROUP BY needed; the LEFT JOIN cannot fan out.
     now = _now_utc()
     invitation_subq = (
         select(
             PasswordResetToken.user_id.label("u_id"),
-            func.max(PasswordResetToken.expires_at).label("inv_expires_at"),
+            PasswordResetToken.id.label("inv_token_id"),
+            PasswordResetToken.expires_at.label("inv_expires_at"),
         )
         .where(
             PasswordResetToken.purpose == "invitation",
             PasswordResetToken.consumed_at.is_(None),
             PasswordResetToken.expires_at > now,
         )
-        .group_by(PasswordResetToken.user_id)
         .subquery()
     )
 
-    stmt = select(User, invitation_subq.c.inv_expires_at).outerjoin(
-        invitation_subq, invitation_subq.c.u_id == User.id
-    )
+    stmt = select(
+        User, invitation_subq.c.inv_token_id, invitation_subq.c.inv_expires_at
+    ).outerjoin(invitation_subq, invitation_subq.c.u_id == User.id)
     if predicates:
         stmt = stmt.where(and_(*predicates))
     stmt = stmt.order_by(User.created_at.desc(), User.id.desc())
@@ -135,7 +140,7 @@ async def list_alive(
     rows = (await session.execute(stmt)).all()
 
     items: list[UserListItemResponse] = []
-    for user_row, inv_expires_at in rows:
+    for user_row, inv_token_id, inv_expires_at in rows:
         items.append(
             UserListItemResponse(
                 id=user_row.id,
@@ -148,6 +153,7 @@ async def list_alive(
                 deactivated_at=user_row.deactivated_at,
                 deactivated_by_user_id=user_row.deactivated_by_user_id,
                 invitation_expires_at=inv_expires_at,
+                invitation_token_id=inv_token_id,
             )
         )
 
