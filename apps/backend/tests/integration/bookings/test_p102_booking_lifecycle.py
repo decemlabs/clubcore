@@ -305,68 +305,87 @@ async def db_session_real_commit_p102() -> AsyncIterator[AsyncSession]:
     async with session_factory() as session:
         yield session
 
-    # WR-03: Scoped cleanup — delete only the rows seeded by THIS test, identified
-    # by the deterministic owner email constant.  Deleting globally via TRUNCATE
-    # would wipe data seeded by other integration tests running in the same session.
-    # FK-safe delete order: audit_log / bookings (leaves) → slots / packages /
-    # clients → plans / trainers → user (roots).
+    # WR-03: Scoped cleanup — delete only the rows seeded (or created as side-
+    # effects) by THIS test, identified by the deterministic owner email constant.
+    # Deleting globally via TRUNCATE would wipe data seeded by other integration
+    # tests running in the same pytest session against shared Postgres.
+    #
+    # FK-safe delete order (leaves → roots):
+    #   1. booking_notifications (FK → bookings)
+    #   2. pt_sessions (FK → bookings, clients, pt_packages, trainers)
+    #   3. audit_log (references actor_user_id — delete early)
+    #   4. bookings (FK → slots, clients, pt_packages)
+    #   5. in_app_notifications + other client-child tables (FK → clients)
+    #   6. trainer_availability_slots (FK → trainers)
+    #   7. pt_packages (FK → clients, pt_package_plans, trainers)
+    #   8. clients (FK → users)
+    #   9. pt_package_plans (leaf — no FK to roots)
+    #  10. trainers (leaf — no FK to roots)
+    #  11. users (root — deleted last)
+    ep = {"email": _RACE_OWNER_EMAIL_P102}
+    # Static SQL subquery fragments (bind-param only — no user input interpolated).
+    owner_subq = "(SELECT id FROM users WHERE email = :email)"
+    client_subq = f"(SELECT id FROM clients WHERE created_by_user_id = {owner_subq})"  # noqa: S608
+    slot_subq = "(SELECT id FROM trainer_availability_slots WHERE created_by_user_id = " + owner_subq + ")"  # noqa: S608,E501
     async with engine.begin() as conn:
-        # 1. audit_log rows emitted by this test's owner.
+        # 1. booking_notifications for bookings on this test's slots.
         await conn.execute(
-            text(
-                "DELETE FROM audit_log WHERE actor_user_id = "
-                "(SELECT id FROM users WHERE email = :email)"
-            ),
-            {"email": _RACE_OWNER_EMAIL_P102},
+            text("DELETE FROM booking_notifications WHERE booking_id IN (SELECT id FROM bookings WHERE slot_id IN " + slot_subq + ")"),  # noqa: S608,E501
+            ep,
         )
-        # 2. bookings for slots created by this test's owner.
+        # 2. pt_sessions for this test's clients.
         await conn.execute(
-            text(
-                "DELETE FROM bookings WHERE slot_id IN ("
-                "  SELECT id FROM trainer_availability_slots"
-                "  WHERE created_by_user_id = (SELECT id FROM users WHERE email = :email)"
-                ")"
-            ),
-            {"email": _RACE_OWNER_EMAIL_P102},
+            text(f"DELETE FROM pt_sessions WHERE client_id IN {client_subq}"),  # noqa: S608
+            ep,
         )
-        # 3. trainer_availability_slots created by this test's owner.
+        # 3. audit_log rows emitted by this test's owner.
         await conn.execute(
-            text(
-                "DELETE FROM trainer_availability_slots"
-                " WHERE created_by_user_id = (SELECT id FROM users WHERE email = :email)"
-            ),
-            {"email": _RACE_OWNER_EMAIL_P102},
+            text(f"DELETE FROM audit_log WHERE actor_user_id = {owner_subq}"),  # noqa: S608
+            ep,
         )
-        # 4. pt_packages for clients seeded by this test.
+        # 4. bookings for this test's slots.
         await conn.execute(
-            text(
-                "DELETE FROM pt_packages WHERE client_id IN ("
-                "  SELECT id FROM clients"
-                "  WHERE created_by_user_id = (SELECT id FROM users WHERE email = :email)"
-                ")"
-            ),
-            {"email": _RACE_OWNER_EMAIL_P102},
+            text(f"DELETE FROM bookings WHERE slot_id IN {slot_subq}"),  # noqa: S608
+            ep,
         )
-        # 5. clients seeded by this test.
+        # 5. client-child side-effect tables created by HTTP booking call.
+        for child_tbl in (
+            "in_app_notifications",
+            "client_push_tokens",
+            "client_refresh_tokens",
+            "client_payment_methods",
+        ):
+            await conn.execute(
+                text(f"DELETE FROM {child_tbl} WHERE client_id IN {client_subq}"),  # noqa: S608
+                ep,
+            )
+        # 6. trainer_availability_slots created by this test's owner.
         await conn.execute(
-            text(
-                "DELETE FROM clients"
-                " WHERE created_by_user_id = (SELECT id FROM users WHERE email = :email)"
-            ),
-            {"email": _RACE_OWNER_EMAIL_P102},
+            text("DELETE FROM trainer_availability_slots WHERE created_by_user_id = " + owner_subq),  # noqa: S608
+            ep,
         )
-        # 6. pt_package_plans seeded by this test (identified by name prefix).
+        # 7. pt_packages for this test's clients.
+        await conn.execute(
+            text(f"DELETE FROM pt_packages WHERE client_id IN {client_subq}"),  # noqa: S608
+            ep,
+        )
+        # 8. clients seeded by this test.
+        await conn.execute(
+            text(f"DELETE FROM clients WHERE created_by_user_id = {owner_subq}"),  # noqa: S608
+            ep,
+        )
+        # 9. pt_package_plans seeded by this test (identified by name prefix).
         await conn.execute(
             text("DELETE FROM pt_package_plans WHERE name LIKE 'P102RacePlan-%'"),
         )
-        # 7. trainers seeded by this test (identified by name prefix).
+        # 10. trainers seeded by this test (identified by name prefix).
         await conn.execute(
             text("DELETE FROM trainers WHERE full_name LIKE 'P102RaceTrainer-%'"),
         )
-        # 8. the owner user (root — deleted last).
+        # 11. the owner user (root — deleted last).
         await conn.execute(
             text("DELETE FROM users WHERE email = :email"),
-            {"email": _RACE_OWNER_EMAIL_P102},
+            ep,
         )
     await engine.dispose()
 
