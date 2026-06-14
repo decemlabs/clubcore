@@ -314,7 +314,10 @@ async def _run() -> int:
     # first run (ON CONFLICT DO NOTHING), so on idempotent re-runs the printed
     # value may differ from the stored DB value.  Use SLOT_ID (above) as the
     # canonical reference — not slot_start — when configuring the walkthrough.
-    print(f"  slot_start (UTC) = {slot_start.isoformat()} (computed this run; may differ from DB on re-runs)")
+    print(
+        f"  slot_start (UTC) = {slot_start.isoformat()}"
+        " (computed this run; may differ from DB on re-runs)"
+    )
     return 0
 
 
