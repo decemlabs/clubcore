@@ -437,7 +437,7 @@ function gymDataToFormState(data: GymInfoData): BranchFormState {
   return {
     nameShort: data.name ?? '',
     name: data.name ?? '',
-    address: data.address ?? '',
+    address: data.address,
     latitude: data.latitude != null ? String(data.latitude) : '',
     longitude: data.longitude != null ? String(data.longitude) : '',
     phone: data.phone ?? '',

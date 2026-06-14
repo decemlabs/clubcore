@@ -46,7 +46,7 @@ export type SessionsListData = z.infer<typeof SessionsListResponseSchema>['data'
 
 export const GymInfoSchema = z.object({
   name: z.string(),
-  address: z.string().nullable(),
+  address: z.string(), // NOT nullable — mirrors backend Mapped[str] NOT NULL (WR-01)
   tagline: z.string().nullable(),
   city: z.string().nullable(),
   phone: z.string().nullable(),
