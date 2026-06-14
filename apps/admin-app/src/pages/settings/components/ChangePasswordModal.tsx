@@ -87,12 +87,6 @@ export function ChangePasswordModal({ open, onClose }: Props) {
       return
     }
 
-    // UI-only confirm-match check (not on the wire schema per D-109-03-NO-CONFIRM-ON-WIRE)
-    if (form.newPassword !== form.confirmPassword) {
-      setFieldErrors({ confirmPassword: 'Пароли не совпадают' })
-      return
-    }
-
     setFieldErrors({})
     setForm((prev) => ({ ...prev, submitting: true }))
 
