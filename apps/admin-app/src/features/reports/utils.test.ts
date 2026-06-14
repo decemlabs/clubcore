@@ -108,7 +108,7 @@ describe('fillDailyBuckets', () => {
 
 describe('fillRevenueBuckets', () => {
   const ZERO_METHODS = { cash: 0, online: 0 };
-  const ZERO_SUBJECT = { membership: 0, pt_package: 0 };
+  const ZERO_SUBJECT = { membership: 0, ptPackage: 0 };
 
   it('returns 3 buckets for a 3-day groupBy=day range', () => {
     const result = fillRevenueBuckets([], '2026-06-10', '2026-06-12', 'day');
@@ -131,7 +131,7 @@ describe('fillRevenueBuckets', () => {
         period: '2026-06-11',
         netKopecks: 5000,
         byMethod: { cash: 3000, online: 2000 },
-        bySubjectKind: { membership: 4000, pt_package: 1000 },
+        bySubjectKind: { membership: 4000, ptPackage: 1000 },
       },
     ];
     const result = fillRevenueBuckets(sparse, '2026-06-10', '2026-06-12', 'day');
@@ -164,7 +164,7 @@ describe('fillRevenueBuckets', () => {
         period: '2026-02',
         netKopecks: 100000,
         byMethod: { cash: 60000, online: 40000 },
-        bySubjectKind: { membership: 80000, pt_package: 20000 },
+        bySubjectKind: { membership: 80000, ptPackage: 20000 },
       },
     ];
     const result = fillRevenueBuckets(sparse, '2026-01-01', '2026-03-31', 'month');

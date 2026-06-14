@@ -22,12 +22,12 @@ const COLORS = [
 ];
 
 function TrainerRowItem({ trainer, first, maxRevenue }: { trainer: TrainerRow; first: boolean; maxRevenue: number }) {
-  const initials = getInitials(trainer.name);
+  const initials = getInitials(trainer.trainerNameSnapshot);
   const colorIdx = trainer.trainerId.charCodeAt(0) % COLORS.length;
   const color = COLORS[colorIdx] ?? '#4f46e5';
-  const barPct = maxRevenue > 0 ? Math.round((trainer.totalRevenueKopecks / maxRevenue) * 100) : 0;
-  const revenueRub = Number.isFinite(trainer.totalRevenueKopecks)
-    ? Math.max(Math.round(trainer.totalRevenueKopecks / 100), 0)
+  const barPct = maxRevenue > 0 ? Math.round((trainer.revenueKopecks / maxRevenue) * 100) : 0;
+  const revenueRub = Number.isFinite(trainer.revenueKopecks)
+    ? Math.max(Math.round(trainer.revenueKopecks / 100), 0)
     : 0;
 
   return (
@@ -40,7 +40,7 @@ function TrainerRowItem({ trainer, first, maxRevenue }: { trainer: TrainerRow; f
       <Initials initials={initials} color={color} className="size-8 text-[11px]" />
 
       <div className="min-w-0">
-        <div className="truncate text-[13.5px] font-semibold">{trainer.name}</div>
+        <div className="truncate text-[13.5px] font-semibold">{trainer.trainerNameSnapshot}</div>
         <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-surface-3">
           <div
             className="h-full rounded-full bg-fg dark:bg-primary"
@@ -48,7 +48,7 @@ function TrainerRowItem({ trainer, first, maxRevenue }: { trainer: TrainerRow; f
           />
         </div>
         <div className="mt-1 text-[11.5px] tabular-nums text-fg-subtle">
-          {trainer.sessionCount} сессий · {trainer.utilizationPct}% загруженность
+          {trainer.sessionCount} сессий · {trainer.utilizationPct ?? 0}% загруженность
         </div>
       </div>
 
@@ -70,11 +70,11 @@ function TrainerRowItem({ trainer, first, maxRevenue }: { trainer: TrainerRow; f
 }
 
 export function TopTrainers({ data, isPending, month }: TopTrainersProps) {
-  const rows = data?.rows ?? [];
+  const rows = data?.trainers ?? [];
   const sorted = [...rows]
-    .sort((a, b) => b.totalRevenueKopecks - a.totalRevenueKopecks)
+    .sort((a, b) => b.revenueKopecks - a.revenueKopecks)
     .slice(0, 5);
-  const maxRevenue = sorted[0]?.totalRevenueKopecks ?? 1;
+  const maxRevenue = sorted[0]?.revenueKopecks ?? 1;
 
   return (
     <DashboardCard

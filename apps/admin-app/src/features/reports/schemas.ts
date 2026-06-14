@@ -50,7 +50,7 @@ export const RevenueBucketSchema = z.object({
   }),
   bySubjectKind: z.object({
     membership: z.number(),
-    pt_package: z.number(),
+    ptPackage: z.number(),
   }),
 });
 
@@ -85,16 +85,23 @@ export type ClientsReportData = z.infer<typeof ClientsReportSchema>['data'];
 
 export const TrainerRowSchema = z.object({
   trainerId: z.string(),
-  name: z.string(),
+  trainerNameSnapshot: z.string(),
   sessionCount: z.number(),
+  cancelledSessionCount: z.number(),
   totalHours: z.number(),
-  uniqueClients: z.number(),
-  utilizationPct: z.number(),
-  totalRevenueKopecks: z.number(),
+  uniqueClientCount: z.number(),
+  utilizationPct: z.number().nullable(),
+  revenueKopecks: z.number(),
+  avgRevenuePerSession: z.number().nullable(),
+  totalAccruedKopecks: z.number(),
+  totalPaidKopecks: z.number(),
 });
 export const TrainersReportSchema = z.object({
   data: z.object({
-    rows: z.array(TrainerRowSchema),
+    trainers: z.array(TrainerRowSchema),
+    fromDate: z.string(),
+    toDate: z.string(),
+    revenueAttributionNote: z.string(),
   }),
 });
 export type TrainersReportData = z.infer<typeof TrainersReportSchema>['data'];

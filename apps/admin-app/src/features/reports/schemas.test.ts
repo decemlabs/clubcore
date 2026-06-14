@@ -29,31 +29,43 @@ describe('ClientsReportSchema', () => {
 });
 
 describe('TrainersReportSchema', () => {
-  it('parses a trainers report with rows', () => {
-    const raw = {
-      data: {
-        rows: [
-          {
-            trainerId: 'abc',
-            name: 'Иван',
-            sessionCount: 10,
-            totalHours: 5.5,
-            uniqueClients: 3,
-            utilizationPct: 0.6,
-            totalRevenueKopecks: 50000,
-          },
-        ],
-      },
-    };
-    const result = TrainersReportSchema.parse(raw).data;
-    expect(result.rows).toHaveLength(1);
-    expect(result.rows[0]?.trainerId).toBe('abc');
-    expect(result.rows[0]?.totalRevenueKopecks).toBe(50000);
+  const sampleTrainer = {
+    trainerId: 'abc',
+    trainerNameSnapshot: 'Иван',
+    sessionCount: 10,
+    cancelledSessionCount: 1,
+    totalHours: 5.5,
+    uniqueClientCount: 3,
+    utilizationPct: 0.6,
+    revenueKopecks: 50000,
+    avgRevenuePerSession: 5000,
+    totalAccruedKopecks: 50000,
+    totalPaidKopecks: 40000,
+  };
+  const meta = {
+    fromDate: '2026-06-01',
+    toDate: '2026-06-30',
+    revenueAttributionNote: 'Revenue attributed to pt_packages.trainer_id.',
+  };
+
+  it('parses a trainers report with the flat data.trainers[] shape', () => {
+    const result = TrainersReportSchema.parse({ data: { trainers: [sampleTrainer], ...meta } }).data;
+    expect(result.trainers).toHaveLength(1);
+    expect(result.trainers[0]?.trainerId).toBe('abc');
+    expect(result.trainers[0]?.trainerNameSnapshot).toBe('Иван');
+    expect(result.trainers[0]?.revenueKopecks).toBe(50000);
   });
 
-  it('parses an empty rows array', () => {
-    const result = TrainersReportSchema.parse({ data: { rows: [] } }).data;
-    expect(result.rows).toHaveLength(0);
+  it('parses an empty trainers array', () => {
+    const result = TrainersReportSchema.parse({ data: { trainers: [], ...meta } }).data;
+    expect(result.trainers).toHaveLength(0);
+  });
+
+  it('tolerates null utilizationPct and avgRevenuePerSession (trainer with no sessions)', () => {
+    const idle = { ...sampleTrainer, utilizationPct: null, avgRevenuePerSession: null };
+    const result = TrainersReportSchema.parse({ data: { trainers: [idle], ...meta } }).data;
+    expect(result.trainers[0]?.utilizationPct).toBeNull();
+    expect(result.trainers[0]?.avgRevenuePerSession).toBeNull();
   });
 });
 

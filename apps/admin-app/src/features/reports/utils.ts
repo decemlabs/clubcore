@@ -38,7 +38,7 @@ export function fillDailyBuckets(
 const ZERO_BUCKET: Omit<RevenueBucket, 'period'> = {
   netKopecks: 0,
   byMethod: { cash: 0, online: 0 },
-  bySubjectKind: { membership: 0, pt_package: 0 },
+  bySubjectKind: { membership: 0, ptPackage: 0 },
 };
 
 /**

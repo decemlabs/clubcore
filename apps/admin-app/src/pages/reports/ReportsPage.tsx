@@ -454,7 +454,7 @@ function TrainersTab({
   query,
 }: {
   query: {
-    data: { rows: TrainerRow[] } | undefined;
+    data: { trainers: TrainerRow[] } | undefined;
     isPending: boolean;
     isFetching: boolean;
     isError: boolean;
@@ -470,7 +470,7 @@ function TrainersTab({
     return <Skeleton className="h-[320px] w-full rounded-xl" />;
   }
 
-  const rows = data?.rows ?? [];
+  const rows = data?.trainers ?? [];
 
   if (rows.length === 0) {
     return (
@@ -483,7 +483,7 @@ function TrainersTab({
     );
   }
 
-  const maxRevenue = Math.max(...rows.map((r) => r.totalRevenueKopecks), 0);
+  const maxRevenue = Math.max(...rows.map((r) => r.revenueKopecks), 0);
 
   return (
     <Card as="section" className="flex min-w-0 flex-col">
@@ -518,13 +518,13 @@ function ReportsTrainerRow({
   first: boolean;
   maxRevenue: number;
 }) {
-  const barPct = maxRevenue > 0 ? Math.round((row.totalRevenueKopecks / maxRevenue) * 100) : 0;
+  const barPct = maxRevenue > 0 ? Math.round((row.revenueKopecks / maxRevenue) * 100) : 0;
   return (
     <div
       className={`grid grid-cols-[minmax(0,1fr)_60px_60px_60px_80px_100px] items-center gap-3 px-5 py-3 max-md:grid-cols-[minmax(0,1fr)_80px] ${!first ? 'border-t-[0.5px] border-border' : ''}`}
     >
       <div className="min-w-0">
-        <div className="truncate text-[13.5px] font-semibold">{row.name}</div>
+        <div className="truncate text-[13.5px] font-semibold">{row.trainerNameSnapshot}</div>
         {/* Mini bar */}
         <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-surface-3">
           <div className="h-full rounded-full bg-primary" style={{ width: `${barPct}%` }} />
@@ -532,10 +532,10 @@ function ReportsTrainerRow({
       </div>
       <div className="text-right text-[13px] tabular-nums max-md:hidden">{row.sessionCount}</div>
       <div className="text-right text-[13px] tabular-nums max-md:hidden">{row.totalHours}</div>
-      <div className="text-right text-[13px] tabular-nums max-md:hidden">{row.uniqueClients}</div>
-      <div className="text-right text-[13px] tabular-nums max-md:hidden">{row.utilizationPct}%</div>
+      <div className="text-right text-[13px] tabular-nums max-md:hidden">{row.uniqueClientCount}</div>
+      <div className="text-right text-[13px] tabular-nums max-md:hidden">{row.utilizationPct ?? 0}%</div>
       <div className="text-right text-[14px] font-bold tabular-nums">
-        {formatRub(row.totalRevenueKopecks / 100)}
+        {formatRub(row.revenueKopecks / 100)}
       </div>
     </div>
   );

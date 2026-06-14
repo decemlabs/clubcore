@@ -35,7 +35,7 @@ const withDataFixture: RevenueReportData = {
       period: '2026-05-14',
       netKopecks: 9600000,
       byMethod: { cash: 4800000, online: 4800000 },
-      bySubjectKind: { membership: 9600000, pt_package: 0 },
+      bySubjectKind: { membership: 9600000, ptPackage: 0 },
     },
   ],
   fromDate,
