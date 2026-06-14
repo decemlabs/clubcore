@@ -61,9 +61,10 @@ _BOOKING_CONFIG_ID = "00000000-0000-0000-0000-000000000003"
 _WORKING_HOURS_CONFIG_ID = "00000000-0000-0000-0000-000000000004"
 
 # All-day schedule for all 7 weekdays — used by permissive booking config reset.
+# day_of_week: 0=Monday … 6=Sunday (CR-01 fix: 0-based, matches seed/frontend convention).
 _ALL_DAYS_OPEN = [
     {"day_of_week": dow, "open_time": "00:00", "close_time": "23:59"}
-    for dow in range(1, 8)
+    for dow in range(0, 7)
 ]
 
 

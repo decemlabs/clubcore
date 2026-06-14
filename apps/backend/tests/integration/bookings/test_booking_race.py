@@ -24,6 +24,7 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 import pytest
 import pytest_asyncio
@@ -199,7 +200,18 @@ async def test_concurrent_create_booking_partial_unique_at_db_layer(
     await db_session_real_commit.refresh(trainer)
 
     # The race target — single active slot.
-    slot_start = datetime.now(tz=UTC) + timedelta(hours=2)
+    # CR-01 fix: working-hours enforcement now fires correctly (0-based weekday).
+    # Use a slot pinned to 10:00 Moscow on the next Monday so it always falls
+    # within the seeded Mon-Fri 08:00-22:00 working-hours window, regardless of
+    # what time or day the test suite runs.
+    _MOSCOW_TZ = ZoneInfo("Europe/Moscow")
+    _now_msk = datetime.now(_MOSCOW_TZ)
+    # days_to_next_monday: 0 on Mon, 7 on Mon (wrap), 1 on Sun, etc.
+    _days_ahead = (7 - _now_msk.weekday()) % 7 or 7  # always ≥ 1 day ahead
+    _slot_msk = _now_msk.replace(hour=10, minute=0, second=0, microsecond=0) + timedelta(
+        days=_days_ahead
+    )
+    slot_start = _slot_msk.astimezone(UTC)
     slot = TrainerAvailabilitySlot(
         trainer_id=trainer.id,
         start_time=slot_start,

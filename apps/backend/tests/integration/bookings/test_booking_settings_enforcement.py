@@ -54,9 +54,10 @@ _BOOKING_CONFIG_ID = "00000000-0000-0000-0000-000000000003"
 _WORKING_HOURS_CONFIG_ID = "00000000-0000-0000-0000-000000000004"
 
 # Permissive schedule covering all 7 days, 00:00 - 23:59.
+# day_of_week: 0=Monday … 6=Sunday (CR-01 fix: 0-based convention, matches seed/frontend).
 _ALL_DAYS_OPEN: list[Any] = [
     {"day_of_week": dow, "open_time": "00:00", "close_time": "23:59"}
-    for dow in range(1, 8)
+    for dow in range(0, 7)
 ]
 
 
@@ -403,13 +404,14 @@ async def test_open_day_allows_booking(
     await _set_booking_config(db_session, booking_ahead_days=30, cutoff_minutes=0)
 
     slot_start_utc = datetime.now(UTC) + timedelta(hours=48)
-    iso_weekday = slot_start_utc.astimezone(MOSCOW_TZ).isoweekday()
+    # CR-01 fix: use 0-based weekday() to match the enforcement code convention.
+    zero_weekday = slot_start_utc.astimezone(MOSCOW_TZ).weekday()  # 0=Mon, 6=Sun
 
     await _set_working_hours(
         db_session,
         schedule=[
             {
-                "day_of_week": iso_weekday,
+                "day_of_week": zero_weekday,
                 "open_time": "00:00",
                 "close_time": "23:59",
             }

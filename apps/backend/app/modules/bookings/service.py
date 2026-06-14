@@ -108,6 +108,13 @@ _WORKING_HOURS_CONFIG_ID = "00000000-0000-0000-0000-000000000004"
 # `.date()` on the UTC value mis-classifies the slot.
 MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 
+# Working-hours weekday name map (0-based, matches seed/frontend convention).
+# CR-01 / IN-02: hoisted to module level so it is allocated once, not per call.
+_WEEKDAY_NAME_MAP: dict[str, int] = {
+    "monday": 0, "tuesday": 1, "wednesday": 2,
+    "thursday": 3, "friday": 4, "saturday": 5, "sunday": 6,
+}
+
 
 # ---------------------------------------------------------------------------
 # Error classes (mirror pt_sessions/service.py shape; class-level code +
@@ -376,8 +383,11 @@ def _is_slot_outside_working_hours(  # noqa: SVC001 caller-owns-txn
     if slot_date_str in closures_as_set(wh.closures):
         return True
 
-    # Working-hours check: look up the slot's Moscow day-of-week (1=Mon..7=Sun ISO).
-    slot_iso_weekday = slot_msk.isoweekday()  # 1=Mon, 7=Sun
+    # Working-hours check: look up the slot's Moscow day-of-week.
+    # Convention: 0=Monday … 6=Sunday (matches seed/frontend ScheduleDaySchema).
+    # CR-01 fix: use .weekday() (0-based) to match the 0-based seed/frontend
+    # day_of_week encoding; isoweekday() (1-based ISO) was off-by-one for every day.
+    slot_zero_weekday = slot_msk.weekday()  # 0=Mon, 6=Sun
 
     if not wh.schedule:
         # Empty schedule → fail-open (do not block).
@@ -387,19 +397,15 @@ def _is_slot_outside_working_hours(  # noqa: SVC001 caller-owns-txn
         if not isinstance(entry, dict):
             continue
         day = entry.get("day_of_week")
-        # Normalise: accept int 1-7 OR string "1".."7" OR lowercase weekday names
+        # Normalise: accept int 0-6 OR string "0".."6" OR lowercase weekday names
         # (e.g. "monday") — be defensive about JSON shape from JSONB storage.
         try:
             day_int = int(day)  # type: ignore[arg-type]
         except (TypeError, ValueError):
-            # Try parsing "monday"/"tuesday" etc.
-            _WEEKDAY_MAP = {
-                "monday": 1, "tuesday": 2, "wednesday": 3,
-                "thursday": 4, "friday": 5, "saturday": 6, "sunday": 7,
-            }
-            day_int = _WEEKDAY_MAP.get(str(day).lower(), -1)
+            # Try parsing "monday"/"tuesday" etc. (0-based, matches seed convention).
+            day_int = _WEEKDAY_NAME_MAP.get(str(day).lower(), -1)
 
-        if day_int != slot_iso_weekday:
+        if day_int != slot_zero_weekday:
             continue
 
         # Found a matching schedule entry — validate the time window.
@@ -443,12 +449,14 @@ def closures_as_set(closures: list[Any]) -> frozenset[str]:
 def _parse_hhmm(s: str) -> time:
     """Parse "HH:MM" or "H:MM" into a datetime.time.
 
+    WR-03: validates format with regex before splitting to avoid fragile
+    indexing on malformed strings such as "08:" or non-numeric tokens.
     Raises ValueError for non-conforming input (caller handles as fail-open).
     """
-    parts = str(s).split(":")
-    if len(parts) < 2:
+    if not re.match(r"^\d{1,2}:\d{2}$", str(s)):
         raise ValueError(f"Cannot parse time string: {s!r}")
-    return time(int(parts[0]), int(parts[1]), 0)
+    h, m = str(s).split(":")
+    return time(int(h), int(m), 0)
 
 
 # ---------------------------------------------------------------------------
@@ -1288,7 +1296,11 @@ async def create_booking(
             raise BookingAheadWindowError("booking_ahead_window_exceeded")
 
         # Guard 2 — Cutoff window (cutoff_minutes from booking_config).
-        if slot.start_time - now_utc < timedelta(minutes=_bconfig.cutoff_minutes):
+        # WR-04: use <= so a booking attempted exactly at the cutoff boundary is
+        # also rejected ("must book strictly earlier than N minutes before start").
+        # cutoff_minutes=0 means no cutoff: (positive timedelta) <= 0 is always
+        # False so the guard is inert when disabled, matching the schema intent.
+        if slot.start_time - now_utc <= timedelta(minutes=_bconfig.cutoff_minutes):
             raise BookingCutoffError("booking_cutoff_passed")
 
     # Guard 3 — Closure / working-hours (working_hours_config).
@@ -1506,6 +1518,25 @@ async def create_booking_via_bot(
     ):
         raise PtPackageExpiredBeforeSlotError("pt_package_expired_before_slot")
 
+    # Step 4b — Phase 108 CFG-03/02 enforcement (CR-02: mirror create_booking
+    # lines 1277-1297). Bot bookings must honour the same booking-ahead window,
+    # cutoff, and working-hours/closure rules as staff-portal bookings.
+    # Cross-module raw SQL reads — DO NOT import app.modules.settings (D-54-08 /
+    # T-108-12 import-linter contract; _read_booking_config and
+    # _read_working_hours_config use sa.text() cross-module reads).
+    # Fail-open: absent config rows do NOT block booking (T-108-11).
+    _bconfig = await _read_booking_config(session)
+    if _bconfig is not None:
+        _ahead_limit = now_utc + timedelta(days=_bconfig.booking_ahead_days)
+        if slot.start_time > _ahead_limit:
+            raise BookingAheadWindowError("booking_ahead_window_exceeded")
+        if slot.start_time - now_utc <= timedelta(minutes=_bconfig.cutoff_minutes):
+            raise BookingCutoffError("booking_cutoff_passed")
+
+    _whconfig = await _read_working_hours_config(session)
+    if _whconfig is not None and _is_slot_outside_working_hours(slot.start_time, _whconfig):
+        raise OutsideWorkingHoursError("outside_working_hours")
+
     # Step 5 — Cross-module raw UPDATE flipping slot active→booked.
     slot_flipped = await repository.update_slot_status_predicate_gated(
         session,
@@ -1655,6 +1686,25 @@ async def create_booking_for_client(
         and pt_package.end_date < slot.start_time.astimezone(MOSCOW_TZ).date()
     ):
         raise PtPackageExpiredBeforeSlotError("pt_package_expired_before_slot")
+
+    # Step 4b — Phase 108 CFG-03/02 enforcement (CR-02: mirror create_booking
+    # lines 1277-1297). Client self-service bookings must honour the same
+    # booking-ahead window, cutoff, and working-hours/closure rules as staff.
+    # Cross-module raw SQL reads — DO NOT import app.modules.settings (D-54-08 /
+    # T-108-12 import-linter contract; _read_booking_config and
+    # _read_working_hours_config use sa.text() cross-module reads).
+    # Fail-open: absent config rows do NOT block booking (T-108-11).
+    _bconfig = await _read_booking_config(session)
+    if _bconfig is not None:
+        _ahead_limit = now_utc + timedelta(days=_bconfig.booking_ahead_days)
+        if slot.start_time > _ahead_limit:
+            raise BookingAheadWindowError("booking_ahead_window_exceeded")
+        if slot.start_time - now_utc <= timedelta(minutes=_bconfig.cutoff_minutes):
+            raise BookingCutoffError("booking_cutoff_passed")
+
+    _whconfig = await _read_working_hours_config(session)
+    if _whconfig is not None and _is_slot_outside_working_hours(slot.start_time, _whconfig):
+        raise OutsideWorkingHoursError("outside_working_hours")
 
     # Step 5 — Cross-module raw UPDATE flipping slot active→booked.
     slot_flipped = await repository.update_slot_status_predicate_gated(
