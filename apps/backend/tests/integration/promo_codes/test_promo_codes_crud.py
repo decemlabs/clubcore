@@ -298,3 +298,91 @@ async def test_used_count_reflects_promo_redemptions(
         f"Expected usedCount=2, got {matching[0]['usedCount']} "
         f"(real backend correlated subquery aggregate)"
     )
+
+
+# ---------------------------------------------------------------------------
+# (10) WR-01 — update path enforces the percentage <= 100% cap
+# ---------------------------------------------------------------------------
+
+
+async def test_update_percentage_over_100_returns_422(
+    authed_client_owner: AsyncClient,
+    make_promo_code: Callable[..., Awaitable[PromoCode]],
+) -> None:
+    """WR-01 — PATCH a percentage promo to discountValue > 10000 (>100%) → 422."""
+    promo = await make_promo_code(
+        code="WR01CAP", discount_type="percentage", discount_value=1000
+    )
+    r = await authed_client_owner.patch(
+        f"/api/v1/promo-codes/{promo.id}",
+        json={"discountValue": 50000},  # 500% — must be rejected on update too
+        headers=_csrf_headers(authed_client_owner),
+    )
+    assert r.status_code == 422, r.text
+
+
+# ---------------------------------------------------------------------------
+# (11) WR-03 — changing discount_type re-validates the merged discount_value
+# ---------------------------------------------------------------------------
+
+
+async def test_update_type_change_revalidates_existing_value_returns_422(
+    authed_client_owner: AsyncClient,
+    make_promo_code: Callable[..., Awaitable[PromoCode]],
+) -> None:
+    """WR-03 — flip a fixed(50000 kopecks) promo to percentage WITHOUT a new
+    value: the merged effective value (50000 = 500%) exceeds the cap → 422."""
+    promo = await make_promo_code(
+        code="WR03FLIP", discount_type="fixed", discount_value=50000
+    )
+    r = await authed_client_owner.patch(
+        f"/api/v1/promo-codes/{promo.id}",
+        json={"discountType": "percentage"},  # value omitted; effective = 50000
+        headers=_csrf_headers(authed_client_owner),
+    )
+    assert r.status_code == 422, r.text
+
+
+# ---------------------------------------------------------------------------
+# (12) WR-02 — validity-window validation (create + update)
+# ---------------------------------------------------------------------------
+
+
+async def test_create_valid_until_before_valid_from_returns_422(
+    authed_client_owner: AsyncClient,
+) -> None:
+    """WR-02 — create with valid_until < valid_from → 422."""
+    r = await authed_client_owner.post(
+        "/api/v1/promo-codes",
+        json={
+            "code": "BADWINDOW",
+            "discountType": "percentage",
+            "discountValue": 1000,
+            "validFrom": "2026-12-01T00:00:00Z",
+            "validUntil": "2026-01-01T00:00:00Z",  # before validFrom
+        },
+        headers=_csrf_headers(authed_client_owner),
+    )
+    assert r.status_code == 422, r.text
+
+
+async def test_update_valid_until_before_existing_valid_from_returns_422(
+    authed_client_owner: AsyncClient,
+    make_promo_code: Callable[..., Awaitable[PromoCode]],
+) -> None:
+    """WR-02 — PATCH a valid_until that precedes the EXISTING valid_from → 422."""
+    promo = await make_promo_code(code="WINDOWPATCH")
+    # First set a valid_from in the future.
+    r1 = await authed_client_owner.patch(
+        f"/api/v1/promo-codes/{promo.id}",
+        json={"validFrom": "2026-12-01T00:00:00Z"},
+        headers=_csrf_headers(authed_client_owner),
+    )
+    assert r1.status_code == 200, r1.text
+    # Now PATCH only valid_until to before the stored valid_from → merged window invalid.
+    r2 = await authed_client_owner.patch(
+        f"/api/v1/promo-codes/{promo.id}",
+        json={"validUntil": "2026-01-01T00:00:00Z"},
+        headers=_csrf_headers(authed_client_owner),
+    )
+    assert r2.status_code == 422, r2.text

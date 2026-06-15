@@ -28,7 +28,7 @@ No session.commit() in read-only paths (D-32-10/D-49-19 caller-owns-txn).
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NoReturn, cast
 from uuid import UUID
 
 import structlog
@@ -132,6 +132,38 @@ _KIND_MAP: dict[str, str] = {
     "sub": "membership",
     "pt": "pt_package",
 }
+
+
+# ---------------------------------------------------------------------------
+# WR-04 — map known DB CHECK-constraint names to domain 422 (not opaque 500)
+# ---------------------------------------------------------------------------
+
+_CHECK_CONSTRAINT_MESSAGES: dict[str, str] = {
+    "ck_promo_codes_discount_type": "discount_type must be 'percentage' or 'fixed'",
+    "ck_promo_codes_discount_value_positive": "discount_value must be > 0",
+}
+
+
+def _raise_for_integrity_error(
+    exc: sa_exc.IntegrityError,
+    *,
+    duplicate_message: str,
+) -> NoReturn:
+    """Translate a promo_codes IntegrityError into a domain error.
+
+    - uq_promo_codes_code_alive   → PromoCodeAlreadyExistsError (409)
+    - known CHECK-constraint names → PromoCodeValidationError (422) (WR-04)
+    - anything else                → re-raise (genuinely unexpected, 500)
+
+    Never returns normally — always raises.
+    """
+    orig = str(exc.orig)
+    if "uq_promo_codes_code_alive" in orig:
+        raise PromoCodeAlreadyExistsError(duplicate_message) from exc
+    for constraint_name, message in _CHECK_CONSTRAINT_MESSAGES.items():
+        if constraint_name in orig:
+            raise PromoCodeValidationError(message) from exc
+    raise exc
 
 
 # ---------------------------------------------------------------------------
@@ -453,6 +485,38 @@ async def record_promo_redemption(
 # ---------------------------------------------------------------------------
 
 
+def _validate_effective_promo(
+    *,
+    discount_type: str,
+    discount_value: int,
+    valid_from: datetime | None,
+    valid_until: datetime | None,
+) -> None:
+    """Validate the EFFECTIVE (merged) promo values before commit.
+
+    Used by the update path, where a PATCH may change discount_type without
+    re-supplying discount_value (or vice versa) and the partial request schema
+    cannot see the existing row. Mirrors the create-schema rules:
+
+    - WR-01: percentage discount_value must be <= 10000 (100% * 100)
+    - WR-03: the percentage cap is enforced against the EFFECTIVE (merged)
+      discount_type, closing the "change type without re-validating value" gap
+    - WR-02: valid_until must not precede valid_from
+
+    Raises PromoCodeValidationError (422) on any violation.
+    """
+    if discount_type == "percentage" and discount_value > 10000:
+        raise PromoCodeValidationError(
+            "discount_value for percentage must be <= 10000 (i.e. 100%)"
+        )
+    if (
+        valid_from is not None
+        and valid_until is not None
+        and valid_until < valid_from
+    ):
+        raise PromoCodeValidationError("valid_until must be >= valid_from")
+
+
 async def create_promo_code(
     session: AsyncSession,
     actor: CurrentUser,
@@ -491,12 +555,12 @@ async def create_promo_code(
         return promo
     except sa_exc.IntegrityError as exc:
         await session.rollback()
-        # The partial unique index uq_promo_codes_code_alive fires on duplicate alive code
-        if "uq_promo_codes_code_alive" in str(exc.orig):
-            raise PromoCodeAlreadyExistsError(
-                f"A promo code with code '{normalized_code}' already exists"
-            ) from exc
-        raise
+        # uq_promo_codes_code_alive → 409; known CHECK constraints → 422 (WR-04);
+        # anything else re-raises.
+        _raise_for_integrity_error(
+            exc,
+            duplicate_message=f"A promo code with code '{normalized_code}' already exists",
+        )
 
 
 async def update_promo_code(
@@ -528,6 +592,30 @@ async def update_promo_code(
     if "code" in raw_values and raw_values["code"] is not None:
         raw_values["code"] = str(raw_values["code"]).strip().upper()
 
+    # WR-01/WR-02/WR-03: validate the EFFECTIVE (existing row + patch) values.
+    # The partial update schema cannot enforce the percentage cap or the
+    # validity-window invariant on its own, because a PATCH may omit
+    # discount_type / discount_value / a validity bound. Merge the patch onto
+    # the loaded row and re-run the create-equivalent business rules so a
+    # looser PATCH cannot persist invalid data (and cannot reach the DB CHECK
+    # as the first line of defense).
+    effective_discount_type = str(raw_values.get("discount_type", promo.discount_type))
+    effective_discount_value = int(raw_values.get("discount_value", promo.discount_value))
+    effective_valid_from = cast(
+        "datetime | None",
+        raw_values.get("valid_from", promo.valid_from),
+    )
+    effective_valid_until = cast(
+        "datetime | None",
+        raw_values.get("valid_until", promo.valid_until),
+    )
+    _validate_effective_promo(
+        discount_type=effective_discount_type,
+        discount_value=effective_discount_value,
+        valid_from=effective_valid_from,
+        valid_until=effective_valid_until,
+    )
+
     try:
         await repository.update_promo_code(session, promo, values=raw_values)
         await session.commit()
@@ -540,11 +628,12 @@ async def update_promo_code(
         return promo
     except sa_exc.IntegrityError as exc:
         await session.rollback()
-        if "uq_promo_codes_code_alive" in str(exc.orig):
-            raise PromoCodeAlreadyExistsError(
-                "A promo code with that code already exists"
-            ) from exc
-        raise
+        # uq_promo_codes_code_alive → 409; known CHECK constraints → 422 (WR-04);
+        # anything else re-raises.
+        _raise_for_integrity_error(
+            exc,
+            duplicate_message="A promo code with that code already exists",
+        )
 
 
 async def deactivate_promo_code(
