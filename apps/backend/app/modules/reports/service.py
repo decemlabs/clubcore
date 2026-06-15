@@ -486,12 +486,6 @@ _RU_MONTH_ABBR: tuple[str, ...] = (
     "июл", "авг", "сен", "окт", "ноя", "дек",
 )
 
-# Russian day abbreviations for anomaly chart labels.
-_RU_DAY_ABBR: tuple[str, ...] = (
-    "янв", "фев", "мар", "апр", "май", "июн",
-    "июл", "авг", "сен", "окт", "ноя", "дек",
-)
-
 
 def _ru_month_label(month_start: date) -> str:
     """Short Russian month label for a given month-start date, e.g. 'янв 2026'."""
@@ -500,7 +494,7 @@ def _ru_month_label(month_start: date) -> str:
 
 def _ru_day_label(d: date) -> str:
     """Short Russian day label for a given date, e.g. '12 июн'."""
-    return f"{d.day} {_RU_DAY_ABBR[d.month - 1]}"
+    return f"{d.day} {_RU_MONTH_ABBR[d.month - 1]}"
 
 
 def _msk_today() -> date:
