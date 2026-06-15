@@ -13,7 +13,7 @@
 
 ### Team Management (P0 — access gap)
 
-- [ ] **TEAM-01**: Owner can change the role (owner ↔ reception) of an existing staff user from the Team/Settings screen, with the change persisted and audited; reception cannot.
+- [x] **TEAM-01**: Owner can change the role (owner ↔ reception) of an existing staff user from the Team/Settings screen, with the change persisted and audited; reception cannot.
 
 ### Promo Codes (P1 — backend ready)
 
@@ -68,7 +68,7 @@
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | REF-01 | 112 | Complete |
-| TEAM-01 | 112 | Pending |
+| TEAM-01 | 112 | Complete |
 | PROMO-01 | 113 | Pending |
 | PROMO-02 | 113 | Pending |
 | ANL-01 | 114 | Pending |
