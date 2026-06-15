@@ -37,6 +37,18 @@ export const PromoCodeSchema = z.object({
 export type PromoCodeData = z.infer<typeof PromoCodeSchema>
 
 // ---------------------------------------------------------------------------
+// Write response (POST create / PATCH edit)
+// ---------------------------------------------------------------------------
+//
+// The backend create/edit response is `PromoCodeResponse`, which deliberately
+// OMITS the `usedCount` aggregate (that field is list-only, served by
+// `PromoCodeListItemResponse`). Reusing the list-shaped `PromoCodeSchema` to
+// parse a mutation response would throw a ZodError on every successful write
+// (missing `usedCount`) — CR-01. Parse write responses with this schema.
+export const PromoCodeWriteResponseSchema = PromoCodeSchema.omit({ usedCount: true })
+export type PromoCodeWriteData = z.infer<typeof PromoCodeWriteResponseSchema>
+
+// ---------------------------------------------------------------------------
 // List response — paginated envelope
 // ---------------------------------------------------------------------------
 

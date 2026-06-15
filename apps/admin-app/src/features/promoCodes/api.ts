@@ -27,7 +27,7 @@ import { can } from '@/shared/session/can'
 import type { Role } from '@/shared/session/types'
 import {
   PromoCodesListResponseSchema,
-  PromoCodeSchema,
+  PromoCodeWriteResponseSchema,
   type PromoCodeCreateInput,
   type PromoCodeUpdateInput,
 } from './schemas'
@@ -87,7 +87,7 @@ export function useCreatePromoCode() {
         '/api/v1/promo-codes' as unknown as keyof paths,
         { body },
       )
-      return PromoCodeSchema.parse((raw as { data: unknown }).data)
+      return PromoCodeWriteResponseSchema.parse((raw as { data: unknown }).data)
     },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: promoCodesKeys.lists() })
@@ -110,7 +110,7 @@ export function useUpdatePromoCode() {
         '/api/v1/promo-codes/{promo_id}' as unknown as keyof paths,
         { params: { promo_id: id }, body },
       )
-      return PromoCodeSchema.parse((raw as { data: unknown }).data)
+      return PromoCodeWriteResponseSchema.parse((raw as { data: unknown }).data)
     },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: promoCodesKeys.lists() })
