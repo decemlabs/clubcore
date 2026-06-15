@@ -510,7 +510,7 @@ Plans:
   3. Owner sees a visit-duration widget (if the backend aggregate carries duration data) or a clearly labeled "coming soon" state if not — no silent mock data.
 
 **Plans**: 2 plans
-- [ ] 114-01-PLAN.md — derive.ts pure derivation (day-of-week / peak-hour / daily-volume frequency) + Vitest edge-case coverage
+- [x] 114-01-PLAN.md — derive.ts pure derivation (day-of-week / peak-hour / daily-volume frequency) + Vitest edge-case coverage
 - [ ] 114-02-PLAN.md — DayOfWeekCard / PeakHourCard / FrequencyCard / DurationPlaceholderCard widgets composed into LoadPage below LoadHeatmapCard
 **UI hint**: yes
 
@@ -580,7 +580,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 112. Critical Money & Access | 3/3 | Complete   | 2026-06-15 |
 | 113. Promo Codes CRUD | 3/3 | Complete   | 2026-06-15 |
-| 114. Attendance Analytics on Existing Reports | 0/TBD | Not started | - |
+| 114. Attendance Analytics on Existing Reports | 1/2 | In Progress|  |
 | 115. Live & Advanced Analytics | 0/TBD | Not started | - |
 | 116. Chat Inbox & Exports | 0/TBD | Not started | - |
 | 117. OpenAPI Handoff + Milestone Gate | 0/TBD | Not started | - |

@@ -22,7 +22,7 @@
 
 ### Attendance & Load Analytics (P1 — on existing reports)
 
-- [ ] **ANL-01**: Owner sees real attendance analytics widgets driven by the existing `reports/visits` aggregate — hourly heatmap, hour-curve, day-of-week, peak, frequency, and duration.
+- [x] **ANL-01**: Owner sees real attendance analytics widgets driven by the existing `reports/visits` aggregate — hourly heatmap, hour-curve, day-of-week, peak, frequency, and duration.
 - [ ] **ANL-02**: Owner sees cohort / anomaly / risk-list attendance widgets backed by new aggregate report queries.
 - [ ] **ANL-03**: Owner sees current live load ("сейчас в зале") on the Load page, backed by a new `reports/load/now` endpoint.
 - [ ] **ANL-04**: Dashboard activity feed, top-trainer KPIs, and the Plans sales chart render real data from existing read endpoints (audit log / visits / payments).
@@ -71,7 +71,7 @@
 | TEAM-01 | 112 | Complete |
 | PROMO-01 | 113 | Complete |
 | PROMO-02 | 113 | Complete |
-| ANL-01 | 114 | Pending |
+| ANL-01 | 114 | Complete |
 | ANL-02 | 115 | Pending |
 | ANL-03 | 115 | Pending |
 | ANL-04 | 115 | Pending |
