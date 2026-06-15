@@ -16,12 +16,12 @@ import { z } from 'zod';
 
 export const VisitsReportDailyBucketSchema = z.object({
   date: z.string(), // 'YYYY-MM-DD'
-  count: z.number(),
+  count: z.number().int().nonnegative(), // visit counts are never negative
 });
 
 export const VisitsReportHourlyBucketSchema = z.object({
   hour: z.number(), // 0–23
-  count: z.number(),
+  count: z.number().int().nonnegative(), // visit counts are never negative
 });
 
 export const VisitsReportSchema = z.object({
