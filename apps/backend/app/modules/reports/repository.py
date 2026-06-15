@@ -301,6 +301,9 @@ async def fetch_payments_for_csv(
       - refund_of             UUID nullable (FK->payments.id for refund rows)
 
     Client name resolution rule (documented per plan output requirement):
+      - Name ordering is ``last_name || ' ' || first_name`` (IN-02): owner-facing
+        financial exports use the project's prevailing "last first" convention, matching
+        the at-risk report (repository.py at-risk SELECT). Do NOT revert to "first last".
       - For 'membership'/'pt_package' rows: LEFT JOIN clients via memberships/pt_packages
         on subject_id. Simple self-join via orig payments for 'refund' rows: first
         resolve the original payment's subject, then look up the client from there.
@@ -325,7 +328,7 @@ async def fetch_payments_for_csv(
         "    CASE"
         "      WHEN p.subject_kind IN ('membership', 'pt_package')"
         "           THEN ("
-        "             SELECT c.first_name || ' ' || c.last_name"
+        "             SELECT c.last_name || ' ' || c.first_name"
         "             FROM clients c"
         "             WHERE c.id = ("
         "               SELECT mem.client_id FROM memberships mem"
@@ -340,7 +343,7 @@ async def fetch_payments_for_csv(
         "           )"
         "      WHEN p.subject_kind = 'refund' AND p.refund_of IS NOT NULL"
         "           THEN ("
-        "             SELECT c.first_name || ' ' || c.last_name"
+        "             SELECT c.last_name || ' ' || c.first_name"
         "             FROM clients c"
         "             WHERE c.id = ("
         "               SELECT"

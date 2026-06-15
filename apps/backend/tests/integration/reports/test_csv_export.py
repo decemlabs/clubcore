@@ -585,8 +585,10 @@ async def test_payments_csv_cyrillic_roundtrip(
         params={"fromDate": "2026-05-10", "toDate": "2026-05-10"},
     )
     assert r.status_code == 200, r.text
-    # Cyrillic name must appear verbatim (BOM enables Excel UTF-8 decode)
-    assert "Мария Петрова" in r.text, (
+    # Cyrillic name must appear verbatim (BOM enables Excel UTF-8 decode).
+    # IN-02: name ordering is "last_name first_name" (owner-facing financial export
+    # convention, matching the at-risk report) → "Петрова Мария".
+    assert "Петрова Мария" in r.text, (
         f"Cyrillic client name not found in CSV. Body excerpt: {r.text[:500]}"
     )
     # Header row must be the canonical CSV_PAYMENTS_HEADERS
@@ -615,7 +617,9 @@ async def test_payments_csv_formula_injection_guarded(
 ) -> None:
     """clientName starting with '=' is prefixed with a single quote (T-116-08, CR-01)."""
     plan = await make_plan(name="PaymentsCSVFormulaTest")
-    formula_client = await make_client(first_name="=HYPERLINK('evil')", last_name="Test")
+    # IN-02: name ordering is "last_name first_name", so the formula trigger must be in
+    # last_name (the leading token) for the formula-injection guard to fire on the cell.
+    formula_client = await make_client(first_name="Test", last_name="=HYPERLINK('evil')")
     mem = await make_membership(client_id=formula_client.id, plan=plan)
     await make_payment_ledger(
         subject_id=mem.id,
