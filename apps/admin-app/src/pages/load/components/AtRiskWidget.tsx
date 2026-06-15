@@ -63,35 +63,40 @@ export function AtRiskWidget({ data, isPending, isError }: AtRiskWidgetProps) {
           className="py-8"
         />
       ) : (
-        <div>
-          {data.items.slice(0, 5).map((item, i) => (
-            <div
-              key={item.clientId}
-              className={
-                'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-5 py-3 transition-colors hover:bg-surface-2' +
-                (i < data.items.slice(0, 5).length - 1 || count > 5
-                  ? ' border-b-[0.5px] border-border'
-                  : '')
-              }
-            >
-              <div className="min-w-0">
-                <div className="truncate text-[13px] font-semibold">{item.name}</div>
-                <div className="truncate text-[11.5px] text-fg-subtle">
-                  {item.membershipType}
+        (() => {
+          const top = data.items.slice(0, 5);
+          return (
+            <div>
+              {top.map((item, i) => (
+                <div
+                  key={item.clientId}
+                  className={
+                    'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-5 py-3 transition-colors hover:bg-surface-2' +
+                    (i < top.length - 1 || count > 5
+                      ? ' border-b-[0.5px] border-border'
+                      : '')
+                  }
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-[13px] font-semibold">{item.name}</div>
+                    <div className="truncate text-[11.5px] text-fg-subtle">
+                      {item.membershipType}
+                    </div>
+                  </div>
+                  <span className="shrink-0 whitespace-nowrap tabular-nums text-[11.5px] text-fg-muted">
+                    {item.lastVisitLabel}
+                  </span>
                 </div>
-              </div>
-              <span className="shrink-0 whitespace-nowrap tabular-nums text-[11.5px] text-fg-muted">
-                {item.lastVisitLabel}
-              </span>
-            </div>
-          ))}
+              ))}
 
-          {count > 5 ? (
-            <div className="px-5 py-3 text-[12px] text-fg-muted">
-              И ещё {count - 5} клиентов →
+              {count > 5 ? (
+                <div className="px-5 py-3 text-[12px] text-fg-muted">
+                  И ещё {count - 5} клиентов →
+                </div>
+              ) : null}
             </div>
-          ) : null}
-        </div>
+          );
+        })()
       )}
     </Card>
   );
