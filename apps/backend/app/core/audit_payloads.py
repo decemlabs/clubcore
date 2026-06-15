@@ -1421,6 +1421,9 @@ class UserRoleChangedPayload(BaseModel):
     old role until re-auth (no session invalidation per 112-CONTEXT.md
     effect-timing decision, T-112-13 accepted risk).
 
+    ``audit_correlation_id``: terminal event — caller passes None (IN-01 lineage;
+    mirrors UserDeactivatedPayload / UserReactivatedPayload for the v1.6+ user
+    admin event family; D-41-20 chain-root marker).
     ``changed_user_id`` is the UUID of the target user (stored as str at the
     callsite per Pitfall 13 — Pydantic v2 coerces back to UUID on validate).
     ``old_role`` and ``new_role`` are the Role.value strings ('owner' | 'reception').
@@ -1428,6 +1431,7 @@ class UserRoleChangedPayload(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    audit_correlation_id: UUID | None  # IN-01 — terminal event; caller passes None
     changed_user_id: UUID
     old_role: str = Field(pattern=r"^(owner|reception)$")
     new_role: str = Field(pattern=r"^(owner|reception)$")

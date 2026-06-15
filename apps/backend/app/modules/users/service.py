@@ -367,6 +367,13 @@ async def change_user_role(
         if active_owner_count < 1:
             raise CannotChangeLastOwnerRoleError("cannot_change_last_owner_role")
 
+    # Capture old_role BEFORE the UPDATE so the audit kwarg is the pre-change value.
+    # SQLAlchemy 2.0 ORM bulk UPDATE (session.execute(update(User)...)) evaluates the
+    # synchronize_session='evaluate' predicate in Python and mutates the identity-map
+    # entry for the loaded `target` object — accessing target.role AFTER the UPDATE
+    # would return the new value, not the old one (observed in Phase 112 tests).
+    old_role_value: str = target.role.value
+
     await repository.update_user_role(session, target_user_id=target_user_id, new_role=new_role)
 
     await audit.emit(
@@ -377,7 +384,7 @@ async def change_user_role(
         resource_id=target_user_id,
         audit_correlation_id=None,  # IN-01 — terminal event, no downstream chain
         changed_user_id=str(target_user_id),
-        old_role=target.role.value,
+        old_role=old_role_value,
         new_role=new_role.value,
     )
     await session.flush()
