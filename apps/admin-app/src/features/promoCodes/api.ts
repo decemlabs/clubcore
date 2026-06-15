@@ -13,16 +13,11 @@
  * CSRF: staffRequest auto-attaches X-CSRF-Token for POST/PATCH — no
  * manual header needed.
  *
- * NOTE: promo-codes admin paths are not yet in schema.d.ts (Phase 117 regenerates
- * the OpenAPI contract). Paths are cast via `as unknown as keyof paths` until
- * the schema is regenerated. All wire shapes are validated by Zod at runtime.
- *
  * ApiError re-exported (D-100-03-APIERROR-REEXPORT) so page/modal layers can
  * `instanceof ApiError` without importing @/api/client directly.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { staffRequest, ApiError } from '@/api/client'
-import type { paths } from '@clubcore/api-client'
 import { can } from '@/shared/session/can'
 import type { Role } from '@/shared/session/types'
 import {
@@ -58,7 +53,7 @@ export function usePromoCodes(opts: { active?: boolean; page?: number }, role: R
     queryFn: async () => {
       const raw = await staffRequest(
         'get',
-        '/api/v1/promo-codes' as unknown as keyof paths,
+        '/api/v1/promo-codes',
         { query: opts },
       )
       return PromoCodesListResponseSchema.parse(raw).data
@@ -84,7 +79,7 @@ export function useCreatePromoCode() {
     mutationFn: async (body: PromoCodeCreateInput) => {
       const raw = await staffRequest(
         'post',
-        '/api/v1/promo-codes' as unknown as keyof paths,
+        '/api/v1/promo-codes',
         { body },
       )
       return PromoCodeWriteResponseSchema.parse((raw as { data: unknown }).data)
@@ -107,7 +102,7 @@ export function useUpdatePromoCode() {
     mutationFn: async ({ id, body }: { id: string; body: PromoCodeUpdateInput }) => {
       const raw = await staffRequest(
         'patch',
-        '/api/v1/promo-codes/{promo_id}' as unknown as keyof paths,
+        '/api/v1/promo-codes/{promo_id}',
         { params: { promo_id: id }, body },
       )
       return PromoCodeWriteResponseSchema.parse((raw as { data: unknown }).data)
@@ -129,7 +124,7 @@ export function useDeactivatePromoCode() {
     mutationFn: (id: string) =>
       staffRequest(
         'patch',
-        '/api/v1/promo-codes/{promo_id}/deactivate' as unknown as keyof paths,
+        '/api/v1/promo-codes/{promo_id}/deactivate',
         { params: { promo_id: id } },
       ),
     onSettled: () => {

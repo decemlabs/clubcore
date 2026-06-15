@@ -77,7 +77,7 @@ export function useThreads() {
   return useQuery({
     queryKey: messagesKeys.threads(),
     queryFn: async () => {
-      const raw = await staffRequest('get', '/api/v1/messages/threads' as never)
+      const raw = await staffRequest('get', '/api/v1/messages/threads')
       return StaffInboxSchema.parse(raw).data
     },
     staleTime: 0,
@@ -99,7 +99,8 @@ export function useThread(threadId: string | null) {
     queryFn: async () => {
       const raw = await staffRequest(
         'get',
-        `/api/v1/messages/threads/${threadId}` as never,
+        '/api/v1/messages/threads/{thread_id}',
+        { params: { thread_id: threadId ?? '' } },
       )
       return StaffThreadSchema.parse(raw).data
     },
@@ -122,8 +123,8 @@ export function useSendReply(threadId: string) {
     mutationFn: async (body: string) => {
       return staffRequest(
         'post',
-        `/api/v1/messages/threads/${threadId}/reply` as never,
-        { body: { body } },
+        '/api/v1/messages/threads/{thread_id}/reply',
+        { params: { thread_id: threadId }, body: { body } },
       )
     },
     onSettled: () => {
@@ -150,8 +151,8 @@ export function useMarkThreadRead() {
     mutationFn: async (threadId: string) =>
       staffRequest(
         'post',
-        `/api/v1/messages/threads/${threadId}/read` as never,
-        { body: {} },
+        '/api/v1/messages/threads/{thread_id}/read',
+        { params: { thread_id: threadId }, body: {} },
       ),
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: messagesKeys.threads() })
