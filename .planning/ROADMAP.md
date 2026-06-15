@@ -511,7 +511,7 @@ Plans:
 
 **Plans**: 2 plans
 - [x] 114-01-PLAN.md — derive.ts pure derivation (day-of-week / peak-hour / daily-volume frequency) + Vitest edge-case coverage
-- [ ] 114-02-PLAN.md — DayOfWeekCard / PeakHourCard / FrequencyCard / DurationPlaceholderCard widgets composed into LoadPage below LoadHeatmapCard
+- [x] 114-02-PLAN.md — DayOfWeekCard / PeakHourCard / FrequencyCard / DurationPlaceholderCard widgets composed into LoadPage below LoadHeatmapCard
 **UI hint**: yes
 
 ### Phase 115: Live & Advanced Analytics
@@ -580,7 +580,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 112. Critical Money & Access | 3/3 | Complete   | 2026-06-15 |
 | 113. Promo Codes CRUD | 3/3 | Complete   | 2026-06-15 |
-| 114. Attendance Analytics on Existing Reports | 1/2 | In Progress|  |
+| 114. Attendance Analytics on Existing Reports | 2/2 | Complete   | 2026-06-15 |
 | 115. Live & Advanced Analytics | 0/TBD | Not started | - |
 | 116. Chat Inbox & Exports | 0/TBD | Not started | - |
 | 117. OpenAPI Handoff + Milestone Gate | 0/TBD | Not started | - |
