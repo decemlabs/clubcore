@@ -544,7 +544,14 @@ Plans:
   3. Owner can export payments to a UTF-8 BOM CSV file over a date range from Cashbox or Finance; the download starts immediately and Cyrillic content round-trips cleanly in Excel.
   4. Owner can export visits/attendance to a UTF-8 BOM CSV file over a date range from the Attendance screen; the file matches the same format discipline.
 
-**Plans**: TBD
+**Plans**: 3 plans, 2 waves
+Plans:
+**Wave 1** *(parallel — disjoint backend modules)*
+- [ ] 116-01-PLAN.md — Backend staff messaging: staff_router (list/history/reply/mark-read) + repo/service/schemas reusing existing dispatch + atomic Resource.MESSAGES RBAC parity + migration 0073 staff_last_read_at + ASGITransport tests [MSG-01, MSG-02] · wave 1
+- [ ] 116-02-PLAN.md — Backend payments CSV: CSV_PAYMENTS_HEADERS + fetch_payments_for_csv (raw-SQL) + payments_csv_rows (sanitized) + GET /reports/payments.csv StreamingResponse (owner-only) + ASGITransport tests (BOM/403/Cyrillic) [EXP-01] · wave 1
+
+**Wave 2** *(blocked on 116-01 + 116-02)*
+- [ ] 116-03-PLAN.md — FE wiring: features/messages real hooks (mock removed) + MessagesPage/ThreadPane wire + owner-only composer gate + owner-gated CSV export buttons (payments Cashbox/Finance, visits Attendance) + human-verify [MSG-01, MSG-02, EXP-01, EXP-02] · wave 2
 **UI hint**: yes
 
 ### Phase 117: OpenAPI Handoff + Milestone Gate
@@ -586,7 +593,7 @@ Plans:
 | 113. Promo Codes CRUD | 3/3 | Complete   | 2026-06-15 |
 | 114. Attendance Analytics on Existing Reports | 2/2 | Complete   | 2026-06-15 |
 | 115. Live & Advanced Analytics | 4/4 | Complete   | 2026-06-15 |
-| 116. Chat Inbox & Exports | 0/TBD | Not started | - |
+| 116. Chat Inbox & Exports | 0/3 | Planned | - |
 | 117. OpenAPI Handoff + Milestone Gate | 0/TBD | Not started | - |
 
 <details>
