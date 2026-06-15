@@ -105,7 +105,15 @@ function mapSingleEvent(event: AuditEvent): ActivityEvent {
   const name = resolveName(event)
   const title = type === 'alert' ? action : titleFor(type, name)
   const subLead = resolveSubLead(event)
-  const timeLabel = formatRelativeRu(event.createdAt)
+  // IN-05: formatRelativeRu (date-fns formatDistanceToNowStrict) throws a RangeError
+  // on an unparseable createdAt. The mapper is contractually "never throws", so guard
+  // defensively and fall back to a safe label rather than crashing the feed.
+  let timeLabel: string
+  try {
+    timeLabel = formatRelativeRu(event.createdAt)
+  } catch {
+    timeLabel = '—'
+  }
 
   return {
     id: event.id,
