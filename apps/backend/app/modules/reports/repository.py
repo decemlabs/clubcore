@@ -665,7 +665,25 @@ visit_months AS (
         date_trunc('month', checked_in_at AT TIME ZONE 'Europe/Moscow')::date AS visit_month
     FROM visits
 ),
-retention AS (
+offsets AS (
+    -- Dense offset grid: every (cohort_month, offset) from 0 up to the number of
+    -- whole months between the cohort month and the current MSK month. This makes
+    -- a genuine 0% retention month emit a row (LEFT JOIN + COALESCE below) so the
+    -- UI can distinguish 0% from "no data" (CR-01).
+    SELECT cs.cohort_month, gs.month_offset
+    FROM cohort_sizes cs
+    CROSS JOIN LATERAL generate_series(
+        0,
+        (
+            (EXTRACT(YEAR FROM date_trunc('month', now() AT TIME ZONE 'Europe/Moscow'))
+             - EXTRACT(YEAR FROM cs.cohort_month)) * 12
+            + (EXTRACT(MONTH FROM date_trunc('month', now() AT TIME ZONE 'Europe/Moscow'))
+             - EXTRACT(MONTH FROM cs.cohort_month))
+        )::int
+    ) AS gs(month_offset)
+),
+visited AS (
+    -- Distinct-client visit aggregation per (cohort_month, months_since).
     SELECT
         cb.cohort_month,
         (
@@ -679,17 +697,19 @@ retention AS (
     GROUP BY cb.cohort_month, months_since
 )
 SELECT
-    r.cohort_month,
-    r.months_since,
-    r.retained_count,
+    o.cohort_month,
+    o.month_offset                      AS months_since,
+    COALESCE(v.retained_count, 0)       AS retained_count,
     cs.cohort_size
-FROM retention r
-JOIN cohort_sizes cs ON cs.cohort_month = r.cohort_month
-WHERE r.cohort_month >= (
+FROM offsets o
+JOIN cohort_sizes cs ON cs.cohort_month = o.cohort_month
+LEFT JOIN visited v ON v.cohort_month = o.cohort_month
+                   AND v.months_since = o.month_offset
+WHERE o.cohort_month >= (
     date_trunc('month', now() AT TIME ZONE 'Europe/Moscow')::date
     - make_interval(months => :cohort_months)
 )
-ORDER BY r.cohort_month, r.months_since
+ORDER BY o.cohort_month, o.month_offset
 """
                 ),
                 {"cohort_months": cohort_months},

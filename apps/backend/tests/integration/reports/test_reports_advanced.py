@@ -165,6 +165,62 @@ async def test_cohort_small_sample(
                 assert pct == pct, "retentionPct is NaN"
 
 
+async def test_cohort_exact_retention_value(
+    authed_client_owner: AsyncClient,
+    make_client: Any,
+    make_plan: Any,
+    make_membership: Any,
+    make_visit: Any,
+) -> None:
+    """Deterministic cohort → assert EXACT retentionPct values (CR-01 dense offset grid).
+
+    Seeds a single-client cohort whose membership starts in the CURRENT MSK month
+    and who visits exactly once in that same month. With the dense offset grid:
+      - offset 0 (cohort month): 1 of 1 cohort member visited → 100.0%.
+    A genuine no-visit month would now emit retentionPct == 0.0 (not None), so the
+    grid is dense and the metric cannot silently drift between 0% and "no data".
+    """
+    plan = await make_plan(name="CohortExactValueTest")
+    client = await make_client()
+
+    # MSK "now": the visit + membership both land in the current MSK month.
+    # Use day 15 at 10:00 MSK (07:00 UTC) — well clear of month boundaries / DST.
+    now_msk = (datetime.now(UTC) + timedelta(hours=3)).date()
+    start_this_month = now_msk.replace(day=15)
+    membership = await make_membership(
+        client_id=client.id,
+        plan=plan,
+        status="active",
+        start_date=start_this_month,
+    )
+
+    # One visit in the SAME MSK month as the cohort start → offset 0 retained.
+    visit_ts = datetime(now_msk.year, now_msk.month, 15, 7, 0, 0, tzinfo=UTC)
+    await make_visit(
+        client_id=client.id,
+        membership_id=membership.id,
+        checked_in_at=visit_ts,
+    )
+
+    r = await authed_client_owner.get(
+        "/api/v1/reports/cohort",
+        params={"cohortMonths": 1},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()["data"]
+    cohorts = body["cohorts"]
+
+    cohort_key = start_this_month.strftime("%Y-%m")
+    entry = next((c for c in cohorts if c["cohortMonth"] == cohort_key), None)
+    assert entry is not None, f"Cohort {cohort_key} missing; got {cohorts}"
+
+    months = {m["offset"]: m["retentionPct"] for m in entry["months"]}
+    # Dense grid guarantees offset 0 is always present.
+    assert 0 in months, f"offset 0 missing from cohort {cohort_key}: {months}"
+    # EXACT value: 1 of 1 cohort member visited in the cohort month → 100.0%.
+    assert months[0] == 100.0, f"Expected offset-0 retention 100.0, got {months[0]}"
+
+
 async def test_cohort_months_param_bounds(
     authed_client_owner: AsyncClient,
 ) -> None:
