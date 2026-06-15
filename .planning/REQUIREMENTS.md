@@ -34,8 +34,8 @@
 
 ### Staff Messaging (P2 — messaging module ready)
 
-- [ ] **MSG-01**: Staff sees a chat inbox of client↔gym threads (list + unread), backed by new staff-side REST over the existing messaging module.
-- [ ] **MSG-02**: Staff can open a thread and send/reply to a client message; messages persist and the client PWA receives them.
+- [x] **MSG-01**: Staff sees a chat inbox of client↔gym threads (list + unread), backed by new staff-side REST over the existing messaging module.
+- [x] **MSG-02**: Staff can open a thread and send/reply to a client message; messages persist and the client PWA receives them.
 
 ### Handoff (closes the milestone)
 
@@ -77,8 +77,8 @@
 | ANL-04 | 115 | Complete |
 | EXP-01 | 116 | Pending |
 | EXP-02 | 116 | Pending |
-| MSG-01 | 116 | Pending |
-| MSG-02 | 116 | Pending |
+| MSG-01 | 116 | Complete |
+| MSG-02 | 116 | Complete |
 | HND-01 | 117 | Pending |
 
 **Coverage:**

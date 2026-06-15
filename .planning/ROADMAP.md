@@ -547,7 +547,7 @@ Plans:
 **Plans**: 3 plans, 2 waves
 Plans:
 **Wave 1** *(parallel — disjoint backend modules)*
-- [ ] 116-01-PLAN.md — Backend staff messaging: staff_router (list/history/reply/mark-read) + repo/service/schemas reusing existing dispatch + atomic Resource.MESSAGES RBAC parity + migration 0073 staff_last_read_at + ASGITransport tests [MSG-01, MSG-02] · wave 1
+- [x] 116-01-PLAN.md — Backend staff messaging: staff_router (list/history/reply/mark-read) + repo/service/schemas reusing existing dispatch + atomic Resource.MESSAGES RBAC parity + migration 0073 staff_last_read_at + ASGITransport tests [MSG-01, MSG-02] · wave 1
 - [ ] 116-02-PLAN.md — Backend payments CSV: CSV_PAYMENTS_HEADERS + fetch_payments_for_csv (raw-SQL) + payments_csv_rows (sanitized) + GET /reports/payments.csv StreamingResponse (owner-only) + ASGITransport tests (BOM/403/Cyrillic) [EXP-01] · wave 1
 
 **Wave 2** *(blocked on 116-01 + 116-02)*
@@ -593,7 +593,7 @@ Plans:
 | 113. Promo Codes CRUD | 3/3 | Complete   | 2026-06-15 |
 | 114. Attendance Analytics on Existing Reports | 2/2 | Complete   | 2026-06-15 |
 | 115. Live & Advanced Analytics | 4/4 | Complete   | 2026-06-15 |
-| 116. Chat Inbox & Exports | 0/3 | Planned | - |
+| 116. Chat Inbox & Exports | 1/3 | In Progress|  |
 | 117. OpenAPI Handoff + Milestone Gate | 0/TBD | Not started | - |
 
 <details>
