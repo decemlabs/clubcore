@@ -53,7 +53,11 @@ class PaymentResponse(ResponseData):
     amount_kopecks: int
     method: str
     received_at: datetime
-    received_by_user_id: UUID
+    # WR-06 — nullable: ЮKassa-webhook online rows are anonymous
+    # (received_by_user_id IS NULL, Alembic 0036). The Finance «Онлайн-платежи»
+    # table renders exactly these rows, so a non-nullable field would fail
+    # model_validate on the GET list and break the refund-launch table.
+    received_by_user_id: UUID | None = None
     refund_of: UUID | None = None
     audit_log_id: UUID | None = None
 

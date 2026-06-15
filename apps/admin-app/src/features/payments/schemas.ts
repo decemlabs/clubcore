@@ -25,7 +25,9 @@ export const PaymentSchema = z.object({
   amountKopecks: z.number(),
   method: z.string(),
   receivedAt: z.string(),
-  receivedByUserId: z.string(),
+  // WR-06 — nullable: ЮKassa-webhook online rows are anonymous (operator NULL).
+  // The Finance «Онлайн-платежи» table renders exactly these rows.
+  receivedByUserId: z.string().nullable(),
   refundOf: z.string().nullable().optional(),
   auditLogId: z.string().nullable().optional(),
 });
