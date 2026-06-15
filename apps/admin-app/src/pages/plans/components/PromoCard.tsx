@@ -78,8 +78,7 @@ export function PromoCard({ promo: p, role, onEdit, onDeactivate }: PromoCardPro
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <div className="text-[14.5px] font-bold">
-            {p.code}
-            <code className="ml-1.5 rounded-[5px] bg-surface-3 px-1.5 py-0.5 font-mono text-[13px] font-semibold">
+            <code className="rounded-[5px] bg-surface-3 px-1.5 py-0.5 font-mono text-[13px] font-semibold">
               {p.code}
             </code>
           </div>
