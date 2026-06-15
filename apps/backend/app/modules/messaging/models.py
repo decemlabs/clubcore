@@ -64,6 +64,12 @@ class MessageThread(Base, UUIDPkMixin, TimestampMixin):
         server_default=text("0"),
         nullable=False,
     )
+    # Phase 116 MSG-01: staff-side unread watermark — NULL = never read by staff.
+    # Staff unread count is derived on read: COUNT(*) WHERE role='client'
+    # AND sent_at > staff_last_read_at (or all client messages when NULL).
+    staff_last_read_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     __table_args__ = (
         UniqueConstraint("client_id", name="uq_message_threads_client_id"),

@@ -1,12 +1,13 @@
 """TEST-06: backend permissions ⇔ frontend can.ts/registry.ts parity (Phase 6 D-13, D-14, D-15).
 
-Three set-equalities (D-13; counts updated through Phase 113 PROMO-01):
-  1. OWNER_ONLY pairs (45 entries: 9 v1.1 + 6 v1.2 + 10 v1.4 + 4 v1.5 + 4 v1.6
+Three set-equalities (D-13; counts updated through Phase 116 MSG-01/02):
+  1. OWNER_ONLY pairs (46 entries: 9 v1.1 + 6 v1.2 + 10 v1.4 + 4 v1.5 + 4 v1.6
      + 2 v1.8 Phase 54 INFRA-42 (VIEW|LIST on AUDIT_LOG)
      + 5 v1.9 Phase 58 INFRA-15/D-58-15 (payroll/compensation write pairs)
      + 1 v2.4 Phase 86 GYM-02 (EDIT on GYM)
      + 1 v2.7 Phase 108 CFG-02/03/04 (EDIT on SETTINGS)
-     + 3 Phase 113 PROMO-01 (CREATE|EDIT|DELETE on PROMO_CODES)) — backend
+     + 3 Phase 113 PROMO-01 (CREATE|EDIT|DELETE on PROMO_CODES)
+     + 1 Phase 116 MSG-01/02 (CREATE on MESSAGES)) — backend
      frozenset == frontend can.ts array.
   2. Resource StrEnum values — backend == frontend Resource union.
   3. Action StrEnum values — backend == frontend Action union.
@@ -147,8 +148,8 @@ def test_action_values_match() -> None:
     )
 
 
-def test_owner_only_count_is_forty_five() -> None:
-    """Sanity belt — `OWNER_ONLY` is exactly 45 entries.
+def test_owner_only_count_is_forty_six() -> None:
+    """Sanity belt — `OWNER_ONLY` is exactly 46 entries.
 
     Breakdown: 9 v1.1 + 6 v1.2 INFRA-08 + 11 v1.4 INFRA-19 - 1 D-34-09a
     + 4 v1.5 INFRA-27 (CREATE|EDIT|DELETE|CANCEL on SCHEDULE_SLOTS)
@@ -158,7 +159,8 @@ def test_owner_only_count_is_forty_five() -> None:
       (CREATE|COMPENSATION, CREATE|PAYROLL, EDIT|PAYROLL, REFUND|PAYROLL, LIST|PAYROLL)
     + 1 v2.4 Phase 86 GYM-02 (EDIT on GYM)
     + 1 v2.7 Phase 108 CFG-02/03/04 (EDIT on SETTINGS)
-    + 3 Phase 113 PROMO-01 (CREATE|EDIT|DELETE on PROMO_CODES).
+    + 3 Phase 113 PROMO-01 (CREATE|EDIT|DELETE on PROMO_CODES)
+    + 1 Phase 116 MSG-01/02 (CREATE on MESSAGES — only owner can send).
     """
-    assert len(OWNER_ONLY) == 45
-    assert len(_parse_owner_only_pairs()) == 45
+    assert len(OWNER_ONLY) == 46
+    assert len(_parse_owner_only_pairs()) == 46

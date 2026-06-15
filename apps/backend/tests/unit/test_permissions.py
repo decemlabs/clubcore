@@ -13,7 +13,7 @@ def test_owner_only_is_frozenset_instance() -> None:
     assert isinstance(OWNER_ONLY, frozenset)
 
 
-def test_owner_only_has_exactly_forty_five_entries() -> None:
+def test_owner_only_has_exactly_forty_six_entries() -> None:
     # Mirrors apps/admin-app/src/shared/session/can.ts.
     # Composition: 9 v1.1 + 6 v1.2 INFRA-08 + 11 v1.4 INFRA-19
     #              - 1 v1.4 Phase 34 D-34-09a removal of `(CANCEL, PT_SESSIONS)`
@@ -30,9 +30,11 @@ def test_owner_only_has_exactly_forty_five_entries() -> None:
     #              + 1 v2.7 Phase 108 CFG-02/03/04 (EDIT on SETTINGS — settings write).
     #              + 3 v3.2 Phase 113 PROMO-01/02 PROMO_CODES write pairs
     #                (CREATE / EDIT / DELETE; DELETE = deactivate). Count grows 42 -> 45.
+    #              + 1 Phase 116 MSG-01/02 MESSAGES send pair
+    #                (CREATE, MESSAGES) owner-only. Count grows 45 -> 46.
     # tests/integration/test_rbac_parity.py covers the cross-codebase mirror;
     # this assertion is the structural-only drift tripwire.
-    assert len(OWNER_ONLY) == 45
+    assert len(OWNER_ONLY) == 46
 
 
 def test_role_value_set() -> None:
@@ -56,9 +58,9 @@ def test_action_value_set() -> None:
 
 
 def test_resource_value_set() -> None:
-    # Verbatim from apps/admin-web/src/shared/session/registry.ts
-    # (23 values: 11 v1.1 + 3 v1.2 + 1 v1.2 FE-09 + 5 v1.4 INFRA-18 + 2 v1.5 Phase 37 INFRA-26
-    # + 1 v2.4 Phase 86 GYM-02 (gym)).
+    # Verbatim from apps/admin-app/src/shared/session/registry.ts
+    # (24 values: 11 v1.1 + 3 v1.2 + 1 v1.2 FE-09 + 5 v1.4 INFRA-18 + 2 v1.5 Phase 37 INFRA-26
+    # + 1 v2.4 Phase 86 GYM-02 (gym) + 1 Phase 116 (messages)).
     # Note: OWNER_AREA / MEMBERSHIP_PLANS / PT_PACKAGE_PLANS / PT_PACKAGES / PT_SESSIONS /
     # SCHEDULE_SLOTS Python identifiers map to hyphenated string values.
     assert {r.value for r in Resource} == {
@@ -88,6 +90,7 @@ def test_resource_value_set() -> None:
         "audit-log",  # Phase 54 INFRA-42 — v1.8 audit-log read resource (kebab, multi-word)
         "gym",  # Phase 86 GYM-02 — v2.4 gym-info owner-only write resource
         "promo-codes",  # Phase 113 PROMO-01/02 — v3.2 promo-codes CRUD (kebab, multi-word)
+        "messages",  # Phase 116 MSG-01/02 — staff chat inbox; (create) owner-only
     }
 
 
@@ -207,6 +210,9 @@ def test_specific_owner_only_membership() -> None:
             (Action.CREATE, Resource.PROMO_CODES),
             (Action.EDIT, Resource.PROMO_CODES),
             (Action.DELETE, Resource.PROMO_CODES),
+            # Phase 116 MSG-01/02 - staff chat inbox; only owner can send (create).
+            # (LIST, MESSAGES) and (VIEW, MESSAGES) intentionally NOT in OWNER_ONLY.
+            (Action.CREATE, Resource.MESSAGES),
         }
     )
     assert expected == OWNER_ONLY

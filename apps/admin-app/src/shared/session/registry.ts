@@ -27,6 +27,7 @@ export type Resource =
   | 'audit-log' // NEW Phase 54 INFRA-42 — mirror Resource.AUDIT_LOG.value; no sidebar entry in v1.8
   | 'gym' // NEW Phase 86 GYM-02 — mirror Resource.GYM.value; owner-only gym-info write
   | 'promo-codes' // NEW Phase 113 — mirror Resource.PROMO_CODES.value; owner-only writes
+  | 'messages' // NEW Phase 116 — staff chat inbox; (create, messages) owner-only send
 
 export type Action =
   | 'view'

@@ -84,6 +84,9 @@ export const OWNER_ONLY: ReadonlyArray<{ action: Action; resource: Resource }> =
   { action: 'create', resource: 'promo-codes' },
   { action: 'edit', resource: 'promo-codes' },
   { action: 'delete', resource: 'promo-codes' }, // deactivate maps to 'delete'
+  // Phase 116 — staff chat inbox: only owner can send (create); both roles can read.
+  // (list, messages) and (view, messages) intentionally NOT in OWNER_ONLY. Count grows 45 -> 46.
+  { action: 'create', resource: 'messages' },
 ]
 
 export function can(role: Role, action: Action, resource: Resource): boolean {

@@ -60,9 +60,11 @@ class Resource(StrEnum):
     GYM = "gym"
     # Phase 113 — promo-codes CRUD: reception retains (LIST, PROMO_CODES). Count grows 42 -> 45.
     PROMO_CODES = "promo-codes"  # kebab (mirrors MEMBERSHIP_PLANS, SCHEDULE_SLOTS)
+    # Phase 116 — staff chat inbox; (CREATE, MESSAGES) owner-only send; count grows 45 -> 46.
+    MESSAGES = "messages"
 
 
-# Verbatim mirror of apps/admin-app/src/shared/session/can.ts (45 entries after Phase 113).
+# Verbatim mirror of apps/admin-app/src/shared/session/can.ts (46 entries after Phase 116).
 # frozenset for set-membership lookup in can() and parity-set equality in Phase 6.
 OWNER_ONLY: frozenset[tuple[Action, Resource]] = frozenset(
     {
@@ -154,6 +156,10 @@ OWNER_ONLY: frozenset[tuple[Action, Resource]] = frozenset(
         (Action.CREATE, Resource.PROMO_CODES),
         (Action.EDIT, Resource.PROMO_CODES),
         (Action.DELETE, Resource.PROMO_CODES),  # deactivate maps to DELETE
+        # Phase 116 — staff chat inbox: reception can LIST/VIEW threads; only owner can CREATE (send).
+        # (LIST, MESSAGES) and (VIEW, MESSAGES) NOT in OWNER_ONLY — intentionally omitted.
+        # Count grows 45 -> 46.
+        (Action.CREATE, Resource.MESSAGES),
     }
 )
 
