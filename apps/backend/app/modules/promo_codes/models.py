@@ -65,6 +65,9 @@ class PromoCode(Base, UUIDPkMixin, TimestampMixin, SoftDeleteMixin):
     applicable_to: Mapped[str | None] = mapped_column(
         String(16), nullable=True
     )  # 'membership' | 'pt_package' | None = both (D-05)
+    description: Mapped[str | None] = mapped_column(
+        String(500), nullable=True
+    )  # Phase 113 — optional owner-editable description
 
     __table_args__ = (
         CheckConstraint(
