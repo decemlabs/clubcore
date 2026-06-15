@@ -39,21 +39,34 @@ Source: `apps/admin-app/components.json` (detected).
 
 ## Spacing Scale
 
-Inherited from project (8-point system, Tailwind v4 CSS-first). No new spacing
-tokens introduced in this phase.
+**Inherited — not introduced by this phase.**
+
+Phase 112 introduces zero new spacing values. All layout uses the existing 8-point
+scale via existing primitives unchanged.
 
 | Token | Value | Usage in Phase 112 |
 |-------|-------|---------------------|
 | xs | 4px | Icon gaps inside chip (size-1), label gap (mb-1) |
 | sm | 8px | Gap between footer buttons (`gap-2`), field bottom margin (`mb-3.5` ≈ 14px) |
-| md | 16px | Modal body horizontal padding (`px-5` desktop = 20px / `py-[18px]`) |
-| lg | 24px | Not introduced; outer modal header padding (`px-[22px]`) |
+| md | 16px | Modal body outer content (`px-5` = 20px on mobile) |
+| lg | 24px | Not introduced in this phase |
 | xl | 32px | Not introduced in this phase |
 | 2xl | 48px | Not introduced in this phase |
 | 3xl | 64px | Not introduced in this phase |
 
-Exceptions:
-- Modal body: `px-5 py-[18px]` on mobile, `px-[22px]` on desktop (matches AdaptiveModal standard body padding — do not deviate).
+**Inherited system constants (not modified by this phase):**
+
+The values below are baked into the locked `AdaptiveModal.tsx` component and are
+part of the frozen design system. Phase 112 reuses `AdaptiveModal` unchanged — it
+does not introduce, override, or document these as new tokens:
+
+- `py-[18px]` — AdaptiveModal body vertical padding (off-grid by design; locked in component)
+- `px-[22px]` — AdaptiveModal body horizontal padding on desktop (off-grid by design; locked in component)
+
+These paddings exist in the codebase prior to this phase. The phase adds no spacing
+outside the 8-point scale.
+
+Additional inherited touch/icon sizes (also not introduced here):
 - IconChip header icon: `size-11` (44px) — matches existing `IconChip` component exactly.
 - Row action trigger: `size-7` (28px) — matches existing `UserRowActions` trigger exactly.
 - Touch target minimum: 44px (icon chip in header satisfies this; dropdown trigger at 28px is acceptable as it is secondary chrome).
@@ -64,20 +77,38 @@ Source: `AdaptiveModal.tsx`, `fields.tsx`, `SectionsBottom.tsx` (detected).
 
 ## Typography
 
-Inherited from project. Phase 112 reuses the type scale already present in
-existing modals — no new sizes or weights introduced.
+**Inherited — not introduced by this phase.**
 
-| Role | Size | Weight | Line Height | Usage in Phase 112 |
-|------|------|--------|-------------|---------------------|
-| Modal title | 17px (`text-[17px]`) | 700 bold | tight (`leading-tight tracking-[-0.3px]`) | RefundModal title, ChangeRoleModal title |
-| Modal description | 12.5px (`text-[12.5px]`) | 400 regular | snug (`leading-snug`) | Subtitle below modal title |
-| Body / field label | 12px (`text-[12px]` or `text-xs`) | 600 semibold | — | Field labels inside both modals |
-| Body / field value | 13.5px (`text-[13.5px]` or `text-sm`) | 400 regular | — | Textarea text, input text |
-| Supporting / hint | 11.5px (`text-[11.5px]`) | 400 regular | — | Field hints, validation errors, summary details |
-| Amount display | 15px (`text-[15px]`) | 700 bold (`tabular-nums tracking-[-0.3px]`) | — | Original amount in refund summary row (StatRow) |
-| Section label | 11.5px (`text-[11.5px]`) | 700 bold (`uppercase tracking-[0.5px]`) | — | Internal section headers inside modals |
+Phase 112 introduces zero new font sizes and zero new font weights. It reuses
+existing primitives (`AdaptiveModal`, `Field`, `ModalInput`, `ModalTextarea`,
+`StatRow`, `Section` from `fields.tsx`) verbatim. The type scale below is the
+locked system scale; the phase only selects from it.
 
-Weights used: **regular (400)** and **semibold/bold (600–700)** — two weights maximum.
+**Four primary type roles used by the two new modals (Phase 112 interaction
+surface only):**
+
+| Role | Size | Weight | Line Height | Usage |
+|------|------|--------|-------------|-------|
+| Modal title | 17px | 700 bold | tight | RefundModal title, ChangeRoleModal title |
+| Body / field value | 13.5–15px | 400 regular / 700 bold | — | Input text (13.5px); StatRow amount (15px bold) |
+| Field label / hint | 12–12.5px | 600 semibold / 400 regular | snug | Field labels (12px semibold); description / hints (12.5px regular) |
+| Supporting / micro | 11.5px | 400 regular / 700 bold | — | Field hints, validation errors, section headers |
+
+**Inherited system scale (not modified — documented for checker context):**
+
+All sizes below exist in `fields.tsx` and `AdaptiveModal.tsx` prior to this
+phase. Phase 112 adds none of them:
+
+- 17px — AdaptiveModal title (`text-[17px]` bold)
+- 15px — StatRow accent value (`text-[15px]` bold tabular-nums)
+- 13.5px — ModalInput / ModalTextarea body text (`text-[13.5px]`)
+- 12.5px — AdaptiveModal description / info callout body (`text-[12.5px]`)
+- 12px — Field label (`text-[12px]` or `text-xs` semibold)
+- 11.5px — Field hint, validation message, Section label (`text-[11.5px]`)
+
+Weights used by the system (and therefore by this phase): **regular (400)** and
+**semibold/bold (600–700)** — two weights maximum. Phase 112 introduces no
+additional weights.
 
 Source: `fields.tsx` (Field, ModalInput, ModalTextarea, StatRow, Section), `AdaptiveModal.tsx` (detected).
 
