@@ -52,6 +52,7 @@ from app.core.dependencies import (
     get_user_session_invalidator,
 )
 from app.core.exceptions import (
+    CannotChangeInactiveUserRoleError,
     CannotChangeLastOwnerRoleError,
     CannotChangeOwnRoleError,
     CannotDeactivateLastOwnerError,
@@ -62,6 +63,7 @@ from app.core.exceptions import (
     InvitationAlreadyAcceptedError,
     InvitationExpiredError,
     InvitationNotFoundError,
+    RoleUnchangedError,
     UserAlreadyInactiveError,
     UserNotFoundError,
     UserNotInactiveError,
@@ -347,7 +349,13 @@ async def change_user_role(
     Guard chain (mirrors deactivate_user guard order):
       1. get_alive → 404 UserNotFoundError if None (deleted or missing).
       2. target.id == actor.id → 409 CannotChangeOwnRoleError.
-      3. Demoting owner → non-owner: count_active_owners_excluding row-lock;
+      3. WR-03 — target not active → 409 CannotChangeInactiveUserRoleError.
+         Role change on a deactivated user is rejected (mirrors the
+         deactivate/soft-delete state guards; a deactivated user has no session).
+      4. WR-04 — no-op (target.role == new_role) → 409 RoleUnchangedError,
+         raised BEFORE the UPDATE/audit emit so no phantom user_role_changed
+         audit row (old_role == new_role) is written.
+      5. Demoting owner → non-owner: count_active_owners_excluding row-lock;
          if count < 1 → 409 CannotChangeLastOwnerRoleError.
          Guard fires ONLY when target is currently OWNER and new_role != OWNER,
          so an owner→owner request never mis-fires the guard (no-op promotion).
@@ -357,6 +365,15 @@ async def change_user_role(
         raise UserNotFoundError("user_not_found")
     if target.id == actor.id:
         raise CannotChangeOwnRoleError("cannot_change_own_role")
+    if not target.is_active:
+        # WR-03 — role change on a deactivated user is rejected. The FE only
+        # exposes the action for active rows, but the endpoint is the security
+        # boundary; a crafted PATCH must not silently mutate an inactive user.
+        raise CannotChangeInactiveUserRoleError("cannot_change_inactive_user_role")
+    if target.role == new_role:
+        # WR-04 — reject the no-op BEFORE mutate/emit so no phantom
+        # user_role_changed audit row (old_role == new_role) is written.
+        raise RoleUnchangedError("role_unchanged")
     if target.role == Role.OWNER and new_role != Role.OWNER:
         # Demoting an owner — guard against stranding the gym with zero owners.
         # count_active_owners_excluding locks candidate-owner rows (CR-02/WR-05

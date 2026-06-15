@@ -47,13 +47,14 @@ function handleRoleChangeError(err: unknown) {
   if (err instanceof ApiError) {
     if (err.code === 'cannot_change_own_role') {
       toast.error('Нельзя изменить собственную роль');
-    } else if (
-      err.code === 'cannot_change_last_owner_role' ||
-      err.code === 'cannot_demote_last_owner'
-    ) {
-      // Map BOTH codes for robustness (backend emits cannot_change_last_owner_role;
-      // UI-SPEC lists cannot_demote_last_owner — handle both per plan note)
+    } else if (err.code === 'cannot_change_last_owner_role') {
       toast.error('Нельзя понизить единственного владельца');
+    } else if (err.code === 'cannot_change_inactive_user_role') {
+      // WR-03 — backend rejects role change on a deactivated user.
+      toast.error('Нельзя изменить роль неактивного сотрудника');
+    } else if (err.code === 'role_unchanged') {
+      // WR-04 — no-op role change (defense-in-depth; FE also blocks via sameRole).
+      toast.error('Роль не изменилась');
     } else if (err.code === 'forbidden') {
       toast.error('Недостаточно прав');
     } else {

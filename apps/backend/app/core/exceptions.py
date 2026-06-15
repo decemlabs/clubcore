@@ -526,6 +526,33 @@ class CannotChangeLastOwnerRoleError(ConflictError):
     status_code = 409
 
 
+class CannotChangeInactiveUserRoleError(ConflictError):
+    """Raised when changing the role of a deactivated (inactive) user (Phase 112 WR-03).
+
+    Mirrors the deactivate/soft-delete state guards: role change is rejected on
+    a target whose ``is_active`` is False. A deactivated user has no session and
+    cannot log in, so staging a privilege change on them is meaningless and
+    diverges from the documented guard set. The owner must reactivate the user
+    first if a role change is genuinely intended.
+    """
+
+    code = "cannot_change_inactive_user_role"
+    status_code = 409
+
+
+class RoleUnchangedError(ConflictError):
+    """Raised when a role-change request sets the target's current role (Phase 112 WR-04).
+
+    A no-op role change must be rejected BEFORE the UPDATE/audit emit so no
+    phantom ``user_role_changed`` audit row (with ``old_role == new_role``)
+    pollutes the forensic trail. The FE already blocks this via ``sameRole``;
+    this is the server-side defense-in-depth.
+    """
+
+    code = "role_unchanged"
+    status_code = 409
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Attach AppError handler to the FastAPI app. Called once during create_app()."""
 
