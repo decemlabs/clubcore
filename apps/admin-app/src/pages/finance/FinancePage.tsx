@@ -126,7 +126,8 @@ function FinancePageContent({ role }: { role: Role }) {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <DateRangePicker from={fromDate} to={toDate} onChange={handleRangeChange} />
-            {can(role, 'view', 'finance') && (
+            {/* WR-06: gate on (VIEW, REPORTS) — the pair payments.csv enforces server-side. */}
+            {can(role, 'view', 'reports') && (
               <Button
                 variant="outline"
                 size="sm"

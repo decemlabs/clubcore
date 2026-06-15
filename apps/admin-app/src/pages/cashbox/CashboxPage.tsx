@@ -89,8 +89,10 @@ function CashboxPageContent() {
     }
   }
 
-  // Owner-gated export button (hidden for reception — not disabled)
-  const exportButton = can(role, 'view', 'finance') ? (
+  // Owner-gated export button (hidden for reception — not disabled).
+  // WR-06: gate on (VIEW, REPORTS) — the pair the payments.csv endpoint actually
+  // enforces — so FE visibility matches BE authorization (not coupled by coincidence).
+  const exportButton = can(role, 'view', 'reports') ? (
     <Button
       variant="outline"
       size="sm"
