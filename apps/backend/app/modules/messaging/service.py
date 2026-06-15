@@ -31,6 +31,7 @@ Public API:
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID, uuid4
 
@@ -565,6 +566,24 @@ async def mark_thread_read(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+@dataclass(frozen=True)
+class StaffReplyResult:
+    """Result of send_staff_reply (CR-01).
+
+    Carries the wire-shaped StaffMessageItem plus the two values the router needs
+    for the post-commit publish step:
+      - client_id: the publish channel (cc:messaging:client:{client_id}); resolved
+        ONCE in the service so the router does NOT re-resolve it (CR-01).
+      - reply_read_at: max sent_at watermark of client messages marked read by the
+        reply-as-read; None if nothing was unread. When not None the router MUST
+        publish_read_receipt AFTER commit so the client's ✓✓ updates (RCPT-03).
+    """
+
+    message: StaffMessageItem
+    client_id: UUID
+    reply_read_at: datetime | None
+
+
 def _make_initials(first_name: str, last_name: str) -> str:
     """Derive 1-2 char uppercase initials from first and last name."""
     parts = [first_name.strip(), last_name.strip()]
@@ -637,43 +656,94 @@ async def send_staff_reply(
     *,
     thread_id: UUID,
     payload: StaffReplyRequest,
-) -> StaffMessageItem:
-    """Persist a staff reply via the existing record_staff_message; return StaffMessageItem.
+) -> StaffReplyResult:
+    """Persist a staff reply scoped STRICTLY to the validated thread_id (CR-01).
 
-    Reuses record_staff_message (resolves thread, marks prior client msgs read,
-    inserts role='staff' message, emits message_sent audit). This function does NOT
-    publish to Redis and does NOT commit — caller-owns-txn (CR-02 / DB-first).
+    CR-01: the reply write is scoped to the SAME thread_id the endpoint validated —
+    it is NOT re-resolved from client_id via get_or_create_thread (which could land
+    the reply in a different thread under any future non-1:1 invariant). We resolve
+    client_id ONCE here (for the reply-as-read scope + the post-commit publish channel)
+    and return it so the router does not re-resolve a third time.
 
-    The caller (router) must: (1) await session.commit(), (2) call
-    publish_new_message(redis, client_id=..., message_id=...) AFTER commit.
+    Sequence (DB-first, P5 — caller-owns-txn, no commit, no Redis here):
+      1. get_thread_client_id(thread_id) — validate the thread exists + resolve client_id.
+      2. mark_client_messages_read(thread_id=<validated>) — reply-as-read, returns the
+         max sent_at watermark of marked client messages (or None).
+      3. If reply_read_at is not None: audit.emit("message_read") co-transactionally.
+      4. insert_message(thread_id=<validated>, role='staff') — persists + bumps unread.
+      5. audit.emit("message_sent") co-transactionally.
+
+    The caller (router) MUST, AFTER session.commit():
+      (1) publish_new_message(redis, client_id=..., message_id=...)
+      (2) if reply_read_at is not None: publish_read_receipt(redis, client_id=...,
+          read_at=reply_read_at) — so the client's ✓✓ updates after a staff reply
+          (documented CR-02 / RCPT-03 contract).
 
     Raises NotFoundError if thread_id does not exist.
     No try/except — AppError bubbles to _app_error_handler.
     """
     from app.core.exceptions import NotFoundError  # local import — avoids circular at module level
 
+    # Resolve client_id ONCE from the VALIDATED thread_id (CR-01: no re-resolution).
     client_id = await repository.get_thread_client_id(session, thread_id)
     if client_id is None:
         raise NotFoundError(f"Thread {thread_id} not found")
 
-    result = await record_staff_message(
+    # Reply-as-read scoped to the SAME validated thread_id (RCPT-03). Returns the max
+    # sent_at watermark of marked client messages, or None if nothing was unread.
+    reply_read_at = await repository.mark_client_messages_read(
+        session, client_id, thread_id=thread_id
+    )
+
+    if reply_read_at is not None:
+        # Emit message_read audit co-transactionally with the reply-as-read marks.
+        await audit.emit(
+            session,
+            "message_read",
+            actor_user_id=None,  # staff-initiated read; no individual staff actor
+            resource_type="message",
+            resource_id=thread_id,
+            client_id=str(client_id),
+        )
+        _log.info(
+            "client_messages_marked_read_on_staff_reply",
+            client_id=str(client_id),
+            thread_id=str(thread_id),
+            reply_read_at=str(reply_read_at),
+        )
+
+    message_id, sent_at = await repository.insert_message(
         session,
-        client_id=client_id,
+        thread_id=thread_id,
+        role="staff",
         body=payload.body,
+    )
+
+    await audit.emit(
+        session,
+        "message_sent",
+        actor_user_id=None,  # staff reply; no individual staff actor in v1
+        resource_type="message",
+        resource_id=message_id,
+        client_id=str(client_id),
     )
 
     _log.info(
         "staff_reply_sent",
         thread_id=str(thread_id),
         client_id=str(client_id),
-        message_id=str(result.id),
+        message_id=str(message_id),
     )
 
-    return StaffMessageItem(
-        id=result.id,
-        role="staff",
-        body=payload.body,
-        sent_at=result.sent_at,
+    return StaffReplyResult(
+        message=StaffMessageItem(
+            id=message_id,
+            role="staff",
+            body=payload.body,
+            sent_at=sent_at,
+        ),
+        client_id=client_id,
+        reply_read_at=reply_read_at,
     )
 
 

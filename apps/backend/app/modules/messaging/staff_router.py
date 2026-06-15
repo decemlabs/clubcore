@@ -13,9 +13,10 @@ RBAC-04 ordering: require_permission BEFORE verify_csrf on all mutation endpoint
   (CREATE, MESSAGES) ∈ OWNER_ONLY → reception POST /reply → 403.
   (LIST, MESSAGES) and (VIEW, MESSAGES) NOT in OWNER_ONLY → reception can read.
 
-Delivery: POST /reply reuses the existing publish_new_message after commit (CR-02 /
-DB-first, P5). No forward_to_staff enqueue — staff sends go directly to the client WS
-+ Telegram via the existing channel (that bridge is for client→staff direction only).
+Delivery: POST /reply publishes publish_new_message AND (when the reply-as-read marked
+any client messages) publish_read_receipt after commit (CR-02 / DB-first, P5; CR-01 +
+RCPT-03). No forward_to_staff enqueue — staff sends go directly to the client WS +
+Telegram via the existing channel (that bridge is for client→staff direction only).
 
 No try/except — AppError bubbles to _app_error_handler.
 """
@@ -35,7 +36,6 @@ from app.core.permissions import Action, Resource
 from app.core.redis import get_redis
 from app.core.schemas import ResponseEnvelope, envelope
 from app.modules.messaging import service
-from app.modules.messaging.repository import get_thread_client_id
 from app.modules.messaging.schemas import (
     StaffInboxResponse,
     StaffMessageItem,
@@ -120,7 +120,13 @@ async def staff_send_reply(
     commits FIRST, then calls publish_new_message so the notification frame is only
     emitted once the row is durable.
 
-    Reuses record_staff_message which emits the message_sent audit co-transactionally.
+    CR-01: send_staff_reply scopes the write to the VALIDATED thread_id (no re-resolve
+    via client_id) and returns client_id (resolved once) + reply_read_at. The router
+    must NOT re-resolve the thread a third time. After commit it publishes:
+      (1) publish_new_message (always)
+      (2) publish_read_receipt (only when reply_read_at is not None) — so the client's
+          ✓✓ updates after a staff reply (documented CR-02 / RCPT-03 contract).
+
     No forward_to_staff enqueue — staff→client direction uses the existing WS + Telegram
     channel; forward_to_staff is the client→staff bridge only.
 
@@ -128,20 +134,25 @@ async def staff_send_reply(
     """
     result = await service.send_staff_reply(session, thread_id=thread_id, payload=payload)
 
-    # Resolve client_id for publish_new_message (needed post-commit — resolve before commit).
-    client_id = await get_thread_client_id(session, thread_id)
-
     await session.commit()
 
-    # CR-02: publish ONLY after the row is durable (post-commit).
-    if client_id is not None:
-        await service.publish_new_message(
+    # CR-02: publish ONLY after the row is durable (post-commit). client_id was
+    # resolved ONCE in the service (CR-01) — do not re-resolve the thread here.
+    await service.publish_new_message(
+        redis,
+        client_id=result.client_id,
+        message_id=result.message.id,
+    )
+    # RCPT-03: a staff reply also marks the client's prior messages read — publish the
+    # read receipt so the client's ✓✓ display updates (CR-02 / DB-first, post-commit).
+    if result.reply_read_at is not None:
+        await service.publish_read_receipt(
             redis,
-            client_id=client_id,
-            message_id=result.id,
+            client_id=result.client_id,
+            read_at=result.reply_read_at,
         )
 
-    return envelope(result)
+    return envelope(result.message)
 
 
 @router.post(

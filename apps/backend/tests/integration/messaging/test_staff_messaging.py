@@ -16,11 +16,14 @@ Coverage:
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
+import pytest
 import pytest_asyncio
 from httpx import AsyncClient
+from redis.asyncio import Redis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,7 +47,6 @@ from tests.integration.memberships.conftest import (  # noqa: F401
     seeded_owner,
     seeded_reception,
 )
-
 
 # ---------------------------------------------------------------------------
 # Seed helpers
@@ -296,3 +298,150 @@ async def test_mark_read_resets_staff_unread(
     )
     assert target_after is not None
     assert target_after["staffUnreadCount"] == 0
+
+
+# ---------------------------------------------------------------------------
+# CR-01 — reply scoped to validated thread + read-receipt published
+# ---------------------------------------------------------------------------
+
+
+async def test_reply_persists_on_validated_thread_and_marks_client_read(
+    authed_client_owner: AsyncClient,
+    seeded_thread: dict[str, Any],
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CR-01: reply lands in the VALIDATED thread; reply-as-read publishes a receipt.
+
+    The seeded thread has one unread client message. A staff reply must:
+      - persist role='staff' on the SAME thread_id (not a re-resolved one), and
+      - mark the prior client message read (read_at set), and
+      - publish a read_receipt post-commit (RCPT-03) since reply_read_at is not None.
+    """
+    from app.modules.messaging import service as messaging_service
+
+    thread_id = str(seeded_thread["thread_id"])
+
+    # Capture publish_read_receipt calls (post-commit RCPT-03 dispatch).
+    receipts: list[tuple[UUID, datetime]] = []
+
+    async def _capture_receipt(
+        redis: Redis, *, client_id: UUID, read_at: datetime
+    ) -> None:
+        receipts.append((client_id, read_at))
+
+    new_messages: list[tuple[UUID, UUID]] = []
+
+    async def _capture_new_message(
+        redis: Redis, *, client_id: UUID, message_id: UUID
+    ) -> None:
+        new_messages.append((client_id, message_id))
+
+    monkeypatch.setattr(messaging_service, "publish_read_receipt", _capture_receipt)
+    monkeypatch.setattr(messaging_service, "publish_new_message", _capture_new_message)
+
+    r = await authed_client_owner.post(
+        f"/api/v1/messages/threads/{thread_id}/reply",
+        json={"body": "Готово!"},
+        headers=_csrf(authed_client_owner),
+    )
+    assert r.status_code == 200, r.text
+    reply_id = r.json()["data"]["id"]
+
+    # The reply persists on the VALIDATED thread (not a re-resolved one).
+    reply_row = (
+        await db_session.execute(
+            text(
+                "SELECT thread_id, role FROM messages WHERE id = CAST(:mid AS uuid)"
+            ),
+            {"mid": reply_id},
+        )
+    ).mappings().one()
+    assert str(reply_row["thread_id"]) == thread_id
+    assert reply_row["role"] == "staff"
+
+    # Reply-as-read marked the prior client message read on the SAME thread.
+    unread_client = (
+        await db_session.execute(
+            text(
+                "SELECT COUNT(*) FROM messages "
+                "WHERE thread_id = CAST(:tid AS uuid) AND role = 'client' "
+                "AND read_at IS NULL"
+            ),
+            {"tid": thread_id},
+        )
+    ).scalar_one()
+    assert unread_client == 0, "staff reply must mark prior client messages read"
+
+    # A read receipt was published post-commit (CR-01 / RCPT-03 contract).
+    assert len(receipts) == 1, "staff reply must publish exactly one read_receipt"
+    assert len(new_messages) == 1, "staff reply must publish exactly one new_message"
+
+
+# ---------------------------------------------------------------------------
+# WR-05 — whitespace-only reply body → 422
+# ---------------------------------------------------------------------------
+
+
+async def test_reply_whitespace_only_body_422(
+    authed_client_owner: AsyncClient,
+    seeded_thread: dict[str, Any],
+) -> None:
+    """WR-05: whitespace-only body is rejected with 422 (mirrors client send guard)."""
+    thread_id = str(seeded_thread["thread_id"])
+    r = await authed_client_owner.post(
+        f"/api/v1/messages/threads/{thread_id}/reply",
+        json={"body": "   "},
+        headers=_csrf(authed_client_owner),
+    )
+    assert r.status_code == 422, r.text
+
+
+# ---------------------------------------------------------------------------
+# WR-03 — staff unread watermark boundary (pins the thread-level marker behavior)
+# ---------------------------------------------------------------------------
+
+
+async def test_staff_unread_watermark_boundary(
+    authed_client_owner: AsyncClient,
+    seeded_thread: dict[str, Any],
+    db_session: AsyncSession,
+) -> None:
+    """WR-03: a client message sent AT or BEFORE the watermark counts as read; AFTER as unread.
+
+    The watermark is a strict `sent_at > staff_last_read_at` comparison. This pins the
+    thread-level marker contract so a future maintainer does not tighten it into a
+    per-message guarantee. A message with sent_at == watermark is NOT unread (strict >);
+    a message strictly after the watermark IS unread.
+    """
+    thread_id = str(seeded_thread["thread_id"])
+
+    # Mark read: sets staff_last_read_at = now(). The pre-seeded client message
+    # (sent_at < now()) is now below the watermark → counts as read.
+    r_read = await authed_client_owner.post(
+        f"/api/v1/messages/threads/{thread_id}/read",
+        headers=_csrf(authed_client_owner),
+    )
+    assert r_read.status_code == 204, r_read.text
+
+    r_after = await authed_client_owner.get("/api/v1/messages/threads")
+    target = next(
+        i for i in r_after.json()["data"]["items"] if i["id"] == thread_id
+    )
+    assert target["staffUnreadCount"] == 0, "pre-watermark message must count as read"
+
+    # Insert a client message strictly AFTER the watermark → must count as unread.
+    await db_session.execute(
+        text(
+            "INSERT INTO messages (thread_id, role, body, sent_at) "
+            "VALUES (CAST(:tid AS uuid), 'client', 'после', now() + interval '1 second')"
+        ),
+        {"tid": thread_id},
+    )
+    await db_session.commit()
+
+    r_after2 = await authed_client_owner.get("/api/v1/messages/threads")
+    target2 = next(
+        i for i in r_after2.json()["data"]["items"] if i["id"] == thread_id
+    )
+    assert target2["staffUnreadCount"] == 1, "post-watermark message must count as unread"
