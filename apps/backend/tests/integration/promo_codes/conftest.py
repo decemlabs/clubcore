@@ -1,13 +1,16 @@
 """Shared fixtures for promo_codes integration tests (Phase 113 PROMO-01/PROMO-02).
 
 Reuses the memberships-package fixture machinery (owner/reception clients,
-make_client, make_user). Adds:
+make_client, make_user, make_plan). Adds:
   - make_promo_code: inserts a PromoCode row directly via the SAVEPOINT session
   - make_redemption: inserts a PromoRedemption row (requires an OnlinePayment stub)
   - _csrf_headers: helper returning X-CSRF-Token from the cookie jar
 
 The make_redemption factory creates a minimal OnlinePayment row first to satisfy
-the NOT NULL FK on promo_redemptions.online_payment_id (RESTRICT).
+the NOT NULL FK on promo_redemptions.online_payment_id (RESTRICT). The
+OnlinePayment stub must satisfy ck_online_payments_exactly_one_subject_fk —
+(membership_plan_id IS NOT NULL) <> (pt_package_plan_id IS NOT NULL) — so
+make_redemption accepts a membership_plan_id (created via make_plan).
 """
 
 from __future__ import annotations
@@ -19,6 +22,7 @@ import pytest_asyncio
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.memberships.models import MembershipPlan
 from app.modules.online_payments.models import OnlinePayment
 from app.modules.promo_codes.models import PromoCode, PromoRedemption
 
@@ -91,12 +95,18 @@ async def make_promo_code(
 @pytest_asyncio.fixture
 async def make_redemption(
     db_session: AsyncSession,
+    make_plan: Callable[..., Awaitable[MembershipPlan]],  # noqa: F811
 ) -> Callable[..., Awaitable[PromoRedemption]]:
     """Insert a PromoRedemption row directly via the SAVEPOINT-mode session.
 
     Creates a minimal OnlinePayment stub first (NOT NULL FK RESTRICT on
-    promo_redemptions.online_payment_id). Each call gets a unique
-    yookassa_payment_id / idempotency_key so there is no UNIQUE conflict.
+    promo_redemptions.online_payment_id). The OnlinePayment stub must also
+    satisfy ck_online_payments_exactly_one_subject_fk: exactly one of
+    membership_plan_id / pt_package_plan_id must be NOT NULL. A MembershipPlan
+    row is created via make_plan (re-exported from memberships fixtures).
+
+    Each call gets unique yookassa_payment_id / idempotency_key so the
+    per-yookassa_payment_id / per-idempotency_key UNIQUE constraints are safe.
 
     Parameters
     ----------
@@ -117,9 +127,14 @@ async def make_redemption(
         discount_kopecks: int = 100,
     ) -> PromoRedemption:
         _counter["i"] += 1
-        # Minimal OnlinePayment stub to satisfy the NOT NULL FK.
+        # A fresh plan per call avoids the uq_online_payments_membership_double_tap
+        # partial unique index (client_id + membership_plan_id + date WHERE status != 'canceled').
+        plan = await make_plan(name=f"PromoTest Plan {_counter['i']}")
+
+        # Minimal OnlinePayment stub satisfying all NOT NULL + CHECK constraints.
         online_payment = OnlinePayment(
             client_id=client_id,
+            membership_plan_id=plan.id,  # satisfies exactly_one_subject_fk
             yookassa_payment_id=f"yoo-test-{_counter['i']}-{uuid4().hex[:8]}",
             idempotency_key=f"idem-test-{_counter['i']}-{uuid4().hex[:8]}",
             amount_kopecks=100000,
@@ -128,7 +143,7 @@ async def make_redemption(
             audit_correlation_id=uuid4(),
         )
         db_session.add(online_payment)
-        await db_session.flush()  # get the generated id before creating the redemption
+        await db_session.flush()  # materialise id before the FK reference
 
         redemption = PromoRedemption(
             promo_code_id=promo_code_id,
