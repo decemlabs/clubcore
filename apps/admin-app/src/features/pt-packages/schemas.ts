@@ -25,8 +25,13 @@ export const PtPackagePlanSchema = z.object({
   sessionCount: z.number(),
   priceKopecks: z.number(),
   validityDays: z.number().nullable().optional(),
-  active: z.boolean(),
+  // Backend PtPackagePlanResponse has NO `active` field — PT-package plans have no
+  // active/inactive concept; archiving is a soft-delete and the default list
+  // (includeArchived omitted) returns only alive plans. Default true so the
+  // «В продаже» badge + sell-modal `p.active` filter keep working. (UAT BUG-1)
+  active: z.boolean().optional().default(true),
   createdAt: z.string(),
+  updatedAt: z.string().optional(),
 });
 export type PtPackagePlanData = z.infer<typeof PtPackagePlanSchema>;
 
@@ -66,17 +71,43 @@ export type PtPackagePlanUpdateInput = z.infer<typeof PtPackagePlanUpdateSchema>
 // PT-Package Instance (purchased package for a client)
 // ---------------------------------------------------------------------------
 
-export const PtPackageSchema = z.object({
-  id: z.string(),
-  clientId: z.string(),
-  status: z.enum(['active', 'exhausted', 'expired', 'cancelled']),
-  planSnapshot: PtPackagePlanSchema,
-  sessionsTotal: z.number(),
-  sessionsUsed: z.number(),
-  sessionsRemaining: z.number(),
-  amountKopecks: z.number(),
-  createdAt: z.string(),
-});
+// Backend PtPackageResponse is FLAT (planNameSnapshot/sessionCountSnapshot/
+// priceKopecksSnapshot/validityDaysSnapshot + sessionsRemaining/isActive), NOT the
+// nested planSnapshot + sessionsTotal/sessionsUsed/amountKopecks the UI used to assume.
+// Parse the real wire shape, then .transform() to the UI-facing shape so consumers
+// (TrainingsTab, PtPackageActionDialogs) keep reading planSnapshot.name / sessionsTotal /
+// sessionsUsed / amountKopecks unchanged. (UAT BUG-2)
+export const PtPackageSchema = z
+  .object({
+    id: z.string(),
+    clientId: z.string(),
+    planId: z.string().optional(),
+    trainerId: z.string().nullable().optional(),
+    status: z.enum(['active', 'exhausted', 'expired', 'cancelled']),
+    planNameSnapshot: z.string(),
+    sessionCountSnapshot: z.number(),
+    priceKopecksSnapshot: z.number(),
+    validityDaysSnapshot: z.number().nullable().optional(),
+    sessionsRemaining: z.number(),
+    isActive: z.boolean().optional(),
+    startDate: z.string().nullable().optional(),
+    endDate: z.string().nullable().optional(),
+    cancellationReason: z.string().nullable().optional(),
+    createdAt: z.string(),
+    updatedAt: z.string().optional(),
+  })
+  .transform((p) => ({
+    ...p,
+    planSnapshot: {
+      name: p.planNameSnapshot,
+      sessionCount: p.sessionCountSnapshot,
+      priceKopecks: p.priceKopecksSnapshot,
+      validityDays: p.validityDaysSnapshot ?? null,
+    },
+    sessionsTotal: p.sessionCountSnapshot,
+    sessionsUsed: Math.max(0, p.sessionCountSnapshot - p.sessionsRemaining),
+    amountKopecks: p.priceKopecksSnapshot,
+  }));
 export type PtPackageData = z.infer<typeof PtPackageSchema>;
 
 export const PtPackagesListResponseSchema = z.object({

@@ -573,7 +573,13 @@ function gymDataToFormState(data: GymInfoData): BranchFormState {
     email: data.email ?? '',
     description: '',
     capacity: 60,
-    amenities: data.amenities ?? [],
+    // Backend amenities are objects [{icon,label}] — map to label strings for the
+    // chip UI (this field is display-only; it is not part of GymInfoUpdateSchema). (UAT BUG-3)
+    amenities: Array.isArray(data.amenities)
+      ? data.amenities
+          .map((a) => (typeof a === 'string' ? a : ((a as { label?: string })?.label ?? '')))
+          .filter(Boolean)
+      : [],
   }
 }
 
@@ -622,15 +628,15 @@ export function BranchSection({
   }
 
   async function handleSave() {
+    // nameShort/description are vestigial UI-only fields the backend rejects
+    // (extra='forbid') — never send them. (UAT BUG-6)
     const body = {
-      nameShort: form.nameShort,
-      name: form.name,
+      name: form.nameShort || form.name,
       address: form.address,
       latitude: form.latitude !== '' ? parseFloat(form.latitude) : null,
       longitude: form.longitude !== '' ? parseFloat(form.longitude) : null,
       phone: form.phone || null,
       email: form.email || null,
-      description: form.description || null,
     }
     const result = GymInfoUpdateSchema.safeParse(body)
     if (!result.success) {
@@ -889,7 +895,9 @@ export function BranchSection({
 // ─────────────────────────────────────────────────────────────────────────────
 
 type ScheduleDay = {
-  day: number
+  // Wire key is `day_of_week` (0=Mon … 6=Sun) — matches the backend seed,
+  // /settings/hours response, and booking-enforcement SQL. (UAT BUG-4)
+  day_of_week: number
   open: string
   close: string
   closed?: boolean
@@ -899,7 +907,7 @@ type BreakItem = { label: string; start: string; end: string }
 type ClosureItem = { date: string; label?: string }
 
 const DEFAULT_SCHEDULE: ScheduleDay[] = Array.from({ length: 7 }, (_, i) => ({
-  day: i,
+  day_of_week: i,
   open: '07:00',
   close: '23:00',
   closed: false,
@@ -958,7 +966,12 @@ export function HoursSection({
 
   async function handleSave() {
     const body = {
-      schedule: schedule as Array<{ day: number; open: string; close: string; closed?: boolean }>,
+      schedule: schedule as Array<{
+        day_of_week: number
+        open: string
+        close: string
+        closed?: boolean
+      }>,
       breaks: breaks as unknown[],
       closures: closures as unknown[],
     }
@@ -1028,10 +1041,10 @@ export function HoursSection({
           <SettingRow first label="Режим работы зала">
             <div className="flex flex-col">
               {schedule.map((day, i) => {
-                const isWeekend = day.day >= 5
+                const isWeekend = day.day_of_week >= 5
                 return (
                   <div
-                    key={day.day}
+                    key={day.day_of_week}
                     className={cn(
                       'flex flex-wrap items-center gap-2 py-2 text-[12.5px]',
                       i > 0 && 'border-t-[0.5px] border-border',
@@ -1043,7 +1056,7 @@ export function HoursSection({
                         isWeekend && 'text-primary-deep dark:text-primary',
                       )}
                     >
-                      {DAY_NAMES[day.day] ?? `День ${day.day}`}
+                      {DAY_NAMES[day.day_of_week] ?? `День ${day.day_of_week}`}
                     </span>
                     <input
                       type="time"
@@ -1052,7 +1065,9 @@ export function HoursSection({
                       onChange={(e) => {
                         setSchedule((prev) =>
                           prev.map((d) =>
-                            d.day === day.day ? { ...d, open: e.target.value } : d,
+                            d.day_of_week === day.day_of_week
+                              ? { ...d, open: e.target.value }
+                              : d,
                           ),
                         )
                         dirty()
@@ -1067,7 +1082,9 @@ export function HoursSection({
                       onChange={(e) => {
                         setSchedule((prev) =>
                           prev.map((d) =>
-                            d.day === day.day ? { ...d, close: e.target.value } : d,
+                            d.day_of_week === day.day_of_week
+                              ? { ...d, close: e.target.value }
+                              : d,
                           ),
                         )
                         dirty()
@@ -1081,7 +1098,9 @@ export function HoursSection({
                       onClick={() => {
                         setSchedule((prev) =>
                           prev.map((d) =>
-                            d.day === day.day ? { ...d, closed: !d.closed } : d,
+                            d.day_of_week === day.day_of_week
+                              ? { ...d, closed: !d.closed }
+                              : d,
                           ),
                         )
                         dirty()

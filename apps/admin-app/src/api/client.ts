@@ -33,6 +33,10 @@ export const STAFF_AUTH_EXEMPT_PATHS: readonly string[] = [
   '/api/v1/auth/logout',
   '/api/v1/auth/password-reset/request',
   '/api/v1/auth/password-reset/confirm',
+  // A 401 here means "wrong CURRENT password" (re-auth check), NOT an expired
+  // session — must not trigger refresh→retry→logout. The ChangePasswordModal
+  // maps invalid_credentials to an inline field error instead. (UAT BUG-5)
+  '/api/v1/auth/change-password',
 ]
 
 function isStaffAuthExempt(path: string): boolean {

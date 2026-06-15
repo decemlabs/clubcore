@@ -54,7 +54,9 @@ export const GymInfoSchema = z.object({
   latitude: z.number().nullable(),
   longitude: z.number().nullable(),
   hours: z.array(z.unknown()),
-  amenities: z.array(z.string()),
+  // Backend returns amenities as objects [{icon,label}], not strings — keep as
+  // passthrough so the gym card loads (BranchSection form doesn't read amenities). (UAT BUG-3)
+  amenities: z.array(z.unknown()),
   rules: z.array(z.string()),
   social: z.array(z.unknown()),
 });
@@ -65,15 +67,16 @@ export const GymInfoResponseSchema = z.object({ data: GymInfoSchema });
  * BranchSection form schema (Zod seam — validates react-hook-form input AND PUT body).
  * Note: nameShort maps to GymInfo.name field on the backend (short public name).
  */
+// Mirror backend GymInfoUpdateRequest (extra='forbid'): name/address/phone/email/
+// lat/lng only. `nameShort` and `description` are vestigial UI-only fields the
+// backend rejects — they must NOT be in the PUT body. (UAT BUG-6)
 export const GymInfoUpdateSchema = z.object({
-  nameShort: z.string().min(1).max(40),
   name: z.string().min(1).max(120),
   address: z.string().min(1),
   latitude: z.number().min(-90).max(90).nullable().optional(),
   longitude: z.number().min(-180).max(180).nullable().optional(),
   phone: z.string().max(20).nullable().optional(),
   email: z.string().email().nullable().optional(),
-  description: z.string().max(500).nullable().optional(),
 });
 
 export type GymInfoData = z.infer<typeof GymInfoSchema>;
@@ -98,7 +101,9 @@ export const WorkingHoursResponseSchema = z.object({ data: WorkingHoursSchema })
 
 /** One row in the weekly schedule array (embedded in WorkingHoursUpdateSchema). */
 const ScheduleDaySchema = z.object({
-  day: z.number().int().min(0).max(6), // 0=Mon … 6=Sun
+  // Wire key is `day_of_week` (0=Mon … 6=Sun) — matches backend seed +
+  // /settings/hours response + booking-enforcement SQL. (UAT BUG-4)
+  day_of_week: z.number().int().min(0).max(6),
   open: z.string().regex(/^\d{2}:\d{2}$/, 'Введите время в формате ЧЧ:ММ'),
   close: z.string().regex(/^\d{2}:\d{2}$/, 'Введите время в формате ЧЧ:ММ'),
   closed: z.boolean().optional(),
