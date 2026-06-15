@@ -82,23 +82,25 @@ export interface RefundModalProps {
 export function RefundModal({ payment, open, onOpenChange }: RefundModalProps) {
   const refundMutation = useRefundPayment();
 
-  // Original amount in rubles (payment.amountKopecks is always positive for non-refund rows)
+  // SINGLE-REFUND CONTRACT (Phase 112, WR-02): the backend permits exactly ONE
+  // refund per original payment (partial-UNIQUE on refund_of). A refund is
+  // one-shot — full OR partial — after which the payment is permanently closed
+  // for refunds (a second attempt returns 409 already_refunded). The UI must
+  // NOT imply cumulative top-ups (refund 50% now, the rest later). The amount
+  // field accepts 1..original (partial allowed), but that partial is the only
+  // refund this payment will ever take.
+  //
+  // Original amount in rubles (payment.amountKopecks is always positive for non-refund rows).
   const originalRub = Math.abs(payment.amountKopecks) / 100;
 
-  // For Phase 112 the backend supports one partial refund per original.
-  // alreadyRefunded is 0 for Phase 112 (no multi-refund tracking on client side yet).
-  const alreadyRefundedKopecks = 0;
-  const remainingKopecks = payment.amountKopecks - alreadyRefundedKopecks;
-  const remainingRub = remainingKopecks / 100;
-
-  const [amountRub, setAmountRub] = useState<string>(String(remainingRub));
+  const [amountRub, setAmountRub] = useState<string>(String(originalRub));
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
 
-  // Validation
+  // Validation — amount may be a partial (1..original); it is the single allowed refund.
   const amountNum = parseFloat(amountRub);
-  const amountValid = !isNaN(amountNum) && amountNum >= 0.01 && amountNum <= remainingRub;
-  const amountExceedsHint = !isNaN(amountNum) && amountNum > remainingRub;
+  const amountValid = !isNaN(amountNum) && amountNum >= 0.01 && amountNum <= originalRub;
+  const amountExceedsHint = !isNaN(amountNum) && amountNum > originalRub;
   const reasonValid = reason.trim().length >= 3;
   const formValid = amountValid && reasonValid;
 
@@ -107,7 +109,7 @@ export function RefundModal({ payment, open, onOpenChange }: RefundModalProps) {
       onOpenChange(false);
       // Reset form state after dialog animation completes
       setTimeout(() => {
-        setAmountRub(String(remainingRub));
+        setAmountRub(String(originalRub));
         setReason('');
         setBusy(false);
       }, 300);
@@ -159,12 +161,9 @@ export function RefundModal({ payment, open, onOpenChange }: RefundModalProps) {
         </>
       }
     >
-      {/* Payment summary rows */}
-      <StatRow label="Исходная сумма" value={formatRub(originalRub)} />
-      {alreadyRefundedKopecks > 0 ? (
-        <StatRow label="Уже возвращено" value={formatRub(alreadyRefundedKopecks / 100)} />
-      ) : null}
-      <StatRow label="Доступно к возврату" value={formatRub(remainingRub)} accent />
+      {/* Payment summary row — the original amount is the maximum refundable
+          in the single allowed refund (WR-02 single-refund contract). */}
+      <StatRow label="Сумма платежа" value={formatRub(originalRub)} accent />
 
       {/* Amount field */}
       <Field
@@ -173,7 +172,7 @@ export function RefundModal({ payment, open, onOpenChange }: RefundModalProps) {
         hint={
           amountExceedsHint
             ? undefined
-            : 'Частичный возврат разрешён — не более доступного остатка'
+            : 'Возврат одноразовый — частичный или полный, не более суммы платежа'
         }
       >
         <ModalInput
@@ -181,13 +180,13 @@ export function RefundModal({ payment, open, onOpenChange }: RefundModalProps) {
           suffix="₽"
           value={amountRub}
           min={0.01}
-          max={remainingRub}
+          max={originalRub}
           step={0.01}
           disabled={busy}
           onChange={(e) => setAmountRub(e.target.value)}
         />
         {amountExceedsHint ? (
-          <div className="mt-1.5 text-[11.5px] text-danger">Превышает доступный остаток</div>
+          <div className="mt-1.5 text-[11.5px] text-danger">Превышает сумму платежа</div>
         ) : null}
       </Field>
 

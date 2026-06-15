@@ -105,7 +105,12 @@ function PaymentRow({
           {isRefund ? '−' : '+'}
           {formatRub(absAmount / 100)}
         </div>
-        {/* Owner-only row action — completely hidden for reception and for refund rows */}
+        {/* Owner-only row action — completely hidden for reception and for refund rows.
+            SINGLE-REFUND CONTRACT (WR-02): the backend allows exactly one refund per
+            original payment. The list row data does not flag whether an original has
+            already been refunded, so we cannot hide/disable the action here — a doomed
+            second attempt is caught by the backend 409 already_refunded + the
+            corresponding RefundModal toast. */}
         {canRefund && !isRefund ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
