@@ -55,14 +55,12 @@ async def _seed_sale_payment(
     make_plan: Any,
     make_client: Any,
     phone_suffix: str,
-    amount_override: int | None = None,
 ) -> tuple[UUID, UUID]:
     """Seed a membership sale via HTTP so the payments ledger has a recorded row.
 
     Returns (membership_id, sale_payment_id).
-    The plan price defaults to 250_000 kopecks; ``amount_override`` is not
-    supported at the membership-sell HTTP level (price comes from the plan),
-    but we keep the parameter slot for clarity.
+    The plan price comes from the plan (membership-sell HTTP level does not
+    accept a price override).
 
     Uses the membership sell endpoint (the same path used by test_payments_refund.py)
     to prime the append-only ledger with a real payment row.
@@ -232,6 +230,63 @@ async def test_arbitrary_refund_double_409(
     )
     assert r2.status_code == 409, r2.text
     assert r2.json()["code"] == "already_refunded"
+
+
+# ─── partial-then-second-partial refund → 409 (single-refund contract) ───────
+
+
+async def test_arbitrary_refund_partial_then_second_partial_409(
+    authed_client_owner: AsyncClient,
+    db_session: AsyncSession,
+    make_plan: Any,
+    make_client: Any,
+) -> None:
+    """Partial refund succeeds, then a SECOND partial of the same original → 409.
+
+    Documents the approach-(b) single-refund contract (WR-02): the partial-UNIQUE
+    on refund_of permits exactly ONE refund row per original. After a 50% partial
+    refund the remaining 50% is permanently unrecoverable through this endpoint —
+    the second attempt fails with already_refunded regardless of amount.
+    """
+    membership_id, payment_id = await _seed_sale_payment(
+        authed_client_owner,
+        make_plan=make_plan,
+        make_client=make_client,
+        phone_suffix="3001241",
+    )
+
+    r_orig = await authed_client_owner.get(f"/api/v1/payments/by-membership/{membership_id}")
+    orig_amount = r_orig.json()["data"]["items"][0]["amountKopecks"]
+    half = orig_amount // 2
+
+    # First partial refund — success.
+    r1 = await authed_client_owner.post(
+        f"/api/v1/payments/{payment_id}/refund",
+        json={"amountKopecks": half, "reason": "first partial refund"},
+        headers=_csrf_headers(authed_client_owner),
+    )
+    assert r1.status_code == 201, r1.text
+    assert r1.json()["data"]["amountKopecks"] == -half
+
+    # Second partial refund of the SAME original — must fail (one-shot contract).
+    r2 = await authed_client_owner.post(
+        f"/api/v1/payments/{payment_id}/refund",
+        json={"amountKopecks": orig_amount - half, "reason": "second partial refund"},
+        headers=_csrf_headers(authed_client_owner),
+    )
+    assert r2.status_code == 409, r2.text
+    assert r2.json()["code"] == "already_refunded"
+
+    # DB invariant: exactly ONE refund row exists; the remaining balance is
+    # unrecoverable through this endpoint.
+    payments = (
+        (await db_session.execute(select(Payment).where(Payment.subject_id == membership_id)))
+        .scalars()
+        .all()
+    )
+    refund_rows = [p for p in payments if p.subject_kind == SUBJECT_KIND_REFUND]
+    assert len(refund_rows) == 1
+    assert refund_rows[0].amount_kopecks == -half
 
 
 # ─── refund of a refund row → 409 ────────────────────────────────────────────
