@@ -260,9 +260,14 @@ def test_locked_audit_events_has_expected_count() -> None:
     pre-registered BEFORE any callsite (Plan 01 implements the emitter):
     ``('profile_updated', 'user')``.
     The frozenset total becomes 116 + 1 = 117. See 109-01-SUMMARY.md.
+
+    Phase 112 (INFRA-15 / TEAM-01 role-change lock) ADDS 1 v3.2 user pair
+    pre-registered BEFORE the callsite (Plan 02 implements the emitter):
+    ``('user_role_changed', 'user')``.
+    The frozenset total becomes 117 + 1 = 118. See 112-02-SUMMARY.md.
     """
-    assert len(LOCKED_AUDIT_EVENTS) == 117, (
-        "LOCKED_AUDIT_EVENTS size drifted: expected 117 "
+    assert len(LOCKED_AUDIT_EVENTS) == 118, (
+        "LOCKED_AUDIT_EVENTS size drifted: expected 118 "
         "(18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4 + 5 v1.5 + 13 v1.6 + 14 v1.7 "
         "+ 4 v1.9/P58 + 4 v1.9/P59 + 1 pre-P68 + 6 v2.0/P68 + 1 v2.2/P80 booking_rescheduled "
         "+ 1 v2.3/P82 loyalty_accrued + 1 v2.3/P83 loyalty_redeemed "
@@ -271,7 +276,8 @@ def test_locked_audit_events_has_expected_count() -> None:
         "+ 3 v2.6/P96: referral_code_generated + referral_captured + referral_bonus_accrued "
         "+ 4 v2.7/P108: gym_card_updated + working_hours_updated + booking_config_updated "
         "+ notification_prefs_updated "
-        "+ 1 v3.1/P109: profile_updated), "
+        "+ 1 v3.1/P109: profile_updated "
+        "+ 1 v3.2/P112: user_role_changed), "
         f"got {len(LOCKED_AUDIT_EVENTS)}"
     )
     # v2.3 Phase 82 INFRA-15 / ACCR-01/ACCR-02: +1 loyalty accrual lifecycle pair
