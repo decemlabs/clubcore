@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v3.2
 milestone_name: Admin — Wire the Rest
-status: verifying
+status: executing
 stopped_at: Phase 114 executed — automated verify 9/9, 4 browser-UAT deferred
-last_updated: "2026-06-15T10:42:32.944Z"
+last_updated: "2026-06-15T11:33:53.725Z"
 last_activity: 2026-06-15
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 8
-  completed_plans: 8
+  total_plans: 12
+  completed_plans: 9
   percent: 50
 ---
 
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 114 — Attendance Analytics on Existing Reports
+**Current focus:** Phase 115 — Live & Advanced Analytics
 
 ## Current Position
 
-Phase: 114 (Attendance Analytics on Existing Reports) — EXECUTING
-Plan: 2 of 2
-Status: Phase complete — ready for verification
+Phase: 115 (Live & Advanced Analytics) — EXECUTING
+Plan: 2 of 4
+Status: Ready to execute
 Last activity: 2026-06-15
 
 ## v3.2 Roadmap Summary
@@ -234,7 +234,7 @@ v3.0 in-progress deferrals:
 
 ## Session Continuity
 
-Last session: 2026-06-15T10:42:32.939Z
+Last session: 2026-06-15T11:33:53.720Z
 Stopped at: Phase 114 executed — automated verify 9/9, 4 browser-UAT deferred
 Resume: `/gsd:plan-phase 112` (Critical Money & Access — arbitrary payment refund + staff role-change).
 
