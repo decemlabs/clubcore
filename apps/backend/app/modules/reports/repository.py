@@ -709,8 +709,10 @@ async def fetch_cohort_retention(
                     """
 WITH cohort_base AS (
     -- One row per (client_id, cohort_month) from eligible memberships.
-    -- Uses DISTINCT ON to deduplicate if a client has multiple memberships
-    -- starting in the same month (keep earliest start_date for that month).
+    -- Plain DISTINCT on (client_id, cohort_month): multiple same-month
+    -- memberships for a client collapse to a single cohort row. No start_date
+    -- is selected and there is no ORDER BY, so there is NO earliest-start
+    -- guarantee — dedup is purely on the (client_id, cohort_month) pair.
     SELECT DISTINCT
         client_id,
         date_trunc('month', start_date AT TIME ZONE 'Europe/Moscow')::date AS cohort_month
