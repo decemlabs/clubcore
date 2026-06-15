@@ -7,6 +7,7 @@ import { EmptyState } from '@/components/feedback/EmptyState';
 import { useModals } from '@/components/modals/modals-context';
 import { AdaptiveModal } from '@/components/modals/AdaptiveModal';
 import { IconChip, ModalButton } from '@/components/modals/fields';
+import { ChangeRoleModal } from '@/components/modals/ChangeRoleModal';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -776,15 +777,24 @@ function handle409(err: unknown) {
 function UserRowActions({
   user,
   currentUserId,
+  role,
 }: {
   user: UserData;
   currentUserId: string | undefined;
+  role: 'owner' | 'reception';
 }) {
   const { open } = useModals();
   const deactivate = useDeactivateUser();
   const reactivate = useReactivateUser();
   const deleteUser = useDeleteUser();
   const revokeInv = useRevokeInvitation();
+
+  // ChangeRoleModal state — local per-row, same approach as inviteOpen in TeamSection
+  const [changeRoleUser, setChangeRoleUser] = useState<{
+    id: string;
+    fullName: string;
+    role: 'owner' | 'reception';
+  } | null>(null);
 
   const isSelf = user.id === currentUserId;
 
@@ -795,61 +805,87 @@ function UserRowActions({
       );
     }
     return (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            aria-label="Действия с сотрудником"
-            className="grid size-7 place-items-center justify-self-end rounded-lg text-fg-subtle transition-colors hover:bg-surface-3 hover:text-fg"
-          >
-            <MoreHorizontal className="size-4" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem
-            variant="destructive"
-            onClick={() =>
-              open('confirm', {
-                confirm: {
-                  title: `Деактивировать ${user.fullName}?`,
-                  message: 'Сотрудник потеряет доступ к системе. Его данные сохранятся.',
-                  confirmLabel: 'Деактивировать',
-                  cancelLabel: 'Отмена',
-                  tone: 'danger',
-                  onConfirm: () => {
-                    deactivate.mutate(user.id, {
-                      onError: (err) => handle409(err),
-                    });
+      <>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label="Действия с сотрудником"
+              className="grid size-7 place-items-center justify-self-end rounded-lg text-fg-subtle transition-colors hover:bg-surface-3 hover:text-fg"
+            >
+              <MoreHorizontal className="size-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {/* «Изменить роль» — owner-only, above Деактивировать (Phase 112 TEAM-01) */}
+            {can(role, 'update', 'users') ? (
+              <DropdownMenuItem
+                onClick={() =>
+                  setChangeRoleUser({
+                    id: user.id,
+                    fullName: user.fullName,
+                    role: user.role,
+                  })
+                }
+              >
+                Изменить роль
+              </DropdownMenuItem>
+            ) : null}
+            <DropdownMenuItem
+              variant="destructive"
+              onClick={() =>
+                open('confirm', {
+                  confirm: {
+                    title: `Деактивировать ${user.fullName}?`,
+                    message: 'Сотрудник потеряет доступ к системе. Его данные сохранятся.',
+                    confirmLabel: 'Деактивировать',
+                    cancelLabel: 'Отмена',
+                    tone: 'danger',
+                    onConfirm: () => {
+                      deactivate.mutate(user.id, {
+                        onError: (err) => handle409(err),
+                      });
+                    },
                   },
-                },
-              })
-            }
-          >
-            Деактивировать
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            variant="destructive"
-            onClick={() =>
-              open('confirm', {
-                confirm: {
-                  title: `Удалить ${user.fullName}?`,
-                  message: 'Аккаунт будет помечен как удалённый. Данные сохраняются.',
-                  confirmLabel: 'Удалить',
-                  cancelLabel: 'Отмена',
-                  tone: 'danger',
-                  onConfirm: () => {
-                    deleteUser.mutate(user.id, {
-                      onError: () => toast.error('Не удалось выполнить действие. Попробуйте ещё раз.'),
-                    });
+                })
+              }
+            >
+              Деактивировать
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              variant="destructive"
+              onClick={() =>
+                open('confirm', {
+                  confirm: {
+                    title: `Удалить ${user.fullName}?`,
+                    message: 'Аккаунт будет помечен как удалённый. Данные сохраняются.',
+                    confirmLabel: 'Удалить',
+                    cancelLabel: 'Отмена',
+                    tone: 'danger',
+                    onConfirm: () => {
+                      deleteUser.mutate(user.id, {
+                        onError: () => toast.error('Не удалось выполнить действие. Попробуйте ещё раз.'),
+                      });
+                    },
                   },
-                },
-              })
-            }
-          >
-            Удалить
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+                })
+              }
+            >
+              Удалить
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        {/* ChangeRoleModal — renders inline per-row (same approach as inviteOpen) */}
+        {changeRoleUser ? (
+          <ChangeRoleModal
+            user={changeRoleUser}
+            open={changeRoleUser !== null}
+            onOpenChange={(isOpen) => {
+              if (!isOpen) setChangeRoleUser(null);
+            }}
+          />
+        ) : null}
+      </>
     );
   }
 
@@ -1070,7 +1106,7 @@ export function TeamSection() {
                     </span>
                   ) : null}
                 </span>
-                <UserRowActions user={user} currentUserId={currentUserId} />
+                <UserRowActions user={user} currentUserId={currentUserId} role={role} />
               </div>
             );
           })}
