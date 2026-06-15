@@ -565,7 +565,12 @@ Plans:
   2. For each new domain introduced in v3.2 (refund, role-change, promo, analytics/LiveNow, staff-messages), at least one contract test parses a REAL backend response (not a mock fixture) and asserts the Zod schema passes — the v3.0/v3.1 drift lesson is structurally closed.
   3. The full milestone gate is green: mypy `--strict` + lint-imports + pytest + admin-app `check`/`test`/`build` + Redocly lint; CISO-01 RBAC byte-parity guard is green; all 13 v3.2 requirements are verified satisfied.
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 117-01-PLAN.md — Regenerate openapi.json + schema.d.ts additively, add _v32Checks forward-guard, drop temporary path casts
+- [ ] 117-02-PLAN.md — Real-backend contract tests: ASGITransport capture per domain + FE Zod parse of captured JSON (+ payments.csv backend assertion)
+- [ ] 117-03-PLAN.md — Full milestone gate fix-to-green (backend + FE + api-client + CISO-01 parity 46) + 13-requirement trace
 
 ## Backlog
 
@@ -594,7 +599,7 @@ Plans:
 | 114. Attendance Analytics on Existing Reports | 2/2 | Complete   | 2026-06-15 |
 | 115. Live & Advanced Analytics | 4/4 | Complete   | 2026-06-15 |
 | 116. Chat Inbox & Exports | 3/3 | Complete   | 2026-06-15 |
-| 117. OpenAPI Handoff + Milestone Gate | 0/TBD | Not started | - |
+| 117. OpenAPI Handoff + Milestone Gate | 0/3 | Not started | - |
 
 <details>
 <summary>✅ v3.1 Admin — Fill the Gaps (Phases 107-111) — Progress (SHIPPED 2026-06-15)</summary>
