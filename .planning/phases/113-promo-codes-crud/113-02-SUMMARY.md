@@ -128,6 +128,20 @@ None. Test files only.
 - 113-03 (frontend wiring of PlansPage promo section) can proceed with confidence: the backend contract is now green-locked by 16 ASGITransport tests.
 - Phase 117 milestone gate: PROMO-01/PROMO-02 domains now have ≥1 real-backend contract test (`test_used_count_reflects_promo_redemptions` parses a live list response with the correlated subquery aggregate).
 
+## Self-Check: PASSED
+
+All key files verified present on disk:
+- FOUND: apps/backend/tests/integration/promo_codes/__init__.py
+- FOUND: apps/backend/tests/integration/promo_codes/conftest.py
+- FOUND: apps/backend/tests/integration/promo_codes/test_promo_codes_crud.py
+- FOUND: apps/backend/tests/integration/promo_codes/test_promo_codes_rbac.py
+- FOUND: .planning/phases/113-promo-codes-crud/113-02-SUMMARY.md
+
+All commits verified in git log:
+- FOUND: 2a3716b6 (test package + conftest)
+- FOUND: 10e805c3 (CRUD behavior tests + conftest fix)
+- FOUND: 98ebe46b (RBAC + CSRF guard tests + ruff fix)
+
 ---
 *Phase: 113-promo-codes-crud*
 *Completed: 2026-06-15*
