@@ -282,8 +282,10 @@ async def get_trainers_csv(
 # Advanced analytics routes (Phase 115 ANL-02..04)
 # All owner-only via require_permission(Action.VIEW, Resource.REPORTS).
 # No try/except — AppError bubbles to _app_error_handler.
-# TODO Phase 117: regen openapi.json + schema.d.ts + _v32Checks for
-#   /reports/cohort | /reports/anomaly | /reports/at-risk | /reports/load/now
+# TODO Phase 117: the four advanced-analytics paths (/reports/cohort | /reports/anomaly
+#   | /reports/at-risk | /reports/load/now) already exist in packages/api-client/src/
+#   schema.d.ts, but with untyped (content: unknown) response bodies. Remaining work is
+#   to regen typed response bodies + _v32Checks for these paths.
 # ---------------------------------------------------------------------------
 
 
