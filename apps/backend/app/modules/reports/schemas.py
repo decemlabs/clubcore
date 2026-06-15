@@ -362,7 +362,7 @@ class CohortRetentionResponse(ResponseData):
 # ---------------------------------------------------------------------------
 # Visit anomaly DTOs (Phase 115 ANL-02)
 # GET /api/v1/reports/anomaly
-# Wire: { points: [{ date, count, isAnomaly, direction, label }], windowDays, sigmaThreshold, anomalyCount }
+# Wire: { points: [...VisitAnomalyPoint], windowDays, sigmaThreshold, anomalyCount }
 # ---------------------------------------------------------------------------
 
 
@@ -401,7 +401,7 @@ class VisitAnomalyResponse(ResponseData):
 
     points: gap-filled daily series (contiguous, no missing days).
     window_days: trailing mean window used (ANOMALY_WINDOW_DAYS constant).
-    sigma_threshold: σ threshold used (ANOMALY_SIGMA constant).
+    sigma_threshold: sigma threshold used (ANOMALY_SIGMA constant).
     anomaly_count: number of flagged points in the series.
     Wire: { points, windowDays, sigmaThreshold, anomalyCount }
     """
@@ -415,7 +415,7 @@ class VisitAnomalyResponse(ResponseData):
 # ---------------------------------------------------------------------------
 # At-risk members DTOs (Phase 115 ANL-02)
 # GET /api/v1/reports/at-risk
-# Wire: { count, items: [{ clientId, name, membershipType, lastVisitDate, daysSinceVisit, lastVisitLabel }], thresholdDays }
+# Wire: { count, items: [...AtRiskMember], thresholdDays }
 # ---------------------------------------------------------------------------
 
 

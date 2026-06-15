@@ -508,7 +508,7 @@ async def fetch_at_risk_members(
     Verified columns:
       - memberships: status='active', client_id, plan_id (FK->membership_plans)
       - membership_plans: name (display name)
-      - clients: full_name, deleted_at (SoftDeleteMixin)
+      - clients: last_name, first_name, deleted_at (SoftDeleteMixin)
       - visits: checked_in_at DateTime(timezone=True)
 
     Includes clients with NO visits at all (last_at IS NULL) → never-visited at-risk.
@@ -546,7 +546,7 @@ last_visit AS (
 )
 SELECT
     am.client_id                                                                AS client_id,
-    c.full_name                                                                 AS name,
+    c.last_name || ' ' || c.first_name                                         AS name,
     am.membership_type                                                          AS membership_type,
     (lv.last_at AT TIME ZONE 'Europe/Moscow')::date                            AS last_visit_date,
     CASE
@@ -613,7 +613,7 @@ async def fetch_cohort_retention(
     session: AsyncSession,
     cohort_months: int,
 ) -> list[dict[str, object]]:
-    """Cohort retention grid: membership-start month × months_since → retained count (ANL-02).
+    """Cohort retention grid: membership-start month x months_since -> retained count (ANL-02).
 
     CROSS-MODULE READ — raw SQL text() only; NO ORM imports of Membership/Visit.
     Verified columns:

@@ -82,7 +82,7 @@ LOAD_NOW_WINDOW_MINUTES: int = 120  # rolling window; ~2 h average session
 
 # Visit-anomaly detection (ANL-02)
 ANOMALY_WINDOW_DAYS: int = 14  # trailing rolling mean window (std computation)
-ANOMALY_SIGMA: float = 2.0  # σ threshold for spike/drop flag
+ANOMALY_SIGMA: float = 2.0  # sigma threshold for spike/drop flag
 ANOMALY_LOOKBACK_DAYS: int = 90  # default chart span when no from_date/to_date given
 
 # At-risk member detection (ANL-02): active membership + last visit > threshold
