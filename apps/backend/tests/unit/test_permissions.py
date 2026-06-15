@@ -13,7 +13,7 @@ def test_owner_only_is_frozenset_instance() -> None:
     assert isinstance(OWNER_ONLY, frozenset)
 
 
-def test_owner_only_has_exactly_forty_two_entries() -> None:
+def test_owner_only_has_exactly_forty_five_entries() -> None:
     # Mirrors apps/admin-app/src/shared/session/can.ts.
     # Composition: 9 v1.1 + 6 v1.2 INFRA-08 + 11 v1.4 INFRA-19
     #              - 1 v1.4 Phase 34 D-34-09a removal of `(CANCEL, PT_SESSIONS)`
@@ -28,9 +28,11 @@ def test_owner_only_has_exactly_forty_two_entries() -> None:
     #                per D-58-15 Claude's Discretion (INSERT-only versioned model).
     #              + 1 v2.4 Phase 86 GYM-02 (EDIT on GYM — gym-info owner-only write).
     #              + 1 v2.7 Phase 108 CFG-02/03/04 (EDIT on SETTINGS — settings write).
+    #              + 3 v3.2 Phase 113 PROMO-01/02 PROMO_CODES write pairs
+    #                (CREATE / EDIT / DELETE; DELETE = deactivate). Count grows 42 -> 45.
     # tests/integration/test_rbac_parity.py covers the cross-codebase mirror;
     # this assertion is the structural-only drift tripwire.
-    assert len(OWNER_ONLY) == 42
+    assert len(OWNER_ONLY) == 45
 
 
 def test_role_value_set() -> None:
@@ -85,6 +87,7 @@ def test_resource_value_set() -> None:
         "users",  # Phase 41 INFRA-37 / D-41-21 — v1.6 multi-user admin resource
         "audit-log",  # Phase 54 INFRA-42 — v1.8 audit-log read resource (kebab, multi-word)
         "gym",  # Phase 86 GYM-02 — v2.4 gym-info owner-only write resource
+        "promo-codes",  # Phase 113 PROMO-01/02 — v3.2 promo-codes CRUD (kebab, multi-word)
     }
 
 
@@ -199,6 +202,11 @@ def test_specific_owner_only_membership() -> None:
             # Phase 108 CFG-02/03/04 - v2.7 settings write
             # (reception denied EDIT on settings; enforced at router level).
             (Action.EDIT, Resource.SETTINGS),
+            # Phase 113 PROMO-01/02 - v3.2 promo-codes CRUD write pairs
+            # (reception denied CREATE/EDIT/DELETE; DELETE = deactivate; LIST retained).
+            (Action.CREATE, Resource.PROMO_CODES),
+            (Action.EDIT, Resource.PROMO_CODES),
+            (Action.DELETE, Resource.PROMO_CODES),
         }
     )
     assert expected == OWNER_ONLY
