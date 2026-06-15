@@ -160,6 +160,14 @@ from app.modules.messaging.router import router as messaging_router  # noqa: E40
 
 v1.include_router(messaging_router, prefix="/client")
 
+# Phase 116 MSG-01/02 — staff-side messaging REST (inbox list + reply + mark-read).
+# Mounted at /api/v1/messages (separate from /api/v1/client to avoid cross-module edge;
+# D-20-MODULE; same split pattern as client_portal_router / notifications_router above).
+# Final paths: /api/v1/messages/threads, /api/v1/messages/threads/{id}/reply|read.
+from app.modules.messaging.staff_router import router as staff_messaging_router  # noqa: E402
+
+v1.include_router(staff_messaging_router, prefix="/messages")
+
 # Phase 42 EMAIL-07 / D-42-17 — _internal namespace established here.
 # Transport-layer endpoints (provider webhooks, ops callbacks) sit under
 # /api/v1/_internal/* with their own auth model (HMAC signature in
