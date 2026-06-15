@@ -90,6 +90,8 @@ export function useThreads() {
  * Thread history: GET /api/v1/messages/threads/{id}
  *
  * Disabled when threadId is null (no thread selected).
+ * IN-01: polls every 15s (matching the inbox) so an open thread shows newly-arrived
+ * client messages near-realtime instead of lagging up to staleTime (30s).
  */
 export function useThread(threadId: string | null) {
   return useQuery({
@@ -103,6 +105,7 @@ export function useThread(threadId: string | null) {
     },
     enabled: !!threadId,
     staleTime: 30_000,
+    refetchInterval: 15_000,
   })
 }
 
@@ -138,8 +141,11 @@ export function useSendReply(threadId: string) {
  *
  * Fire-and-forget — no toast on error (silent watermark update).
  * Both roles allowed (backend: VIEW, MESSAGES).
+ * WR-01: invalidate the inbox query on settle so the unread badge clears
+ * immediately instead of lagging up to the 15s poll.
  */
 export function useMarkThreadRead() {
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (threadId: string) =>
       staffRequest(
@@ -147,5 +153,8 @@ export function useMarkThreadRead() {
         `/api/v1/messages/threads/${threadId}/read` as never,
         { body: {} },
       ),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: messagesKeys.threads() })
+    },
   })
 }
