@@ -156,9 +156,9 @@ OWNER_ONLY: frozenset[tuple[Action, Resource]] = frozenset(
         (Action.CREATE, Resource.PROMO_CODES),
         (Action.EDIT, Resource.PROMO_CODES),
         (Action.DELETE, Resource.PROMO_CODES),  # deactivate maps to DELETE
-        # Phase 116 — staff chat inbox: reception can LIST/VIEW threads; only owner can CREATE (send).
-        # (LIST, MESSAGES) and (VIEW, MESSAGES) NOT in OWNER_ONLY — intentionally omitted.
-        # Count grows 45 -> 46.
+        # Phase 116 — staff chat inbox: reception can LIST/VIEW threads; only
+        # owner can CREATE (send). (LIST/VIEW, MESSAGES) intentionally NOT in
+        # OWNER_ONLY. Count grows 45 -> 46.
         (Action.CREATE, Resource.MESSAGES),
     }
 )
