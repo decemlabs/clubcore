@@ -1,10 +1,12 @@
 /**
- * Plans page — wired to real membership-plans + pt-package-plans catalogs (Phase 101 MEM-01).
+ * Plans page — wired to real membership-plans + pt-package-plans + promo codes
+ * catalogs (Phase 101 MEM-01, Phase 113 PROMO-01/02).
  *
  * Data sources:
  *   - Tariffs section: usePlans() → GET /api/v1/membership-plans (real data)
  *   - Addons section: usePtPackagePlans() → GET /api/v1/pt-package-plans (real data)
- *   - Sales chart + promos sections: plansPageData mock (unchanged, deferred to future phase)
+ *   - Promos section: usePromoCodes() → GET /api/v1/promo-codes (real data — Phase 113)
+ *   - Sales chart + KPIs + page head: plansPageData mock (unchanged, deferred)
  *
  * Permission gating (T-101-05-OWNERPLAN, T-101-06-403QUERY, T-101-07-IMMUTABLE):
  *   - Add/Edit/Delete buttons HIDDEN (not disabled) when can(role, 'edit'|'delete', resource) === false
@@ -15,8 +17,10 @@ import { useRef, useState, type RefObject } from 'react'
 import { toast } from 'sonner'
 import { usePlans, useDeletePlan, ApiError } from '@/features/plans/api'
 import { usePtPackagePlans, useDeletePtPackagePlan } from '@/features/pt-packages/api'
+import { usePromoCodes, useDeactivatePromoCode } from '@/features/promoCodes/api'
 import { useSession } from '@/features/auth/api'
 import { can } from '@/shared/session/can'
+import { useModals } from '@/components/modals/modals-context'
 import { PageLoading, PageError } from '@/components/feedback/PageState'
 import { EmptyState } from '@/components/feedback/EmptyState'
 import type { PlanTab } from '@/features/plans/types'
@@ -33,7 +37,9 @@ import { SALES_UNIT_OPTIONS, type SalesUnit } from './components/sales-unit'
 import { formatKopecks } from '@/lib/format'
 import type { MembershipPlanData } from '@/features/plans/schemas'
 import type { PtPackagePlanData } from '@/features/pt-packages/schemas'
+import type { PromoCodeData } from '@/features/promoCodes/schemas'
 import { PlanFormModal } from '@/components/modals/PlanFormModal'
+import { PromoCodeModal } from '@/components/modals/PromoCodeModal'
 
 const ADD_BTN =
   'inline-flex h-9 items-center gap-1.5 rounded-full border-[0.5px] border-border bg-surface px-3.5 text-[13px] font-semibold text-fg transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
@@ -193,14 +199,17 @@ function PtPackagePlanRow({
 export function PlansPage() {
   const session = useSession()
   const role = session.data?.role ?? 'reception'
+  const { open: openModal } = useModals()
 
   // Real data queries
   const plansQuery = usePlans()
   const ptPackagesQuery = usePtPackagePlans()
+  const promoCodesQuery = usePromoCodes({}, role)
 
   // Mutations — delete plans; create/update wired via PlanFormModal (Phase 107-01)
   const deletePlan = useDeletePlan()
   const deletePtPlan = useDeletePtPackagePlan()
+  const deactivatePromoCode = useDeactivatePromoCode()
 
   // Permission checks — gate each entry point on the verb of the action it
   // performs (WR-03): create buttons → 'create', per-card edit → 'edit'.
@@ -210,8 +219,9 @@ export function PlansPage() {
   const canCreatePtPackagePlans = can(role, 'create', 'pt-package-plans')
   const canEditPtPackagePlans = can(role, 'edit', 'pt-package-plans')
   const canDeletePtPackagePlans = can(role, 'delete', 'pt-package-plans')
+  const canCreatePromoCodes = can(role, 'create', 'promo-codes')
 
-  // Mock data for not-yet-wired sections (sales chart, promos, KPIs, page head)
+  // Mock data for not-yet-wired sections (sales chart, KPIs, page head)
   const mockData = plansPageData
 
   const [tab, setTab] = useState<PlanTab>('tariffs')
@@ -222,6 +232,13 @@ export function PlansPage() {
     mode: 'create' | 'edit'
     plan?: MembershipPlanData | PtPackagePlanData
   }>({ open: false, kind: 'membership', mode: 'create' })
+
+  // Promo code modal state
+  const [promoModal, setPromoModal] = useState<{
+    open: boolean
+    mode: 'create' | 'edit'
+    promo?: PromoCodeData
+  }>({ open: false, mode: 'create' })
 
   const tariffsRef = useRef<HTMLElement>(null)
   const promosRef = useRef<HTMLElement>(null)
@@ -281,6 +298,30 @@ export function PlansPage() {
     })
   }
 
+  // ── Promo code handlers (Phase 113) ─────────────────────────────────────
+
+  const handleCreatePromo = () =>
+    setPromoModal({ open: true, mode: 'create' })
+
+  const handleEditPromo = (promo: PromoCodeData) =>
+    setPromoModal({ open: true, mode: 'edit', promo })
+
+  const handleDeactivatePromo = (promo: PromoCodeData) => {
+    openModal('confirm', {
+      confirm: {
+        title: 'Деактивировать промокод',
+        message: `Промокод «${promo.code}» будет деактивирован. Клиенты не смогут им воспользоваться. Это действие необратимо.`,
+        confirmLabel: 'Деактивировать',
+        cancelLabel: 'Отмена',
+        tone: 'danger',
+        onConfirm: async () => {
+          await deactivatePromoCode.mutateAsync(promo.id)
+          toast.success('Промокод деактивирован', { description: promo.code })
+        },
+      },
+    })
+  }
+
   // ── 403 query → friendly EmptyState (T-101-06-403QUERY) ─────────────────
 
   const plansForbidden =
@@ -292,6 +333,11 @@ export function PlansPage() {
     ptPackagesQuery.isError &&
     ptPackagesQuery.error instanceof ApiError &&
     ptPackagesQuery.error.code === 'forbidden'
+
+  const promoCodesForbidden =
+    promoCodesQuery.isError &&
+    promoCodesQuery.error instanceof ApiError &&
+    promoCodesQuery.error.code === 'forbidden'
 
   return (
     <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-4 px-4 pb-10 pt-5 sm:px-6 sm:pb-12 sm:pt-6 lg:px-7">
@@ -382,25 +428,64 @@ export function PlansPage() {
         <SalesChart data={mockData.sales} unit={salesUnit} />
       </section>
 
-      {/* ── Скидки и акции (mock — not wired in this plan) ── */}
+      {/* ── Скидки и акции (promo codes — real data, Phase 113) ── */}
       <section ref={promosRef} className="flex scroll-mt-24 flex-col gap-3.5">
         <SectionHead
           title="Скидки и акции"
           subtitle="Активные предложения, видны клиентам в приложении"
           action={
-            canEditMembershipPlans ? (
-              <button type="button" onClick={() => toast('Создание акции')} className={ADD_BTN}>
+            canCreatePromoCodes ? (
+              <button type="button" onClick={handleCreatePromo} className={ADD_BTN}>
                 <Plus className="size-3.5" strokeWidth={2.4} />
-                Создать акцию
+                Создать промокод
               </button>
             ) : null
           }
         />
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {mockData.promos.map((p) => (
-            <PromoCard key={p.id} promo={p} />
-          ))}
-        </div>
+
+        {promoCodesQuery.isPending && <PageLoading />}
+
+        {promoCodesForbidden && (
+          <EmptyState
+            icon={Lock}
+            title="Недостаточно прав"
+            message="Этот раздел доступен только владельцу. Обратитесь к владельцу клуба."
+          />
+        )}
+
+        {promoCodesQuery.isError && !promoCodesForbidden && (
+          <PageError onRetry={() => void promoCodesQuery.refetch()} />
+        )}
+
+        {promoCodesQuery.isSuccess && promoCodesQuery.data.items.length === 0 && (
+          <EmptyState
+            icon={Tag}
+            title="Промокодов пока нет"
+            message="Создайте первый промокод, чтобы он появился у клиентов в приложении."
+            action={
+              canCreatePromoCodes ? (
+                <button type="button" onClick={handleCreatePromo} className={ADD_BTN}>
+                  <Plus className="size-3.5" strokeWidth={2.4} />
+                  Создать промокод
+                </button>
+              ) : null
+            }
+          />
+        )}
+
+        {promoCodesQuery.isSuccess && promoCodesQuery.data.items.length > 0 && (
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {promoCodesQuery.data.items.map((p) => (
+              <PromoCard
+                key={p.id}
+                promo={p}
+                role={role}
+                onEdit={handleEditPromo}
+                onDeactivate={handleDeactivatePromo}
+              />
+            ))}
+          </div>
+        )}
       </section>
 
       {/* ── Доп. услуги (pt-package plans — real data) ── */}
@@ -468,12 +553,20 @@ export function PlansPage() {
         )}
       </section>
 
+      {/* Modals */}
       <PlanFormModal
         open={planFormModal.open}
         onOpenChange={(open) => setPlanFormModal((s) => ({ ...s, open }))}
         kind={planFormModal.kind}
         mode={planFormModal.mode}
         plan={planFormModal.plan}
+      />
+
+      <PromoCodeModal
+        open={promoModal.open}
+        onOpenChange={(open) => setPromoModal((s) => ({ ...s, open }))}
+        mode={promoModal.mode}
+        promo={promoModal.promo}
       />
     </div>
   )

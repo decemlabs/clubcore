@@ -23,7 +23,7 @@ describe('can()', () => {
     expect(can('reception', 'delete', 'clients')).toBe(false)
   })
 
-  it('reception is denied all 42 OWNER_ONLY pairs', () => {
+  it('reception is denied all 45 OWNER_ONLY pairs', () => {
     for (const { action, resource } of OWNER_ONLY) {
       expect(can('reception', action, resource)).toBe(false)
     }
@@ -42,13 +42,25 @@ describe('can()', () => {
     expect(can('reception', 'view', 'dashboard')).toBe(true)
     // Reception can view schedule
     expect(can('reception', 'view', 'schedule')).toBe(true)
+    // Reception can list promo codes (Phase 113: list/view NOT in OWNER_ONLY)
+    expect(can('reception', 'list', 'promo-codes')).toBe(true)
   })
 
-  it('OWNER_ONLY matrix contains exactly 42 unique entries', () => {
-    // v2.7 (Phase 108-01): added { action: 'edit', resource: 'settings' } — count 41 → 42
+  it('Phase 113 — promo-codes write actions are owner-only', () => {
+    // Write actions are OWNER_ONLY
+    expect(can('owner', 'create', 'promo-codes')).toBe(true)
+    expect(can('owner', 'edit', 'promo-codes')).toBe(true)
+    expect(can('owner', 'delete', 'promo-codes')).toBe(true)
+    expect(can('reception', 'create', 'promo-codes')).toBe(false)
+    expect(can('reception', 'edit', 'promo-codes')).toBe(false)
+    expect(can('reception', 'delete', 'promo-codes')).toBe(false)
+  })
+
+  it('OWNER_ONLY matrix contains exactly 45 unique entries', () => {
+    // Phase 113-01: added 3 promo-codes write pairs (create/edit/delete) — count 42 → 45
     const pairs = new Set(OWNER_ONLY.map((e) => `${e.action}|${e.resource}`))
-    expect(pairs.size).toBe(42)
-    expect(OWNER_ONLY.length).toBe(42)
+    expect(pairs.size).toBe(45)
+    expect(OWNER_ONLY.length).toBe(45)
   })
 })
 
