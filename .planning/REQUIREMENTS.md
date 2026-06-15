@@ -39,7 +39,7 @@
 
 ### Handoff (closes the milestone)
 
-- [ ] **HND-01**: OpenAPI (`openapi.json` + `schema.d.ts`) regenerated additively for the new v3.2 routes (refund, role-change, promo CRUD, analytics, exports, staff-messages) with a `_v32Checks` forward-guard; full milestone gate green; **≥1 contract test per new domain parses a REAL backend response** (closes the v3.0/v3.1 mock↔real drift lesson).
+- [x] **HND-01**: OpenAPI (`openapi.json` + `schema.d.ts`) regenerated additively for the new v3.2 routes (refund, role-change, promo CRUD, analytics, exports, staff-messages) with a `_v32Checks` forward-guard; full milestone gate green; **≥1 contract test per new domain parses a REAL backend response** (closes the v3.0/v3.1 mock↔real drift lesson).
 
 ## v2 Requirements (deferred — future milestones)
 
@@ -79,7 +79,7 @@
 | EXP-02 | 116 | Complete |
 | MSG-01 | 116 | Complete |
 | MSG-02 | 116 | Complete |
-| HND-01 | 117 | Pending |
+| HND-01 | 117 | Complete |
 
 **Coverage:**
 - v1 requirements: 13 total
