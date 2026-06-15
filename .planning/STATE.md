@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v3.2
-milestone_name: Admin — Wire the Rest
-status: Awaiting next milestone
-stopped_at: Phase 116 executed — automated verify 7/7, 5 browser-UAT deferred
-last_updated: "2026-06-15T22:00:56.033Z"
-last_activity: 2026-06-15 — Milestone v3.2 completed and archived
+milestone: v4.0
+milestone_name: Production Infrastructure — Self-Hosted k3s
+status: planning
+last_updated: "2026-06-15T23:24:46.574Z"
+last_activity: 2026-06-15
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 18
-  completed_plans: 18
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: Milestone v3.2 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-15 — Milestone v3.2 completed and archived
+Status: Defining requirements
+Last activity: 2026-06-15 — Milestone v4.0 started
 
 ## v3.2 Roadmap Summary
 

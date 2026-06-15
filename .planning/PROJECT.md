@@ -18,7 +18,28 @@ clubcore — CRM для тренажёрного зала (переименов�
 
 Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
 
-## Current Milestone: v3.2 Admin — Wire the Rest
+## Current Milestone: v4.0 Production Infrastructure — Self-Hosted k3s
+
+**Goal:** Сделать clubcore по-настоящему запускаемым — контейнеризировать весь стек, описать инфраструктуру как код (Terraform под on-prem/bare-metal k3s), развернуть в кластере с наблюдаемостью, бэкапами и сетевой безопасностью. Bar = **локальная валидация** (kind/k3s deploy + `terraform validate/plan` + helm lint + smoke); боевой apply на реальный сервер/VM + живой ЮKassa-leg + RU email/SMS deliverability остаются operator-pending (нужны креды, прецедент D-72-06).
+
+**Target features (по измерениям):**
+- **Containerization** — production multi-stage образы для всех runtime-компонентов (backend API/uvicorn, telegram-bot worker, ARQ worker, migrate-job) + статические сборки admin-app + client-pwa за nginx; hardening (non-root, slim, pinned digests, `.dockerignore`).
+- **Terraform (IaC)** — модули под on-prem/bare-metal: provisioning VM/хоста + сети + установка k3s; kubernetes/helm провайдеры для in-cluster ресурсов; state локально; `validate` + `plan` зелёные.
+- **K8s манифесты / Helm** — Deployments (backend/bot/arq), StatefulSet/PVC для Postgres 16 + Redis 7 + object-storage (MinIO/SeaweedFS), migrate как Job/init, ConfigMaps/Secrets, readiness/liveness пробы, Helm-чарт(ы).
+- **Networking** — k3s ingress (Traefik/nginx) для API + двух фронтендов, TLS (cert-manager; self-signed/staging локально), NetworkPolicies (least-privilege), DNS-план.
+- **Security** — секреты вне репозитория (k8s Secrets + sealed-secrets/SOPS), image-scan (trivy), pod security context; carry-over: CSRF rename `sportzal_csrf → clubcore_csrf` (NAME-01, additive) + ретро `/gsd:secure-phase 70` (proxy rate-limit / QR post-decode / cancel idempotency).
+- **Logging + Monitoring** — Prometheus + Grafana + Loki: метрики backend, structlog JSON → Loki, дашборды (latency/errors/ресурсы/cron), базовые алерты (pod down, error-rate, disk, cert-expiry).
+- **Backup & Recovery** — Postgres backup CronJob → object-storage, Redis snapshot, object-storage backup, retention + **проверенный restore-runbook** (round-trip, прецедент v1.10 db-rename).
+- **CI/CD / автоматизация** — Makefile: build → push → apply (terraform + helm/kubectl) → smoke; одна команда поднять/снести; без внешнего runner'а (no-remote реальность).
+- **Документация** — production runbook: топология, prerequisites, deploy-шаги, операции (backup/restore/rollback/scale), troubleshooting, явный список operator-pending.
+
+**Key context:** чисто инфра/DevOps milestone — **бизнес-фичи не трогаем**, OpenAPI-контракт не меняется (кроме additive CSRF-cookie-rename NAME-01). Исходная точка — существующий `docker compose up` стек (backend + telegram-bot + ARQ + migrate + Postgres 16 + Redis 7 + SeaweedFS/S3 + Mailpit-dev), не с нуля. Все 8 бизнес-доменов уже ✅ full (см. `## Current State`). Нумерация фаз продолжается со **118**.
+
+**Out of scope:** managed-cloud (Yandex/AWS — выбран on-prem k3s); боевой cloud/VM-apply; живой ЮKassa credentialed leg + RU email/SMS deliverability (operator-pending); новые бизнес-фичи; мультифилиальность / multi-tenancy; Notifications Hub / рассылки; persisted-RBAC / Roles-editor.
+
+## Last Shipped Milestone: v3.2 Admin — Wire the Rest
+
+**✅ SHIPPED 2026-06-15/16** (Phases 112–117, 18 plans; tag `v3.2`; audit `tech_debt`, 13/13 requirements). Исходный scope milestone — ниже для контекста.
 
 **Goal:** Закрыть операционную полноту staff-админки для одного зала — критичные дыры (возврат произвольного платежа, смена роли сотрудника) и «дожимку» уже готового backend (промокоды, аналитика посещаемости, экспорт, чат-инбокс). Дорогой full-stack (мультифилиальность, нотификации-хаб, persisted-RBAC) — в backlog.
 
@@ -396,7 +417,7 @@ v1.8 Reports + Audit Log read API shipped 2026-05-24 (tag `v1.8`, 30/30 requirem
 
 ## Next Milestone Goals
 
-**v2.1→v2.6 shipped in order** (Fill the Gaps, Membership self-service, Loyalty + Real Autopay, Content & Communication, Chat / Messaging, Referral System) — вся арка «довести client-PWA до макета» закрыта. **Активный milestone теперь — v3.0 Production Admin — Backend Wiring** (см. `## Current Milestone` выше): подключаем новый staff-frontend `apps/admin-app` к реальному backend (одно-клубный срез) и удаляем `apps/admin-web`. **Renumber note:** изначальный v3.0 = «Production deploy / launch» сдвинут на **v3.1+** (admin-wiring забрал major-bump v3.0 — симметрично v2.0, который привёл client-pwa). Таблица-кандидат ниже — *исходная* post-v2.1 последовательность, оставлена для истории и **частично устарела**: в частности, старая строка v2.6 «unfreeze admin-web chat inbox» мертва — admin-web **удаляется**, а не размораживается, и заменяется новым `apps/admin-app`. Durable snapshot: `.planning/todos/pending/2026-06-02-future-milestones-sequence-post-v2-1.md`.
+**v2.1→v2.6 shipped in order** (Fill the Gaps, Membership self-service, Loyalty + Real Autopay, Content & Communication, Chat / Messaging, Referral System) — вся арка «довести client-PWA до макета» закрыта. **Активный milestone теперь — v4.0 Production Infrastructure — Self-Hosted k3s** (см. `## Current Milestone` выше): забирает строку «Production deploy / launch» из таблицы-кандидата ниже, скорректированную под **on-prem/bare-metal k3s** с **локальной валидацией** (боевой cloud-apply + живой ЮKassa-leg + RU deliverability остаются operator-pending). Промежуточные v3.0/v3.1/v3.2 (admin wiring → gaps → rest) — отгружены. **Renumber note:** изначальный v3.0 = «Production deploy / launch» сдвинут на **v3.1+** (admin-wiring забрал major-bump v3.0 — симметрично v2.0, который привёл client-pwa). Таблица-кандидат ниже — *исходная* post-v2.1 последовательность, оставлена для истории и **частично устарела**: в частности, старая строка v2.6 «unfreeze admin-web chat inbox» мертва — admin-web **удаляется**, а не размораживается, и заменяется новым `apps/admin-app`. Durable snapshot: `.planning/todos/pending/2026-06-02-future-milestones-sequence-post-v2-1.md`.
 
 **✅ Decision gate before content/communication domains — RESOLVED (2026-06-06, D-86-STAFF):** for v2.4 we chose **option (2): owner manages via owner-only write-API + seeds, no admin-web UI**. `apps/admin-web` stays frozen; the admin-web UI for these domains becomes a separate future milestone that integrates over the already-shipped client-facing paths. The notification inbox is fed by **system events only** (no manual broadcast — anti-feature), and **trainer reviews are deferred** (only trainer detail/bio ships), so the moderation surface that would have demanded a staff UI is out of v2.4 scope entirely.
 
@@ -575,7 +596,7 @@ Target features (all delivered):
 
 ### Active
 
-**v3.0 Production Admin — Backend Wiring (opened 2026-06-12).** Подробности — в разделе `## Current Milestone` выше. Кратко: `apps/admin-app` (новый staff-frontend, React 18 + Bun + Vite, уже прогнан через 17 hardening-планов) входит в монорепо и подключается к боевому backend по одно-клубному срезу существующих доменов (Dashboard / Clients / Абонементы / Schedule / Trainers / Attendance / Cashbox+Finance / Audit / Settings + staff-auth); `apps/admin-web` удаляется (frozen mock-reference), его роль RBAC-reference переносится (механика — на плане Phase 100). Мульти-бранч (Branches / Branch-Settings / System-Settings) и экраны без backend (ImportExport / Duplicates / Confirmations / staff-Messages / Roles-mgmt) — hide-for-future. **Out of scope:** новые бизнес-домены на backend (wire-only), мульти-тенантность / branch-архитектура (следующий milestone), production deploy / launch (v3.1+). Полные REQ-ID — в `.planning/REQUIREMENTS.md`.
+**v4.0 Production Infrastructure — Self-Hosted k3s (opened 2026-06-16).** Подробности — в разделе `## Current Milestone` выше. Кратко: контейнеризация всего стека + Terraform (on-prem/bare-metal k3s) + K8s/Helm-манифесты + Networking (ingress/TLS/NetworkPolicies) + Security (секреты вне репы, trivy, NAME-01 CSRF-rename, ретро secure-phase 70) + Prometheus/Grafana/Loki + Backup&Recovery (Postgres/Redis/object-storage + проверенный restore-runbook) + Makefile-CI/CD + production runbook. Bar = локальная валидация (kind/k3s + terraform validate/plan + helm lint + smoke); боевой apply / живой ЮKassa-leg / RU deliverability — operator-pending. **Out of scope:** managed-cloud, боевой cloud/VM-apply, новые бизнес-фичи, мультифилиальность, Notifications Hub, persisted-RBAC. Полные REQ-ID — в `.planning/REQUIREMENTS.md`.
 
 ### Out of Scope
 
@@ -584,7 +605,7 @@ Target features (all delivered):
 - Multi-tenancy (ContextVar/`tenant_id`/RLS/`SET LOCAL`) — пет-проект на 1 зал; добавим только когда появится второй покупатель
 - **Stripe** — недоступен в РФ, не использовать никогда в этом проекте
 - **Production admin frontend** — *(Обновлено v3.0, 2026-06-12: больше НЕ out-of-scope.)* Боевая staff-админка `apps/admin-app` теперь В репозитории и подключается к реальному backend (v3.0); `apps/admin-web` (старый frozen mock-reference) **удаляется**. Out-of-scope остаётся: **мульти-бранч / branch-архитектура** (экраны Branches / Branch-Settings / System-Settings — single-club сначала, мульти-тенантность → следующий milestone) и экраны без backend-поддержки (ImportExport / Duplicates / Confirmations / staff-Messages / Roles-management — hide-for-future).
-- Kubernetes / Terraform / production deploy — пока только dev docker-compose
+- **Managed-cloud (Yandex/AWS) + боевой cloud/VM-apply + живой ЮKassa-leg + RU email/SMS deliverability** — *(Обновлено v4.0, 2026-06-16.)* IaC / контейнеризация / наблюдаемость / бэкапы под **on-prem k3s** теперь В scope (v4.0), но **провалидированы локально** (kind/k3s + terraform validate/plan); реальный apply на боевой сервер + operator-credentialed legs остаются operator-pending (нужны креды / инфра / бюджет)
 
 ## Context
 
@@ -694,7 +715,12 @@ Target features (all delivered):
 | D-V30-BRANCH — single-club сначала; мульти-бранч (Branches/Branch-Settings/System-Settings) hide-for-future, backend архитектурно не трогаем | Backend жёстко single-gym; вводить branch/мульти-тенантность ради трёх экранов в wiring-milestone — несоразмерный риск (затронуло бы все домены, RBAC, миграции, scoping всех запросов). Мульти-тенантность — отдельный будущий milestone. | — Pending — v3.0 (2026-06-12) |
 | D-V30-SCOPE-WIRE — v3.0 = wire-only срез на существующем backend; новых бизнес-доменов на backend нет | `apps/admin-app` уже построен и захардэнен (17 планов); ценность milestone — подключить готовые экраны к готовым endpoint'ам, а не строить backend. Экраны без backend (ImportExport/Duplicates/Confirmations/staff-Messages/Roles-mgmt) → future. | — Pending — v3.0 (2026-06-12) |
 | D-V30-ADMINWEB-DELETE — `apps/admin-web` удаляется; механику переноса RBAC-reference (three-way parity + CISO-01) решаем на плане Phase 100 | admin-web — frozen mock-reference, заменяется боевым admin-app; держать два staff-фронта смысла нет. Связанность guard'ов с `can.ts`/`registry.ts` нетривиальна → сначала прочитать код, потом выбрать (паритет → admin-app vs backend-only). | — Pending — v3.0 (2026-06-12) |
-| D-V30-VERSION — этот milestone = v3.0 (major); изначальный v3.0 «Production deploy/launch» сдвинут на v3.1+ | Новый прод-frontend входит в монорепо + удаляется старый reference — структурно симметрично v2.0 (привёл client-pwa) → заслуживает major-bump. | — Pending — v3.0 (2026-06-12) |
+| D-V30-VERSION — этот milestone = v3.0 (major); изначальный v3.0 «Production deploy/launch» сдвинут на v3.1+ | Новый прод-frontend входит в монорепо + удаляется старый reference — структурно симметрично v2.0 (привёл client-pwa) → заслуживает major-bump. | ✓ Good — v3.0 (deploy/launch теперь = v4.0) |
+| D-V40-LOCAL-VALIDATE — v4.0 «готово» = локальная валидация (terraform validate/plan + helm lint + kind/k3s deploy + smoke); боевой cloud/VM-apply + живой ЮKassa-leg + RU email/SMS deliverability — operator-pending | Пет-проект без git remote и без боевых кредов; писать + локально доказывать IaC ценно и достижимо, реальный apply ждёт креды/инфру (прецедент D-72-06 ЮKassa-leg, D-67-03 no-fabricated-evidence) | — Pending — v4.0 (2026-06-16) |
+| D-V40-ONPREM-K3S — целевая платформа = on-prem/bare-metal k3s (НЕ managed-cloud Yandex/AWS) | Один зал; k3s дёшев, полный контроль, без вендор-lock-in; Terraform таргетит VM/хост + in-cluster ресурсы | — Pending — v4.0 (2026-06-16) |
+| D-V40-OSS-OBSERVABILITY — стек наблюдаемости = Prometheus + Grafana + Loki (OSS) | K8s-стандарт, портируется между кластерами; structlog уже даёт JSON-логи под Loki; не привязывает к вендору | — Pending — v4.0 (2026-06-16) |
+| D-V40-MAKEFILE-CD — доставка через локальный Makefile (build/push/apply/smoke), без внешнего runner'а/registry | «Нет git remote» (репа копируется на другой PC для бэкапа) → GitHub Actions deploy-pipeline неуместен; Makefile подходит соло-разработчику | — Pending — v4.0 (2026-06-16) |
+| D-V40-VERSION — этот milestone = v4.0 (major); productionization всего стека | Новый структурный пласт (инфра/деплой/наблюдаемость) — симметрично major-бампам v2.0 (full-stack) и v3.0 (production admin) | — Pending — v4.0 (2026-06-16) |
 
 ## Evolution
 
@@ -712,6 +738,9 @@ This document evolves at phase transitions and milestone boundaries.
 2. Core Value check — still the right priority?
 3. Audit Out of Scope — reasons still valid?
 4. Update Context with current state
+
+---
+*Last updated: 2026-06-16 — **started milestone v4.0 Production Infrastructure — Self-Hosted k3s.** Чисто инфра/DevOps milestone: контейнеризация всего стека, Terraform (on-prem/bare-metal k3s), K8s/Helm-манифесты, Networking (ingress/TLS/NetworkPolicies), Security (секреты вне репы + trivy + NAME-01 CSRF-rename + ретро `/gsd:secure-phase 70`), Prometheus/Grafana/Loki, Backup&Recovery (Postgres/Redis/object-storage + проверенный restore-runbook), Makefile-driven CI/CD (no-remote реальность), production runbook. **Bar = локальная валидация** (kind/k3s deploy + terraform validate/plan + helm lint + smoke); боевой cloud/VM-apply + живой ЮKassa-leg + RU email/SMS deliverability остаются operator-pending (D-72-06/D-67-03 precedent). Бизнес-фичи не трогаем; OpenAPI-контракт не меняется (кроме additive NAME-01). Major-bump (productionization pillar, симметрично v2.0/v3.0). Phase numbering continues from 117 → starts at **Phase 118**. REQUIREMENTS.md recreated fresh; v3.2 snapshot archived to `.planning/milestones/v3.2-REQUIREMENTS.md`.*
 
 ---
 *Last updated: 2026-06-16 — **v3.2 Admin — Wire the Rest SHIPPED** (Phases 112-117, 18 plans; tag `v3.2`; audit `tech_debt`, 0 blockers, 13/13 requirements satisfied, cross-phase integration verified). Delivered: arbitrary-payment refund (REF-01) + staff role-change (TEAM-01); promo-codes admin CRUD + Plans wiring (PROMO-01/02); attendance + cohort/anomaly/at-risk + LiveNow + dashboard analytics on real endpoints (ANL-01..04); staff chat inbox + reply over the shared messaging module + CSV exports (MSG-01/02, EXP-01/02); additive OpenAPI regen + `_v32Checks` guard + 5 real-backend contract tests closing the mock↔real drift lesson (HND-01). Known deferred (operator-accepted): full backend pytest not run green — systemic PRE-EXISTING test-isolation deadlock (autouse `permissive_booking_config` × `working_hours_config`, out of v3.2 scope, see 117-HUMAN-UAT.md); browser/human UAT across all phases. REQUIREMENTS.md archived to `.planning/milestones/v3.2-REQUIREMENTS.md` + removed (fresh at next `/gsd:new-milestone`). Next: `/gsd:new-milestone`.*
