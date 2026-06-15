@@ -6,7 +6,7 @@ status: planning
 last_updated: "2026-06-15T03:15:49.190Z"
 last_activity: 2026-06-15
 progress:
-  total_phases: 0
+  total_phases: 6
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,16 +20,31 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 111 — OpenAPI Handoff + Milestone Gate
+**Current focus:** Phase 112 — Critical Money & Access (P0)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: Not started
 Plan: —
-Status: Defining requirements
-Last activity: 2026-06-15 — Milestone v3.2 started
+Status: Roadmap defined — ready for Phase 112 planning
+Last activity: 2026-06-15 — v3.2 roadmap created (Phases 112-117)
 
-## v3.1 Roadmap Summary
+## v3.2 Roadmap Summary
+
+| Phase | Goal | Requirements |
+|-------|------|--------------|
+| 112. Critical Money & Access | Arbitrary payment refund (`POST /payments/{id}/refund` + RBAC) + staff role-change (`PATCH /users/{id}/role` + modal + audit) — P0 operational gaps | REF-01, TEAM-01 |
+| 113. Promo Codes CRUD | Staff CRUD over existing `promo_codes` backend; wire PlansPage «Скидки и акции» mock→real | PROMO-01, PROMO-02 |
+| 114. Attendance Analytics on Existing Reports | FE heatmap/hour-curve/day-of-week/peak/frequency/duration widgets wired to existing `reports/visits` aggregate — zero new backend | ANL-01 |
+| 115. Live & Advanced Analytics | Cohort/anomaly/risk (new window-function queries) + LiveNow (`/reports/load/now`) + dashboard activity-feed/trainer-KPI/plans sales-chart | ANL-02, ANL-03, ANL-04 |
+| 116. Chat Inbox & Exports | Staff REST over existing messaging module (list threads, send/reply) + CSV exports over existing `csv_export.py` | MSG-01, MSG-02, EXP-01, EXP-02 |
+| 117. OpenAPI Handoff + Milestone Gate | Additive `openapi.json` + `schema.d.ts` regen + `_v32Checks` guard + ≥1 real-backend contract test per new domain + full gate green | HND-01 |
+
+**Coverage:** 13/13 v3.2 requirements mapped (112: 2 · 113: 2 · 114: 1 · 115: 3 · 116: 4 · 117: 1). **Execution order: 112 → 113 → 114 → 115 → 116 → 117.**
+
+Note: Phase 114 has no dependency on 112/113 (pure FE wiring on existing backend) and can run in parallel in theory, but is sequenced after for simplicity. Phase 116 depends on 112 (RBAC/staffRequest patterns established).
+
+## v3.1 Roadmap Summary (shipped 2026-06-15 — historical)
 
 | Phase | Goal | Requirements |
 |-------|------|--------------|
@@ -57,16 +72,28 @@ Last activity: 2026-06-15 — Milestone v3.2 started
 
 ## Accumulated Context
 
-### v3.1 Architecture Context (current milestone)
+### v3.2 Architecture Context (current milestone)
 
-- **D-V31-SCOPE**: v3.1 relaxes v3.0 `D-V30-SCOPE-WIRE` — new backend endpoints ARE allowed, but minimal + single-club; reuse existing where possible (v2.4 `gym` module `PUT /gym`, notification dispatcher, already-shipped PT-package hooks). Source of scope = the 2026-06-14 admin-app audit (`🩹 stubs` + `🟡 not-live-verified`).
+- **D-V32-SCOPE**: Prioritization по backend-готовности (probed 2026-06-15): `promo_codes` (v2.0), `messaging` (v2.5), `reports/visits` + `csv_export.py` (v1.8) — все готовы для FE-wiring. Дорогой full-stack (cohort/anomaly/risk, LiveNow) — Phase 115, после дешёвого Phase 114.
+- **D-V32-CONTRACT-ADDITIVE**: новые маршруты (refund, role-change, promo CRUD, analytics, staff-messages) — additive, NOT byte-stable. Phase 117 регенерирует `openapi.json` + `schema.d.ts` + добавляет `_v32Checks` AssertNonNever guard для каждого нового path×method.
+- **D-V32-DRIFT-LESSON**: обязателен ≥1 contract-тест на домен, парсящий РЕАЛЬНЫЙ ответ backend — закрывает v3.0/v3.1 mock↔real schema-drift (дважды прошёл формальный гейт, пойман только browser-UAT).
+- **D-V32-RBAC**: REF-01 требует нового `Action.REFUND` (или re-use `Action.CREATE` на `Resource.PAYMENTS`); TEAM-01 требует `(EDIT, USERS_ROLE)` пары — оба owner-only. Extend `Resource`/`OWNER_ONLY` в `permissions.py` + `can.ts`/`registry.ts` (CISO-01 byte-parity). Конкретный дизайн — на планировании Phase 112.
+- **D-V32-IDEMPOTENCY**: `POST /payments/{id}/refund` — категория-A (денежная мутация): per-attempt `Idempotency-Key` на FE, `idempotent_execute` orchestrator на backend.
+- **D-V32-PROMO-REUSE**: `promo_codes` модуль уже есть (v2.0, `app/modules/promo_codes/`) — только staff-side CRUD endpoints нужны (client-side validate/redeem уже готовы). Admin CRUD был явно отложен в v2.0.
+- **D-V32-MESSAGING-STAFF**: `messaging` модуль уже есть (v2.5, `app/modules/messaging/`) — только staff-side REST нужен (list threads, GET thread, POST message). Существующий WS/Telegram bridge остаётся без изменений.
+- **D-V32-PHASE114-INDEPENDENT**: Phase 114 не имеет backend-зависимости (чистое FE-wiring на `GET /reports/visits`) — может выполняться параллельно с 112/113, но сиквенсирован после для простоты.
+- **Backend discipline carried**: FastAPI modular monolith — raw-SQL reads / Protocol-slot writes (D-20-MODULE), LOCKED audit events pre-registered before any callsite (INFRA-15), Alembic migrations round-trip clean, money in integer kopecks, all dates/windows Europe/Moscow.
+- **Frontend discipline carried**: per-domain Zod seam + TanStack Query + `staffRequest` (`cc_access`/`cc_refresh` cookies + `clubcore_csrf` → `X-CSRF-Token`) + `can()`-gating; per-attempt `Idempotency-Key` на денежных мутациях.
+- **Cookie naming**: реальные staff cookies — `cc_access`/`cc_refresh` + `clubcore_csrf` (X-CSRF-Token) — старый roadmap prose иногда говорит `sz_*`; доверяй коду.
+
+### v3.1 Architecture Context (pre-locked, carried)
+
+- **D-V31-SCOPE**: v3.1 relaxes v3.0 `D-V30-SCOPE-WIRE` — new backend endpoints ARE allowed, but minimal + single-club; reuse existing where possible (v2.4 `gym` module `PUT /gym`, notification dispatcher, already-shipped PT-package hooks). Source of scope = the 2026-06-14 admin-app audit (`stubs` + `not-live-verified`).
 - **D-V31-CONTRACT-ADDITIVE**: because new routes land (`PATCH /auth/me`, password-change, Settings persistence), the staff OpenAPI contract changes **additively — NOT byte-stable** (unlike v3.0). Phase 111 regenerates `openapi.json` + `schema.d.ts` and adds a `_v31Checks` `AssertNonNever` forward-guard for each new path×method; the staff drift-gate expects a non-empty additive diff, not zero-diff.
 - **Handoff phase is NOT a no-op** (contrast Phase 106): Phase 111 must regenerate artifacts AND run the full gate (mypy --strict + lint-imports + pytest + admin-app check/test/build + Redocly + CISO-01 parity).
 - **Backend discipline carried**: FastAPI modular monolith — raw-SQL reads / Protocol-slot writes (D-20-MODULE), RBAC byte-parity (CISO-01; extend `Resource`/`OWNER_ONLY` only if a new gated resource appears), LOCKED audit events pre-registered before any callsite (INFRA-15), Alembic migrations round-trip clean, money in integer kopecks, all dates/windows Europe/Moscow.
 - **Frontend discipline carried**: per-domain Zod seam + TanStack Query + `staffRequest` (`cc_access`/`cc_refresh` cookies + `clubcore_csrf` → `X-CSRF-Token`) + `can()`-gating; per-attempt `Idempotency-Key` on sales.
-- **Plan-phase investigation flag (108)**: which Settings endpoints already exist vs need building is left for `/gsd:plan-phase 108` to investigate. Assume CFG-01 (gym card) largely reuses the v2.4 `gym` module; CFG-02/03/04 likely need new/extended endpoints. Keep minimal + single-club.
 - **Cookie naming reminder**: real staff cookies are `cc_access`/`cc_refresh` + `clubcore_csrf` (X-CSRF-Token) — some older roadmap prose says `sz_*`; trust the code (memory: staff-cookie-names-cc-not-sz).
-- **VER-01/02 prerequisite**: P102 was `data-setup-blocked` at v3.0 close — Phase 110 must produce repeatable seed fixtures (dev-DB `docker compose down -v` + migrate + seed) so the booking/payroll walkthrough does not re-block.
 
 ### v3.0 Architecture Constraints (pre-locked)
 
@@ -75,14 +102,15 @@ Last activity: 2026-06-15 — Milestone v3.2 started
 - **D-V30-ADMINWEB-DELETE**: admin-web deleted; RBAC re-home mechanic decided at Phase 100 plan (read real coupling first)
 - **D-V30-VERSION**: v3.0 is the wiring milestone; production deploy/launch → v3.1+
 - **Zod contract seam**: spike 010 Option A — per-domain zod layer adopted lazily as each screen is wired; mock `queryFn` removed when domain goes live
-- **Staff principal**: `sz_*` cookies, `X-CSRF-Token` on mutating requests — not `cc_client_*`
+- **Staff principal**: `cc_*` cookies, `X-CSRF-Token` on mutating requests — not `cc_client_*`
 - **RBAC decision deferred**: whether parity lives in admin-app `can.ts` vs backend-only authority is decided at Phase 100 plan after reading real coupling in `permissions.py`/`can.ts`/`registry.ts`
 
 ### Pending Todos
 
-- v3.1 roadmap created (Phases 107–111). Next: `/gsd:plan-phase 107` (Admin FE Completion — plan/PT-package/client-delete stubs → real actions on existing backend).
-- Phase 108 plan must investigate existing-vs-new Settings endpoints before building (reuse v2.4 `gym` `PUT /gym` for CFG-01).
-- Phase 110 needs repeatable seed fixtures so the P102 booking/payroll live-UAT does not re-block (the v3.0 `data-setup-blocked` cause).
+- v3.2 roadmap created (Phases 112–117). Next: `/gsd:plan-phase 112` (Critical Money & Access — arbitrary refund + role-change).
+- Phase 112 plan must decide RBAC design: `Action.REFUND` vs re-use, exact `Resource` enum extension, `OWNER_ONLY` additions — read `permissions.py` + `can.ts` before building.
+- Phase 115 plan must investigate window-function query design for cohort/anomaly/risk before building — verify `reports/` read-only discipline applies.
+- Phase 117 contract-test requirement: plan must specify which ASGITransport integration test per domain parses a real backend response (not a mock fixture).
 
 ### Phase 101 Decisions
 
@@ -205,10 +233,11 @@ v3.0 in-progress deferrals:
 
 ## Session Continuity
 
-Last session: 2026-06-14T22:36:59.054Z
-Stopped at: Phase 109 UI-SPEC approved
-Resume: `/gsd:plan-phase 107` (Admin FE Completion on Existing Backend — PLAN/PTPKG/CLI-04).
+Last session: 2026-06-15
+Stopped at: v3.2 roadmap creation
+Resume: `/gsd:plan-phase 112` (Critical Money & Access — arbitrary payment refund + staff role-change).
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Complete v3.1 browser-UAT if desired, then `/gsd-complete-milestone v3.1`
+- Start planning: `/gsd:plan-phase 112`

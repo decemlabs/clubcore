@@ -23,6 +23,7 @@
 - ✅ **v2.6 Referral System** — Phases 96-99 (shipped 2026-06-08) — see [milestones/v2.6-ROADMAP.md](milestones/v2.6-ROADMAP.md)
 - ✅ **v3.0 Production Admin — Backend Wiring** — Phases 100-106 (shipped 2026-06-14) — see [milestones/v3.0-ROADMAP.md](milestones/v3.0-ROADMAP.md)
 - ✅ **v3.1 Admin — Fill the Gaps** — Phases 107-111 (shipped 2026-06-15) — see [milestones/v3.1-ROADMAP.md](milestones/v3.1-ROADMAP.md)
+- 🚧 **v3.2 Admin — Wire the Rest** — Phases 112-117 (in progress)
 
 ## Phases
 
@@ -439,6 +440,110 @@ Plans:
 
 </details>
 
+### v3.2 Admin — Wire the Rest (Phases 112-117)
+
+**Milestone Goal:** Закрыть операционную полноту staff-админки — критичные дыры (возврат произвольного платежа, смена роли сотрудника) и «дожимку» уже готового backend (промокоды, аналитика посещаемости, экспорт, чат-инбокс). Приоритет по backend-готовности: большинство фич — дешёвое FE-wiring к уже существующим эндпоинтам.
+
+**Scope principle (D-V32-SCOPE):** Additive-контракт (не byte-stable). Урок v3.0/v3.1: **≥1 contract-тест на домен**, парсящий РЕАЛЬНЫЙ ответ backend (mock↔real schema-дрейф дважды прошёл формальный гейт, пойман только browser-UAT). `_v32Checks` forward-guard закрывает milestone.
+
+**Backend discipline (carried):** FastAPI modular monолит — raw-SQL cross-module reads / Protocol-slot writes (D-20-MODULE), RBAC byte-parity (CISO-01; extend `Resource`/`OWNER_ONLY` + `can.ts`/`registry.ts` для новых gated ресурсов: `REFUND`/`PAYMENTS`, `USERS_ROLE`), LOCKED audit events pre-registered (INFRA-15), Alembic round-trip clean, деньги в integer kopecks, даты Europe/Moscow. Frontend: per-domain Zod seam + TanStack Query + `staffRequest` (`cc_*` cookies + `X-CSRF-Token`) + `can()`-gating; `Idempotency-Key` на денежных мутациях.
+
+**Execution order: 112 → 113 → 114 → 115 → 116 → 117**
+
+- [ ] **Phase 112: Critical Money & Access (P0)** — arbitrary payment refund (`POST /payments/{id}/refund` + `Action.REFUND` RBAC + un-stub Cashbox/Finance) + staff role-change (`PATCH /users/{id}/role` + modal + audit)
+- [ ] **Phase 113: Promo Codes CRUD (P1)** — staff CRUD over existing `promo_codes` backend; wire PlansPage «Скидки и акции» mock→real
+- [ ] **Phase 114: Attendance Analytics on Existing Reports (P1)** — heatmap/hour-curve/day-of-week/peak/frequency/duration FE widgets wired to existing `reports/visits` aggregate
+- [ ] **Phase 115: Live & Advanced Analytics (P1)** — cohort/anomaly/risk (new window-function queries) + LiveNow (`/reports/load/now`) + dashboard activity-feed/trainer-KPI/plans sales-chart on existing read endpoints
+- [ ] **Phase 116: Chat Inbox & Exports (P2)** — staff REST over existing messaging module (list threads, send/reply) + CSV exports over existing `csv_export.py`
+- [ ] **Phase 117: OpenAPI Handoff + Milestone Gate** — additive `openapi.json` + `schema.d.ts` regen for new v3.2 routes + `_v32Checks` forward-guard + ≥1 real-backend contract test per new domain + full gate green
+
+## Phase Details
+
+### Phase 112: Critical Money & Access
+
+**Goal**: Owner can refund any recorded payment (not just membership/PT) and can change a staff user's role — the two P0 operational gaps that block daily gym management.
+**Depends on**: Nothing (first phase of v3.2)
+**Requirements**: REF-01, TEAM-01
+**Success Criteria** (what must be TRUE):
+
+  1. Owner can select any payment row in Cashbox or Finance and issue a refund with a required reason; the refund is recorded in the ledger and the cashbox balance reflects it — the `T-103-03-FAKEREFUND` read-only stub is gone.
+  2. The refund endpoint enforces RBAC — reception gets a 403; owner sees the refund action; a duplicate refund attempt is rejected gracefully.
+  3. Owner can open a staff user's profile in Team settings and change their role (owner ↔ reception) via a modal; the change persists and the new role is reflected on next login.
+  4. Role-change is audited; reception cannot access the role-change UI or endpoint (403).
+
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 113: Promo Codes CRUD
+
+**Goal**: Owner can manage promo codes directly in the admin app — create, edit, deactivate — and the Plans page displays real promo data instead of mock cards.
+**Depends on**: Phase 112
+**Requirements**: PROMO-01, PROMO-02
+**Success Criteria** (what must be TRUE):
+
+  1. Owner can create a new promo code (percentage or fixed discount, with usage limits and validity window) from the Plans page; the code is persisted to the `promo_codes` backend and immediately visible.
+  2. Owner can edit an existing promo code (adjust limits, dates, description) and deactivate/archive it; reception is gated from write actions.
+  3. The Plans page «Скидки и акции» section lists real promo codes from `GET /api/v1/promo-codes` — mock cards are replaced; empty state renders correctly.
+
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 114: Attendance Analytics on Existing Reports
+
+**Goal**: Owner sees real attendance analytics derived from the already-shipped `reports/visits` aggregate — the built-but-unwired analytics widgets render live data.
+**Depends on**: Nothing (independent of 112/113 — no new backend)
+**Requirements**: ANL-01
+**Success Criteria** (what must be TRUE):
+
+  1. Owner sees an hourly heatmap and hour-curve chart on the Load or Analytics screen, driven by real `GET /api/v1/reports/visits` data; buckets with zero visits render as zero, not NaN.
+  2. Owner sees day-of-week breakdown, peak-hour, and visit-frequency distribution widgets — all derived from the same aggregate endpoint without new backend queries.
+  3. Owner sees a visit-duration widget (if the backend aggregate carries duration data) or a clearly labeled "coming soon" state if not — no silent mock data.
+
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 115: Live & Advanced Analytics
+
+**Goal**: Owner sees cohort, anomaly, and at-risk member widgets backed by new aggregate queries, a live gym-load counter, and real-data dashboard feed/KPI/sales widgets.
+**Depends on**: Phase 114
+**Requirements**: ANL-02, ANL-03, ANL-04
+**Success Criteria** (what must be TRUE):
+
+  1. Owner sees cohort retention and visit-anomaly widgets, backed by new window-function report queries on the existing `visits` + `memberships` tables; reception is not exposed to owner-only aggregate endpoints.
+  2. Owner sees a "сейчас в зале" live-load count on the Load page, backed by a new `GET /api/v1/reports/load/now` endpoint returning the current in-gym headcount.
+  3. Dashboard activity feed shows real recent events (from audit log or visits/payments read endpoints); top-trainer KPIs and plans sales chart render real data — mock widgets are removed.
+
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 116: Chat Inbox & Exports
+
+**Goal**: Staff can read and reply to client messages from the admin app, and owner can download payments and attendance data as CSV files.
+**Depends on**: Phase 112
+**Requirements**: MSG-01, MSG-02, EXP-01, EXP-02
+**Success Criteria** (what must be TRUE):
+
+  1. Staff sees a chat inbox listing all client↔gym threads with unread counts, backed by new staff-side REST endpoints over the existing `messaging` module; reception sees the inbox (read-permitted), owner can send.
+  2. Staff can open a thread and send or reply to a client message; the message is persisted and the client PWA receives it via the existing WS/Telegram channel.
+  3. Owner can export payments to a UTF-8 BOM CSV file over a date range from Cashbox or Finance; the download starts immediately and Cyrillic content round-trips cleanly in Excel.
+  4. Owner can export visits/attendance to a UTF-8 BOM CSV file over a date range from the Attendance screen; the file matches the same format discipline.
+
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 117: OpenAPI Handoff + Milestone Gate
+
+**Goal**: The v3.2 OpenAPI contract is regenerated additively, forward-guarded, and each new domain has at least one contract test that parses a real backend response — closing the mock↔real schema-drift lesson from v3.0/v3.1.
+**Depends on**: Phases 112, 113, 114, 115, 116
+**Requirements**: HND-01
+**Success Criteria** (what must be TRUE):
+
+  1. `openapi.json` + `schema.d.ts` are regenerated to include all new v3.2 paths (refund, role-change, promo CRUD, analytics endpoints, staff-messages, exports) — additively, NOT byte-stable — and a `_v32Checks` `AssertNonNever` forward-guard tuple covers each new path×method.
+  2. For each new domain introduced in v3.2 (refund, role-change, promo, analytics/LiveNow, staff-messages), at least one contract test parses a REAL backend response (not a mock fixture) and asserts the Zod schema passes — the v3.0/v3.1 drift lesson is structurally closed.
+  3. The full milestone gate is green: mypy `--strict` + lint-imports + pytest + admin-app `check`/`test`/`build` + Redocly lint; CISO-01 RBAC byte-parity guard is green; all 13 v3.2 requirements are verified satisfied.
+
+**Plans**: TBD
+
 ## Backlog
 
 ### Backlog 999.1 — WR-06 restore PT session credit on owner force-cancel (✅ DONE 2026-05-29 — quick task 260529-ny2)
@@ -455,7 +560,21 @@ Plans:
 
 ## Progress
 
-**Current milestone:** v3.1 Admin — Fill the Gaps — ✅ SHIPPED 2026-06-15. Next milestone being defined.
+**Current milestone:** v3.2 Admin — Wire the Rest — in progress (Phases 112-117).
+
+**Execution Order:** 112 → 113 → 114 → 115 → 116 → 117
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 112. Critical Money & Access | 0/TBD | Not started | - |
+| 113. Promo Codes CRUD | 0/TBD | Not started | - |
+| 114. Attendance Analytics on Existing Reports | 0/TBD | Not started | - |
+| 115. Live & Advanced Analytics | 0/TBD | Not started | - |
+| 116. Chat Inbox & Exports | 0/TBD | Not started | - |
+| 117. OpenAPI Handoff + Milestone Gate | 0/TBD | Not started | - |
+
+<details>
+<summary>✅ v3.1 Admin — Fill the Gaps (Phases 107-111) — Progress (SHIPPED 2026-06-15)</summary>
 
 **Execution Order:** 107 → 108 → 109 → 110 → 111
 
@@ -466,6 +585,8 @@ Plans:
 | 109. Profile & Security — Backend + Wiring | 4/4 | Complete    | 2026-06-14 |
 | 110. Live Verification — Deferred P102 | 3/3 | Complete    | 2026-06-14 |
 | 111. OpenAPI Handoff + Milestone Gate | 2/2 | Complete    | 2026-06-14 |
+
+</details>
 
 <details>
 <summary>✅ v3.0 Production Admin — Backend Wiring (Phases 100-106) — Progress (SHIPPED 2026-06-14)</summary>
