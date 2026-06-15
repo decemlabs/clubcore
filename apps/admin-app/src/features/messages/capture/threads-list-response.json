@@ -2,11 +2,11 @@
   "data": {
     "items": [
       {
-        "id": "325585d8-5114-4336-9bb0-e1e0533c4358",
-        "clientId": "92faf377-8fd6-4e1e-863e-f5d95bcb2131",
+        "id": "ab50cb49-4a60-4f03-afd9-bdd77d29f897",
+        "clientId": "b0513dbb-cbbe-4d9d-bc51-64a566c003cf",
         "clientName": "Иван Захватов",
         "clientInitials": "ИЗ",
-        "lastMessageAt": "2026-06-15T14:18:13.678669Z",
+        "lastMessageAt": "2026-06-15T14:24:08.934749Z",
         "lastMessageBody": "Привет из capture теста",
         "lastMessageRole": "client",
         "staffUnreadCount": 1

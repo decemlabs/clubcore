@@ -1,13 +1,13 @@
 {
   "data": {
-    "id": "0049442a-4aab-4c02-bd34-6adadad26390",
+    "id": "21e97a44-ed20-4bf1-b579-a7d5b6c986cd",
     "subjectKind": "refund",
-    "subjectId": "49b20299-0fe2-4ccd-a8c1-7739b1b61802",
+    "subjectId": "f191cef1-b1f3-4997-a0f2-1f7dd9462d2b",
     "amountKopecks": -250000,
     "method": "cash",
-    "receivedAt": "2026-06-15T14:18:11.269576Z",
-    "receivedByUserId": "9df43fe6-90dc-48eb-b702-90934683bb52",
-    "refundOf": "b7c6ee18-c741-443a-b059-4dc75a88958a",
+    "receivedAt": "2026-06-15T14:24:06.559359Z",
+    "receivedByUserId": "0024124f-096d-471a-9858-98fd8a2eed58",
+    "refundOf": "118482d1-01de-456e-bff7-0b49a966affe",
     "auditLogId": null
   }
 }

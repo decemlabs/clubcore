@@ -2,7 +2,7 @@
   "data": {
     "items": [
       {
-        "id": "4ef6144e-9314-444e-9ee2-2d9421a7f4c6",
+        "id": "ed2f7ff0-4b9b-4fcd-bd3b-886d3f6e97df",
         "code": "CAPTURE117",
         "discountType": "percentage",
         "discountValue": 1000,
@@ -14,7 +14,7 @@
         "applicableTo": null,
         "description": "117 capture test code",
         "usedCount": 0,
-        "createdAt": "2026-06-15T14:18:12.010988Z"
+        "createdAt": "2026-06-15T14:24:07.367535Z"
       },
       {
         "id": "6f1f5ae1-8a3d-41ee-9ddd-209503679768",

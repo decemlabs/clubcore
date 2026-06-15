@@ -2,13 +2,13 @@
   "data": {
     "items": [
       {
-        "id": "c7347847-790c-417e-b673-04363fa6b81a",
+        "id": "b35b1ae5-267c-4a0c-ac31-f5506bad5b68",
         "email": "users-owner@example.com",
         "fullName": "Users Owner",
         "role": "owner",
         "isActive": true,
         "status": "active",
-        "createdAt": "2026-06-15T14:18:11.705589Z",
+        "createdAt": "2026-06-15T14:24:06.990625Z",
         "deactivatedAt": null,
         "deactivatedByUserId": null,
         "invitationExpiresAt": null,
@@ -16,13 +16,13 @@
         "isDeactivated": false
       },
       {
-        "id": "5a41c6c2-d82b-46b8-b06b-940be73b0ffe",
+        "id": "a8f636df-83f6-4d44-8652-d385b3cb6d8c",
         "email": "capture-role-target@example.com",
         "fullName": "Capture Role Target",
         "role": "owner",
         "isActive": true,
         "status": "active",
-        "createdAt": "2026-06-15T14:18:11.705589Z",
+        "createdAt": "2026-06-15T14:24:06.990625Z",
         "deactivatedAt": null,
         "deactivatedByUserId": null,
         "invitationExpiresAt": null,
