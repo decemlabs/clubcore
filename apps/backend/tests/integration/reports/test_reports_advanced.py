@@ -456,3 +456,89 @@ async def test_at_risk_flags_stale_member(
     assert len(stale_entry["lastVisitLabel"]) > 0
 
     assert body["count"] >= 1
+
+
+async def test_at_risk_ignores_visits_predating_membership(
+    authed_client_owner: AsyncClient,
+    make_client: Any,
+    make_plan: Any,
+    make_membership: Any,
+    make_visit: Any,
+) -> None:
+    """WR-04: a re-joined client's visits predating the current membership are NOT counted.
+
+    Seed a client whose CURRENT active membership started 10 days ago, but whose only
+    visit happened 40 days ago (i.e. during an earlier, churned membership). The
+    last_visit aggregation is scoped to checked_in_at >= membership start_date, so this
+    client is treated as never-visited within the current membership → at-risk with
+    lastVisitDate == None (not judged on the stale 40-day-old visit).
+    """
+    plan = await make_plan(name="AtRiskRejoinTest")
+    client = await make_client()
+
+    start_recent = (datetime.now(UTC).date()) - timedelta(days=10)
+    membership = await make_membership(
+        client_id=client.id,
+        plan=plan,
+        status="active",
+        start_date=start_recent,
+    )
+
+    # Only visit is 40 days ago — well before the current membership's start_date.
+    old_visit_ts = datetime.now(UTC).replace(
+        hour=7, minute=0, second=0, microsecond=0
+    ) - timedelta(days=40)
+    await make_visit(
+        client_id=client.id,
+        membership_id=membership.id,
+        checked_in_at=old_visit_ts,
+    )
+
+    r = await authed_client_owner.get("/api/v1/reports/at-risk")
+    assert r.status_code == 200, r.text
+    items = r.json()["data"]["items"]
+
+    entry = next((i for i in items if i["clientId"] == str(client.id)), None)
+    assert entry is not None, "Re-joined client should be at-risk (no visit since membership start)"
+    # Visit predating the membership is excluded → treated as never-visited.
+    assert entry["lastVisitDate"] is None, (
+        f"Pre-membership visit must be ignored; lastVisitDate={entry['lastVisitDate']!r}"
+    )
+    assert entry["lastVisitLabel"] == "не посещал"
+
+
+async def test_at_risk_count_can_exceed_items_when_capped(
+    authed_client_owner: AsyncClient,
+    make_client: Any,
+    make_plan: Any,
+    make_membership: Any,
+) -> None:
+    """IN-02: count is the TRUE uncapped total; items is capped at AT_RISK_MAX_ITEMS (50).
+
+    Seed AT_RISK_MAX_ITEMS + 5 never-visited active members. The response items list is
+    capped at 50, but count must report the full total (55), so the FE overflow line
+    ("И ещё N клиентов") is accurate when the list is capped.
+    """
+    from app.modules.reports.constants import AT_RISK_MAX_ITEMS
+
+    plan = await make_plan(name="AtRiskCountCapTest")
+    extra = 5
+    for _ in range(AT_RISK_MAX_ITEMS + extra):
+        client = await make_client()
+        await make_membership(client_id=client.id, plan=plan, status="active")
+        # No visit at all → never-visited → at-risk.
+
+    r = await authed_client_owner.get("/api/v1/reports/at-risk")
+    assert r.status_code == 200, r.text
+    body = r.json()["data"]
+
+    assert len(body["items"]) == AT_RISK_MAX_ITEMS, (
+        f"items should be capped at {AT_RISK_MAX_ITEMS}, got {len(body['items'])}"
+    )
+    assert body["count"] >= AT_RISK_MAX_ITEMS + extra, (
+        f"count should be the uncapped total (>= {AT_RISK_MAX_ITEMS + extra}), "
+        f"got {body['count']}"
+    )
+    assert body["count"] > len(body["items"]), (
+        "count must exceed len(items) when the list is capped (IN-02)"
+    )

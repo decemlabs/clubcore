@@ -590,6 +590,9 @@ async def get_at_risk_members(session: AsyncSession) -> AtRiskMembersResponse:
     rows = await repository.fetch_at_risk_members(
         session, AT_RISK_THRESHOLD_DAYS, AT_RISK_MAX_ITEMS
     )
+    # IN-02: count is the TRUE uncapped total (may exceed len(items) when the list is
+    # capped at AT_RISK_MAX_ITEMS), so the FE "И ещё N клиентов" overflow line is correct.
+    total_count = await repository.fetch_at_risk_count(session, AT_RISK_THRESHOLD_DAYS)
     items: list[AtRiskMember] = []
     for row in rows:
         last_visit_date_raw = row.get("last_visit_date")
@@ -627,7 +630,7 @@ async def get_at_risk_members(session: AsyncSession) -> AtRiskMembersResponse:
         )
 
     return AtRiskMembersResponse(
-        count=len(items),
+        count=total_count,
         items=items,
         threshold_days=AT_RISK_THRESHOLD_DAYS,
     )

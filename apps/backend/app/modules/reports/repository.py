@@ -43,6 +43,7 @@ from app.modules.reports.schemas import AuditLogQuery, RevenueReportQuery
 
 __all__ = (
     "fetch_active_memberships_count",
+    "fetch_at_risk_count",
     "fetch_at_risk_members",
     "fetch_audit_log_page",
     "fetch_cohort_retention",
@@ -515,6 +516,11 @@ async def fetch_at_risk_members(
     Stable ordering: never-visited first (NULLS FIRST on last_at), then longest-absent DESC.
     LIMIT :max_items caps the result (DoS guard, T-115-05).
 
+    WR-04: last_visit is scoped to the current active membership's start_date — visits
+    that predate the active membership (e.g. from a churned-then-rejoined client's old
+    membership) are NOT counted, so a genuinely-new active member is not wrongly judged
+    "not at-risk" on the strength of stale historical visits.
+
     Security (T-115-02): threshold_days and max_items are constants, never user-input;
     bound via :name params regardless.
 
@@ -528,21 +534,26 @@ async def fetch_at_risk_members(
                 text(
                     """
 WITH active_memberships AS (
-    -- One row per active-membership client (most recent plan name if multiple active)
+    -- One row per active-membership client (most recent plan name if multiple active).
+    -- start_date scopes last_visit so visits predating the current membership are excluded (WR-04).
     SELECT DISTINCT ON (m.client_id)
         m.client_id,
-        COALESCE(mp.name, 'Абонемент') AS membership_type
+        COALESCE(mp.name, 'Абонемент') AS membership_type,
+        m.start_date                   AS membership_start_date
     FROM memberships m
     LEFT JOIN membership_plans mp ON mp.id = m.plan_id
     WHERE m.status = 'active'
     ORDER BY m.client_id, m.id DESC
 ),
 last_visit AS (
+    -- Last check-in per client, scoped to >= current active membership start_date (WR-04).
     SELECT
-        client_id,
-        MAX(checked_in_at) AS last_at
-    FROM visits
-    GROUP BY client_id
+        v.client_id,
+        MAX(v.checked_in_at) AS last_at
+    FROM visits v
+    JOIN active_memberships am ON am.client_id = v.client_id
+    WHERE (v.checked_in_at AT TIME ZONE 'Europe/Moscow')::date >= am.membership_start_date
+    GROUP BY v.client_id
 )
 SELECT
     am.client_id                                                                AS client_id,
@@ -569,6 +580,59 @@ LIMIT :max_items
         .all()
     )
     return [dict(r) for r in rows]
+
+
+async def fetch_at_risk_count(
+    session: AsyncSession,
+    threshold_days: int,
+) -> int:
+    """Uncapped COUNT(*) of at-risk members (IN-02 true total, ignores LIMIT).
+
+    Mirrors fetch_at_risk_members' WHERE predicate exactly but returns the full
+    count (NOT capped at max_items) so the FE "И ещё N клиентов" overflow line
+    reports the true total when the displayed list is capped.
+
+    CROSS-MODULE READ — raw SQL text() only; NO ORM imports.
+    Security (T-115-02): threshold_days is a constant, bound via :name regardless.
+    """
+    row = (
+        (
+            await session.execute(
+                text(
+                    """
+WITH active_memberships AS (
+    SELECT DISTINCT ON (m.client_id)
+        m.client_id,
+        m.start_date AS membership_start_date
+    FROM memberships m
+    WHERE m.status = 'active'
+    ORDER BY m.client_id, m.id DESC
+),
+last_visit AS (
+    -- Scoped to >= current active membership start_date — mirrors fetch_at_risk_members (WR-04).
+    SELECT
+        v.client_id,
+        MAX(v.checked_in_at) AS last_at
+    FROM visits v
+    JOIN active_memberships am ON am.client_id = v.client_id
+    WHERE (v.checked_in_at AT TIME ZONE 'Europe/Moscow')::date >= am.membership_start_date
+    GROUP BY v.client_id
+)
+SELECT COUNT(*) AS cnt
+FROM active_memberships am
+JOIN clients c ON c.id = am.client_id AND c.deleted_at IS NULL
+LEFT JOIN last_visit lv ON lv.client_id = am.client_id
+WHERE lv.last_at IS NULL
+   OR lv.last_at < now() - make_interval(days => :threshold_days)
+"""
+                ),
+                {"threshold_days": threshold_days},
+            )
+        )
+        .mappings()
+        .one()
+    )
+    return int(row["cnt"])
 
 
 async def fetch_visit_anomaly_daily(
