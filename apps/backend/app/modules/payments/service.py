@@ -313,7 +313,8 @@ async def refund_arbitrary_payment(
         reason=reason,
         payment_row_hash=original_hash,
     )
-    await session.flush()
+    # IN-01 — commit() flushes implicitly; the refund row was already flushed
+    # inside the try block above, so no extra flush is needed here.
     await session.commit()
     return refund_payment
 
