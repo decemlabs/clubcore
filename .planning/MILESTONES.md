@@ -1,5 +1,22 @@
 # Milestones
 
+## v3.2 Admin — Wire the Rest (Shipped: 2026-06-15)
+
+**Phases completed:** 6 phases, 18 plans, 17 tasks
+
+**Key accomplishments:**
+
+- **REF-01** — arbitrary recorded-payment refund: `POST /api/v1/payments/{id}/refund` (partial-amount, OWNER_ONLY RBAC, CSRF, `refund_issued` audit) + owner-gated RefundModal in Cashbox/Finance; old `T-103-03-FAKEREFUND` read-only stub removed; 8 ASGITransport tests.
+- **TEAM-01** — staff role-change: `PATCH /api/v1/users/{id}/role` (owner-only, self/last-owner guards, `user_role_changed` audit) + ChangeRoleModal in Settings/Team.
+- **PROMO-01/02** — promo-codes admin CRUD (`GET/POST /promo-codes`, `PATCH /{id}`, `/{id}/deactivate`) with migrations 0072/0073 + PromoCodeModal; Plans «Скидки и акции» wired to real `GET /promo-codes` (mock cards removed; used_count).
+- **ANL-01/02/03/04** — attendance widgets on existing `reports/visits`; cohort/anomaly/at-risk window-function aggregates; LiveNow (`/reports/load/now`); dashboard activity-feed/top-trainers/sales chart on real read endpoints.
+- **MSG-01/02 + EXP-01/02** — staff chat inbox (`GET /messages/threads`) + reply (`POST /threads/{id}/reply`) over the shared messaging module (reaches client PWA); CSV exports `payments.csv` (BOM/formula-guard) + `visits.csv`.
+- **HND-01** — additive OpenAPI regen (15 new v3.2 routes) + `_v32Checks` AssertNonNever forward-guard + 5 real-backend contract tests (real captured ASGITransport JSON × real Zod) closing the v3.0/v3.1 mock↔real drift lesson; codegen zero-diff; cross-phase integration audit clean.
+
+**Known deferred items at close:** 13 (6 phase browser/human-UAT VERIFICATIONs [human_needed] + 6 UAT scenario sets + 1 planning todo). Plus: full backend pytest NOT run green — systemic PRE-EXISTING test-isolation deadlock (autouse `permissive_booking_config` × `working_hours_config`), out of v3.2 scope. See STATE.md `## Deferred Items`, `.planning/milestones/v3.2-MILESTONE-AUDIT.md`, and `117-HUMAN-UAT.md`.
+
+---
+
 ## v3.1 Admin — Fill the Gaps (Shipped: 2026-06-15)
 
 **Phases completed:** 5 phases, 17 plans, 23 tasks

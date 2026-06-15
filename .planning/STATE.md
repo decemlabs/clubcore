@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v3.2
 milestone_name: Admin — Wire the Rest
-status: executing
+status: Awaiting next milestone
 stopped_at: Phase 116 executed — automated verify 7/7, 5 browser-UAT deferred
-last_updated: "2026-06-15T20:44:14.310Z"
-last_activity: 2026-06-15
+last_updated: "2026-06-15T22:00:56.033Z"
+last_activity: 2026-06-15 — Milestone v3.2 completed and archived
 progress:
   total_phases: 6
   completed_phases: 6
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 117
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-06-15
+Phase: Milestone v3.2 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-15 — Milestone v3.2 completed and archived
 
 ## v3.2 Roadmap Summary
 
@@ -205,6 +205,18 @@ Note: Phase 114 has no dependency on 112/113 (pure FE wiring on existing backend
 
 ## Deferred Items
 
+**Acknowledged at v3.2 milestone close (2026-06-16):**
+
+| Category | Item | Status |
+|----------|------|--------|
+| tech-debt (test-infra) | Full backend pytest NOT run green — systemic PRE-EXISTING test-isolation deadlock: autouse `permissive_booking_config` holds `working_hours_config` open; any 2nd connection (alembic-downgrade subprocess OR `direct_engine_session`) deadlocks. Reproduced on a clean DB; pre-v3.2 (Phase 108 table); NOT a v3.2 defect. | deferred → test-infra refactor (out of v3.2 scope). Diagnosis + deselect cmd + clean-DB setup in `117-HUMAN-UAT.md`. v3.2 correctness covered by mypy/lint-imports/scoped-ruff/admin-app×4/api-client×3/Redocly/OWNER_ONLY=46/5 real-backend contract tests + integration audit. |
+| human-verify | Browser/human UAT for all 6 v3.2 phases (112-117 VERIFICATION = human_needed; 112-116 UAT scenario sets pending) | pending — see per-phase *-UAT.md / *-HUMAN-UAT.md; surfaces in /gsd:audit-uat |
+| planning | `2026-06-02-future-milestones-sequence-post-v2-1.md` todo | carried forward (planning note, not v3.2 work) |
+
+v3.2 milestone audit: `.planning/milestones/v3.2-MILESTONE-AUDIT.md` (tech_debt; 13/13 requirements satisfied, integration verified, 0 blockers).
+
+---
+
 Carrying forward from v2.6 close (2026-06-08):
 
 | Category | Item | Status |
@@ -240,5 +252,4 @@ Resume: `/gsd:plan-phase 112` (Critical Money & Access — arbitrary payment ref
 
 ## Operator Next Steps
 
-- Complete v3.1 browser-UAT if desired, then `/gsd-complete-milestone v3.1`
-- Start planning: `/gsd:plan-phase 112`
+- Start the next milestone with /gsd-new-milestone
