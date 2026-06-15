@@ -1,8 +1,13 @@
-"""Promo code validation service (Phase 999.4 D-06/D-07/D-08/D-09).
+"""Promo code validation + admin CRUD service (Phase 999.4 + Phase 113).
 
 Core validate_promo_code function: checks activity window, is_active flag,
 applicability, usage limits, then computes and returns the authoritative
 discounted amount.
+
+Phase 113 admin CRUD (PROMO-01/PROMO-02):
+  - create_promo_code — UPPER-normalize code, insert, commit
+  - update_promo_code — load alive or 404, apply partial patch, commit
+  - deactivate_promo_code — load alive or 404, set is_active=False, commit
 
 Error discipline: each failure reason raises a distinct ValidationAppError subclass
 with a stable `code` attribute (D-09 — per-reason error codes for the client PWA
@@ -17,21 +22,31 @@ Plan price is read via raw SQL text() SELECT (D-54-08 cross-module precedent;
 no ORM import of MembershipPlan / PtPackagePlan from foreign modules).
 Usage counts are raw SQL text() COUNT queries on promo_redemptions.
 
-No session.commit() — read-only path (D-32-10/D-49-19 caller-owns-txn).
+No session.commit() in read-only paths (D-32-10/D-49-19 caller-owns-txn).
 """
 
 from __future__ import annotations
 
-import structlog
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 from uuid import UUID
 
+import structlog
+from sqlalchemy import exc as sa_exc
 from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ValidationAppError
+from app.core.exceptions import AppError, ValidationAppError
 from app.modules.promo_codes.models import PromoRedemption
+
+if TYPE_CHECKING:
+    from app.modules.auth.models import User
+    from app.modules.promo_codes.models import PromoCode
+    from app.modules.promo_codes.schemas import (
+        PromoCodeCreateRequest,
+        PromoCodeUpdateRequest,
+    )
 
 _log = structlog.get_logger("modules.promo_codes.service")
 
@@ -84,6 +99,32 @@ class PromoUsedUpError(ValidationAppError):
 
 
 # ---------------------------------------------------------------------------
+# Phase 113 — admin CRUD error classes
+# ---------------------------------------------------------------------------
+
+
+class PromoCodeNotFoundError(AppError):
+    """Admin CRUD: promo code not found or soft-deleted (PROMO-01)."""
+
+    code = "promo_code_not_found"
+    status_code = 404
+
+
+class PromoCodeAlreadyExistsError(AppError):
+    """Admin CRUD: alive promo code with same UPPER(code) already exists (PROMO-01)."""
+
+    code = "promo_code_already_exists"
+    status_code = 409
+
+
+class PromoCodeValidationError(ValidationAppError):
+    """Admin CRUD: generic promo code validation failure."""
+
+    code = "promo_code_validation_error"
+    status_code = 422
+
+
+# ---------------------------------------------------------------------------
 # Kind mapping: PWA shorthand → DB applicable_to value
 # ---------------------------------------------------------------------------
 
@@ -125,7 +166,7 @@ async def validate_promo_code(
     -------
     tuple[discount_kopecks, new_amount_kopecks, discount_type, promo_id]
         discount_kopecks:    computed discount in integer kopecks.
-        new_amount_kopecks:  price − discount (never < 0; zero raises PromoNotApplicableError).
+        new_amount_kopecks:  price - discount (never < 0; zero raises PromoNotApplicableError).
         discount_type:       'percentage' | 'fixed'.
         promo_id:            UUID of the PromoCode row (CR-02 — eliminates second lookup).
 
@@ -253,10 +294,7 @@ async def _read_plan_price(
     Raw SQL text() SELECT — no ORM import of foreign-module models.
     Raises PromoNotFoundError if the plan row is absent or soft-deleted.
     """
-    if kind == "membership":
-        table = "membership_plans"
-    else:
-        table = "pt_package_plans"
+    table = "membership_plans" if kind == "membership" else "pt_package_plans"
 
     row = (
         await session.execute(
@@ -314,7 +352,7 @@ async def record_promo_redemption(
     online_payment_id:
         UUID of the OnlinePayment row (from online_payments.id).
     discount_kopecks:
-        Discount actually granted (plan_price − row.amount_kopecks at record time).
+        Discount actually granted (plan_price - row.amount_kopecks at record time).
     """
     # CR-01 fix: acquire row lock on the promo_codes row BEFORE the COUNT check so
     # concurrent webhook handlers serialise on this promo code and cannot both pass
@@ -410,13 +448,142 @@ async def record_promo_redemption(
     )
 
 
+# ---------------------------------------------------------------------------
+# Phase 113 — admin CRUD service functions
+# ---------------------------------------------------------------------------
+
+
+async def create_promo_code(
+    session: AsyncSession,
+    actor: User,
+    payload: PromoCodeCreateRequest,
+) -> PromoCode:
+    """Create a promo code (PROMO-01).
+
+    Normalizes code to UPPER (strip + upper) before persistence.
+    Raises PromoCodeAlreadyExistsError on alive-uniqueness constraint violation
+    (uq_promo_codes_code_alive partial UNIQUE on upper(code) WHERE deleted_at IS NULL).
+
+    Returns the inserted PromoCode ORM instance.
+    """
+    from app.modules.promo_codes import repository
+
+    normalized_code = payload.code.strip().upper()
+    try:
+        promo = await repository.insert_promo_code(
+            session,
+            code=normalized_code,
+            discount_type=payload.discount_type,
+            discount_value=payload.discount_value,
+            max_uses=payload.max_uses,
+            per_client_limit=payload.per_client_limit,
+            valid_from=payload.valid_from,
+            valid_until=payload.valid_until,
+            applicable_to=payload.applicable_to,
+            description=payload.description,
+        )
+        await session.commit()
+        _log.info(
+            "promo_code_created",
+            code=normalized_code,
+            actor_id=str(actor.id),
+        )
+        return promo
+    except sa_exc.IntegrityError as exc:
+        await session.rollback()
+        # The partial unique index uq_promo_codes_code_alive fires on duplicate alive code
+        if "uq_promo_codes_code_alive" in str(exc.orig):
+            raise PromoCodeAlreadyExistsError(
+                f"A promo code with code '{normalized_code}' already exists"
+            ) from exc
+        raise
+
+
+async def update_promo_code(
+    session: AsyncSession,
+    actor: User,
+    promo_id: UUID,
+    payload: PromoCodeUpdateRequest,
+) -> PromoCode:
+    """Partially edit an alive promo code (PROMO-01).
+
+    Only fields present in the request (exclude_unset) are applied.
+    Code is UPPER-normalized if provided. Raises PromoCodeNotFoundError on
+    missing/soft-deleted promo, PromoCodeAlreadyExistsError on alive-uniqueness conflict.
+
+    Returns the updated PromoCode ORM instance.
+    """
+    from app.modules.promo_codes import repository
+
+    promo = await repository.get_alive(session, promo_id)
+    if promo is None:
+        raise PromoCodeNotFoundError(f"Promo code {promo_id} not found")
+
+    # Build the update dict from only the fields the caller explicitly set
+    raw_values = payload.model_dump(exclude_unset=True)
+    if not raw_values:
+        return promo  # no-op PATCH
+
+    # Normalize code if present
+    if "code" in raw_values and raw_values["code"] is not None:
+        raw_values["code"] = str(raw_values["code"]).strip().upper()
+
+    try:
+        await repository.update_promo_code(session, promo, values=raw_values)
+        await session.commit()
+        _log.info(
+            "promo_code_updated",
+            promo_id=str(promo_id),
+            fields=list(raw_values.keys()),
+            actor_id=str(actor.id),
+        )
+        return promo
+    except sa_exc.IntegrityError as exc:
+        await session.rollback()
+        if "uq_promo_codes_code_alive" in str(exc.orig):
+            raise PromoCodeAlreadyExistsError(
+                "A promo code with that code already exists"
+            ) from exc
+        raise
+
+
+async def deactivate_promo_code(
+    session: AsyncSession,
+    actor: User,
+    promo_id: UUID,
+) -> None:
+    """Deactivate (soft - sets is_active=False) an alive promo code (PROMO-01).
+
+    Raises PromoCodeNotFoundError if the code is missing or already soft-deleted.
+    """
+    from app.modules.promo_codes import repository
+
+    promo = await repository.get_alive(session, promo_id)
+    if promo is None:
+        raise PromoCodeNotFoundError(f"Promo code {promo_id} not found")
+
+    await repository.deactivate_promo_code(session, promo_id=promo_id)
+    await session.commit()
+    _log.info(
+        "promo_code_deactivated",
+        promo_id=str(promo_id),
+        actor_id=str(actor.id),
+    )
+
+
 __all__ = (
-    "validate_promo_code",
-    "record_promo_redemption",
-    "PromoNotFoundError",
-    "PromoInactiveError",
+    "PromoCodeAlreadyExistsError",
+    "PromoCodeNotFoundError",
+    "PromoCodeValidationError",
     "PromoExpiredError",
-    "PromoNotYetActiveError",
+    "PromoInactiveError",
     "PromoNotApplicableError",
+    "PromoNotFoundError",
+    "PromoNotYetActiveError",
     "PromoUsedUpError",
+    "create_promo_code",
+    "deactivate_promo_code",
+    "record_promo_redemption",
+    "update_promo_code",
+    "validate_promo_code",
 )
