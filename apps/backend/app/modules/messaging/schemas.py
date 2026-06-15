@@ -237,9 +237,21 @@ class StaffReplyRequest(BackendSchemaBase):
     extra='forbid' (inherited from BackendSchemaBase) rejects unknown fields.
     body must be non-empty and non-whitespace-only.
     max_length=4000 mirrors SendMessageRequest validation.
+
+    WR-05: min_length=1 alone does NOT reject whitespace-only input ("   " has
+    length 3 and passes). The backend is the trust boundary — an API caller can
+    bypass the FE trim — so a model_validator rejects whitespace-only body,
+    mirroring SendMessageRequest.body_or_attachment_required (preserves T-90-09).
     """
 
     body: Annotated[str, Field(min_length=1, max_length=4000)]
+
+    @model_validator(mode="after")
+    def body_not_whitespace(self) -> Self:
+        """Reject whitespace-only body (mirrors SendMessageRequest guard, WR-05)."""
+        if not self.body.strip():
+            raise ValueError("body must not be whitespace-only")
+        return self
 
 
 class StaffThreadItem(ResponseData):
