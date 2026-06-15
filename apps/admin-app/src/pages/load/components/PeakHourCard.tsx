@@ -7,21 +7,18 @@
  * Data: derived client-side from VisitsReportHourlyBucket[] via derivePeakHour.
  * No network calls, no hooks.
  */
-import { Card, CardHeader } from '@/components/layout/Card'
-import { KpiTile } from '@/components/ui/KpiTile'
-import { Clock } from '@/components/icons'
-import type { VisitsReportHourlyBucket } from '@/features/reports/schemas'
-import { derivePeakHour } from './derive'
+import { Card, CardHeader } from '@/components/layout/Card';
+import { KpiTile } from '@/components/ui/KpiTile';
+import { Clock } from '@/components/icons';
+import type { VisitsReportHourlyBucket } from '@/features/reports/schemas';
+import { derivePeakHour } from './derive';
 
 export function PeakHourCard({ hourly }: { hourly: VisitsReportHourlyBucket[] }) {
-  const peak = derivePeakHour(hourly)
+  const peak = derivePeakHour(hourly);
 
   return (
     <Card as="section" className="flex min-w-0 flex-col">
-      <CardHeader
-        title="Пиковый час"
-        subtitle="Час дня с наибольшим числом визитов"
-      />
+      <CardHeader title="Пиковый час" subtitle="Час дня с наибольшим числом визитов" />
       <div className="px-5 pb-4 pt-0">
         <KpiTile
           icon={Clock}
@@ -31,5 +28,5 @@ export function PeakHourCard({ hourly }: { hourly: VisitsReportHourlyBucket[] })
         />
       </div>
     </Card>
-  )
+  );
 }

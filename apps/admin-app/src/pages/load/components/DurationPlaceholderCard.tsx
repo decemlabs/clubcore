@@ -7,16 +7,13 @@
  *
  * No props. No network calls. No fabricated data.
  */
-import { Card, CardHeader } from '@/components/layout/Card'
-import { Clock } from '@/components/icons'
+import { Card, CardHeader } from '@/components/layout/Card';
+import { Clock } from '@/components/icons';
 
 export function DurationPlaceholderCard() {
   return (
     <Card as="section" className="flex min-w-0 flex-col">
-      <CardHeader
-        title="Время пребывания"
-        subtitle="Аналитика по времени визитов"
-      />
+      <CardHeader title="Время пребывания" subtitle="Аналитика по времени визитов" />
       <div className="px-5 pb-5 pt-2 flex flex-col items-center text-center gap-3">
         <Clock className="size-8 text-fg-subtle" strokeWidth={1.5} />
         <p className="text-[13px] text-fg-muted leading-snug max-w-[260px]">
@@ -27,5 +24,5 @@ export function DurationPlaceholderCard() {
         </span>
       </div>
     </Card>
-  )
+  );
 }

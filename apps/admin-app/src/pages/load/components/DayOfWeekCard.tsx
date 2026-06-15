@@ -9,14 +9,14 @@
  * Data: derived client-side from VisitsReportDailyBucket[] via deriveDayOfWeek.
  * No network calls, no hooks.
  */
-import { cn } from '@/lib/cn'
-import { Card, CardHeader } from '@/components/layout/Card'
-import type { VisitsReportDailyBucket } from '@/features/reports/schemas'
-import { deriveDayOfWeek } from './derive'
+import { cn } from '@/lib/cn';
+import { Card, CardHeader } from '@/components/layout/Card';
+import type { VisitsReportDailyBucket } from '@/features/reports/schemas';
+import { deriveDayOfWeek } from './derive';
 
 export function DayOfWeekCard({ daily }: { daily: VisitsReportDailyBucket[] }) {
-  const stats = deriveDayOfWeek(daily)
-  const maxTotal = Math.max(...stats.map((s) => s.total), 0)
+  const stats = deriveDayOfWeek(daily);
+  const maxTotal = Math.max(...stats.map((s) => s.total), 0);
 
   return (
     <Card as="section" className="flex min-w-0 flex-col">
@@ -26,8 +26,8 @@ export function DayOfWeekCard({ daily }: { daily: VisitsReportDailyBucket[] }) {
       />
       <div className="px-5 pb-4">
         {stats.map((stat) => {
-          const pct = maxTotal === 0 ? 0 : (stat.total / maxTotal) * 100
-          const isPeak = maxTotal > 0 && stat.total === maxTotal
+          const pct = maxTotal === 0 ? 0 : (stat.total / maxTotal) * 100;
+          const isPeak = maxTotal > 0 && stat.total === maxTotal;
           return (
             <div key={stat.weekday} className="flex items-center gap-3 py-1.5">
               <span className="w-6 shrink-0 text-[11.5px] text-fg-muted">{stat.label}</span>
@@ -44,9 +44,9 @@ export function DayOfWeekCard({ daily }: { daily: VisitsReportDailyBucket[] }) {
                 {stat.total}
               </span>
             </div>
-          )
+          );
         })}
       </div>
     </Card>
-  )
+  );
 }
