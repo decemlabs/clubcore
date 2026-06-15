@@ -448,6 +448,17 @@ async def list_all_threads_with_unread(
     AND (staff_last_read_at IS NULL OR sent_at > staff_last_read_at).
     NULL staff_last_read_at means never read by staff → all client messages counted.
 
+    WR-03 — WATERMARK TRADEOFF (mirrors mark_client_messages_read at repository.py):
+      Staff-side unread is a strict `sent_at > staff_last_read_at` comparison against a
+      single per-thread timestamp WATERMARK (set by mark_staff_thread_read = now()), NOT
+      a per-message read flag. A client message whose sent_at equals the mark-read now()
+      to the timestamp resolution — or one that commits with an earlier sent_at but after
+      the mark-read snapshot under READ COMMITTED — can be transiently mis-counted (hidden
+      as read or shown as unread). This thread-level marker tradeoff is intentional and
+      ACCEPTED: the next inbox poll self-heals the count (it is a near-realtime triage
+      hint, NOT an exact per-message guarantee). Do NOT "tighten" this into a per-message
+      read flag or treat the count as exact.
+
     Joins to clients table (alive only: deleted_at IS NULL) to get first/last name.
     Orders by last_message_at DESC NULLS LAST (threads with no messages appear last).
 
@@ -512,6 +523,16 @@ async def mark_staff_thread_read(
 
     No RETURNING needed — unread count is derived on read from the staff_last_read_at
     watermark (COUNT WHERE role='client' AND sent_at > watermark). No counter to recompute.
+
+    WR-03 — WATERMARK TRADEOFF (mirrors mark_client_messages_read at repository.py):
+      This sets a single per-thread timestamp watermark = now(); list_all_threads_with_unread
+      then derives staff unread via a strict `sent_at > staff_last_read_at` comparison. Because
+      this is a timestamp watermark and NOT a per-message read flag, a client message whose
+      sent_at lands at/just before this now() (timestamp resolution, or a concurrent same-thread
+      send under READ COMMITTED) may be transiently mis-counted. This is intentional and ACCEPTED
+      (thread-level marker, self-heals on the next inbox poll). Do NOT tighten it into a
+      per-message guarantee. See list_all_threads_with_unread for the read-side note + the
+      boundary test in tests/integration/messaging/test_staff_messaging.py.
 
     raw SQL text() + :name bind params (D-54-08 discipline).
     No session.commit() — caller-owns-txn (D-32-10/D-49-19).
