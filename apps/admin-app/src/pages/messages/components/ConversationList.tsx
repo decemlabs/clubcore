@@ -22,7 +22,11 @@ const SOURCE_PILLS: { value: SourceFilter; label: string }[] = [
   { value: 'bot', label: 'Боты' },
 ];
 
-const DAY_LABEL: Record<Conversation['day'], string> = { today: 'Сегодня', yesterday: 'Вчера' };
+const DAY_LABEL: Record<Conversation['day'], string> = {
+  today: 'Сегодня',
+  yesterday: 'Вчера',
+  earlier: 'Ранее',
+};
 
 function ConvRow({
   conv,
@@ -154,7 +158,7 @@ export function ConversationList({
     });
   }, [convs, query, source]);
 
-  const days = ['today', 'yesterday'] as const;
+  const days = ['today', 'yesterday', 'earlier'] as const;
 
   return (
     <div

@@ -33,7 +33,8 @@ export interface Conversation {
   time: string;
   unread?: number;
   snoozed?: boolean;
-  day: 'today' | 'yesterday';
+  // WR-04: 'earlier' bucket so threads older than yesterday are not mislabeled "Вчера".
+  day: 'today' | 'yesterday' | 'earlier';
 }
 
 /* ---------- Тред ---------- */

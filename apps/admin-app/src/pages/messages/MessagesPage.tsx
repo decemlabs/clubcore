@@ -29,14 +29,15 @@ import { ClientPanel } from './components/ClientPanel';
 // StaffThread → Conversation mapping (for ConversationList props)
 // ---------------------------------------------------------------------------
 
-/** Determine if a thread belongs to today/yesterday for ConversationList grouping. */
-function threadDay(lastMessageAt: string | null): 'today' | 'yesterday' {
+/** Bucket a thread into today/yesterday/earlier for ConversationList grouping. */
+function threadDay(lastMessageAt: string | null): 'today' | 'yesterday' | 'earlier' {
   if (!lastMessageAt) return 'today';
   const d = parseISO(lastMessageAt);
   const now = new Date();
   if (isSameDay(d, now)) return 'today';
   if (isSameDay(d, subDays(now, 1))) return 'yesterday';
-  return 'yesterday'; // older threads still shown in yesterday group
+  // WR-04: anything older than yesterday goes to the "Ранее" bucket, NOT "Вчера".
+  return 'earlier';
 }
 
 function staffThreadToConversation(t: StaffThread): Conversation {
