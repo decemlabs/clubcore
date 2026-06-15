@@ -95,7 +95,7 @@ export function useClientsReport(query: ClientsReportQuery, role: Role) {
     queryKey: reportsQueryKeys.clients(query),
     queryFn: async () => {
       const raw = await staffRequest('get', '/api/v1/reports/clients', {
-        query: { fromDate: query.fromDate, toDate: query.toDate, within: query.within ?? 30 },
+        query: { fromDate: query.fromDate, toDate: query.toDate, within: query.within ?? 7 },
       });
       return ClientsReportSchema.parse(raw).data;
     },
