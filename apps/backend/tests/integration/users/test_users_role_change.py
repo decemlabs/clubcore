@@ -23,6 +23,7 @@ TOP level (not under detail). All assertions use r.json()["code"].
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from uuid import UUID
 
 import pytest
@@ -66,6 +67,33 @@ async def _seed_reception(db_session: AsyncSession, *, email: str = "role-test-r
         email_verified=True,
         status="active",
         is_active=True,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+async def _seed_inactive_reception(
+    db_session: AsyncSession, *, email: str = "role-test-inactive@example.com"
+) -> User:
+    """Insert a deactivated reception user; return the ORM row.
+
+    Mirrors real deactivation: ``is_active=False`` while ``status`` stays
+    'active' (the CHECK ck_users_status only permits 'active' /
+    'pending_invitation'; deactivation flips is_active, not status). The
+    ck_users_lifecycle_consistency CHECK requires ``deactivated_at IS NOT NULL``
+    whenever ``is_active=False``, so it is set here.
+    """
+    user = User(
+        email=email,
+        password_hash=_PLACEHOLDER_PWD_HASH,
+        role=Role.RECEPTION,
+        full_name="Role Test Inactive",
+        email_verified=True,
+        status="active",
+        is_active=False,
+        deactivated_at=datetime.now(tz=UTC),
     )
     db_session.add(user)
     await db_session.commit()
@@ -284,4 +312,77 @@ async def test_successful_role_change_writes_audit_row(
     assert row.payload["new_role"] == "owner", f"new_role wrong: {row.payload}"
     assert row.payload["changed_user_id"] == str(target_id), (
         f"changed_user_id wrong: {row.payload}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# WR-03 — role change on inactive user is rejected
+# ---------------------------------------------------------------------------
+
+
+async def test_role_change_on_inactive_user_returns_409(
+    authed_client_owner: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """PATCH role on a deactivated user → 409 cannot_change_inactive_user_role.
+
+    WR-03 — the endpoint is the security boundary; a deactivated user's role
+    must not be silently mutated even though the FE hides the action.
+    """
+    target = await _seed_inactive_reception(db_session)
+
+    r = await authed_client_owner.patch(
+        f"/api/v1/users/{target.id}/role",
+        json={"role": "owner"},
+        headers=_csrf(authed_client_owner),
+    )
+    assert r.status_code == 409, r.text
+    assert r.json()["code"] == "cannot_change_inactive_user_role"
+
+    # Role unchanged in the DB.
+    await db_session.refresh(target)
+    assert target.role == Role.RECEPTION
+
+
+# ---------------------------------------------------------------------------
+# WR-04 — no-op role change is rejected and emits NO audit row
+# ---------------------------------------------------------------------------
+
+
+async def test_noop_role_change_returns_409_and_writes_no_audit(
+    authed_client_owner: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    """PATCH role == current role → 409 role_unchanged, NO user_role_changed audit.
+
+    WR-04 — the no-op is rejected BEFORE mutate/emit so no phantom audit row
+    (old_role == new_role) pollutes the forensic trail.
+    """
+    target = await _seed_reception(db_session, email="noop-role-check@example.com")
+    target_id: UUID = target.id
+
+    r = await authed_client_owner.patch(
+        f"/api/v1/users/{target_id}/role",
+        json={"role": "reception"},  # same as current role
+        headers=_csrf(authed_client_owner),
+    )
+    assert r.status_code == 409, r.text
+    assert r.json()["code"] == "role_unchanged"
+
+    # No user_role_changed audit row was written for this target.
+    audit_rows = (
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "user_role_changed",
+                    AuditLog.resource_id == target_id,
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(audit_rows) == 0, (
+        f"Expected NO user_role_changed audit row for no-op on {target_id}, "
+        f"found {len(audit_rows)}"
     )
