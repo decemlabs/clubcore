@@ -30,6 +30,7 @@ from httpx import AsyncClient
 from app.modules.reports.constants import (
     CSV_AUDIT_LOG_HEADERS,
     CSV_CLIENTS_HEADERS,
+    CSV_PAYMENTS_HEADERS,
     CSV_REVENUE_HEADERS,
     CSV_VISITS_HEADERS,
 )
@@ -509,3 +510,135 @@ async def test_csv_endpoints_require_auth(
     ):
         r = await async_client.get(path)
         assert r.status_code == 401, f"{path} unexpectedly returned {r.status_code}"
+
+
+# ---------------------------------------------------------------------------
+# Payments CSV export tests (Phase 116 EXP-01)
+# ---------------------------------------------------------------------------
+
+
+async def test_payments_csv_bom_and_content_type(
+    authed_client_owner: AsyncClient,
+) -> None:
+    """Owner GET /reports/payments.csv → 200; text/csv; body starts with UTF-8 BOM (EXP-04)."""
+    r = await authed_client_owner.get(
+        "/api/v1/reports/payments.csv",
+        params={"fromDate": "2026-05-01", "toDate": "2026-05-31"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"].startswith("text/csv")
+    assert r.text[0] == BOM, f"Expected BOM as first char, got {r.text[0]!r}"
+    assert ord(r.text[0]) == 0xFEFF, f"BOM must be U+FEFF, got U+{ord(r.text[0]):04X}"
+
+
+async def test_payments_csv_header_row(
+    authed_client_owner: AsyncClient,
+) -> None:
+    """Payments CSV header row matches CSV_PAYMENTS_HEADERS (Phase 116 EXP-01)."""
+    r = await authed_client_owner.get(
+        "/api/v1/reports/payments.csv",
+        params={"fromDate": "2026-05-01", "toDate": "2026-05-31"},
+    )
+    assert r.status_code == 200, r.text
+    rows = parse_csv_text(r.text)
+    assert rows[0] == list(CSV_PAYMENTS_HEADERS), f"Header mismatch: {rows[0]}"
+
+
+async def test_payments_csv_reception_forbidden(
+    authed_client_reception: AsyncClient,
+) -> None:
+    """(VIEW, REPORTS) ∈ OWNER_ONLY → reception 403 on payments.csv (T-116-07)."""
+    r = await authed_client_reception.get(
+        "/api/v1/reports/payments.csv",
+        params={"fromDate": "2026-05-01", "toDate": "2026-05-31"},
+    )
+    assert r.status_code == 403, r.text
+    assert r.json()["code"] == "forbidden"
+
+
+async def test_payments_csv_cyrillic_roundtrip(
+    authed_client_owner: AsyncClient,
+    make_payment_ledger: Any,
+    make_client: Any,
+    make_membership: Any,
+    make_plan: Any,
+    seeded_owner: Any,
+) -> None:
+    """Cyrillic client name round-trips cleanly via the UTF-8 BOM (EXP-04, T-116-08).
+
+    Seed a payment for a client with a Cyrillic name; the CSV export must
+    contain the name intact and the header row must equal CSV_PAYMENTS_HEADERS.
+    """
+    plan = await make_plan(name="PaymentsCSVCyrillicTest")
+    cyrillic_client = await make_client(first_name="Мария", last_name="Петрова")
+    mem = await make_membership(client_id=cyrillic_client.id, plan=plan)
+    await make_payment_ledger(
+        subject_id=mem.id,
+        subject_kind="membership",
+        amount_kopecks=150000,
+        method="cash",
+        received_at=datetime(2026, 5, 10, 9, 0, 0, tzinfo=UTC),
+        received_by_user_id=seeded_owner.id,
+    )
+    r = await authed_client_owner.get(
+        "/api/v1/reports/payments.csv",
+        params={"fromDate": "2026-05-10", "toDate": "2026-05-10"},
+    )
+    assert r.status_code == 200, r.text
+    # Cyrillic name must appear verbatim (BOM enables Excel UTF-8 decode)
+    assert "Мария Петрова" in r.text, (
+        f"Cyrillic client name not found in CSV. Body excerpt: {r.text[:500]}"
+    )
+    # Header row must be the canonical CSV_PAYMENTS_HEADERS
+    rows = parse_csv_text(r.text)
+    assert rows[0] == list(CSV_PAYMENTS_HEADERS), f"Header mismatch: {rows[0]}"
+
+
+async def test_payments_csv_inverted_range_422(
+    authed_client_owner: AsyncClient,
+) -> None:
+    """toDate < fromDate → 422 via _validate_date_range (T-116-11)."""
+    r = await authed_client_owner.get(
+        "/api/v1/reports/payments.csv",
+        params={"fromDate": "2026-05-31", "toDate": "2026-05-01"},
+    )
+    assert r.status_code == 422, r.text
+
+
+async def test_payments_csv_formula_injection_guarded(
+    authed_client_owner: AsyncClient,
+    make_payment_ledger: Any,
+    make_client: Any,
+    make_membership: Any,
+    make_plan: Any,
+    seeded_owner: Any,
+) -> None:
+    """clientName starting with '=' is prefixed with a single quote (T-116-08, CR-01)."""
+    plan = await make_plan(name="PaymentsCSVFormulaTest")
+    formula_client = await make_client(first_name="=HYPERLINK('evil')", last_name="Test")
+    mem = await make_membership(client_id=formula_client.id, plan=plan)
+    await make_payment_ledger(
+        subject_id=mem.id,
+        subject_kind="membership",
+        amount_kopecks=100000,
+        method="cash",
+        received_at=datetime(2026, 5, 12, 10, 0, 0, tzinfo=UTC),
+        received_by_user_id=seeded_owner.id,
+    )
+    r = await authed_client_owner.get(
+        "/api/v1/reports/payments.csv",
+        params={"fromDate": "2026-05-12", "toDate": "2026-05-12"},
+    )
+    assert r.status_code == 200, r.text
+    rows = parse_csv_text(r.text)
+    client_name_col = list(CSV_PAYMENTS_HEADERS).index("clientName")
+    data_rows = [row for row in rows[1:] if row]
+    # The formula-injection-guarded cell must start with a single quote prefix
+    target = [
+        row for row in data_rows
+        if row[client_name_col].startswith("'=HYPERLINK")
+    ]
+    assert target, (
+        f"Expected formula-injection-guarded cell starting with \"'=\" in clientName column. "
+        f"Data rows: {data_rows}"
+    )

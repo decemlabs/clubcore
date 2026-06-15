@@ -38,6 +38,7 @@ from app.modules.reports import csv_export, service
 from app.modules.reports.constants import (
     CSV_AUDIT_LOG_HEADERS,
     CSV_CLIENTS_HEADERS,
+    CSV_PAYMENTS_HEADERS,
     CSV_REVENUE_HEADERS,
     CSV_TRAINER_USAGE_HEADERS,
     CSV_VISITS_HEADERS,
@@ -207,6 +208,37 @@ async def get_visits_csv(
     """
     rows = await service.visits_csv_rows(session, query)
     return csv_export.make_csv_streaming_response(iter(rows), CSV_VISITS_HEADERS, "visits.csv")
+
+
+@router.get(
+    "/payments.csv",
+    response_class=StreamingResponse,
+    summary=(
+        "Payments ledger CSV download — one row per payment (owner-only; EXP-01 Phase 116)"
+    ),
+)
+async def get_payments_csv(
+    from_date: Annotated[date, Query(alias="fromDate")],
+    to_date: Annotated[date, Query(alias="toDate")],
+    _actor: Annotated[CurrentUser, Depends(require_permission(Action.VIEW, Resource.REPORTS))],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> StreamingResponse:
+    """Stream payments ledger as UTF-8 BOM + RFC-4180 CSV (Phase 116 EXP-01).
+
+    One row per payment (sales + refunds) in [fromDate, toDate] MSK, ordered by
+    received_at ASC. Columns: date, clientName, amountRubles, method, subjectKind,
+    refundOf, operatorEmail.
+
+    Query params: ?fromDate=YYYY-MM-DD&toDate=YYYY-MM-DD (alias convention matching
+    VisitsReportQuery / RevenueReportQuery siblings via alias_generator=to_camel).
+
+    Owner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.
+    Range cap: 366 days; toDate < fromDate → 422.
+    No try/except — errors bubble to _app_error_handler.
+    """
+    filename = f"payments-{from_date.isoformat()}-{to_date.isoformat()}.csv"
+    rows = await service.payments_csv_rows(session, from_date=from_date, to_date=to_date)
+    return csv_export.make_csv_streaming_response(iter(rows), CSV_PAYMENTS_HEADERS, filename)
 
 
 @router.get(
