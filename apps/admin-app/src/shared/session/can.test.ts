@@ -56,11 +56,11 @@ describe('can()', () => {
     expect(can('reception', 'delete', 'promo-codes')).toBe(false)
   })
 
-  it('OWNER_ONLY matrix contains exactly 45 unique entries', () => {
-    // Phase 113-01: added 3 promo-codes write pairs (create/edit/delete) — count 42 → 45
+  it('OWNER_ONLY matrix contains exactly 46 unique entries', () => {
+    // Phase 116-01: added (create, messages) — count 45 → 46
     const pairs = new Set(OWNER_ONLY.map((e) => `${e.action}|${e.resource}`))
-    expect(pairs.size).toBe(45)
-    expect(OWNER_ONLY.length).toBe(45)
+    expect(pairs.size).toBe(46)
+    expect(OWNER_ONLY.length).toBe(46)
   })
 })
 

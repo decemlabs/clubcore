@@ -1,5 +1,19 @@
+/**
+ * ThreadPane — centre column of the staff inbox (Phase 116 MSG-01/02).
+ *
+ * Wired to:
+ *   useThread(activeThreadId)    — loads real message history
+ *   useSendReply(activeThreadId) — owner-only POST .../reply
+ *
+ * Composer gate: can(role, 'create', 'messages')
+ *   owner     → sees reply composer; send calls useSendReply
+ *   reception → sees thread read-only; composer is absent (hidden, not disabled)
+ *
+ * Empty-thread placeholder: shown when no thread is selected.
+ */
 import { useEffect, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
+import { isSameDay, parseISO, subDays } from 'date-fns';
 import { toast } from 'sonner';
 import { cn } from '@/lib/cn';
 import { Initials } from '@/components/ui/initials';
@@ -23,12 +37,53 @@ import {
   Smile,
   User,
 } from '@/components/icons';
-import type { Bubble, Conversation, QuickReply, ThreadItem } from '@/features/messages/types';
+import { PageLoading } from '@/components/feedback/PageState';
+import { can } from '@/shared/session/can';
+import { useThread, useSendReply } from '@/features/messages/api';
+import type { Role } from '@/shared/session/types';
+import type { Bubble, ThreadItem } from '@/features/messages/types';
+import type { StaffMessage, StaffThread } from '@/features/messages/types';
 
 type ComposeMode = 'reply' | 'note' | 'resolve';
 
 const HTBTN =
   'grid size-8 shrink-0 place-items-center rounded-lg border-[0.5px] border-border text-fg-muted transition-colors hover:border-border-strong hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
+
+// ---------------------------------------------------------------------------
+// StaffMessage → ThreadItem mapping
+// ---------------------------------------------------------------------------
+
+function staffMessagesToThreadItems(messages: StaffMessage[]): ThreadItem[] {
+  const items: ThreadItem[] = [];
+  let lastDay: string | null = null;
+  for (const msg of messages) {
+    const d = parseISO(msg.sentAt);
+    const day = d.toDateString();
+    if (day !== lastDay) {
+      lastDay = day;
+      items.push({
+        kind: 'daysep',
+        label: isSameDay(d, new Date())
+          ? 'Сегодня'
+          : isSameDay(d, subDays(new Date(), 1))
+            ? 'Вчера'
+            : d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }),
+      });
+    }
+    items.push({
+      kind: 'msg',
+      id: msg.id,
+      type: msg.role === 'client' ? 'them' : 'me',
+      text: msg.body,
+      meta: d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
+    });
+  }
+  return items;
+}
+
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
 
 function MsgBubble({ b }: { b: Bubble }) {
   if (b.type === 'sys') {
@@ -125,65 +180,75 @@ function ModeTab({
   );
 }
 
-/** Центральная колонка: шапка диалога, лента сообщений, composer. */
-export function ThreadPane({
-  conv,
-  threadMeta,
-  seed,
-  draft,
-  quickReplies,
+function NoThreadPlaceholder() {
+  return (
+    <div className="flex flex-1 items-center justify-center px-6 text-center">
+      <div>
+        <span className="mb-3 grid size-12 place-items-center rounded-full bg-surface-3 text-fg-subtle mx-auto">
+          <MessageSquare className="size-5" />
+        </span>
+        <div className="text-[14px] font-medium text-fg-muted">
+          Выберите диалог, чтобы открыть переписку.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Inner loaded pane (renders header + messages + optional composer)
+// ---------------------------------------------------------------------------
+
+function LoadedThreadPane({
+  thread,
+  messages,
+  role,
 }: {
-  conv: Conversation;
-  threadMeta: string;
-  seed: ThreadItem[];
-  draft: string;
-  quickReplies: QuickReply[];
+  thread: StaffThread;
+  messages: StaffMessage[];
+  role: Role;
 }) {
-  const [items, setItems] = useState<ThreadItem[]>(seed);
+  const canCompose = can(role, 'create', 'messages');
+  const sendReply = useSendReply(thread.id);
+  const isSending = sendReply.isPending;
+
+  const items = staffMessagesToThreadItems(messages);
   const [mode, setMode] = useState<ComposeMode>('reply');
-  const [text, setText] = useState(draft);
+  const [text, setText] = useState('');
   const msgsRef = useRef<HTMLDivElement>(null);
-  const counter = useRef(0);
 
   useEffect(() => {
     const el = msgsRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [items]);
+  }, [items.length]);
 
   const send = () => {
     const value = text.trim();
-    if (!value) return;
-    counter.current += 1;
-    const isNote = mode === 'note';
-    setItems((prev) => [
-      ...prev,
-      {
-        kind: 'msg',
-        id: `sent-${counter.current}`,
-        type: isNote ? 'note' : 'me',
-        text: value,
-        noteHead: isNote ? 'Внутренняя заметка' : undefined,
-        meta: isNote ? 'только что · видна только администраторам' : 'только что · ✓ отправлено',
-      },
-    ]);
-    setText('');
+    if (!value || isSending) return;
+    sendReply.mutate(value, {
+      onSuccess: () => setText(''),
+    });
   };
 
   return (
-    <div className="flex min-h-0 flex-col bg-bg">
+    <>
       {/* Шапка */}
       <div className="flex shrink-0 items-center gap-3 border-b-[0.5px] border-border bg-surface px-4 py-3">
-        <Initials initials={conv.initials} color={conv.color} className="size-9 text-[12px]" />
+        <Initials
+          initials={thread.clientInitials}
+          color="var(--primary)"
+          className="size-9 text-[12px]"
+        />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[14.5px] font-bold">{conv.name}</div>
+          <div className="truncate text-[14.5px] font-bold">{thread.clientName}</div>
           <div className="flex items-center gap-1.5 truncate text-[11.5px] text-fg-subtle">
             <span className="size-1.5 shrink-0 rounded-full bg-primary" />
-            {threadMeta}
+            Чат в приложении
           </div>
         </div>
         <button
           type="button"
-          onClick={() => toast('Переназначить диалог', { description: 'Сейчас: Маша Костина' })}
+          onClick={() => toast('Переназначить диалог')}
           className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-fg px-2.5 text-[12px] font-semibold text-bg transition-colors hover:bg-black dark:bg-primary dark:text-[#06120c] dark:hover:bg-[#5ee9b8] max-sm:hidden"
         >
           <User className="size-3.5" />
@@ -232,106 +297,144 @@ export function ThreadPane({
       </div>
 
       {/* Сообщения */}
-      <div ref={msgsRef} className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-5 py-4">
-        {items.map((item, i) =>
-          item.kind === 'daysep' ? (
-            <div
-              key={`d${i}`}
-              className="my-1 flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.3px] text-fg-subtle"
-            >
-              <span className="h-px flex-1 bg-border" />
-              {item.label}
-              <span className="h-px flex-1 bg-border" />
-            </div>
-          ) : (
-            <MsgBubble key={item.id} b={item} />
-          ),
+      <div
+        ref={msgsRef}
+        className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-5 py-4"
+      >
+        {items.length === 0 ? (
+          <div className="flex flex-1 items-center justify-center text-[13px] text-fg-subtle">
+            Нет сообщений
+          </div>
+        ) : (
+          items.map((item, i) =>
+            item.kind === 'daysep' ? (
+              <div
+                key={`d${i}`}
+                className="my-1 flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.3px] text-fg-subtle"
+              >
+                <span className="h-px flex-1 bg-border" />
+                {item.label}
+                <span className="h-px flex-1 bg-border" />
+              </div>
+            ) : (
+              <MsgBubble key={item.id} b={item} />
+            ),
+          )
         )}
       </div>
 
-      {/* Composer */}
-      <div className="shrink-0 border-t-[0.5px] border-border bg-surface px-4 pb-3.5 pt-2">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex gap-1">
-            <ModeTab
-              active={mode === 'reply'}
-              icon={MessageSquare}
-              label="Ответ"
-              onClick={() => setMode('reply')}
-            />
-            <ModeTab
-              active={mode === 'note'}
-              icon={Info}
-              label="Заметка"
-              note
-              onClick={() => setMode('note')}
-            />
-            <ModeTab
-              active={mode === 'resolve'}
-              icon={CheckCircle2}
-              label="Решить"
-              onClick={() => setMode('resolve')}
-            />
+      {/* Composer — owner-only via can(role,'create','messages'); absent for reception */}
+      {canCompose && (
+        <div className="shrink-0 border-t-[0.5px] border-border bg-surface px-4 pb-3.5 pt-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex gap-1">
+              <ModeTab
+                active={mode === 'reply'}
+                icon={MessageSquare}
+                label="Ответ"
+                onClick={() => setMode('reply')}
+              />
+              <ModeTab
+                active={mode === 'note'}
+                icon={Info}
+                label="Заметка"
+                note
+                onClick={() => setMode('note')}
+              />
+              <ModeTab
+                active={mode === 'resolve'}
+                icon={CheckCircle2}
+                label="Решить"
+                onClick={() => setMode('resolve')}
+              />
+            </div>
+            <div className="text-[11.5px] text-fg-subtle max-md:hidden">
+              Ответ на{' '}
+              <b className="font-semibold text-fg-muted">{thread.clientName}</b> · в приложение
+            </div>
           </div>
-          <div className="text-[11.5px] text-fg-subtle max-md:hidden">
-            Ответ на <b className="font-semibold text-fg-muted">{conv.name}</b> · в приложение и
-            push
-          </div>
-        </div>
 
-        <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {quickReplies.map((q) => (
-            <button
-              key={q.key}
-              type="button"
-              onClick={() => setText((t) => (t ? `${t} ${q.text}` : q.text))}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border-[0.5px] border-border px-2.5 py-1 text-[12px] text-fg-muted transition-colors hover:border-border-strong hover:text-fg"
-            >
-              <span className="font-mono text-[11px] text-fg-subtle">{q.key}</span>
-              {q.text}
-            </button>
-          ))}
-          <button
-            type="button"
-            className="inline-flex shrink-0 items-center rounded-full border-[0.5px] border-dashed border-border px-2.5 py-1 text-[12px] text-fg-subtle transition-colors hover:border-border-strong hover:text-fg"
-          >
-            + Шаблон
-          </button>
-        </div>
-
-        <div className="mt-2 flex items-end gap-2">
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-                e.preventDefault();
-                send();
-              }
-            }}
-            rows={2}
-            placeholder="Напишите ответ… ⌘↵ — отправить"
-            className="min-h-[40px] max-h-[140px] flex-1 resize-none rounded-xl border-[0.5px] border-border bg-surface px-3 py-2 text-[13.5px] text-fg outline-none transition-colors placeholder:text-fg-subtle focus:border-fg-subtle"
-          />
-          <div className="flex shrink-0 items-center gap-1 pb-0.5">
-            <button type="button" className={HTBTN} aria-label="Прикрепить">
-              <Paperclip className="size-4" />
-            </button>
-            <button type="button" className={HTBTN} aria-label="Эмодзи">
-              <Smile className="size-4" />
-            </button>
-            <button
-              type="button"
-              onClick={send}
-              aria-label="Отправить"
-              title="Отправить ⌘↵"
-              className="grid size-9 place-items-center rounded-xl bg-fg text-bg transition-colors hover:bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-primary dark:text-[#06120c] dark:hover:bg-[#5ee9b8]"
-            >
-              <Send className="size-4" />
-            </button>
+          <div className="mt-2 flex items-end gap-2">
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                  e.preventDefault();
+                  send();
+                }
+              }}
+              rows={2}
+              placeholder="Напишите ответ… ⌘↵ — отправить"
+              className="max-h-[140px] min-h-[40px] flex-1 resize-none rounded-xl border-[0.5px] border-border bg-surface px-3 py-2 text-[13.5px] text-fg outline-none transition-colors placeholder:text-fg-subtle focus:border-fg-subtle"
+            />
+            <div className="flex shrink-0 items-center gap-1 pb-0.5">
+              <button type="button" className={HTBTN} aria-label="Прикрепить">
+                <Paperclip className="size-4" />
+              </button>
+              <button type="button" className={HTBTN} aria-label="Эмодзи">
+                <Smile className="size-4" />
+              </button>
+              <button
+                type="button"
+                onClick={send}
+                disabled={!text.trim() || isSending}
+                aria-label="Отправить"
+                title="Отправить ⌘↵"
+                className={cn(
+                  'grid size-9 place-items-center rounded-xl bg-fg text-bg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-primary dark:text-[#06120c] dark:hover:bg-[#5ee9b8]',
+                  !text.trim() || isSending ? 'cursor-not-allowed opacity-50' : 'hover:bg-black',
+                )}
+              >
+                <Send className="size-4" />
+              </button>
+            </div>
           </div>
         </div>
+      )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Public ThreadPane — fetches thread data and renders
+// ---------------------------------------------------------------------------
+
+export interface ThreadPaneProps {
+  /** Active thread (from inbox list), null when none selected. */
+  activeThread: StaffThread | null;
+  role: Role;
+}
+
+/** Центральная колонка: шапка диалога, лента сообщений, composer (owner-only). */
+export function ThreadPane({ activeThread, role }: ThreadPaneProps) {
+  const threadQuery = useThread(activeThread?.id ?? null);
+
+  if (!activeThread) {
+    return (
+      <div className="flex min-h-0 flex-col bg-bg">
+        <NoThreadPlaceholder />
       </div>
+    );
+  }
+
+  if (threadQuery.isPending) {
+    return (
+      <div className="flex min-h-0 flex-col bg-bg">
+        <PageLoading />
+      </div>
+    );
+  }
+
+  const messages = threadQuery.data?.messages ?? [];
+
+  return (
+    <div className="flex min-h-0 flex-col bg-bg">
+      <LoadedThreadPane
+        thread={activeThread}
+        messages={messages}
+        role={role}
+      />
     </div>
   );
 }
