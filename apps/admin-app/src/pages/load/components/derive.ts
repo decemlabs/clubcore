@@ -12,33 +12,30 @@
  * MSK-safe: date-only strings ('YYYY-MM-DD') are parsed via parseISO (local
  * midnight) per CLAUDE.md — NEVER new Date(dateOnlyString) which has a DST risk.
  */
-import { parseISO } from 'date-fns'
-import type {
-  VisitsReportDailyBucket,
-  VisitsReportHourlyBucket,
-} from '@/features/reports/schemas'
+import { parseISO } from 'date-fns';
+import type { VisitsReportDailyBucket, VisitsReportHourlyBucket } from '@/features/reports/schemas';
 
 // ---------------------------------------------------------------------------
 // Day-of-week breakdown
 // ---------------------------------------------------------------------------
 
 /** Russian Mon-first weekday labels. */
-const DOW_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'] as const
+const DOW_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'] as const;
 
 export interface DayOfWeekStat {
   /** 0 = Пн … 6 = Вс */
-  weekday: number
+  weekday: number;
   /** Russian abbreviation: 'Пн', 'Вт', … */
-  label: string
+  label: string;
   /** Sum of visit counts across all days that fall on this weekday. */
-  total: number
+  total: number;
   /** Number of calendar days in the range that mapped to this weekday. */
-  daysWithData: number
+  daysWithData: number;
   /**
    * Average visits per occurrence of this weekday.
    * Guarded: 0 when daysWithData === 0 (never NaN).
    */
-  avgPerWeekday: number
+  avgPerWeekday: number;
 }
 
 /**
@@ -55,25 +52,25 @@ export function deriveDayOfWeek(daily: VisitsReportDailyBucket[]): DayOfWeekStat
     total: 0,
     daysWithData: 0,
     avgPerWeekday: 0,
-  }))
+  }));
 
   for (const bucket of daily) {
     // parseISO('YYYY-MM-DD') → local midnight — no DST shift (per CLAUDE.md).
-    const d = parseISO(bucket.date)
+    const d = parseISO(bucket.date);
     // getDay(): 0=Sun, 1=Mon … 6=Sat → shift to Mon=0 … Sun=6.
-    const dow = (d.getDay() + 6) % 7
-    const stat = stats[dow]
-    if (stat === undefined) continue // noUncheckedIndexedAccess guard
-    stat.total += bucket.count
-    stat.daysWithData += 1
+    const dow = (d.getDay() + 6) % 7;
+    const stat = stats[dow];
+    if (stat === undefined) continue; // noUncheckedIndexedAccess guard
+    stat.total += bucket.count;
+    stat.daysWithData += 1;
   }
 
   // Compute averages after accumulation so the guard is applied once per slot.
   for (const stat of stats) {
-    stat.avgPerWeekday = stat.daysWithData === 0 ? 0 : stat.total / stat.daysWithData
+    stat.avgPerWeekday = stat.daysWithData === 0 ? 0 : stat.total / stat.daysWithData;
   }
 
-  return stats
+  return stats;
 }
 
 // ---------------------------------------------------------------------------
@@ -82,30 +79,33 @@ export function deriveDayOfWeek(daily: VisitsReportDailyBucket[]): DayOfWeekStat
 
 export interface PeakHour {
   /** 0–23 */
-  hour: number
+  hour: number;
   /** Visit count at this hour. */
-  count: number
+  count: number;
 }
 
 /**
  * Returns the busiest hour from the hourly visit buckets.
  *
- * - All counts zero (or empty input) → null.
- * - Tie between two equal maxima → the EARLIER hour wins (first-found argmax).
+ * - All counts ≤ 0 (or empty input) → null.
+ * - Tie between two equal maxima → the EARLIER hour wins.
+ *
+ * Order-independent: the tie-break compares the `hour` value, not array index, so
+ * SPARSE/unordered input (as the schema documents) yields the correct earlier hour.
  */
 export function derivePeakHour(hourly: VisitsReportHourlyBucket[]): PeakHour | null {
-  // Spread can throw on very large arrays but VisitsReport is bounded to 24 items.
-  const maxCount = Math.max(...hourly.map((b) => b.count), 0)
-  if (maxCount === 0) return null
-
-  // First (lowest-index) bucket whose count equals the max → earlier-hour tie-break.
+  let best: PeakHour | null = null;
   for (const bucket of hourly) {
-    if (bucket.count === maxCount) {
-      return { hour: bucket.hour, count: bucket.count }
+    if (bucket.count <= 0) continue;
+    if (
+      best === null ||
+      bucket.count > best.count ||
+      (bucket.count === best.count && bucket.hour < best.hour)
+    ) {
+      best = { hour: bucket.hour, count: bucket.count };
     }
   }
-  // Unreachable (maxCount > 0 guarantees a match), but satisfies TypeScript.
-  return null
+  return best;
 }
 
 // ---------------------------------------------------------------------------
@@ -123,13 +123,13 @@ const FREQ_RANGES: ReadonlyArray<{ label: string; max: number }> = [
   { label: '15–19', max: 20 },
   { label: '20–24', max: 25 },
   { label: '25+', max: Infinity },
-]
+];
 
 export interface FrequencyBucket {
   /** Range label, e.g. '0–4', '25+'. Uses en-dash (U+2013). */
-  label: string
+  label: string;
   /** Number of calendar days whose visit count fell in this range. */
-  count: number
+  count: number;
 }
 
 /**
@@ -139,17 +139,17 @@ export interface FrequencyBucket {
  * Returns exactly 6 zero-filled buckets. Empty input → all counts 0.
  */
 export function deriveFrequency(daily: VisitsReportDailyBucket[]): FrequencyBucket[] {
-  const buckets: FrequencyBucket[] = FREQ_RANGES.map(({ label }) => ({ label, count: 0 }))
+  const buckets: FrequencyBucket[] = FREQ_RANGES.map(({ label }) => ({ label, count: 0 }));
 
   for (const day of daily) {
-    const idx = FREQ_RANGES.findIndex((r) => day.count < r.max)
+    const idx = FREQ_RANGES.findIndex((r) => day.count < r.max);
     // findIndex returns -1 only when no range matches; the last range has max=Infinity
     // so this can never happen. Guard added for noUncheckedIndexedAccess safety.
-    const bucket = buckets[idx === -1 ? buckets.length - 1 : idx]
+    const bucket = buckets[idx === -1 ? buckets.length - 1 : idx];
     if (bucket !== undefined) {
-      bucket.count += 1
+      bucket.count += 1;
     }
   }
 
-  return buckets
+  return buckets;
 }
