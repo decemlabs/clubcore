@@ -478,7 +478,7 @@ Plans:
 - [x] 112-02-PLAN.md — Backend role-change: PATCH /users/{id}/role + user_role_changed LOCKED audit event + self/last-owner guards + ASGITransport tests [TEAM-01] · wave 1
 
 **Wave 2** *(blocked on 112-01 + 112-02)*
-- [ ] 112-03-PLAN.md — FE wiring: useRefundPayment + useChangeUserRole hooks + RefundModal (Cashbox + Finance, owner-gated) + ChangeRoleModal (Settings Team) + human-verify [REF-01, TEAM-01] · wave 2
+- [x] 112-03-PLAN.md — FE wiring: useRefundPayment + useChangeUserRole hooks + RefundModal (Cashbox + Finance, owner-gated) + ChangeRoleModal (Settings Team) + human-verify [REF-01, TEAM-01] · wave 2
 **UI hint**: yes
 
 ### Phase 113: Promo Codes CRUD
@@ -573,7 +573,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 112. Critical Money & Access | 2/3 | In Progress|  |
+| 112. Critical Money & Access | 3/3 | Complete   | 2026-06-15 |
 | 113. Promo Codes CRUD | 0/TBD | Not started | - |
 | 114. Attendance Analytics on Existing Reports | 0/TBD | Not started | - |
 | 115. Live & Advanced Analytics | 0/TBD | Not started | - |
