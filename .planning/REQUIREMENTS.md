@@ -29,7 +29,7 @@
 
 ### Data Export (P2 — backend csv_export ready)
 
-- [ ] **EXP-01**: Owner can export payments to CSV (RFC-4180 + BOM) over a date range.
+- [x] **EXP-01**: Owner can export payments to CSV (RFC-4180 + BOM) over a date range.
 - [ ] **EXP-02**: Owner can export attendance/visits to CSV over a date range.
 
 ### Staff Messaging (P2 — messaging module ready)
@@ -75,7 +75,7 @@
 | ANL-02 | 115 | Complete |
 | ANL-03 | 115 | Complete |
 | ANL-04 | 115 | Complete |
-| EXP-01 | 116 | Pending |
+| EXP-01 | 116 | Complete |
 | EXP-02 | 116 | Pending |
 | MSG-01 | 116 | Complete |
 | MSG-02 | 116 | Complete |
