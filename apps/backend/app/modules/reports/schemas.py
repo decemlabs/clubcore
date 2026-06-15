@@ -300,7 +300,7 @@ class LoadNowResponse(ResponseData):
 
     count: int  # wire: count — non-negative distinct client count
     as_of: datetime  # wire: asOf — UTC server timestamp at query time
-    window_minutes: int  # wire: windowMinutes — rolling window used (seconds)
+    window_minutes: int  # wire: windowMinutes — rolling window length in minutes
 
 
 # ---------------------------------------------------------------------------
