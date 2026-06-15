@@ -60,11 +60,11 @@ export interface PromoCodeModalProps {
 // Helpers: numeric coercion
 // ---------------------------------------------------------------------------
 
-/** Parse an integer field: empty → undefined, non-integer/NaN → NaN. */
+/** Parse an integer field: empty or non-integer → undefined, else the integer. */
 function parseIntField(value: string): number | undefined {
   if (value === '') return undefined
   const n = Number(value)
-  return Number.isInteger(n) ? n : NaN
+  return Number.isInteger(n) ? n : undefined
 }
 
 // ---------------------------------------------------------------------------
