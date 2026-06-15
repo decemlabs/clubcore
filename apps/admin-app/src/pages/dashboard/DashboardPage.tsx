@@ -1,20 +1,21 @@
 /**
- * Dashboard landing page (Phase 104-02).
+ * Dashboard landing page (Phase 104-02 / Phase 115-04).
  *
  * Universal landing: both roles land on /.
- * Owner sees full analytics layout (KPI + Occupancy + Revenue + TopTrainers + Schedule + Expiring).
+ * Owner sees full analytics layout (KPI + Occupancy + Revenue + TopTrainers + Schedule + Expiring + ActivityFeed).
  * Reception sees ONLY operational widgets: ScheduleToday + ExpiringMemberships.
  *
  * Owner-only cards are NOT rendered for reception — not locked, not placeholdered — absent.
  * CR-01 fix: owner-only hooks live in DashboardOwnerSection which only MOUNTS when
  * isOwner === true → hooks NEVER instantiated for reception → zero owner-only API calls (T-104-04).
  *
+ * T-115-D1: useActivityFeed is enabled:can(role,'view','audit-log') — reception never fetches.
+ *
  * ClientMessages: hidden for ALL roles (no staff-chat backend).
  * OccupancyNow: hidden for ALL roles (no real-time endpoint).
- * ActivityFeed: hidden for all roles — using EmptyState with link to /audit-log.
+ * ActivityFeed: real data from GET /api/v1/audit-log (Phase 115-04 ANL-04).
  */
 import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
 import { useSession } from '@/features/auth/api';
 import {
   useScheduleToday,
@@ -23,11 +24,12 @@ import {
   useVisitsReport,
   useClientsReport,
   useTrainersReport,
+  useActivityFeed,
 } from '@/features/dashboard/api';
 import { can } from '@/shared/session/can';
-import { ROUTES } from '@/app/routes';
-import { Activity } from '@/components/icons';
+import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/feedback/EmptyState';
+import { Activity } from '@/components/icons';
 import { mskTodayISO, mskDaysAgoISO } from '@/lib/format';
 import type { Role } from '@/shared/session/types';
 import type { BookingData } from '@/features/bookings/schemas';
@@ -39,6 +41,7 @@ import { ScheduleToday } from './components/ScheduleToday';
 import { ExpiringMemberships } from './components/ExpiringMemberships';
 import { RevenueChart } from './components/RevenueChart';
 import { TopTrainers } from './components/TopTrainers';
+import { ActivityFeed } from './components/ActivityFeed';
 
 // ---------------------------------------------------------------------------
 // Outer component — calls only both-role hooks; owner section mounts separately
@@ -168,6 +171,8 @@ function DashboardOwnerSection({
     { fromDate: monthStart, toDate: today },
     role,
   );
+  // T-115-D1: enabled:can(role,'view','audit-log') — never fires for reception.
+  const activityFeedQ = useActivityFeed(role);
 
   // CR-02 fix: extract today's revenue bucket only (not a 30-day sum).
   // The revenue query covers 30 days for the chart; find the bucket whose period === today.
@@ -222,21 +227,19 @@ function DashboardOwnerSection({
       {/* OccupancyNow: hidden — no real-time endpoint */}
       {/* ClientMessages: hidden — no staff-chat backend */}
 
-      {/* ActivityFeed: disabled — link to audit-log instead of expensive fetch */}
-      <EmptyState
-        icon={Activity}
-        title="Активность"
-        message="Доступна в журнале действий"
-        action={
-          <Link
-            to={ROUTES.audit}
-            className="mt-1 text-[13px] font-semibold text-primary-deep hover:underline dark:text-primary"
-          >
-            Перейти →
-          </Link>
-        }
-        className="rounded-xl border-[0.5px] border-border bg-surface py-10 shadow-1"
-      />
+      {/* ActivityFeed — real data from GET /api/v1/audit-log (Phase 115-04 ANL-04) */}
+      {activityFeedQ.isPending ? (
+        <Skeleton className="h-[220px] w-full rounded-xl" />
+      ) : activityFeedQ.isError ? (
+        <EmptyState
+          icon={Activity}
+          title="Активность недоступна"
+          message="Не удалось загрузить ленту событий"
+          className="rounded-xl border-[0.5px] border-border bg-surface py-10 shadow-1"
+        />
+      ) : activityFeedQ.data != null ? (
+        <ActivityFeed data={activityFeedQ.data} />
+      ) : null}
     </>
   );
 }
