@@ -121,6 +121,12 @@ export const routeConfig: RouteObject[] = [
         }),
         handle: { breadcrumb: ['Настройки', 'Журнал действий'] },
       },
+      {
+        path: ROUTES.messages,
+        lazy: async () => ({
+          Component: (await import('@/pages/messages/MessagesPage')).MessagesPage,
+        }),
+      },
 
       // --- Отложенные маршруты (FND-04 hide-for-future) — рендерят <ComingSoon/> ---
       // Файлы страниц сохранены в дереве; подключаются в будущих фазах.
@@ -130,7 +136,6 @@ export const routeConfig: RouteObject[] = [
         element: <ComingSoon />,
         handle: { breadcrumb: ['Филиалы'] },
       },
-      { path: ROUTES.messages,       element: <ComingSoon /> },
       { path: ROUTES.notifications,  element: <ComingSoon /> },
       {
         path: ROUTES.systemSettings,

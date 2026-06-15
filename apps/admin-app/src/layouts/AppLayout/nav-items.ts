@@ -6,6 +6,7 @@ import {
   CreditCard,
   UserCog,
   Wallet,
+  MessageSquare,
   BarChart3,
   Activity,
   Clock,
@@ -19,8 +20,11 @@ import { ROUTES } from '@/app/routes';
 // ownerOnly items are gated via can(role, 'view', ownerResource).
 // ownerResource must be set explicitly on every ownerOnly item so the sidebar
 // filter does not have to guess from the URL path (WR-02).
-// Deferred items (Сообщения, Уведомления, Филиалы) are removed entirely from
+// Deferred items (Уведомления, Филиалы) are removed entirely from
 // NAV_SECTIONS; they are gone for ALL roles (FND-04 hide-for-future).
+// «Сообщения» (v3.2 Phase 116 staff inbox) is active and visible to BOTH roles;
+// reception is read-only — the reply composer is gated owner-only inside
+// MessagesPage via can(role, 'create', 'messages').
 
 export interface NavItem {
   label: string;
@@ -55,6 +59,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { label: 'Расписание', to: ROUTES.schedule, icon: Calendar },
       { label: 'Абонементы', to: ROUTES.plans, icon: CreditCard },
       { label: 'Тренеры', to: ROUTES.trainers, icon: UserCog, badge: 12 },
+      { label: 'Сообщения', to: ROUTES.messages, icon: MessageSquare },
       { label: 'Касса', to: ROUTES.cashbox, icon: Wallet, ownerOnly: true, ownerResource: 'payments' },
     ],
   },
