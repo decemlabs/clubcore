@@ -33,7 +33,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import audit
 from app.core.audit_hash import payment_row_hash
 from app.core.dependencies import CurrentUser
-from app.core.exceptions import ConflictError, NotFoundError
+from app.core.exceptions import (
+    CannotRefundRefundError,
+    ConflictError,
+    NotFoundError,
+    OverRefundError,
+)
 from app.modules.payments import repository
 from app.modules.payments.constants import (
     SUBJECT_KIND_MEMBERSHIP,
@@ -241,9 +246,82 @@ async def issue_refund(  # noqa: SVC001 caller-owns-txn — refund orchestrator 
     return refund_payment
 
 
+async def refund_arbitrary_payment(
+    session: AsyncSession,
+    *,
+    payment_id: UUID,
+    amount_kopecks: int,
+    reason: str,
+    audit_actor: CurrentUser,
+) -> Payment:
+    """REF-01 Phase 112 — refund any non-refund payment row by direct payment_id.
+
+    Unlike issue_refund (which takes subject_kind/subject_id), this function
+    fetches the original by ID, validates it is not itself a refund row, validates
+    amount_kopecks <= original.amount_kopecks, inserts a negative-amount row,
+    and emits refund_issued audit. This function owns the UoW (flush + commit).
+
+    Guards (in order):
+      1. Not found        → OriginalPaymentNotFoundError (404)
+      2. Is a refund row  → CannotRefundRefundError (409)
+      3. Over-refund      → OverRefundError (409)
+      4. Duplicate (UNIQUE constraint) → AlreadyRefundedError (409)
+    """
+    original = await repository.get_payment_by_id(session, payment_id)
+    if original is None:
+        raise OriginalPaymentNotFoundError("original_payment_not_found")
+
+    if original.subject_kind == SUBJECT_KIND_REFUND:
+        raise CannotRefundRefundError("cannot_refund_refund")
+
+    if amount_kopecks > original.amount_kopecks:
+        raise OverRefundError("over_refund")
+
+    original_hash = payment_row_hash(_payment_row_dict(original))
+
+    refund_payment = await repository.insert_payment(
+        session,
+        subject_kind=SUBJECT_KIND_REFUND,
+        subject_id=original.subject_id,
+        amount_kopecks=-amount_kopecks,
+        method=original.method,
+        received_by_user_id=audit_actor.id,
+        refund_of=original.id,
+    )
+    try:
+        await session.flush()
+    except IntegrityError as exc:
+        await session.rollback()
+        if repository._is_refund_of_uniqueness_conflict(exc):
+            raise AlreadyRefundedError("already_refunded") from exc
+        raise
+
+    # Cast UUID kwargs to str — JSONB encoder rejects raw UUIDs (see record_payment).
+    # Pass original.subject_kind (not 'refund') per RefundIssuedPayload constraint.
+    await audit.emit(
+        session,
+        "refund_issued",
+        actor_user_id=audit_actor.id,
+        resource_type="payment",
+        resource_id=refund_payment.id,
+        payment_id=str(refund_payment.id),
+        refund_of_payment_id=str(original.id),
+        amount_kopecks=refund_payment.amount_kopecks,
+        subject_kind=original.subject_kind,
+        subject_id=str(original.subject_id),
+        received_by_user_id=str(audit_actor.id),
+        reason=reason,
+        payment_row_hash=original_hash,
+    )
+    await session.flush()
+    await session.commit()
+    return refund_payment
+
+
 __all__ = (
     "AlreadyRefundedError",
     "OriginalPaymentNotFoundError",
     "issue_refund",
     "record_payment",
+    "refund_arbitrary_payment",
 )

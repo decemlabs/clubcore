@@ -1,9 +1,10 @@
-"""Payments router — 3 GET endpoints (Phase 32 PAY-06..08 / D-32-25).
+"""Payments router — GET endpoints + POST refund (Phase 32 PAY-06..08 / Phase 112 REF-01).
 
-Endpoint surface (read-only in Plan 32-01 — mutations land in Plan 32-02/03):
+Endpoint surface:
   - GET /api/v1/payments               — global list, owner-only (VIEW, PAYMENTS).
   - GET /api/v1/payments/by-client/{id}     — reception+owner via scoped Depends.
   - GET /api/v1/payments/by-membership/{id} — reception+owner via scoped Depends.
+  - POST /api/v1/payments/{payment_id}/refund — owner-only manual ledger refund (REF-01).
 
 Permission mapping:
   - GET / (global) uses ``require_permission(Action.VIEW, Resource.PAYMENTS)`` →
@@ -11,8 +12,11 @@ Permission mapping:
   - Scoped routes use ``require_payments_view_for_subject()`` which admits
     both owner and reception (PAY-07 — reception needs visibility on detail
     pages).
+  - POST /{id}/refund uses ``require_permission(Action.REFUND, Resource.FINANCE)`` +
+    ``verify_csrf``; ``(REFUND, FINANCE)`` is in ``OWNER_ONLY`` → reception 403.
 
-All three return ``ResponseEnvelope[PaginatedData[PaymentResponse]]``.
+All GET routes return ``ResponseEnvelope[PaginatedData[PaymentResponse]]``.
+POST /refund returns ``ResponseEnvelope[PaymentResponse]`` (201 new ledger row).
 """
 
 from __future__ import annotations
@@ -20,17 +24,18 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.dependencies import CurrentUser, require_permission
+from app.core.dependencies import CurrentUser, require_permission, verify_csrf
 from app.core.pagination import PaginatedData
 from app.core.permissions import Action, Resource
 from app.core.schemas import ResponseEnvelope, envelope
 from app.modules.payments import repository
+from app.modules.payments import service as payments_service
 from app.modules.payments.permissions import require_payments_view_for_subject
-from app.modules.payments.schemas import PaymentListQuery, PaymentResponse
+from app.modules.payments.schemas import PaymentListQuery, PaymentRefundRequest, PaymentResponse
 
 router = APIRouter(tags=["Payments"])
 
@@ -100,3 +105,35 @@ async def list_payments_by_membership(
         session, membership_id, page=page, page_size=page_size
     )
     return envelope(page_data)
+
+
+@router.post(
+    "/{payment_id}/refund",
+    status_code=status.HTTP_201_CREATED,
+    response_model=ResponseEnvelope[PaymentResponse],
+    summary="Issue a manual ledger refund for any recorded payment (owner-only; REF-01)",
+)
+async def refund_payment_endpoint(
+    payment_id: UUID,
+    payload: PaymentRefundRequest,
+    actor: Annotated[CurrentUser, Depends(require_permission(Action.REFUND, Resource.FINANCE))],
+    _csrf: Annotated[None, Depends(verify_csrf)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[PaymentResponse]:
+    """REF-01 / Phase 112 — owner-only; RBAC-04: require_permission before verify_csrf.
+
+    Posts a negative-amount refund row for any recorded non-refund payment.
+    Partial refunds (amount_kopecks <= original) are accepted; over-refunds
+    (amount_kopecks > original) return 409 over_refund. A second refund of
+    the same original returns 409 already_refunded (unique-constraint). Trying
+    to refund a refund row returns 409 cannot_refund_refund. Missing payment
+    returns 404 original_payment_not_found.
+    """
+    refund = await payments_service.refund_arbitrary_payment(
+        session,
+        payment_id=payment_id,
+        amount_kopecks=payload.amount_kopecks,
+        reason=payload.reason,
+        audit_actor=actor,
+    )
+    return envelope(PaymentResponse.model_validate(refund))
