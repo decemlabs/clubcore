@@ -477,6 +477,52 @@ async def trainer_usage_csv_rows(
 
 
 # ---------------------------------------------------------------------------
+# Payments CSV export (Phase 116 EXP-01)
+# ---------------------------------------------------------------------------
+
+
+async def payments_csv_rows(
+    session: AsyncSession,
+    *,
+    from_date: date,
+    to_date: date,
+) -> list[list[object]]:
+    """Build payments CSV data rows from the ledger (Phase 116 EXP-01).
+
+    Thin orchestrator: validate date range -> fetch raw ledger rows ->
+    format each field into CSV_PAYMENTS_HEADERS column order.
+
+    Column order (CSV_PAYMENTS_HEADERS):
+      date, clientName, amountRubles, method, subjectKind, refundOf, operatorEmail
+
+    Formula-injection guard (CR-01 / T-116-08):
+      - clientName: wrapped in sanitize_csv_text (user-derived free text).
+      - operatorEmail: wrapped in sanitize_csv_text (user-derived free text).
+      - amountRubles: NOT sanitized — signed ruble values legitimately start with '-'
+        for refunds (csv_export.py:32-35 documenting the exclusion).
+
+    Money formatting: format_kopecks_as_rubles (D-13; period decimal, no grouping).
+    refundOf: str(uuid) for refund rows, empty string otherwise.
+
+    Read-only: NO session.commit(), NO session.flush() (caller-owns-txn).
+    """
+    _validate_date_range(from_date, to_date)
+    raw_rows = await repository.fetch_payments_for_csv(session, from_date, to_date)
+    return [
+        [
+            row["received_at_msk"],
+            csv_export.sanitize_csv_text(str(row["client_name"] or "")),
+            csv_export.format_kopecks_as_rubles(int(row["amount_kopecks"])),
+            row["method"],
+            row["subject_kind"],
+            str(row["refund_of"]) if row["refund_of"] else "",
+            csv_export.sanitize_csv_text(str(row["operator_email"] or "")),
+        ]
+        for row in raw_rows
+    ]
+
+
+# ---------------------------------------------------------------------------
 # Advanced analytics service functions (Phase 115 ANL-02..04)
 # ---------------------------------------------------------------------------
 

@@ -48,6 +48,20 @@ CSV_CLIENTS_HEADERS: tuple[str, ...] = (
 CSV_VISITS_HEADERS: tuple[str, ...] = ("date", "count")
 
 # ---------------------------------------------------------------------------
+# Payments ledger CSV header constants (Phase 116 EXP-01)
+# ---------------------------------------------------------------------------
+
+CSV_PAYMENTS_HEADERS: tuple[str, ...] = (
+    "date",           # received_at MSK date (YYYY-MM-DD)
+    "clientName",     # client first_name + last_name; empty for non-client payments
+    "amountRubles",   # amount_kopecks / 100 (format_kopecks_as_rubles, D-13)
+    "method",         # 'cash' | 'online'
+    "subjectKind",    # 'membership' | 'pt_package' | 'refund'
+    "refundOf",       # UUID of original payment for refund rows, empty otherwise
+    "operatorEmail",  # received_by user email; empty when NULL (online payments)
+)
+
+# ---------------------------------------------------------------------------
 # Trainer-usage report constants (Phase 60 RPT-01..04)
 # ---------------------------------------------------------------------------
 
@@ -104,6 +118,7 @@ __all__ = (
     "COHORT_MAX_MONTHS",
     "CSV_AUDIT_LOG_HEADERS",
     "CSV_CLIENTS_HEADERS",
+    "CSV_PAYMENTS_HEADERS",
     "CSV_REVENUE_HEADERS",
     "CSV_TRAINER_USAGE_HEADERS",
     "CSV_VISITS_HEADERS",

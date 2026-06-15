@@ -50,6 +50,7 @@ __all__ = (
     "fetch_expiring_memberships_count",
     "fetch_load_now_count",
     "fetch_new_clients_count",
+    "fetch_payments_for_csv",
     "fetch_revenue_buckets",
     "fetch_trainer_usage",
     "fetch_visit_anomaly_daily",
@@ -279,6 +280,110 @@ ORDER BY session_count DESC, t.full_name ASC, t.id ASC
         .mappings()
         .all()
     )
+    return [dict(r) for r in rows]
+
+
+async def fetch_payments_for_csv(
+    session: AsyncSession,
+    from_date: date,
+    to_date: date,
+) -> list[dict[str, Any]]:
+    """Fetch payments ledger rows for CSV export (Phase 116 EXP-01).
+
+    CROSS-MODULE READ — raw SQL text() only; ZERO ORM imports from other modules.
+    Verified columns (apps/backend/app/modules/payments/models.py:52-99):
+      - amount_kopecks        Integer NOT NULL signed (negative for subject_kind='refund')
+      - method                Text NOT NULL ('cash' | 'online')
+      - subject_kind          Text NOT NULL ('membership' | 'pt_package' | 'refund')
+      - subject_id            UUID NOT NULL
+      - received_at           DateTime(timezone=True) NOT NULL
+      - received_by_user_id   UUID nullable (NULL for online/webhook payments)
+      - refund_of             UUID nullable (FK->payments.id for refund rows)
+
+    Client name resolution rule (documented per plan output requirement):
+      - For 'membership'/'pt_package' rows: LEFT JOIN clients via memberships/pt_packages
+        on subject_id. Simple self-join via orig payments for 'refund' rows: first
+        resolve the original payment's subject, then look up the client from there.
+      - Strategy: use a subquery that tries membership -> client and pt_package -> client
+        for the row's own subject_id. For refund rows, walk back to original payment via
+        refund_of, then apply the same logic to orig.subject_id / orig.subject_kind.
+        When no client can be resolved (e.g. unknown subject_kind), returns empty string.
+      - Clients are joined on NOT deleted (deleted_at IS NULL) — soft-delete guard.
+
+    Date range filter: half-open MSK range [from_date 00:00 MSK, to_date+1 00:00 MSK),
+    expressed as BETWEEN :from_date AND :to_date on the MSK-projected date (inclusive).
+    Matches the established convention in fetch_revenue_buckets (D-54-08).
+
+    Ordering: received_at ASC, id ASC — chronological export.
+    No session.commit() — caller-owns-txn (D-32-10/D-49-19).
+    """
+    _sql = (
+        "SELECT "
+        "  (p.received_at AT TIME ZONE 'Europe/Moscow')::date::text"
+        "    AS received_at_msk, "
+        "  COALESCE("
+        "    CASE"
+        "      WHEN p.subject_kind IN ('membership', 'pt_package')"
+        "           THEN ("
+        "             SELECT c.first_name || ' ' || c.last_name"
+        "             FROM clients c"
+        "             WHERE c.id = ("
+        "               SELECT mem.client_id FROM memberships mem"
+        "               WHERE mem.id = p.subject_id"
+        "               UNION ALL"
+        "               SELECT pkg.client_id FROM pt_packages pkg"
+        "               WHERE pkg.id = p.subject_id"
+        "               LIMIT 1"
+        "             )"
+        "             AND c.deleted_at IS NULL"
+        "             LIMIT 1"
+        "           )"
+        "      WHEN p.subject_kind = 'refund' AND p.refund_of IS NOT NULL"
+        "           THEN ("
+        "             SELECT c.first_name || ' ' || c.last_name"
+        "             FROM clients c"
+        "             WHERE c.id = ("
+        "               SELECT"
+        "                 CASE"
+        "                   WHEN orig.subject_kind IN ('membership', 'pt_package')"
+        "                        THEN ("
+        "                          SELECT mem2.client_id FROM memberships mem2"
+        "                          WHERE mem2.id = orig.subject_id"
+        "                          UNION ALL"
+        "                          SELECT pkg2.client_id FROM pt_packages pkg2"
+        "                          WHERE pkg2.id = orig.subject_id"
+        "                          LIMIT 1"
+        "                        )"
+        "                   ELSE NULL"
+        "                 END"
+        "               FROM payments orig"
+        "               WHERE orig.id = p.refund_of"
+        "               LIMIT 1"
+        "             )"
+        "             AND c.deleted_at IS NULL"
+        "             LIMIT 1"
+        "           )"
+        "      ELSE NULL"
+        "    END,"
+        "    ''"
+        "  ) AS client_name, "
+        "  p.amount_kopecks, "
+        "  p.method, "
+        "  p.subject_kind, "
+        "  p.refund_of, "
+        "  u.email AS operator_email "
+        "FROM payments p "
+        "LEFT JOIN users u ON u.id = p.received_by_user_id "
+        "WHERE (p.received_at AT TIME ZONE 'Europe/Moscow')::date "
+        "      BETWEEN :from_date AND :to_date "
+        "ORDER BY p.received_at ASC, p.id ASC"
+    )
+    rows = (
+        await session.execute(
+            text(_sql),
+            {"from_date": from_date, "to_date": to_date},
+        )
+    ).mappings().all()
     return [dict(r) for r in rows]
 
 
