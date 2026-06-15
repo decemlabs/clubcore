@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v3.2
 milestone_name: Admin — Wire the Rest
 status: verifying
-stopped_at: Phase 113 executed — automated verify 14/14, 4 browser-UAT deferred
-last_updated: "2026-06-15T10:31:23.179Z"
+stopped_at: Phase 114 executed — automated verify 9/9, 4 browser-UAT deferred
+last_updated: "2026-06-15T10:42:32.944Z"
 last_activity: 2026-06-15
 progress:
   total_phases: 6
@@ -234,8 +234,8 @@ v3.0 in-progress deferrals:
 
 ## Session Continuity
 
-Last session: 2026-06-15T10:31:23.174Z
-Stopped at: Phase 113 executed — automated verify 14/14, 4 browser-UAT deferred
+Last session: 2026-06-15T10:42:32.939Z
+Stopped at: Phase 114 executed — automated verify 9/9, 4 browser-UAT deferred
 Resume: `/gsd:plan-phase 112` (Critical Money & Access — arbitrary payment refund + staff role-change).
 
 ## Operator Next Steps
