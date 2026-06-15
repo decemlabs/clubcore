@@ -529,7 +529,7 @@ Plans:
 - [x] 115-01-PLAN.md — Backend: cohort / anomaly / at-risk / load-now aggregate routes (raw-SQL window functions on existing reports module; owner-only)
 - [x] 115-02-PLAN.md — Backend: ASGITransport integration tests (owner-200 + reception-403 + empty/small-sample) for the four new endpoints
 - [x] 115-03-PLAN.md — Frontend: reports Zod/hooks + CohortRetentionCard / VisitAnomalyCard / AtRiskWidget + LiveNowCard wiring on Load page
-- [ ] 115-04-PLAN.md — Frontend: dashboard ActivityFeed→audit-log mapper/hook + real TopTrainers/RevenueChart verification (mock removal, ANL-04)
+- [x] 115-04-PLAN.md — Frontend: dashboard ActivityFeed→audit-log mapper/hook + real TopTrainers/RevenueChart verification (mock removal, ANL-04)
 **UI hint**: yes
 
 ### Phase 116: Chat Inbox & Exports
@@ -585,7 +585,7 @@ Plans:
 | 112. Critical Money & Access | 3/3 | Complete   | 2026-06-15 |
 | 113. Promo Codes CRUD | 3/3 | Complete   | 2026-06-15 |
 | 114. Attendance Analytics on Existing Reports | 2/2 | Complete   | 2026-06-15 |
-| 115. Live & Advanced Analytics | 3/4 | In Progress|  |
+| 115. Live & Advanced Analytics | 4/4 | Complete   | 2026-06-15 |
 | 116. Chat Inbox & Exports | 0/TBD | Not started | - |
 | 117. OpenAPI Handoff + Milestone Gate | 0/TBD | Not started | - |
 
