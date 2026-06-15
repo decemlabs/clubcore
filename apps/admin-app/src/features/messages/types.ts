@@ -106,3 +106,36 @@ export interface MessagesData {
   quickReplies: QuickReply[];
   client: ClientPanelData;
 }
+
+// ---------------------------------------------------------------------------
+// Wire types for real staff endpoints (Phase 116)
+// These match the EXACT camelCase field names from 116-01-SUMMARY wire shapes.
+// ---------------------------------------------------------------------------
+
+export interface StaffThread {
+  id: string
+  clientId: string
+  clientName: string
+  clientInitials: string
+  lastMessageAt: string | null // ISO or null if no messages yet
+  lastMessageBody: string | null
+  lastMessageRole: 'client' | 'staff' | null
+  staffUnreadCount: number
+}
+
+export interface StaffMessage {
+  id: string
+  role: 'client' | 'staff' // open string, but 116-01 ships exactly these two values
+  body: string
+  sentAt: string // ISO
+}
+
+export interface StaffInboxData {
+  items: StaffThread[]
+  total: number
+}
+
+export interface StaffThreadData {
+  threadId: string
+  messages: StaffMessage[]
+}
