@@ -249,6 +249,14 @@ The frozenset size grows 53 → 58.
                                         # emitted co-transactionally with the ledger INSERT.
                                         # 'redemption' entry_type NOT emitted here (Phase 83).
 
+  ## v3.2 (Phase 112 lock — INFRA-15; emitted in Phase 112 users service)
+  Staff role-change lifecycle (TEAM-01):
+  Pre-registered BEFORE any callsite per INFRA-15 discipline.
+  - user_role_changed                   {changed_user_id, old_role, new_role}
+                                        # 'user' — `UserRoleChangedPayload`;
+                                        # role takes effect on target's next login;
+                                        # existing sessions keep old role (no invalidation).
+
 Architectural boundary: app.core.audit MUST NOT import from app.modules.*
 (importlinter `core-not-depend-on-modules` contract).
 """
@@ -394,6 +402,9 @@ LOCKED_AUDIT_EVENTS: frozenset[tuple[str, str]] = frozenset(
         ("user_deactivated", "user"),
         ("user_reactivated", "user"),
         ("user_soft_deleted", "user"),
+        # v3.2 (Phase 112 TEAM-01 — INFRA-15; pre-registered before the callsite)
+        # Role change persists on next login; no session invalidation (112-CONTEXT.md).
+        ("user_role_changed", "user"),
         # Password reset (Phase 44 RESET-01 / RESET-02):
         # `password_reset_requested` is emitted in BOTH known-email and
         # unknown-email branches per the anti-oracle contract (RESET-06);

@@ -1407,6 +1407,33 @@ class ReferralBonusAccruedPayload(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# v3.2 (Phase 112 lock — INFRA-15; emitted in Phase 112 users service)
+# Staff role-change lifecycle (TEAM-01):
+# Pre-registered BEFORE any callsite per INFRA-15 discipline.
+# ---------------------------------------------------------------------------
+
+
+class UserRoleChangedPayload(BaseModel):
+    """Payload schema for ("user_role_changed", "user") — Phase 112 TEAM-01.
+
+    Emitted when the owner changes a staff user's role (owner ↔ reception).
+    Role takes effect on the target's NEXT login — existing sessions keep the
+    old role until re-auth (no session invalidation per 112-CONTEXT.md
+    effect-timing decision, T-112-13 accepted risk).
+
+    ``changed_user_id`` is the UUID of the target user (stored as str at the
+    callsite per Pitfall 13 — Pydantic v2 coerces back to UUID on validate).
+    ``old_role`` and ``new_role`` are the Role.value strings ('owner' | 'reception').
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    changed_user_id: UUID
+    old_role: str = Field(pattern=r"^(owner|reception)$")
+    new_role: str = Field(pattern=r"^(owner|reception)$")
+
+
+# ---------------------------------------------------------------------------
 # Registry — single canonical (event, resource_type) → Pydantic schema map.
 # Mirrors LOCKED_AUDIT_EVENTS tuple-key shape (`audit.py:102-157`) so the
 # lookup in `audit.emit()` is a single `.get((event, resource_type))`.
@@ -1516,4 +1543,7 @@ AUDIT_PAYLOAD_SCHEMAS: dict[tuple[str, str], type[BaseModel]] = {
     # v2.6 (Phase 97 referral bonus accrual — REFER-04 / INFRA-15):
     # Pre-registered BEFORE the payment.succeeded webhook callsite.
     ("referral_bonus_accrued", "referral"): ReferralBonusAccruedPayload,
+    # v3.2 (Phase 112 TEAM-01 — staff role-change / INFRA-15):
+    # Pre-registered BEFORE any callsite per INFRA-15 discipline.
+    ("user_role_changed", "user"): UserRoleChangedPayload,
 }

@@ -86,6 +86,17 @@ class InvitationRevokeRequest(BackendSchemaBase):
     reason: str | None = Field(default=None, max_length=500)
 
 
+class UserRoleChangeRequest(BackendSchemaBase):
+    """PATCH /api/v1/users/{user_id}/role body (Phase 112 TEAM-01).
+
+    BackendSchemaBase sets extra='forbid' automatically, so unknown fields
+    in the request body raise 422 (defence-in-depth; mirrors UserCreateRequest).
+    ``role`` is the target role — either the role enum variant.
+    """
+
+    role: Role
+
+
 class InvitationAcceptRequest(BackendSchemaBase):
     """Body for POST /api/v1/users/invitations/accept (RESET-04).
 

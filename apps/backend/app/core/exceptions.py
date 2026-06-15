@@ -499,6 +499,33 @@ class OverRefundError(ConflictError):
     status_code = 409
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 112 users domain errors (TEAM-01).
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class CannotChangeOwnRoleError(ConflictError):
+    """Raised when actor tries to change their own role (Phase 112 TEAM-01).
+
+    An actor cannot change their own role — prevents self-lock or solo
+    self-escalation games (T-112-09 mitigation).
+    """
+
+    code = "cannot_change_own_role"
+    status_code = 409
+
+
+class CannotChangeLastOwnerRoleError(ConflictError):
+    """Raised when demoting the last remaining active owner (Phase 112 TEAM-01).
+
+    The gym can never be left with zero owners (T-112-10 mitigation).
+    Reuses count_active_owners_excluding row-lock guard from deactivate_user.
+    """
+
+    code = "cannot_change_last_owner_role"
+    status_code = 409
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Attach AppError handler to the FastAPI app. Called once during create_app()."""
 
