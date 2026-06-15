@@ -1,18 +1,21 @@
 /**
- * LoadPage — owner-only visits aggregate (Phase 103-03).
+ * LoadPage — owner-only visits aggregate + advanced analytics (Phase 103-03, Phase 115-03).
  *
  * RBAC: early-return Lock-EmptyState BEFORE any data hook fires.
  * Reception makes ZERO API calls when navigating to /load.
  *
- * Real data: GET /api/v1/reports/visits via useLoad(query).
- * Zero-fill: hourly (24 pts) + daily (full range) via features/load/api.ts.
- * No NaN reaches the charts.
+ * Real data:
+ *   - GET /api/v1/reports/visits via useLoad(query) — heatmap + DayOfWeek/PeakHour/Frequency
+ *   - GET /api/v1/reports/load/now via useLoadNow(role) — live headcount counter (Phase 115)
+ *   - GET /api/v1/reports/cohort via useCohortReport — cohort retention grid (Phase 115)
+ *   - GET /api/v1/reports/anomaly via useVisitAnomaly — anomaly chart (Phase 115)
+ *   - GET /api/v1/reports/at-risk via useAtRiskMembers — at-risk members (Phase 115)
  *
- * LiveNowCard: HIDDEN — no real-time endpoint in Phase 103.
- * TODO Phase 104: wire LiveNow to real-time endpoint.
+ * LiveNowCard: wired to useLoadNow — omitted silently on error (no alarming UX for approximation).
+ * T-115-F3: shows approximation sub-label "Оценка присутствующих · окно N мин".
  */
 import { useState } from 'react';
-import { useLoad } from '@/features/load/api';
+import { useLoad, useLoadNow, useCohortReport, useVisitAnomaly, useAtRiskMembers } from '@/features/load/api';
 import { useSession } from '@/features/auth/api';
 import { can } from '@/shared/session/can';
 import { PageLoading, PageError } from '@/components/feedback/PageState';
@@ -23,14 +26,17 @@ import { DateRangePicker } from '@/components/common/DateRangePicker';
 import { LoadPageHead } from './components/LoadPageHead';
 import { LoadKpis } from './components/LoadKpis';
 import { LoadHeatmapCard } from './components/LoadHeatmapCard';
+import { LiveNowCard } from './components/LiveNowCard';
 import { DayOfWeekCard } from './components/DayOfWeekCard';
 import { PeakHourCard } from './components/PeakHourCard';
 import { FrequencyCard } from './components/FrequencyCard';
 import { DurationPlaceholderCard } from './components/DurationPlaceholderCard';
-import { mskTodayISO, mskDaysAgoISO } from '@/lib/format';
+import { CohortRetentionCard } from './components/CohortRetentionCard';
+import { VisitAnomalyCard } from './components/VisitAnomalyCard';
+import { AtRiskWidget } from './components/AtRiskWidget';
+import { mskTodayISO, mskDaysAgoISO, formatTime } from '@/lib/format';
+import type { LiveData } from '@/features/load/types';
 import type { Role } from '@/shared/session/types';
-
-// LiveNowCard intentionally omitted — TODO Phase 104: wire LiveNow to real-time endpoint.
 
 export function LoadPage() {
   // RBAC guard: MUST be FIRST — before any data hook fires.
@@ -56,6 +62,41 @@ function LoadPageContent({ role }: { role: Role }) {
 
   const query = { fromDate, toDate };
   const { data, isPending, isFetching, isError, refetch } = useLoad(query, role);
+
+  // Phase 115: advanced analytics hooks (all owner-gated internally via can())
+  const { data: liveNowData, isError: liveNowError } = useLoadNow(role);
+  const { data: cohortData, isPending: cohortPending, isError: cohortError } = useCohortReport(
+    { cohortMonths: 6 },
+    role,
+  );
+  const { data: anomalyData, isPending: anomalyPending, isError: anomalyError } = useVisitAnomaly(
+    {},
+    role,
+  );
+  const { data: atRiskData, isPending: atRiskPending, isError: atRiskError } = useAtRiskMembers(role);
+
+  // Map LoadNowData → LiveData (single "Зал" zone; no real capacity from endpoint)
+  const liveData: LiveData | undefined =
+    !liveNowError && liveNowData
+      ? {
+          time: formatTime(liveNowData.asOf),
+          current: liveNowData.count,
+          capacity: 0, // capacity not provided by endpoint — meter shows 0%
+          meterPct: 0,
+          filledPct: `${liveNowData.count}`,
+          dayVisits: liveNowData.count,
+          zones: [
+            {
+              name: 'Зал',
+              metaStrong: '',
+              metaRest: `Оценка присутствующих · окно ${liveNowData.windowMinutes} мин`,
+              barPct: 0,
+              tone: 'accent' as const,
+              pct: `${liveNowData.count}`,
+            },
+          ],
+        }
+      : undefined;
 
   // Initial full-page skeleton.
   if (isPending) return <PageLoading />;
@@ -86,6 +127,9 @@ function LoadPageContent({ role }: { role: Role }) {
 
       <LoadKpis averagePerDay={averagePerDay} totalVisits={totalVisits} />
 
+      {/* LiveNowCard — wired to useLoadNow; omitted silently on error (T-115-F3). */}
+      {liveData ? <LiveNowCard data={liveData} /> : null}
+
       {/* Section skeleton on date re-fetch (keeps head+KPIs visible). */}
       {isFetching && !isPending ? (
         <Skeleton className="h-[320px] w-full rounded-xl" />
@@ -109,6 +153,15 @@ function LoadPageContent({ role }: { role: Role }) {
           </section>
         </>
       )}
+
+      {/* Phase 115: Расширенная аналитика — owner-only advanced analytics section.
+          Rendered independently from the visits range section so it always shows
+          regardless of the visits all-zero state. */}
+      <section aria-label="Расширенная аналитика" className="flex flex-col gap-4">
+        <CohortRetentionCard data={cohortData} isPending={cohortPending} isError={cohortError} />
+        <VisitAnomalyCard data={anomalyData} isPending={anomalyPending} isError={anomalyError} />
+        <AtRiskWidget data={atRiskData} isPending={atRiskPending} isError={atRiskError} />
+      </section>
     </div>
   );
 }

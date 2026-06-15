@@ -3348,6 +3348,111 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    /** Phase 115 — Advanced analytics endpoints (TODO Phase 117: regenerate from OpenAPI spec) */
+    "/api/v1/reports/cohort": {
+        parameters: {
+            query?: { cohortMonths?: number };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cohort retention grid (owner-only; ANL-02) */
+        get: {
+            parameters: {
+                query?: { cohortMonths?: number };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: { 200: { headers: Record<string, unknown>; content: { "application/json": unknown } } };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/anomaly": {
+        parameters: {
+            query?: { fromDate?: string; toDate?: string };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Visit anomaly detection (owner-only; ANL-02) */
+        get: {
+            parameters: {
+                query?: { fromDate?: string; toDate?: string };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: { 200: { headers: Record<string, unknown>; content: { "application/json": unknown } } };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/at-risk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** At-risk members list (owner-only; ANL-02) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: { 200: { headers: Record<string, unknown>; content: { "application/json": unknown } } };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/load/now": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Live gym headcount rolling-window approximation (owner-only; ANL-03) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: { 200: { headers: Record<string, unknown>; content: { "application/json": unknown } } };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/settings/booking": {
         parameters: {
             query?: never;
