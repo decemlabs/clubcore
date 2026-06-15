@@ -2528,6 +2528,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/payments/{payment_id}/refund": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue a manual ledger refund for any recorded payment (owner-only; REF-01)
+         * @description Phase 112 REF-01 — POST /api/v1/payments/{payment_id}/refund.
+         *
+         *     Owner-only (Action.REFUND, Resource.FINANCE) + CSRF required.
+         *     Validates amount_kopecks <= original; unique constraint guards double-refund.
+         *     Returns 201 Created with the new refund Payment row.
+         */
+        post: operations["refund_payment_endpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/payroll/accruals": {
         parameters: {
             query?: never;
@@ -3758,6 +3782,27 @@ export interface paths {
          * @description USERS-04 / D-43-16 — self + last-owner guards; UPDATE permission + CSRF required.
          */
         patch: operations["deactivate_user_endpoint"];
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}/role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change a staff user's role (owner↔reception); 409 on self / last-owner demotion
+         * @description Phase 112 TEAM-01 — self + last-owner guards; UPDATE permission + CSRF required.
+         *     Returns 204 No Content. New role applies on target's NEXT login.
+         */
+        patch: operations["change_user_role_endpoint"];
         trace?: never;
     };
     "/api/v1/users/{user_id}/reactivate": {
@@ -11968,6 +12013,70 @@ export interface operations {
                     };
                 };
             };
+        };
+    };
+    /** Phase 112 REF-01 — POST /api/v1/payments/{payment_id}/refund (owner-only) */
+    refund_payment_endpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Refund amount in kopecks; must not exceed original payment amount. */
+                    amountKopecks: number;
+                    /** @description Reason for the refund (min 3 chars, saved to audit log). */
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description New refund payment row created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["PaymentResponse"];
+                    };
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    /** Phase 112 TEAM-01 — PATCH /api/v1/users/{user_id}/role (owner-only) */
+    change_user_role_endpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description New role for the target user. */
+                    role: "owner" | "reception";
+                };
+            };
+        };
+        responses: {
+            /** @description Role updated; new role applies on target's next login. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["422_ValidationError"];
         };
     };
 }

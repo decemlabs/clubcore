@@ -1,8 +1,9 @@
 /**
- * Payments domain TanStack Query hooks (Phase 101-04, extended Phase 103-01).
+ * Payments domain TanStack Query hooks (Phase 101-04, extended Phase 103-01, 112-03).
  *
  * Phase 101: usePaymentsByClient (scoped by-client path, reception+owner)
  * Phase 103: usePaymentsLedger (global /payments ledger, OWNER_ONLY via can() gate)
+ * Phase 112: useRefundPayment (POST /payments/{id}/refund — owner-only REF-01)
  *
  * Transport: staffRequest(...) → Schema.parse(raw).data
  *
@@ -13,7 +14,7 @@
  * ApiError re-exported (D-100-03-APIERROR-REEXPORT) so page/tab layers can
  * `instanceof ApiError` without importing @/api/client directly (ESLint boundary).
  */
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { staffRequest, ApiError } from '@/api/client';
 import { can } from '@/shared/session/can';
 import type { Role } from '@/shared/session/types';
@@ -79,6 +80,48 @@ export function usePaymentsLedger(filter: PaymentsLedgerQuery, role: Role) {
     },
     enabled: can(role, 'view', 'payments'), // OWNER_ONLY — reception makes zero API calls
     staleTime: 30_000,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Mutations
+// ---------------------------------------------------------------------------
+
+/**
+ * Refund a payment by payment id (owner-only, REFUND + FINANCE permission).
+ * POST /api/v1/payments/{payment_id}/refund
+ * Returns new refund Payment row (ResponseEnvelope[PaymentResponse] — 201 Created).
+ * Invalidates paymentsKeys.lists() — covers both cashbox (usePaymentsLedger)
+ * and the finance online-payments table (broad invalidation, per 112-CONTEXT).
+ *
+ * NOTE: ApiError is NOT swallowed here — callers (modals) map err.code to toasts.
+ * May throw ApiError with code: over_refund | already_refunded | cannot_refund_refund
+ */
+export function useRefundPayment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      paymentId,
+      amountKopecks,
+      reason,
+    }: {
+      paymentId: string;
+      amountKopecks: number;
+      reason: string;
+    }) => {
+      const raw = await staffRequest('post', '/api/v1/payments/{payment_id}/refund', {
+        params: { payment_id: paymentId },
+        body: { amountKopecks, reason },
+      });
+      // Backend returns ResponseEnvelope[PaymentResponse] with 201 Created.
+      // Parse the inner data item using the existing PaymentSchema.
+      return PaymentsListResponseSchema.shape.data.shape.items.element.parse(
+        (raw as { data: unknown }).data,
+      );
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: paymentsKeys.lists() });
+    },
   });
 }
 

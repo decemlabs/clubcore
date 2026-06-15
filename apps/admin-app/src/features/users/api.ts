@@ -135,6 +135,29 @@ export function useDeleteUser() {
 }
 
 /**
+ * Change a staff user's role (owner-only).
+ * PATCH /api/v1/users/{user_id}/role
+ * Returns 204 No Content.
+ * Invalidates usersKeys.lists() so the Team list re-renders.
+ *
+ * May throw ApiError with code: cannot_change_own_role | cannot_change_last_owner_role
+ * (ApiError is NOT swallowed here — callers map err.code to Russian toasts.)
+ */
+export function useChangeUserRole() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, role }: { id: string; role: 'owner' | 'reception' }) =>
+      staffRequest('patch', '/api/v1/users/{user_id}/role', {
+        params: { user_id: id },
+        body: { role },
+      }),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: usersKeys.lists() });
+    },
+  });
+}
+
+/**
  * Revoke a pending invitation.
  * POST /api/v1/users/invitations/{token_id}/revoke
  *
