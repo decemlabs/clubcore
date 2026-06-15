@@ -746,3 +746,29 @@ Full-stack referral ("Приведи друга"): a new `app/modules/referrals/
 - Model mix: orchestrator Opus; quick-task executor Sonnet; survey/verification fan-out workflows on the inherited (Opus) main-loop model via Explore agents.
 - This close was driven interactively (not the autonomous per-phase pipeline) — milestone was already shipped/paused; work was: situational survey workflow → close-gate triage → stale-quick-task verification workflow → archive.
 - Notable: two read-only fan-out workflows (4-agent state survey, 7-agent quick-task verification) produced the grounded "what's next" recommendation and cleared the close-gate noise without polluting the main context.
+
+## Milestone: v3.1 — Admin — Fill the Gaps
+
+**Shipped:** 2026-06-15
+**Phases:** 5 (107–111) | **Plans:** 17 | **Tasks:** 23
+
+### What Was Built
+Plan + PT-package create/edit/sell/cancel/refund wiring + client-delete-from-hero on the existing backend (107); editable settings — gym card, working hours/breaks/closures, booking rules, notification matrix — persisted + enforced by schedule/booking-window/dispatcher (108); self profile edit + password-change with session-revocation on new `PATCH /auth/me` + `POST /auth/change-password` (109); live verification of the deferred P102 booking lifecycle + payroll (110); additive OpenAPI regen + `_v31Checks` forward-guard + full gate (111).
+
+### What Worked
+Additive-contract discipline (new endpoints, not byte-stable) with a `_v31Checks` forward-guard; RBAC byte-parity (CISO-01) held across new gated resources; reuse of existing backend (gym module, notification dispatcher, promo/PT hooks) kept new surface minimal; the formal gate (mypy/lint/pytest/builds/Redocly) stayed green throughout.
+
+### What Was Inefficient
+The formal verification gate marked all FE-touching phases `human_needed` and deferred browser UAT — which then surfaced **6 FE↔backend schema-divergence bugs** (4 blocking) only when finally driven in a real browser. This is the **same class** that shipped in v3.0 (memberships flat-vs-nested). Unit tests + source review validated FE Zod schemas against MOCK fixtures, so mock↔real wire drift passed the gate twice.
+
+### Patterns Established
+- Automated browser UAT via chrome-devtools-mcp reliably catches the schema-divergence class that headless gates miss — adopt it as the closing step for FE-wiring milestones.
+- Fix pattern for instance-schema drift: parse the real (flat) wire shape, then Zod `.transform()` to the UI shape — zero consumer churn.
+
+### Key Lessons
+- **Add ≥1 contract test per domain that parses a REAL backend response (or validate Zod against `openapi.json`).** This is the single highest-leverage fix — it would have failed BUG-1..4/6 in CI. Carried into v3.2 Phase 117 as a gate requirement.
+- A 401 used for both "session expired" and "wrong credential" collides with a global refresh-interceptor (BUG-5: change-password wrong-password logged the user out). Exempt re-auth endpoints from the session-expiry path.
+
+### Cost Observations
+- v3.1 build executed across phases 107–111 (autonomous + planned). Browser-UAT closeout + 6 fixes + re-verify done in one session (chrome-devtools-mcp; ~2 parallel audit workflows for the follow-on completeness/roadmap analysis).
+- Notable: the browser-UAT closeout cost was small relative to the bugs it caught — all 4 blockers were one-to-few-line FE schema fixes once located.

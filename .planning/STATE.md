@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v3.1
 milestone_name: Admin — Fill the Gaps
-status: milestone-built-awaiting-archival
-stopped_at: v3.1 — all 5 phases (107–111) complete + audited PASSED; milestone archival PAUSED by user pending browser-UAT
-last_updated: "2026-06-15T00:00:00.000Z"
-last_activity: 2026-06-15
+status: Awaiting next milestone
+stopped_at: Phase 109 UI-SPEC approved
+last_updated: "2026-06-15T03:09:14.303Z"
+last_activity: 2026-06-15 — Milestone v3.1 completed and archived
 progress:
   total_phases: 5
   completed_phases: 5
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 111
-Plan: Not started
-Status: Phase complete — ready for verification
-Last activity: 2026-06-14
+Phase: Milestone v3.1 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-15 — Milestone v3.1 completed and archived
 
 ## v3.1 Roadmap Summary
 
@@ -212,4 +212,4 @@ Resume: `/gsd:plan-phase 107` (Admin FE Completion on Existing Backend — PLAN/
 
 ## Operator Next Steps
 
-- v3.1 roadmap is ready. Plan the first phase with `/gsd:plan-phase 107`.
+- Start the next milestone with /gsd-new-milestone

@@ -1,8 +1,10 @@
 ---
 phase: 107-admin-fe-completion-on-existing-backend
 verified: 2026-06-14T17:30:00Z
-status: human_needed
-score: 5/5 must-haves verified
+human_verified: 2026-06-15T02:45:00Z
+status: passed
+human_verification_status: "completed via automated browser UAT (chrome-devtools-mcp) — 107-UAT.md complete; 2 schema-divergence bugs (BUG-1/BUG-2) found, fixed, re-verified live. See .planning/v3.1-UAT-BROWSER-AUDIT.md"
+score: 5/5 must-haves verified + 10/10 browser-UAT
 overrides_applied: 0
 human_verification:
   - test: "Owner opens PlanFormModal for membership-plan create — fill all fields, submit, observe success toast and modal close"

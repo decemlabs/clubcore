@@ -1,8 +1,10 @@
 ---
 phase: 108-editable-settings-backend-wiring
 verified: 2026-06-14T20:45:00Z
-status: human_needed
-score: 14/14 must-haves verified
+human_verified: 2026-06-15T02:45:00Z
+status: passed
+human_verification_status: "completed via automated browser UAT (chrome-devtools-mcp) — 108-UAT.md complete; BUG-3/BUG-4/BUG-6 found, fixed, re-verified live; CFG-01..04 load+save + RBAC lock confirmed. See .planning/v3.1-UAT-BROWSER-AUDIT.md"
+score: 14/14 must-haves verified + browser-UAT (7 pass / 5 polish-skipped / 1 fault-injection-blocked)
 overrides_applied: 0
 human_verification:
   - test: "CFG-01 BranchSection (owner) — load + save"

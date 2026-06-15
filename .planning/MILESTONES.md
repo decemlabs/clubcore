@@ -1,5 +1,28 @@
 # Milestones
 
+## v3.1 Admin — Fill the Gaps (Shipped: 2026-06-15)
+
+**Phases completed:** 5 phases, 17 plans, 23 tasks
+
+**Key accomplishments:**
+
+- Real Zod-validated membership/PT-package plan create/edit form modal replacing four PlansPage toast stubs, plus deletion of the zero-importer orphan TariffCard.tsx.
+- PtPackageSellModal
+- Owner-gated `useDeleteClient` mutation replacing toast.info stub in ProfileHeroReal — 204 navigates to clients list, RBAC hides delete item for reception
+- 42 (was 41 before Phase 108)
+- Booking enforcement guards (ahead-window, cutoff, closures, working-hours) wired to live booking_config + notification dispatcher matrix gate + quiet-hours suppression, both reading settings via raw SQL (modules-independent contract)
+- 1. [Rule 1 - Bug] Fixed stale OWNER_ONLY count in can.test.ts
+- Four settings sections wired to real API hooks (CFG-01..04) using local state + Zod safeParse; SaveBar calls real mutations; react-router-dom v6 navigate-away guard with Save/Leave/Stay dialog
+- Registered `profile_updated` locked audit event + `ProfileUpdateRequest` / `ChangePasswordRequest` Pydantic models + three service functions (`update_profile`, `revoke_other_sessions_on_password_change`, `change_password`) implementing PROF-01/PROF-02 contract with exclude-current session revocation and Argon2id hash reuse.
+- Wired `PATCH /api/v1/auth/me` (PROF-01) and `POST /api/v1/auth/change-password` (PROF-02) into auth router with `require_authenticated()` + `verify_csrf` RBAC-04 ordering, plus 14 passing ASGITransport integration tests proving the full contract.
+- ProfileUpdateSchema + ChangePasswordSchema zod contracts with Russian validation messages, plus useUpdateProfile/useChangePassword TanStack mutations wired via staffRequest `as never` casts against the additive PATCH /auth/me + POST /auth/change-password endpoints
+- Editable ProfileSection (full_name + email) wired to PATCH /auth/me via the global SaveBar (BranchSection pattern), and new ChangePasswordModal (AdaptiveModal, current/new/confirm, useChangePassword) opened from SecuritySection — closes D-104-04-PROFILE-READONLY
+- [Rule 3 - Deferred] Literal HTTP confirmation via running uvicorn
+- Additive openapi.json regen (+788 insertions) for 6 new v3.1 staff routes, regenerated schema.d.ts, and 14-entry _v31Checks AssertNonNever forward-guard — all committed as the new byte-stable baseline
+- Full v3.1 gate GREEN: mypy/lint/drift/alembic/pytest/api-client/admin-app/client-pwa/Redocly/CISO-01 all pass; 5 inline test regressions fixed; 13/13 v3.1 feature requirements confirmed Complete
+
+---
+
 ## v3.0 Production Admin — Backend Wiring (Shipped: 2026-06-14)
 
 **Phases completed:** 7 phases, 24 plans, 45 tasks

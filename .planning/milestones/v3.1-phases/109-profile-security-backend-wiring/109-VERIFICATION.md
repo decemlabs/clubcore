@@ -1,8 +1,10 @@
 ---
 phase: 109-profile-security-backend-wiring
 verified: 2026-06-14T23:05:00Z
-status: human_needed
-score: 12/12 must-haves verified
+human_verified: 2026-06-15T02:45:00Z
+status: passed
+human_verification_status: "completed via automated browser UAT (chrome-devtools-mcp) — 109-UAT.md complete (10/10); BUG-5 (wrong-password logout) found, fixed, re-verified live; profile/email-taken/password-change happy-path all confirmed. See .planning/v3.1-UAT-BROWSER-AUDIT.md"
+score: 12/12 must-haves verified + 10/10 browser-UAT
 overrides_applied: 0
 human_verification:
   - test: "Settings → Профиль — edit full name, click Save"
