@@ -569,7 +569,7 @@ Plans:
 
 Plans:
 - [x] 117-01-PLAN.md — Regenerate openapi.json + schema.d.ts additively, add _v32Checks forward-guard, drop temporary path casts
-- [ ] 117-02-PLAN.md — Real-backend contract tests: ASGITransport capture per domain + FE Zod parse of captured JSON (+ payments.csv backend assertion)
+- [x] 117-02-PLAN.md — Real-backend contract tests: ASGITransport capture per domain + FE Zod parse of captured JSON (+ payments.csv backend assertion)
 - [ ] 117-03-PLAN.md — Full milestone gate fix-to-green (backend + FE + api-client + CISO-01 parity 46) + 13-requirement trace
 
 ## Backlog
@@ -599,7 +599,7 @@ Plans:
 | 114. Attendance Analytics on Existing Reports | 2/2 | Complete   | 2026-06-15 |
 | 115. Live & Advanced Analytics | 4/4 | Complete   | 2026-06-15 |
 | 116. Chat Inbox & Exports | 3/3 | Complete   | 2026-06-15 |
-| 117. OpenAPI Handoff + Milestone Gate | 1/3 | In Progress|  |
+| 117. OpenAPI Handoff + Milestone Gate | 2/3 | In Progress|  |
 
 <details>
 <summary>✅ v3.1 Admin — Fill the Gaps (Phases 107-111) — Progress (SHIPPED 2026-06-15)</summary>
