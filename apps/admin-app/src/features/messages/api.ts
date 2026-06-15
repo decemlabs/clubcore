@@ -31,7 +31,7 @@ const StaffThreadItemSchema = z.object({
   staffUnreadCount: z.number(),
 })
 
-const StaffInboxSchema = z.object({
+export const StaffInboxSchema = z.object({
   data: z.object({
     items: z.array(StaffThreadItemSchema),
     total: z.number(),
@@ -45,7 +45,7 @@ const StaffMessageItemSchema = z.object({
   sentAt: z.string(),
 })
 
-const StaffThreadSchema = z.object({
+export const StaffThreadSchema = z.object({
   data: z.object({
     threadId: z.string(),
     messages: z.array(StaffMessageItemSchema),
