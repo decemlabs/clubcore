@@ -9,7 +9,7 @@
 
 ### Refunds (P0 — operational money gap)
 
-- [ ] **REF-01**: Owner can refund an arbitrary recorded payment (cash / non-membership / non-PT) from Cashbox or Finance, with a reason; the refund is recorded and the ledger/cashbox reflects it (removes the READ-ONLY `T-103-03-FAKEREFUND` stub).
+- [x] **REF-01**: Owner can refund an arbitrary recorded payment (cash / non-membership / non-PT) from Cashbox or Finance, with a reason; the refund is recorded and the ledger/cashbox reflects it (removes the READ-ONLY `T-103-03-FAKEREFUND` stub).
 
 ### Team Management (P0 — access gap)
 
@@ -67,7 +67,7 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REF-01 | 112 | Pending |
+| REF-01 | 112 | Complete |
 | TEAM-01 | 112 | Pending |
 | PROMO-01 | 113 | Pending |
 | PROMO-02 | 113 | Pending |
