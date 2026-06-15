@@ -231,6 +231,78 @@ class TypingEvent(ResponseData):
     actor: Literal["staff"] = "staff"
 
 
+class StaffReplyRequest(BackendSchemaBase):
+    """Request body for POST /api/v1/messages/threads/{id}/reply (Phase 116 MSG-02).
+
+    extra='forbid' (inherited from BackendSchemaBase) rejects unknown fields.
+    body must be non-empty and non-whitespace-only.
+    max_length=4000 mirrors SendMessageRequest validation.
+    """
+
+    body: Annotated[str, Field(min_length=1, max_length=4000)]
+
+
+class StaffThreadItem(ResponseData):
+    """Single thread row in the staff inbox list (Phase 116 MSG-01).
+
+    id: thread UUID.
+    client_id (→ clientId on wire): the client's UUID.
+    client_name (→ clientName on wire): first_name + last_name.
+    client_initials (→ clientInitials on wire): 1-2 char uppercase initials.
+    last_message_at (→ lastMessageAt on wire): when the last message was sent; None if empty.
+    last_message_body (→ lastMessageBody on wire): body of the latest message; None if empty.
+    last_message_role (→ lastMessageRole on wire): sender role of latest message; None if empty.
+    staff_unread_count (→ staffUnreadCount on wire): count of client messages newer than
+        staff_last_read_at (or all client messages if staff_last_read_at IS NULL).
+    """
+
+    id: UUID
+    client_id: UUID
+    client_name: str
+    client_initials: str
+    last_message_at: datetime | None = None
+    last_message_body: str | None = None
+    last_message_role: str | None = None
+    staff_unread_count: int
+
+
+class StaffInboxResponse(ResponseData):
+    """Paginated staff inbox response (Phase 116 MSG-01).
+
+    items: list of all client threads ordered by last_message_at DESC.
+    total: total thread count (same as len(items) — inbox is not paginated in v1).
+    """
+
+    items: list[StaffThreadItem]
+    total: int
+
+
+class StaffMessageItem(ResponseData):
+    """Single message row in the staff thread history (Phase 116 MSG-01).
+
+    id: message UUID.
+    role: 'client' or 'staff'.
+    body: message text.
+    sent_at (→ sentAt on wire): when the message was sent.
+    """
+
+    id: UUID
+    role: str
+    body: str
+    sent_at: datetime
+
+
+class StaffThreadHistoryResponse(ResponseData):
+    """Full history of a single client↔gym thread (Phase 116 MSG-01).
+
+    thread_id (→ threadId on wire): the thread UUID.
+    messages: list of all messages in the thread, chronological order (oldest first).
+    """
+
+    thread_id: UUID
+    messages: list[StaffMessageItem]
+
+
 class AttachmentUploadResponse(ResponseData):
     """Response for POST /client/messages/attachments (Phase 92 ATT-01).
 

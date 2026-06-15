@@ -439,6 +439,119 @@ async def mark_thread_read(
     return len(updated) > 0
 
 
+async def list_all_threads_with_unread(
+    session: AsyncSession,
+) -> list[dict[str, Any]]:
+    """Return all threads with staff_unread_count, last_message preview (Phase 116 MSG-01).
+
+    staff_unread_count = COUNT(*) of messages WHERE role='client'
+    AND (staff_last_read_at IS NULL OR sent_at > staff_last_read_at).
+    NULL staff_last_read_at means never read by staff → all client messages counted.
+
+    Joins to clients table (alive only: deleted_at IS NULL) to get first/last name.
+    Orders by last_message_at DESC NULLS LAST (threads with no messages appear last).
+
+    raw SQL text() + :name bind params (D-54-08 cross-module read discipline).
+    No session.commit() — caller-owns-txn (D-32-10/D-49-19).
+    """
+    rows = (
+        await session.execute(
+            text(
+                "SELECT "
+                "  mt.id, mt.client_id, mt.last_message_at, "
+                "  mt.staff_last_read_at, "
+                "  ( SELECT COUNT(*) FROM messages m "
+                "    WHERE m.thread_id = mt.id AND m.role = 'client' "
+                "    AND (mt.staff_last_read_at IS NULL OR m.sent_at > mt.staff_last_read_at) "
+                "  ) AS staff_unread_count, "
+                "  ( SELECT m2.body FROM messages m2 "
+                "    WHERE m2.thread_id = mt.id "
+                "    ORDER BY m2.sent_at DESC LIMIT 1 "
+                "  ) AS last_message_body, "
+                "  ( SELECT m3.role FROM messages m3 "
+                "    WHERE m3.thread_id = mt.id "
+                "    ORDER BY m3.sent_at DESC LIMIT 1 "
+                "  ) AS last_message_role, "
+                "  c.first_name, c.last_name "
+                "FROM message_threads mt "
+                "JOIN clients c ON c.id = mt.client_id AND c.deleted_at IS NULL "
+                "ORDER BY mt.last_message_at DESC NULLS LAST"
+            )
+        )
+    ).mappings().all()
+    return [dict(r) for r in rows]
+
+
+async def get_thread_client_id(
+    session: AsyncSession,
+    thread_id: UUID,
+) -> UUID | None:
+    """Resolve client_id from message_threads.id via raw SQL (Phase 116 MSG-01).
+
+    Returns None if the thread_id does not exist.
+    Used by staff history + reply endpoints to call the existing client_id-keyed functions.
+    raw SQL text() + :name bind params (D-54-08 cross-module read discipline).
+    No session.commit() — caller-owns-txn (D-32-10/D-49-19).
+    """
+    row = (
+        await session.execute(
+            text("SELECT client_id FROM message_threads WHERE id = :tid"),
+            {"tid": str(thread_id)},
+        )
+    ).mappings().one_or_none()
+    if row is None:
+        return None
+    return UUID(str(row["client_id"]))
+
+
+async def mark_staff_thread_read(
+    session: AsyncSession,
+    thread_id: UUID,
+) -> None:
+    """Set staff_last_read_at = now() for thread; staff unread is derived from this watermark.
+
+    No RETURNING needed — unread count is derived on read from the staff_last_read_at
+    watermark (COUNT WHERE role='client' AND sent_at > watermark). No counter to recompute.
+
+    raw SQL text() + :name bind params (D-54-08 discipline).
+    No session.commit() — caller-owns-txn (D-32-10/D-49-19).
+    """
+    await session.execute(
+        text(
+            "UPDATE message_threads "
+            "SET staff_last_read_at = now(), updated_at = now() "
+            "WHERE id = :tid"
+        ),
+        {"tid": str(thread_id)},
+    )
+
+
+async def list_thread_messages_for_staff(
+    session: AsyncSession,
+    thread_id: UUID,
+) -> list[dict[str, Any]]:
+    """Return all messages in a thread chronological (oldest first) for staff view (Phase 116).
+
+    Staff thread history is a full chronological list (not paginated, no after cursor).
+    Returns id, role, body, sent_at for each message.
+
+    raw SQL text() + :name bind params (D-54-08 cross-module read discipline).
+    No session.commit() — caller-owns-txn.
+    """
+    rows = (
+        await session.execute(
+            text(
+                "SELECT id, role, body, sent_at "
+                "FROM messages "
+                "WHERE thread_id = :tid "
+                "ORDER BY sent_at ASC, id ASC"
+            ),
+            {"tid": str(thread_id)},
+        )
+    ).mappings().all()
+    return [dict(r) for r in rows]
+
+
 async def get_client_display(
     session: AsyncSession,
     client_id: UUID,

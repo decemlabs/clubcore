@@ -53,7 +53,12 @@ from app.modules.messaging.schemas import (
     NewMessageEvent,
     ReadReceiptEvent,
     SendMessageRequest,
+    StaffInboxResponse,
+    StaffMessageItem,
     StaffMessageResult,
+    StaffReplyRequest,
+    StaffThreadHistoryResponse,
+    StaffThreadItem,
     TypingEvent,
 )
 
@@ -553,3 +558,136 @@ async def mark_thread_read(
             client_id=str(client_id),
             thread_id=str(thread_id),
         )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 116 MSG-01/02 — Staff-side inbox + reply service functions
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _make_initials(first_name: str, last_name: str) -> str:
+    """Derive 1-2 char uppercase initials from first and last name."""
+    parts = [first_name.strip(), last_name.strip()]
+    initials = "".join(p[0].upper() for p in parts if p)
+    return initials[:2] or "?"
+
+
+async def list_threads(
+    session: AsyncSession,
+) -> StaffInboxResponse:
+    """Return all client threads with staff unread count + last-message preview (Phase 116 MSG-01).
+
+    Calls list_all_threads_with_unread and maps rows to StaffInboxResponse.
+    clientInitials are derived from first/last name (1-2 uppercase chars).
+    No session.commit() — caller-owns-txn.
+    No try/except — AppError bubbles to _app_error_handler.
+    """
+    rows = await repository.list_all_threads_with_unread(session)
+    items = [
+        StaffThreadItem(
+            id=UUID(str(row["id"])),
+            client_id=UUID(str(row["client_id"])),
+            client_name=f"{row['first_name']} {row['last_name']}",
+            client_initials=_make_initials(str(row["first_name"]), str(row["last_name"])),
+            last_message_at=row["last_message_at"],
+            last_message_body=row["last_message_body"],
+            last_message_role=row["last_message_role"],
+            staff_unread_count=int(row["staff_unread_count"]),
+        )
+        for row in rows
+    ]
+    return StaffInboxResponse(items=items, total=len(items))
+
+
+async def get_staff_thread(
+    session: AsyncSession,
+    *,
+    thread_id: UUID,
+) -> StaffThreadHistoryResponse:
+    """Return full chronological message history for a single thread (Phase 116 MSG-01).
+
+    Resolves client_id via get_thread_client_id, then fetches all messages via
+    list_thread_messages_for_staff (oldest-first, no pagination in v1).
+
+    Raises NotFoundError if thread_id does not exist.
+    No session.commit() — caller-owns-txn.
+    No try/except — AppError bubbles to _app_error_handler.
+    """
+    from app.core.exceptions import NotFoundError  # local import — avoids circular at module level
+
+    client_id = await repository.get_thread_client_id(session, thread_id)
+    if client_id is None:
+        raise NotFoundError(f"Thread {thread_id} not found")
+
+    rows = await repository.list_thread_messages_for_staff(session, thread_id)
+    messages = [
+        StaffMessageItem(
+            id=UUID(str(row["id"])),
+            role=str(row["role"]),
+            body=str(row["body"]),
+            sent_at=row["sent_at"],
+        )
+        for row in rows
+    ]
+    return StaffThreadHistoryResponse(thread_id=thread_id, messages=messages)
+
+
+async def send_staff_reply(
+    session: AsyncSession,
+    *,
+    thread_id: UUID,
+    payload: StaffReplyRequest,
+) -> StaffMessageItem:
+    """Persist a staff reply via the existing record_staff_message; return StaffMessageItem.
+
+    Reuses record_staff_message (resolves thread, marks prior client msgs read,
+    inserts role='staff' message, emits message_sent audit). This function does NOT
+    publish to Redis and does NOT commit — caller-owns-txn (CR-02 / DB-first).
+
+    The caller (router) must: (1) await session.commit(), (2) call
+    publish_new_message(redis, client_id=..., message_id=...) AFTER commit.
+
+    Raises NotFoundError if thread_id does not exist.
+    No try/except — AppError bubbles to _app_error_handler.
+    """
+    from app.core.exceptions import NotFoundError  # local import — avoids circular at module level
+
+    client_id = await repository.get_thread_client_id(session, thread_id)
+    if client_id is None:
+        raise NotFoundError(f"Thread {thread_id} not found")
+
+    result = await record_staff_message(
+        session,
+        client_id=client_id,
+        body=payload.body,
+    )
+
+    _log.info(
+        "staff_reply_sent",
+        thread_id=str(thread_id),
+        client_id=str(client_id),
+        message_id=str(result.id),
+    )
+
+    return StaffMessageItem(
+        id=result.id,
+        role="staff",
+        body=payload.body,
+        sent_at=result.sent_at,
+    )
+
+
+async def mark_staff_thread_read(
+    session: AsyncSession,
+    *,
+    thread_id: UUID,
+) -> None:
+    """Reset the staff-side unread watermark for a thread (Phase 116 MSG-01).
+
+    Sets message_threads.staff_last_read_at = now() so subsequent inbox fetches
+    show staffUnreadCount = 0 for this thread.
+
+    No session.commit() — caller-owns-txn (router commits).
+    No try/except — AppError bubbles to _app_error_handler.
+    """
+    await repository.mark_staff_thread_read(session, thread_id)
