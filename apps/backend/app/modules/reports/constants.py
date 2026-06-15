@@ -72,7 +72,36 @@ TRAINER_REPORT_REVENUE_NOTE: str = (
     "trainers may not equal the global PT-package revenue total."
 )
 
+# ---------------------------------------------------------------------------
+# Advanced analytics constants (Phase 115 ANL-02..04)
+# ---------------------------------------------------------------------------
+
+# Live gym-load (ANL-03, ANL-04): rolling-window approximation of "currently present".
+# Visit model has only checked_in_at (no checkout column); window ≈ average session length.
+LOAD_NOW_WINDOW_MINUTES: int = 120  # rolling window; ~2 h average session
+
+# Visit-anomaly detection (ANL-02)
+ANOMALY_WINDOW_DAYS: int = 14  # trailing rolling mean window (std computation)
+ANOMALY_SIGMA: float = 2.0  # σ threshold for spike/drop flag
+ANOMALY_LOOKBACK_DAYS: int = 90  # default chart span when no from_date/to_date given
+
+# At-risk member detection (ANL-02): active membership + last visit > threshold
+AT_RISK_THRESHOLD_DAYS: int = 14  # days without a visit → at-risk
+AT_RISK_MAX_ITEMS: int = 50  # LIMIT cap on at-risk list (DoS guard, T-115-05)
+
+# Cohort retention analysis (ANL-02)
+COHORT_DEFAULT_MONTHS: int = 6  # default cohort span when ?cohortMonths omitted
+COHORT_MAX_MONTHS: int = 12  # upper bound validated in service (DoS guard, T-115-05)
+
+
 __all__ = (
+    "ANOMALY_LOOKBACK_DAYS",
+    "ANOMALY_SIGMA",
+    "ANOMALY_WINDOW_DAYS",
+    "AT_RISK_MAX_ITEMS",
+    "AT_RISK_THRESHOLD_DAYS",
+    "COHORT_DEFAULT_MONTHS",
+    "COHORT_MAX_MONTHS",
     "CSV_AUDIT_LOG_HEADERS",
     "CSV_CLIENTS_HEADERS",
     "CSV_REVENUE_HEADERS",
@@ -81,5 +110,6 @@ __all__ = (
     "GRAIN_DAY",
     "GRAIN_MONTH",
     "GRAIN_VALUES",
+    "LOAD_NOW_WINDOW_MINUTES",
     "TRAINER_REPORT_REVENUE_NOTE",
 )

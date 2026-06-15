@@ -48,7 +48,10 @@ from pydantic import Field
 
 from app.core.pagination import PageQuery
 from app.core.schemas import BackendSchemaBase, ResponseData
-from app.modules.reports.constants import TRAINER_REPORT_REVENUE_NOTE
+from app.modules.reports.constants import (
+    COHORT_DEFAULT_MONTHS,
+    TRAINER_REPORT_REVENUE_NOTE,
+)
 
 # ---------------------------------------------------------------------------
 # Revenue report DTOs (REV-01..05)
@@ -275,3 +278,178 @@ class TrainerUsageReportResponse(ResponseData):
     from_date: date
     to_date: date
     revenue_attribution_note: str = TRAINER_REPORT_REVENUE_NOTE
+
+
+# ---------------------------------------------------------------------------
+# Live gym-load DTOs (Phase 115 ANL-03, ANL-04)
+# GET /api/v1/reports/load/now
+# Wire: { count, asOf, windowMinutes }
+# ---------------------------------------------------------------------------
+
+
+class LoadNowResponse(ResponseData):
+    """GET /api/v1/reports/load/now payload — rolling-window in-gym headcount (ANL-03).
+
+    count: distinct clients with checked_in_at in the last window_minutes.
+    as_of: server UTC timestamp of the query (wire: asOf).
+    window_minutes: rolling window length used (wire: windowMinutes).
+
+    Approximation: Visit model has only checked_in_at (no checkout column).
+    Window = LOAD_NOW_WINDOW_MINUTES (≈ average session length).
+    """
+
+    count: int  # wire: count — non-negative distinct client count
+    as_of: datetime  # wire: asOf — UTC server timestamp at query time
+    window_minutes: int  # wire: windowMinutes — rolling window used (seconds)
+
+
+# ---------------------------------------------------------------------------
+# Cohort retention DTOs (Phase 115 ANL-02)
+# GET /api/v1/reports/cohort
+# Wire: { cohorts: [{ cohortMonth, label, months: [{ offset, retentionPct }] }], maxOffset }
+# ---------------------------------------------------------------------------
+
+
+class CohortRetentionQuery(BackendSchemaBase):
+    """GET /api/v1/reports/cohort query params (ANL-02).
+
+    Wire: ?cohortMonths=6  (alias_generator=to_camel maps cohort_months -> cohortMonths)
+    Service validates: 1 <= cohort_months <= COHORT_MAX_MONTHS.
+    """
+
+    cohort_months: int = COHORT_DEFAULT_MONTHS  # wire: cohortMonths
+
+
+class CohortMonthEntry(ResponseData):
+    """Per-offset retention point within a cohort (ANL-02).
+
+    offset: months after cohort start (0 = cohort month itself).
+    retention_pct: % of cohort with ≥1 visit in that month offset;
+                   None when cohort_size == 0 (never div-by-zero).
+    Wire: { offset, retentionPct }
+    """
+
+    offset: int  # wire: offset
+    retention_pct: float | None  # wire: retentionPct
+
+
+class CohortEntry(ResponseData):
+    """Single cohort row — membership-start month + per-month retention points (ANL-02).
+
+    cohort_month: 'YYYY-MM' — truncated membership start month (Europe/Moscow).
+    label: short Russian label (e.g. 'янв 2026') for chart axes.
+    months: ordered list of retention points, offset 0..N.
+    Wire: { cohortMonth, label, months: [CohortMonthEntry] }
+    """
+
+    cohort_month: str  # wire: cohortMonth — 'YYYY-MM'
+    label: str  # wire: label — short ru month label
+    months: list[CohortMonthEntry]  # wire: months
+
+
+class CohortRetentionResponse(ResponseData):
+    """GET /api/v1/reports/cohort payload (ANL-02).
+
+    cohorts: one entry per cohort month, ordered chronologically.
+    max_offset: maximum months_since seen across all cohorts (0 when empty).
+    Wire: { cohorts, maxOffset }
+    """
+
+    cohorts: list[CohortEntry]  # wire: cohorts
+    max_offset: int  # wire: maxOffset
+
+
+# ---------------------------------------------------------------------------
+# Visit anomaly DTOs (Phase 115 ANL-02)
+# GET /api/v1/reports/anomaly
+# Wire: { points: [{ date, count, isAnomaly, direction, label }], windowDays, sigmaThreshold, anomalyCount }
+# ---------------------------------------------------------------------------
+
+
+class VisitAnomalyQuery(BackendSchemaBase):
+    """GET /api/v1/reports/anomaly query params (ANL-02).
+
+    Wire: ?fromDate=YYYY-MM-DD&toDate=YYYY-MM-DD
+    Both default to None — service fills in last ANOMALY_LOOKBACK_DAYS MSK days.
+    alias_generator=to_camel: from_date -> fromDate, to_date -> toDate.
+    """
+
+    from_date: date | None = None  # wire: fromDate
+    to_date: date | None = None  # wire: toDate
+
+
+class VisitAnomalyPoint(ResponseData):
+    """Single daily observation in the anomaly series (ANL-02).
+
+    date: 'YYYY-MM-DD' gym_date (MSK).
+    count: visit count for that day.
+    is_anomaly: True when |count - trailing_mean| > ANOMALY_SIGMA * trailing_std.
+    direction: 'spike' (above mean) | 'drop' (below mean) | None (not anomalous).
+    label: short Russian label (e.g. '12 июн') for chart tooltips.
+    Wire: { date, count, isAnomaly, direction, label }
+    """
+
+    date: str  # wire: date — 'YYYY-MM-DD'
+    count: int  # wire: count
+    is_anomaly: bool  # wire: isAnomaly
+    direction: Literal["spike", "drop"] | None  # wire: direction
+    label: str  # wire: label — short ru day label
+
+
+class VisitAnomalyResponse(ResponseData):
+    """GET /api/v1/reports/anomaly payload (ANL-02).
+
+    points: gap-filled daily series (contiguous, no missing days).
+    window_days: trailing mean window used (ANOMALY_WINDOW_DAYS constant).
+    sigma_threshold: σ threshold used (ANOMALY_SIGMA constant).
+    anomaly_count: number of flagged points in the series.
+    Wire: { points, windowDays, sigmaThreshold, anomalyCount }
+    """
+
+    points: list[VisitAnomalyPoint]  # wire: points
+    window_days: int  # wire: windowDays
+    sigma_threshold: float  # wire: sigmaThreshold
+    anomaly_count: int  # wire: anomalyCount
+
+
+# ---------------------------------------------------------------------------
+# At-risk members DTOs (Phase 115 ANL-02)
+# GET /api/v1/reports/at-risk
+# Wire: { count, items: [{ clientId, name, membershipType, lastVisitDate, daysSinceVisit, lastVisitLabel }], thresholdDays }
+# ---------------------------------------------------------------------------
+
+
+class AtRiskMember(ResponseData):
+    """Single at-risk member entry (ANL-02).
+
+    client_id: UUID string (wire: clientId).
+    name: full_name from clients table (wire: name).
+    membership_type: membership plan name (wire: membershipType).
+    last_visit_date: 'YYYY-MM-DD' of last check-in, None if never visited (wire: lastVisitDate).
+    days_since_visit: integer days since last visit; AT_RISK_THRESHOLD_DAYS+1 used for
+                      never-visited (service fills; wire: daysSinceVisit).
+    last_visit_label: pre-formatted Russian string, e.g. '18 дней назад' or 'не посещал'
+                      (wire: lastVisitLabel).
+    Wire: { clientId, name, membershipType, lastVisitDate, daysSinceVisit, lastVisitLabel }
+    """
+
+    client_id: str  # wire: clientId
+    name: str  # wire: name
+    membership_type: str  # wire: membershipType
+    last_visit_date: str | None  # wire: lastVisitDate — 'YYYY-MM-DD' or null
+    days_since_visit: int  # wire: daysSinceVisit
+    last_visit_label: str  # wire: lastVisitLabel — pre-formatted ru label
+
+
+class AtRiskMembersResponse(ResponseData):
+    """GET /api/v1/reports/at-risk payload (ANL-02).
+
+    count: total at-risk clients (may exceed items if capped by AT_RISK_MAX_ITEMS).
+    items: at-risk member list (capped at AT_RISK_MAX_ITEMS).
+    threshold_days: threshold used (AT_RISK_THRESHOLD_DAYS constant).
+    Wire: { count, items, thresholdDays }
+    """
+
+    count: int  # wire: count
+    items: list[AtRiskMember]  # wire: items
+    threshold_days: int  # wire: thresholdDays

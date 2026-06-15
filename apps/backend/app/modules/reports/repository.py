@@ -43,11 +43,15 @@ from app.modules.reports.schemas import AuditLogQuery, RevenueReportQuery
 
 __all__ = (
     "fetch_active_memberships_count",
+    "fetch_at_risk_members",
     "fetch_audit_log_page",
+    "fetch_cohort_retention",
     "fetch_expiring_memberships_count",
+    "fetch_load_now_count",
     "fetch_new_clients_count",
     "fetch_revenue_buckets",
     "fetch_trainer_usage",
+    "fetch_visit_anomaly_daily",
     "fetch_visits_daily",
     "fetch_visits_hourly",
     "stream_audit_log_rows",
@@ -430,6 +434,265 @@ async def fetch_visits_hourly(
                     "GROUP BY hour ORDER BY hour"
                 ),
                 {"from_date": from_date, "to_date": to_date},
+            )
+        )
+        .mappings()
+        .all()
+    )
+    return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Advanced analytics raw-SQL reads (Phase 115 ANL-02..04)
+#
+# CROSS-MODULE READ DISCIPLINE (D-54-08): raw text() ONLY; NO ORM imports from
+# other modules. All user-supplied values pass through :name bound params — no
+# f-string interpolation of user input (T-115-02).
+#
+# Verified columns (apps/backend/app/modules/visits/models.py:72-84):
+#   - checked_in_at  DateTime(timezone=True) — raw timestamptz
+#   - gym_date       Date STORED GENERATED ((checked_in_at AT TIME ZONE 'Europe/Moscow')::date)
+#   - client_id      UUID NOT NULL
+#   - membership_id  UUID NOT NULL
+# Verified columns (apps/backend/app/modules/memberships/models.py:130-140):
+#   - status    String(16) ('active' | 'expired' | 'cancelled' | 'frozen')
+#   - start_date  Date
+#   - end_date    Date (inclusive)
+#   - client_id   UUID NOT NULL
+#   - plan_id     UUID nullable (FK->membership_plans)
+# Verified columns (apps/backend/app/modules/clients/models.py:58-120):
+#   - full_name  Text NOT NULL
+#   - deleted_at nullable DateTime(timezone=True) (SoftDeleteMixin)
+# Verified columns (apps/backend/app/modules/memberships/membership_plans/models.py):
+#   - name  Text NOT NULL (plan display name)
+# ---------------------------------------------------------------------------
+
+
+async def fetch_load_now_count(session: AsyncSession, window_minutes: int) -> int:
+    """Count distinct clients checked-in within the last window_minutes (ANL-03).
+
+    CROSS-MODULE READ — raw SQL text() only; NO ORM import of Visit.
+    Verified column: visits.checked_in_at DateTime(timezone=True) timestamptz.
+
+    Uses make_interval(mins => :window_minutes) — a bound param, never f-string.
+    Empty (no recent visits) → 0; never NaN, never error (T-115-05).
+
+    Security (T-115-02): window_minutes is a service-validated int from the
+    LOAD_NOW_WINDOW_MINUTES constant; not user-supplied.
+    """
+    row = (
+        (
+            await session.execute(
+                text(
+                    "SELECT COUNT(DISTINCT client_id) AS cnt "
+                    "FROM visits "
+                    "WHERE checked_in_at >= now() - make_interval(mins => :window_minutes)"
+                ),
+                {"window_minutes": window_minutes},
+            )
+        )
+        .mappings()
+        .one()
+    )
+    return int(row["cnt"])
+
+
+async def fetch_at_risk_members(
+    session: AsyncSession,
+    threshold_days: int,
+    max_items: int,
+) -> list[dict[str, object]]:
+    """At-risk member rows: active membership + last visit > threshold_days ago (ANL-02).
+
+    CROSS-MODULE READ — raw SQL text() only; NO ORM imports of Membership/Client/Visit.
+    Verified columns:
+      - memberships: status='active', client_id, plan_id (FK->membership_plans)
+      - membership_plans: name (display name)
+      - clients: full_name, deleted_at (SoftDeleteMixin)
+      - visits: checked_in_at DateTime(timezone=True)
+
+    Includes clients with NO visits at all (last_at IS NULL) → never-visited at-risk.
+    Stable ordering: never-visited first (NULLS FIRST on last_at), then longest-absent DESC.
+    LIMIT :max_items caps the result (DoS guard, T-115-05).
+
+    Security (T-115-02): threshold_days and max_items are constants, never user-input;
+    bound via :name params regardless.
+
+    Returns list of dicts with keys:
+      client_id (UUID), name (str), membership_type (str),
+      last_visit_date (date | None), days_since_visit (int)
+    """
+    rows = (
+        (
+            await session.execute(
+                text(
+                    """
+WITH active_memberships AS (
+    -- One row per active-membership client (most recent plan name if multiple active)
+    SELECT DISTINCT ON (m.client_id)
+        m.client_id,
+        COALESCE(mp.name, 'Абонемент') AS membership_type
+    FROM memberships m
+    LEFT JOIN membership_plans mp ON mp.id = m.plan_id
+    WHERE m.status = 'active'
+    ORDER BY m.client_id, m.id DESC
+),
+last_visit AS (
+    SELECT
+        client_id,
+        MAX(checked_in_at) AS last_at
+    FROM visits
+    GROUP BY client_id
+)
+SELECT
+    am.client_id                                                                AS client_id,
+    c.full_name                                                                 AS name,
+    am.membership_type                                                          AS membership_type,
+    (lv.last_at AT TIME ZONE 'Europe/Moscow')::date                            AS last_visit_date,
+    CASE
+        WHEN lv.last_at IS NULL THEN :threshold_days + 1
+        ELSE EXTRACT(DAY FROM now() - lv.last_at)::int
+    END                                                                         AS days_since_visit
+FROM active_memberships am
+JOIN clients c ON c.id = am.client_id AND c.deleted_at IS NULL
+LEFT JOIN last_visit lv ON lv.client_id = am.client_id
+WHERE lv.last_at IS NULL
+   OR lv.last_at < now() - make_interval(days => :threshold_days)
+ORDER BY lv.last_at NULLS FIRST, days_since_visit DESC, am.client_id
+LIMIT :max_items
+"""
+                ),
+                {"threshold_days": threshold_days, "max_items": max_items},
+            )
+        )
+        .mappings()
+        .all()
+    )
+    return [dict(r) for r in rows]
+
+
+async def fetch_visit_anomaly_daily(
+    session: AsyncSession,
+    from_date: date,
+    to_date: date,
+) -> list[dict[str, object]]:
+    """Daily visit counts for [from_date, to_date] for anomaly detection (ANL-02).
+
+    CROSS-MODULE READ — raw SQL text() only; NO ORM import of Visit.
+    Verified column: visits.gym_date Date STORED GENERATED (MSK).
+
+    Filters by gym_date directly (STORED column — no secondary TZ conversion, VIS-R-04).
+    Sparse output: only dates with ≥1 visit appear; gap-fill to contiguous series
+    is done by the service layer (_compute_anomaly consumer).
+    Empty range → [] (no error).
+
+    Security (T-115-02): from_date/to_date are validated date objects; bound as :name.
+
+    Returns list of dicts with keys: d (date), cnt (int).
+    """
+    rows = (
+        (
+            await session.execute(
+                text(
+                    "SELECT gym_date AS d, COUNT(*) AS cnt "
+                    "FROM visits "
+                    "WHERE gym_date BETWEEN :from_date AND :to_date "
+                    "GROUP BY gym_date "
+                    "ORDER BY gym_date"
+                ),
+                {"from_date": from_date, "to_date": to_date},
+            )
+        )
+        .mappings()
+        .all()
+    )
+    return [dict(r) for r in rows]
+
+
+async def fetch_cohort_retention(
+    session: AsyncSession,
+    cohort_months: int,
+) -> list[dict[str, object]]:
+    """Cohort retention grid: membership-start month × months_since → retained count (ANL-02).
+
+    CROSS-MODULE READ — raw SQL text() only; NO ORM imports of Membership/Visit.
+    Verified columns:
+      - memberships: start_date Date, status String(16) IN ('active','expired','cancelled','frozen')
+      - visits: checked_in_at DateTime(timezone=True) timestamptz
+
+    Cohort = date_trunc('month', start_date AT TIME ZONE 'Europe/Moscow')::date.
+    Eligibility: status IN ('active','expired') — includes completed memberships.
+    Retained: ≥1 visit in the cohort_month + months_since offset.
+    months_since: month-difference between cohort month and visit month.
+
+    Filter: cohort_month >= cutoff (today MSK - cohort_months months).
+    Stable order: cohort_month ASC, months_since ASC.
+
+    Empty (no memberships/visits) → [] (no error, no NaN).
+    Division-by-zero: NOT computed in SQL — service calculates retention_pct from
+    retained_count/cohort_size with cohort_size > 0 guard.
+
+    Security (T-115-02): cohort_months is a service-validated int 1..12; bound as :cohort_months.
+
+    Returns list of dicts with keys:
+      cohort_month (date — month-start), months_since (int),
+      retained_count (int), cohort_size (int).
+    """
+    rows = (
+        (
+            await session.execute(
+                text(
+                    """
+WITH cohort_base AS (
+    -- One row per (client_id, cohort_month) from eligible memberships.
+    -- Uses DISTINCT ON to deduplicate if a client has multiple memberships
+    -- starting in the same month (keep earliest start_date for that month).
+    SELECT DISTINCT
+        client_id,
+        date_trunc('month', start_date AT TIME ZONE 'Europe/Moscow')::date AS cohort_month
+    FROM memberships
+    WHERE status IN ('active', 'expired')
+),
+cohort_sizes AS (
+    SELECT cohort_month, COUNT(DISTINCT client_id) AS cohort_size
+    FROM cohort_base
+    GROUP BY cohort_month
+),
+visit_months AS (
+    -- One row per (client_id, visit_month) — deduplicated to avoid double-counting.
+    SELECT DISTINCT
+        client_id,
+        date_trunc('month', checked_in_at AT TIME ZONE 'Europe/Moscow')::date AS visit_month
+    FROM visits
+),
+retention AS (
+    SELECT
+        cb.cohort_month,
+        (
+            (EXTRACT(YEAR FROM vm.visit_month) - EXTRACT(YEAR FROM cb.cohort_month)) * 12
+            + (EXTRACT(MONTH FROM vm.visit_month) - EXTRACT(MONTH FROM cb.cohort_month))
+        )::int                                          AS months_since,
+        COUNT(DISTINCT cb.client_id)                   AS retained_count
+    FROM cohort_base cb
+    JOIN visit_months vm ON vm.client_id = cb.client_id
+                        AND vm.visit_month >= cb.cohort_month
+    GROUP BY cb.cohort_month, months_since
+)
+SELECT
+    r.cohort_month,
+    r.months_since,
+    r.retained_count,
+    cs.cohort_size
+FROM retention r
+JOIN cohort_sizes cs ON cs.cohort_month = r.cohort_month
+WHERE r.cohort_month >= (
+    date_trunc('month', now() AT TIME ZONE 'Europe/Moscow')::date
+    - make_interval(months => :cohort_months)
+)
+ORDER BY r.cohort_month, r.months_since
+"""
+                ),
+                {"cohort_months": cohort_months},
             )
         )
         .mappings()
