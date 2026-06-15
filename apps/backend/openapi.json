@@ -262,6 +262,79 @@
         "title": "ActiveSessionItem",
         "type": "object"
       },
+      "AtRiskMember": {
+        "description": "Single at-risk member entry (ANL-02).\n\nclient_id: UUID string (wire: clientId).\nname: full_name from clients table (wire: name).\nmembership_type: membership plan name (wire: membershipType).\nlast_visit_date: 'YYYY-MM-DD' of last check-in, None if never visited (wire: lastVisitDate).\ndays_since_visit: integer days since last visit; AT_RISK_THRESHOLD_DAYS+1 used for\n                  never-visited (service fills; wire: daysSinceVisit).\nlast_visit_label: pre-formatted Russian string, e.g. '18 дней назад' or 'не посещал'\n                  (wire: lastVisitLabel).\nWire: { clientId, name, membershipType, lastVisitDate, daysSinceVisit, lastVisitLabel }",
+        "properties": {
+          "clientId": {
+            "title": "Clientid",
+            "type": "string"
+          },
+          "daysSinceVisit": {
+            "title": "Dayssincevisit",
+            "type": "integer"
+          },
+          "lastVisitDate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastvisitdate"
+          },
+          "lastVisitLabel": {
+            "title": "Lastvisitlabel",
+            "type": "string"
+          },
+          "membershipType": {
+            "title": "Membershiptype",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "clientId",
+          "name",
+          "membershipType",
+          "lastVisitDate",
+          "daysSinceVisit",
+          "lastVisitLabel"
+        ],
+        "title": "AtRiskMember",
+        "type": "object"
+      },
+      "AtRiskMembersResponse": {
+        "description": "GET /api/v1/reports/at-risk payload (ANL-02).\n\ncount: total at-risk clients (may exceed items if capped by AT_RISK_MAX_ITEMS).\nitems: at-risk member list (capped at AT_RISK_MAX_ITEMS).\nthreshold_days: threshold used (AT_RISK_THRESHOLD_DAYS constant).\nWire: { count, items, thresholdDays }",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AtRiskMember"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "thresholdDays": {
+            "title": "Thresholddays",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count",
+          "items",
+          "thresholdDays"
+        ],
+        "title": "AtRiskMembersResponse",
+        "type": "object"
+      },
       "AttachmentUploadResponse": {
         "description": "Response for POST /client/messages/attachments (Phase 92 ATT-01).\n\nReturned by service.create_attachment after the file is stored in S3 and\na message_attachments row is persisted.\n\nattachment_id (→ attachmentId on wire via alias_generator=to_camel): the\nnew message_attachments.id UUID, used by the client to attach to a message.\npreview_url (→ previewUrl on wire): relative path to the authenticated\nserve endpoint /api/v1/client/messages/attachments/{attachment_id}. The\nPWA must fetch this URL with credentials — NOT a presigned URL (D-92-ATT-03).\n\nThe Python attribute is named attachment_id (not id) so the to_camel\nalias generator produces attachmentId on the wire (per plan contract).",
         "properties": {
@@ -2565,6 +2638,81 @@
         "title": "ClientsReportResponse",
         "type": "object"
       },
+      "CohortEntry": {
+        "description": "Single cohort row — membership-start month + per-month retention points (ANL-02).\n\ncohort_month: 'YYYY-MM' — truncated membership start month (Europe/Moscow).\nlabel: short Russian label (e.g. 'янв 2026') for chart axes.\nmonths: ordered list of retention points, offset 0..N.\nWire: { cohortMonth, label, months: [CohortMonthEntry] }",
+        "properties": {
+          "cohortMonth": {
+            "title": "Cohortmonth",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "months": {
+            "items": {
+              "$ref": "#/components/schemas/CohortMonthEntry"
+            },
+            "title": "Months",
+            "type": "array"
+          }
+        },
+        "required": [
+          "cohortMonth",
+          "label",
+          "months"
+        ],
+        "title": "CohortEntry",
+        "type": "object"
+      },
+      "CohortMonthEntry": {
+        "description": "Per-offset retention point within a cohort (ANL-02).\n\noffset: months after cohort start (0 = cohort month itself).\nretention_pct: % of cohort with ≥1 visit in that month offset;\n               None when cohort_size == 0 (never div-by-zero).\nWire: { offset, retentionPct }",
+        "properties": {
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "retentionPct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retentionpct"
+          }
+        },
+        "required": [
+          "offset",
+          "retentionPct"
+        ],
+        "title": "CohortMonthEntry",
+        "type": "object"
+      },
+      "CohortRetentionResponse": {
+        "description": "GET /api/v1/reports/cohort payload (ANL-02).\n\ncohorts: one entry per cohort month, ordered chronologically.\nmax_offset: maximum months_since seen across all cohorts (0 when empty).\nWire: { cohorts, maxOffset }",
+        "properties": {
+          "cohorts": {
+            "items": {
+              "$ref": "#/components/schemas/CohortEntry"
+            },
+            "title": "Cohorts",
+            "type": "array"
+          },
+          "maxOffset": {
+            "title": "Maxoffset",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "cohorts",
+          "maxOffset"
+        ],
+        "title": "CohortRetentionResponse",
+        "type": "object"
+      },
       "EmergencyContact": {
         "description": "Free-shape contact owned by UI (D-17). Same E.164 phone as Client.phone.",
         "properties": {
@@ -3017,6 +3165,31 @@
           }
         },
         "title": "InvitationRevokeRequest",
+        "type": "object"
+      },
+      "LoadNowResponse": {
+        "description": "GET /api/v1/reports/load/now payload — rolling-window in-gym headcount (ANL-03).\n\ncount: distinct clients with checked_in_at in the last window_minutes.\nas_of: server UTC timestamp of the query (wire: asOf).\nwindow_minutes: rolling window length used (wire: windowMinutes).\n\nApproximation: Visit model has only checked_in_at (no checkout column).\nWindow = LOAD_NOW_WINDOW_MINUTES (≈ average session length).",
+        "properties": {
+          "asOf": {
+            "format": "date-time",
+            "title": "Asof",
+            "type": "string"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "windowMinutes": {
+            "title": "Windowminutes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count",
+          "asOf",
+          "windowMinutes"
+        ],
+        "title": "LoadNowResponse",
         "type": "object"
       },
       "LoginRequest": {
@@ -4373,6 +4546,37 @@
         "title": "PaginatedData[PayrollAccrualResponse]",
         "type": "object"
       },
+      "PaginatedData_PromoCodeListItemResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PromoCodeListItemResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "pageSize": {
+            "title": "Pagesize",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "title": "PaginatedData[PromoCodeListItemResponse]",
+        "type": "object"
+      },
       "PaginatedData_PtPackagePlanResponse_": {
         "properties": {
           "items": {
@@ -4693,6 +4897,30 @@
         "title": "PasswordResetRequestBody",
         "type": "object"
       },
+      "PaymentRefundRequest": {
+        "additionalProperties": false,
+        "description": "POST /api/v1/payments/{payment_id}/refund body (Phase 112 REF-01).\n\n``reason`` is required, min 3 chars (per D-112 decision).\n``amount_kopecks`` is required; must be > 0 and <= original (validated in service).\nBackendSchemaBase sets extra='forbid' automatically.",
+        "properties": {
+          "amountKopecks": {
+            "description": "Refund amount in kopecks; must not exceed original payment amount.",
+            "exclusiveMinimum": 0.0,
+            "title": "Amountkopecks",
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "amountKopecks",
+          "reason"
+        ],
+        "title": "PaymentRefundRequest",
+        "type": "object"
+      },
       "PaymentResponse": {
         "description": "Outbound representation of a Payment ledger row (Phase 32 PAY-08).\n\nMirrors the 9 DB columns minus implementation details (audit_log_id is\nsurfaced for forensic UI but `id` carries the same operational weight).",
         "properties": {
@@ -4727,9 +4955,16 @@
             "type": "string"
           },
           "receivedByUserId": {
-            "format": "uuid",
-            "title": "Receivedbyuserid",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Receivedbyuserid"
           },
           "refundOf": {
             "anyOf": [
@@ -4759,8 +4994,7 @@
           "subjectId",
           "amountKopecks",
           "method",
-          "receivedAt",
-          "receivedByUserId"
+          "receivedAt"
         ],
         "title": "PaymentResponse",
         "type": "object"
@@ -4999,6 +5233,451 @@
           }
         },
         "title": "ProfileUpdateRequest",
+        "type": "object"
+      },
+      "PromoCodeCreateRequest": {
+        "additionalProperties": false,
+        "description": "POST /api/v1/promo-codes body (PROMO-01).",
+        "properties": {
+          "applicableTo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applicableto"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "discountType": {
+            "enum": [
+              "percentage",
+              "fixed"
+            ],
+            "title": "Discounttype",
+            "type": "string"
+          },
+          "discountValue": {
+            "title": "Discountvalue",
+            "type": "integer"
+          },
+          "maxUses": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxuses"
+          },
+          "perClientLimit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Perclientlimit"
+          },
+          "validFrom": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validfrom"
+          },
+          "validUntil": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validuntil"
+          }
+        },
+        "required": [
+          "code",
+          "discountType",
+          "discountValue"
+        ],
+        "title": "PromoCodeCreateRequest",
+        "type": "object"
+      },
+      "PromoCodeListItemResponse": {
+        "description": "Item shape for GET /api/v1/promo-codes list — includes used_count aggregate.",
+        "properties": {
+          "applicableTo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applicableto"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "discountType": {
+            "title": "Discounttype",
+            "type": "string"
+          },
+          "discountValue": {
+            "title": "Discountvalue",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "isActive": {
+            "title": "Isactive",
+            "type": "boolean"
+          },
+          "maxUses": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxuses"
+          },
+          "perClientLimit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Perclientlimit"
+          },
+          "usedCount": {
+            "title": "Usedcount",
+            "type": "integer"
+          },
+          "validFrom": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validfrom"
+          },
+          "validUntil": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validuntil"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "discountType",
+          "discountValue",
+          "maxUses",
+          "perClientLimit",
+          "validFrom",
+          "validUntil",
+          "isActive",
+          "applicableTo",
+          "description",
+          "usedCount",
+          "createdAt"
+        ],
+        "title": "PromoCodeListItemResponse",
+        "type": "object"
+      },
+      "PromoCodeResponse": {
+        "description": "Response shape for POST (create) and PATCH (edit) — full row.",
+        "properties": {
+          "applicableTo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applicableto"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "title": "Createdat",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "discountType": {
+            "title": "Discounttype",
+            "type": "string"
+          },
+          "discountValue": {
+            "title": "Discountvalue",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "isActive": {
+            "title": "Isactive",
+            "type": "boolean"
+          },
+          "maxUses": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxuses"
+          },
+          "perClientLimit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Perclientlimit"
+          },
+          "validFrom": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validfrom"
+          },
+          "validUntil": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validuntil"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "discountType",
+          "discountValue",
+          "maxUses",
+          "perClientLimit",
+          "validFrom",
+          "validUntil",
+          "isActive",
+          "applicableTo",
+          "description",
+          "createdAt"
+        ],
+        "title": "PromoCodeResponse",
+        "type": "object"
+      },
+      "PromoCodeUpdateRequest": {
+        "additionalProperties": false,
+        "description": "PATCH /api/v1/promo-codes/{id} body — partial edit (PROMO-01).\n\nAll fields optional; service applies only those provided (exclude_unset).",
+        "properties": {
+          "applicableTo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applicableto"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "discountType": {
+            "anyOf": [
+              {
+                "enum": [
+                  "percentage",
+                  "fixed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discounttype"
+          },
+          "discountValue": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discountvalue"
+          },
+          "maxUses": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxuses"
+          },
+          "perClientLimit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Perclientlimit"
+          },
+          "validFrom": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validfrom"
+          },
+          "validUntil": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validuntil"
+          }
+        },
+        "title": "PromoCodeUpdateRequest",
         "type": "object"
       },
       "PtPackageCancelRequest": {
@@ -5865,6 +6544,18 @@
         "title": "ReferralSummaryResponse",
         "type": "object"
       },
+      "ResponseEnvelope_AtRiskMembersResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/AtRiskMembersResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[AtRiskMembersResponse]",
+        "type": "object"
+      },
       "ResponseEnvelope_AttachmentUploadResponse_": {
         "properties": {
           "data": {
@@ -6105,6 +6796,18 @@
         "title": "ResponseEnvelope[ClientsReportResponse]",
         "type": "object"
       },
+      "ResponseEnvelope_CohortRetentionResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/CohortRetentionResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[CohortRetentionResponse]",
+        "type": "object"
+      },
       "ResponseEnvelope_GymInfoResponse_": {
         "properties": {
           "data": {
@@ -6115,6 +6818,18 @@
           "data"
         ],
         "title": "ResponseEnvelope[GymInfoResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_LoadNowResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/LoadNowResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[LoadNowResponse]",
         "type": "object"
       },
       "ResponseEnvelope_LoginResponse_": {
@@ -6394,6 +7109,18 @@
         "title": "ResponseEnvelope[PaginatedData[PayrollAccrualResponse]]",
         "type": "object"
       },
+      "ResponseEnvelope_PaginatedData_PromoCodeListItemResponse__": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PaginatedData_PromoCodeListItemResponse_"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[PaginatedData[PromoCodeListItemResponse]]",
+        "type": "object"
+      },
       "ResponseEnvelope_PaginatedData_PtPackagePlanResponse__": {
         "properties": {
           "data": {
@@ -6502,6 +7229,18 @@
         "title": "ResponseEnvelope[PaginatedData[VisitResponse]]",
         "type": "object"
       },
+      "ResponseEnvelope_PaymentResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PaymentResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[PaymentResponse]",
+        "type": "object"
+      },
       "ResponseEnvelope_PayrollAccrualResponse_": {
         "properties": {
           "data": {
@@ -6524,6 +7263,18 @@
           "data"
         ],
         "title": "ResponseEnvelope[PayrollPreviewResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_PromoCodeResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PromoCodeResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[PromoCodeResponse]",
         "type": "object"
       },
       "ResponseEnvelope_PtPackagePlanResponse_": {
@@ -6658,6 +7409,42 @@
         "title": "ResponseEnvelope[SlotResponse]",
         "type": "object"
       },
+      "ResponseEnvelope_StaffInboxResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/StaffInboxResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[StaffInboxResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_StaffMessageItem_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/StaffMessageItem"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[StaffMessageItem]",
+        "type": "object"
+      },
+      "ResponseEnvelope_StaffThreadHistoryResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/StaffThreadHistoryResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[StaffThreadHistoryResponse]",
+        "type": "object"
+      },
       "ResponseEnvelope_TelegramStartResponse_": {
         "properties": {
           "data": {
@@ -6778,6 +7565,18 @@
           "data"
         ],
         "title": "ResponseEnvelope[UserCreateResponse]",
+        "type": "object"
+      },
+      "ResponseEnvelope_VisitAnomalyResponse_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/VisitAnomalyResponse"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ResponseEnvelope[VisitAnomalyResponse]",
         "type": "object"
       },
       "ResponseEnvelope_VisitResponse_": {
@@ -7294,6 +8093,169 @@
           "handle"
         ],
         "title": "SocialItem",
+        "type": "object"
+      },
+      "StaffInboxResponse": {
+        "description": "Paginated staff inbox response (Phase 116 MSG-01).\n\nitems: list of all client threads ordered by last_message_at DESC.\ntotal: total thread count (same as len(items) — inbox is not paginated in v1).",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/StaffThreadItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "StaffInboxResponse",
+        "type": "object"
+      },
+      "StaffMessageItem": {
+        "description": "Single message row in the staff thread history (Phase 116 MSG-01).\n\nid: message UUID.\nrole: 'client' or 'staff'.\nbody: message text.\nsent_at (→ sentAt on wire): when the message was sent.",
+        "properties": {
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "sentAt": {
+            "format": "date-time",
+            "title": "Sentat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "body",
+          "sentAt"
+        ],
+        "title": "StaffMessageItem",
+        "type": "object"
+      },
+      "StaffReplyRequest": {
+        "additionalProperties": false,
+        "description": "Request body for POST /api/v1/messages/threads/{id}/reply (Phase 116 MSG-02).\n\nextra='forbid' (inherited from BackendSchemaBase) rejects unknown fields.\nbody must be non-empty and non-whitespace-only.\nmax_length=4000 mirrors SendMessageRequest validation.\n\nWR-05: min_length=1 alone does NOT reject whitespace-only input (\"   \" has\nlength 3 and passes). The backend is the trust boundary — an API caller can\nbypass the FE trim — so a model_validator rejects whitespace-only body,\nmirroring SendMessageRequest.body_or_attachment_required (preserves T-90-09).",
+        "properties": {
+          "body": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "title": "StaffReplyRequest",
+        "type": "object"
+      },
+      "StaffThreadHistoryResponse": {
+        "description": "Full history of a single client↔gym thread (Phase 116 MSG-01).\n\nthread_id (→ threadId on wire): the thread UUID.\nmessages: list of all messages in the thread, chronological order (oldest first).",
+        "properties": {
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/StaffMessageItem"
+            },
+            "title": "Messages",
+            "type": "array"
+          },
+          "threadId": {
+            "format": "uuid",
+            "title": "Threadid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "threadId",
+          "messages"
+        ],
+        "title": "StaffThreadHistoryResponse",
+        "type": "object"
+      },
+      "StaffThreadItem": {
+        "description": "Single thread row in the staff inbox list (Phase 116 MSG-01).\n\nid: thread UUID.\nclient_id (→ clientId on wire): the client's UUID.\nclient_name (→ clientName on wire): first_name + last_name.\nclient_initials (→ clientInitials on wire): 1-2 char uppercase initials.\nlast_message_at (→ lastMessageAt on wire): when the last message was sent; None if empty.\nlast_message_body (→ lastMessageBody on wire): body of the latest message; None if empty.\nlast_message_role (→ lastMessageRole on wire): sender role of latest message; None if empty.\nstaff_unread_count (→ staffUnreadCount on wire): count of client messages newer than\n    staff_last_read_at (or all client messages if staff_last_read_at IS NULL).",
+        "properties": {
+          "clientId": {
+            "format": "uuid",
+            "title": "Clientid",
+            "type": "string"
+          },
+          "clientInitials": {
+            "title": "Clientinitials",
+            "type": "string"
+          },
+          "clientName": {
+            "title": "Clientname",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "lastMessageAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastmessageat"
+          },
+          "lastMessageBody": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastmessagebody"
+          },
+          "lastMessageRole": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastmessagerole"
+          },
+          "staffUnreadCount": {
+            "title": "Staffunreadcount",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "clientId",
+          "clientName",
+          "clientInitials",
+          "staffUnreadCount"
+        ],
+        "title": "StaffThreadItem",
         "type": "object"
       },
       "TelegramStartResponse": {
@@ -8044,6 +9006,20 @@
         "title": "UserPublic",
         "type": "object"
       },
+      "UserRoleChangeRequest": {
+        "additionalProperties": false,
+        "description": "PATCH /api/v1/users/{user_id}/role body (Phase 112 TEAM-01).\n\nBackendSchemaBase sets extra='forbid' automatically, so unknown fields\nin the request body raise 422 (defence-in-depth; mirrors UserCreateRequest).\n``role`` is the target role — either the role enum variant.",
+        "properties": {
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          }
+        },
+        "required": [
+          "role"
+        ],
+        "title": "UserRoleChangeRequest",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -8082,6 +9058,83 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "VisitAnomalyPoint": {
+        "description": "Single daily observation in the anomaly series (ANL-02).\n\ndate: 'YYYY-MM-DD' gym_date (MSK).\ncount: visit count for that day.\nis_anomaly: True when |count - trailing_mean| > ANOMALY_SIGMA * trailing_std.\ndirection: 'spike' (above mean) | 'drop' (below mean) | None (not anomalous).\nlabel: short Russian label (e.g. '12 июн') for chart tooltips.\nWire: { date, count, isAnomaly, direction, label }",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "date": {
+            "title": "Date",
+            "type": "string"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "enum": [
+                  "spike",
+                  "drop"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direction"
+          },
+          "isAnomaly": {
+            "title": "Isanomaly",
+            "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date",
+          "count",
+          "isAnomaly",
+          "direction",
+          "label"
+        ],
+        "title": "VisitAnomalyPoint",
+        "type": "object"
+      },
+      "VisitAnomalyResponse": {
+        "description": "GET /api/v1/reports/anomaly payload (ANL-02).\n\npoints: gap-filled daily series (contiguous, no missing days).\nwindow_days: trailing mean window used (ANOMALY_WINDOW_DAYS constant).\nsigma_threshold: sigma threshold used (ANOMALY_SIGMA constant).\nanomaly_count: number of flagged points in the series.\nWire: { points, windowDays, sigmaThreshold, anomalyCount }",
+        "properties": {
+          "anomalyCount": {
+            "title": "Anomalycount",
+            "type": "integer"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/VisitAnomalyPoint"
+            },
+            "title": "Points",
+            "type": "array"
+          },
+          "sigmaThreshold": {
+            "title": "Sigmathreshold",
+            "type": "number"
+          },
+          "windowDays": {
+            "title": "Windowdays",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "points",
+          "windowDays",
+          "sigmaThreshold",
+          "anomalyCount"
+        ],
+        "title": "VisitAnomalyResponse",
         "type": "object"
       },
       "VisitCreateRequest": {
@@ -12090,6 +13143,142 @@
         ]
       }
     },
+    "/api/v1/messages/threads": {
+      "get": {
+        "description": "Return all client threads with per-thread staff unread count + last-message preview.\n\nBoth roles (owner + reception) may list the inbox.\nNo CSRF dep — GET is a safe method per RBAC-04.\nNo try/except — AppError bubbles to _app_error_handler.\nNo session.commit() — read path.",
+        "operationId": "staff_list_threads",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_StaffInboxResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Staff inbox: all client threads with unread counts (LIST, MESSAGES; both roles)",
+        "tags": [
+          "Messaging"
+        ]
+      }
+    },
+    "/api/v1/messages/threads/{thread_id}": {
+      "get": {
+        "description": "Return full chronological message history for a client↔gym thread.\n\nBoth roles (owner + reception) may view thread history.\nNo CSRF dep — GET is a safe method per RBAC-04.\nNo try/except — AppError bubbles to _app_error_handler.\nNo session.commit() — read path.",
+        "operationId": "staff_get_thread",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Thread Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_StaffThreadHistoryResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Staff thread history: full message list for one thread (VIEW, MESSAGES; both roles)",
+        "tags": [
+          "Messaging"
+        ]
+      }
+    },
+    "/api/v1/messages/threads/{thread_id}/read": {
+      "post": {
+        "description": "Set staff_last_read_at = now() so next inbox fetch shows staffUnreadCount = 0.\n\nBoth roles (owner + reception) may mark-read — inbox is readable by both.\nRBAC-04: require_permission before verify_csrf.\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "staff_mark_thread_read",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Thread Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Reset staff-side unread watermark for thread (VIEW, MESSAGES; both roles)",
+        "tags": [
+          "Messaging"
+        ]
+      }
+    },
+    "/api/v1/messages/threads/{thread_id}/reply": {
+      "post": {
+        "description": "Persist a staff reply and publish via the existing client delivery channel.\n\n(CREATE, MESSAGES) ∈ OWNER_ONLY → reception → 403 (T-116-01 mitigation).\nRBAC-04: require_permission declared BEFORE verify_csrf (T-116-02 mitigation —\na forbidden reception never reaches the CSRF check).\n\nDB-first (CR-02 / P5): send_staff_reply persists but does NOT publish; the router\ncommits FIRST, then calls publish_new_message so the notification frame is only\nemitted once the row is durable.\n\nCR-01: send_staff_reply scopes the write to the VALIDATED thread_id (no re-resolve\nvia client_id) and returns client_id (resolved once) + reply_read_at. The router\nmust NOT re-resolve the thread a third time. After commit it publishes:\n  (1) publish_new_message (always)\n  (2) publish_read_receipt (only when reply_read_at is not None) — so the client's\n      ✓✓ updates after a staff reply (documented CR-02 / RCPT-03 contract).\n\nNo forward_to_staff enqueue — staff→client direction uses the existing WS + Telegram\nchannel; forward_to_staff is the client→staff bridge only.\n\nNo try/except — AppError bubbles to _app_error_handler.",
+        "operationId": "staff_send_reply",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Thread Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StaffReplyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_StaffMessageItem_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Staff send reply to client thread (CREATE, MESSAGES; owner-only)",
+        "tags": [
+          "Messaging"
+        ]
+      }
+    },
     "/api/v1/online-payments/memberships/{membership_id}/refund": {
       "post": {
         "description": "REFUND-01 — POST /api/v1/online-payments/memberships/{id}/refund.\n\nRBAC-04 ordering: auth → require_permission(REFUND, MEMBERSHIPS) →\nverify_csrf (D-49-25). Service applies Phase 32 guards (frozen / renewed-\nsource / FSM) BEFORE calling ЮKassa; emits the\n``online_refund_initiated`` audit row inside the single UoW.\n\nError mapping (raised from the service layer):\n  - 404 membership_not_found / online_payment_not_found / original_payment_not_found\n  - 409 must_unfreeze_first / cannot_refund_renewed_source / invalid_transition\n    / refund_already_in_flight\n  - 422 yookassa_validation_error\n  - 503 yookassa_unavailable\n  - 502 yookassa_permanent_error\n\nIDM-07 classification B (v1.11-idempotency-audit.md / 66-03): ``verify_idempotency``\nis intentionally absent. The body-level ``payload.idempotency_key`` is forwarded\nverbatim to ЮKassa ``Idempotence-Key`` (operator-contract idempotency at the\nprovider). The DB partial UNIQUE ``uq_online_refunds_alive_per_online_payment``\n(`(payment_id) WHERE status != 'failed'`) surfaces 409 ``refund_already_in_flight``\non concurrent double-tap — this is the load-bearing race defence. Adding a\nheader-level ``Idempotency-Key`` would be a redundant third layer; the 202 async\nreturn makes verbatim-replay semantics awkward. Decision binding for 66-03/66-04.",
@@ -12633,6 +13822,53 @@
         ]
       }
     },
+    "/api/v1/payments/{payment_id}/refund": {
+      "post": {
+        "description": "REF-01 / Phase 112 — owner-only; RBAC-04: require_permission before verify_csrf.\n\nPosts a negative-amount refund row for any recorded non-refund payment.\nPartial refunds (amount_kopecks <= original) are accepted; over-refunds\n(amount_kopecks > original) return 409 over_refund. A second refund of\nthe same original returns 409 already_refunded (unique-constraint). Trying\nto refund a refund row returns 409 cannot_refund_refund. Missing payment\nreturns 404 original_payment_not_found.",
+        "operationId": "refund_payment_endpoint",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "payment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Payment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentRefundRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PaymentResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Issue a manual ledger refund for any recorded payment (owner-only; REF-01)",
+        "tags": [
+          "Payments"
+        ]
+      }
+    },
     "/api/v1/payroll/accruals": {
       "get": {
         "description": "List all payroll accrual rows for *trainer_id*, ordered accrued_at DESC (PAY-05 / D-58-14).\n\nBoth paid and pending rows are returned; clawback rows (negative accrual_kopecks)\nare included alongside regular accruals — no status or period filters (deferred per\nCONTEXT.md D-58-14).\n\nPagination (PageQuery): page (default 1) + pageSize (default 20, max 100).\nResponse envelope: { data: { items: [...], total: N, page: P, pageSize: S } }.\n\nOwner-only: (LIST, PAYROLL) ∈ OWNER_ONLY (pre-registered Plan 58-01).\nReception receives 403 (T-58-31 mitigate).\n\nThreat T-58-32: pageSize bounded by PageQuery Field(le=100) — resource exhaustion\nmitigated by the shared pagination validator.\nThreat T-58-33: trainer_id is a bound WHERE parameter; owner sees all trainers\nby design (no cross-trainer leakage).",
@@ -12899,6 +14135,182 @@
         "summary": "Set/replace trainer comp config (INSERT-only versioned; owner-only PAY-01 / D-58-10)",
         "tags": [
           "Payments"
+        ]
+      }
+    },
+    "/api/v1/promo-codes": {
+      "get": {
+        "description": "PROMO-02 — paginated list with used_count aggregate. LIST required; no CSRF (read).",
+        "operationId": "list_promo_codes_endpoint",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pageSize",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Pagesize",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "active",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Active"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PaginatedData_PromoCodeListItemResponse__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "List promo codes with optional active filter and pagination",
+        "tags": [
+          "Promo Codes"
+        ]
+      },
+      "post": {
+        "description": "PROMO-01 — create promo code. CREATE permission + CSRF required (RBAC-04 ordering).",
+        "operationId": "create_promo_code_endpoint",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromoCodeCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PromoCodeResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Create a promo code (owner-only; UPPER-normalizes code; 409 on alive duplicate)",
+        "tags": [
+          "Promo Codes"
+        ]
+      }
+    },
+    "/api/v1/promo-codes/{promo_id}": {
+      "patch": {
+        "description": "PROMO-01 — partial edit. EDIT permission + CSRF required (RBAC-04 ordering).",
+        "operationId": "edit_promo_code_endpoint",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "promo_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Promo Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromoCodeUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_PromoCodeResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Partial edit of an alive promo code (owner-only; 404 missing, 409 duplicate code)",
+        "tags": [
+          "Promo Codes"
+        ]
+      }
+    },
+    "/api/v1/promo-codes/{promo_id}/deactivate": {
+      "patch": {
+        "description": "PROMO-01 — deactivate (DELETE permission maps to deactivate). RBAC-04 ordering.",
+        "operationId": "deactivate_promo_code_endpoint",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "promo_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Promo Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Deactivate promo code (soft - sets is_active=False); 404 if missing",
+        "tags": [
+          "Promo Codes"
         ]
       }
     },
@@ -13775,6 +15187,89 @@
         ]
       }
     },
+    "/api/v1/reports/anomaly": {
+      "get": {
+        "description": "Daily visit counts flagged when count deviates > 2 sigma from a trailing 14-day rolling mean. Optional date range: ?fromDate=...&toDate=... (default: last 90 days MSK). Owner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.",
+        "operationId": "get_anomaly_report",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "fromDate",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Fromdate"
+            }
+          },
+          {
+            "in": "query",
+            "name": "toDate",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Todate"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_VisitAnomalyResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Visit-anomaly daily series with >2-sigma spike/drop flags (owner-only; ANL-02)",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/api/v1/reports/at-risk": {
+      "get": {
+        "description": "Returns clients with an active membership whose last visit was >14 days ago (or who have never visited). Capped at 50 items. Owner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.",
+        "operationId": "get_at_risk_report",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_AtRiskMembersResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "At-risk member list: active membership + last visit >14 days ago (owner-only; ANL-02)",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
     "/api/v1/reports/clients": {
       "get": {
         "description": "Clients snapshot: active memberships, expiring-within-N count, new-clients in range.\n\nAll counters exclude soft-deleted clients (CLR-04).\n`within` defaults to 7, range 1..30 (D-07); out-of-range → 422.\nActive/expiring are as-of-now (D-05); new-clients scoped to fromDate..toDate (CLR-03).\n\nOwner-only: ``(VIEW, REPORTS)`` is in ``OWNER_ONLY``; reception → 403.\nRange cap: 366 days (D-06); toDate<fromDate → 422.",
@@ -13877,6 +15372,105 @@
           }
         },
         "summary": "Clients snapshot CSV download — single summary row (owner-only; EXP-03)",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/api/v1/reports/cohort": {
+      "get": {
+        "description": "Cohort = membership-start month; retention = % of cohort with ≥1 visit per subsequent month. Query param: ?cohortMonths=6 (default 6, max 12). Owner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.",
+        "operationId": "get_cohort_report",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cohortMonths",
+            "required": false,
+            "schema": {
+              "default": 6,
+              "title": "Cohortmonths",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_CohortRetentionResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Cohort retention grid (owner-only; ANL-02)",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/api/v1/reports/load/now": {
+      "get": {
+        "description": "Distinct clients with checked_in_at in the last 120 minutes. Approximation: no checkout column on Visit; window ≈ average session. Returns { count, asOf, windowMinutes }. Owner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.",
+        "operationId": "get_load_now",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseEnvelope_LoadNowResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Live gym headcount — rolling-window approximation (owner-only; ANL-03)",
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/api/v1/reports/payments.csv": {
+      "get": {
+        "description": "Stream payments ledger as UTF-8 BOM + RFC-4180 CSV (Phase 116 EXP-01).\n\nOne row per payment (sales + refunds) in [fromDate, toDate] MSK, ordered by\nreceived_at ASC. Columns: date, clientName, amountRubles, method, subjectKind,\nrefundOf, operatorEmail.\n\nQuery params: ?fromDate=YYYY-MM-DD&toDate=YYYY-MM-DD (alias convention matching\nVisitsReportQuery / RevenueReportQuery siblings via alias_generator=to_camel).\n\nOwner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.\nRange cap: 366 days; toDate < fromDate → 422.\nNo try/except — errors bubble to _app_error_handler.",
+        "operationId": "get_payments_csv",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "fromDate",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Fromdate",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "toDate",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Todate",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Payments ledger CSV download — one row per payment (owner-only; EXP-01 Phase 116)",
         "tags": [
           "Reports"
         ]
@@ -15213,6 +16807,46 @@
           }
         },
         "summary": "Reactivate a previously-deactivated user (404 missing, 409 if already active)",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/api/v1/users/{user_id}/role": {
+      "patch": {
+        "description": "Phase 112 TEAM-01 — self + last-owner guards; UPDATE permission + CSRF required.\n\nRBAC-04 ordering: require_permission declared BEFORE verify_csrf in the\nsignature so 401 (auth) fires before 403 (rbac/csrf). Reception gets 403\nfrom require_permission because (Action.UPDATE, Resource.USERS) is in OWNER_ONLY.\nRole change takes effect on the target's NEXT login (no session invalidation\nper 112-CONTEXT.md effect-timing decision).",
+        "operationId": "change_user_role_endpoint",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserRoleChangeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "$ref": "#/components/responses/422_ValidationError"
+          }
+        },
+        "summary": "Change a staff user's role (owner↔reception); 409 on self / last-owner demotion",
         "tags": [
           "Users"
         ]

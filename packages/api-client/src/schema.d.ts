@@ -2283,6 +2283,120 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/messages/threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Staff inbox: all client threads with unread counts (LIST, MESSAGES; both roles)
+         * @description Return all client threads with per-thread staff unread count + last-message preview.
+         *
+         *     Both roles (owner + reception) may list the inbox.
+         *     No CSRF dep — GET is a safe method per RBAC-04.
+         *     No try/except — AppError bubbles to _app_error_handler.
+         *     No session.commit() — read path.
+         */
+        get: operations["staff_list_threads"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/messages/threads/{thread_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Staff thread history: full message list for one thread (VIEW, MESSAGES; both roles)
+         * @description Return full chronological message history for a client↔gym thread.
+         *
+         *     Both roles (owner + reception) may view thread history.
+         *     No CSRF dep — GET is a safe method per RBAC-04.
+         *     No try/except — AppError bubbles to _app_error_handler.
+         *     No session.commit() — read path.
+         */
+        get: operations["staff_get_thread"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/messages/threads/{thread_id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset staff-side unread watermark for thread (VIEW, MESSAGES; both roles)
+         * @description Set staff_last_read_at = now() so next inbox fetch shows staffUnreadCount = 0.
+         *
+         *     Both roles (owner + reception) may mark-read — inbox is readable by both.
+         *     RBAC-04: require_permission before verify_csrf.
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        post: operations["staff_mark_thread_read"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/messages/threads/{thread_id}/reply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Staff send reply to client thread (CREATE, MESSAGES; owner-only)
+         * @description Persist a staff reply and publish via the existing client delivery channel.
+         *
+         *     (CREATE, MESSAGES) ∈ OWNER_ONLY → reception → 403 (T-116-01 mitigation).
+         *     RBAC-04: require_permission declared BEFORE verify_csrf (T-116-02 mitigation —
+         *     a forbidden reception never reaches the CSRF check).
+         *
+         *     DB-first (CR-02 / P5): send_staff_reply persists but does NOT publish; the router
+         *     commits FIRST, then calls publish_new_message so the notification frame is only
+         *     emitted once the row is durable.
+         *
+         *     CR-01: send_staff_reply scopes the write to the VALIDATED thread_id (no re-resolve
+         *     via client_id) and returns client_id (resolved once) + reply_read_at. The router
+         *     must NOT re-resolve the thread a third time. After commit it publishes:
+         *       (1) publish_new_message (always)
+         *       (2) publish_read_receipt (only when reply_read_at is not None) — so the client's
+         *           ✓✓ updates after a staff reply (documented CR-02 / RCPT-03 contract).
+         *
+         *     No forward_to_staff enqueue — staff→client direction uses the existing WS + Telegram
+         *     channel; forward_to_staff is the client→staff bridge only.
+         *
+         *     No try/except — AppError bubbles to _app_error_handler.
+         */
+        post: operations["staff_send_reply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/online-payments/memberships/{membership_id}/refund": {
         parameters: {
             query?: never;
@@ -2539,11 +2653,14 @@ export interface paths {
         put?: never;
         /**
          * Issue a manual ledger refund for any recorded payment (owner-only; REF-01)
-         * @description Phase 112 REF-01 — POST /api/v1/payments/{payment_id}/refund.
+         * @description REF-01 / Phase 112 — owner-only; RBAC-04: require_permission before verify_csrf.
          *
-         *     Owner-only (Action.REFUND, Resource.FINANCE) + CSRF required.
-         *     Validates amount_kopecks <= original; unique constraint guards double-refund.
-         *     Returns 201 Created with the new refund Payment row.
+         *     Posts a negative-amount refund row for any recorded non-refund payment.
+         *     Partial refunds (amount_kopecks <= original) are accepted; over-refunds
+         *     (amount_kopecks > original) return 409 over_refund. A second refund of
+         *     the same original returns 409 already_refunded (unique-constraint). Trying
+         *     to refund a refund row returns 409 cannot_refund_refund. Missing payment
+         *     returns 404 original_payment_not_found.
          */
         post: operations["refund_payment_endpoint"];
         delete?: never;
@@ -2697,6 +2814,70 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/promo-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List promo codes with optional active filter and pagination
+         * @description PROMO-02 — paginated list with used_count aggregate. LIST required; no CSRF (read).
+         */
+        get: operations["list_promo_codes_endpoint"];
+        put?: never;
+        /**
+         * Create a promo code (owner-only; UPPER-normalizes code; 409 on alive duplicate)
+         * @description PROMO-01 — create promo code. CREATE permission + CSRF required (RBAC-04 ordering).
+         */
+        post: operations["create_promo_code_endpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/promo-codes/{promo_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Partial edit of an alive promo code (owner-only; 404 missing, 409 duplicate code)
+         * @description PROMO-01 — partial edit. EDIT permission + CSRF required (RBAC-04 ordering).
+         */
+        patch: operations["edit_promo_code_endpoint"];
+        trace?: never;
+    };
+    "/api/v1/promo-codes/{promo_id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Deactivate promo code (soft - sets is_active=False); 404 if missing
+         * @description PROMO-01 — deactivate (DELETE permission maps to deactivate). RBAC-04 ordering.
+         */
+        patch: operations["deactivate_promo_code_endpoint"];
         trace?: never;
     };
     "/api/v1/pt-package-plans": {
@@ -3149,6 +3330,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/anomaly": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Visit-anomaly daily series with >2-sigma spike/drop flags (owner-only; ANL-02)
+         * @description Daily visit counts flagged when count deviates > 2 sigma from a trailing 14-day rolling mean. Optional date range: ?fromDate=...&toDate=... (default: last 90 days MSK). Owner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.
+         */
+        get: operations["get_anomaly_report"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/at-risk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * At-risk member list: active membership + last visit >14 days ago (owner-only; ANL-02)
+         * @description Returns clients with an active membership whose last visit was >14 days ago (or who have never visited). Capped at 50 items. Owner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.
+         */
+        get: operations["get_at_risk_report"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reports/clients": {
         parameters: {
             query?: never;
@@ -3193,6 +3414,77 @@ export interface paths {
          *     Owner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.
          */
         get: operations["get_clients_csv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/cohort": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cohort retention grid (owner-only; ANL-02)
+         * @description Cohort = membership-start month; retention = % of cohort with ≥1 visit per subsequent month. Query param: ?cohortMonths=6 (default 6, max 12). Owner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.
+         */
+        get: operations["get_cohort_report"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/load/now": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Live gym headcount — rolling-window approximation (owner-only; ANL-03)
+         * @description Distinct clients with checked_in_at in the last 120 minutes. Approximation: no checkout column on Visit; window ≈ average session. Returns { count, asOf, windowMinutes }. Owner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.
+         */
+        get: operations["get_load_now"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/payments.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Payments ledger CSV download — one row per payment (owner-only; EXP-01 Phase 116)
+         * @description Stream payments ledger as UTF-8 BOM + RFC-4180 CSV (Phase 116 EXP-01).
+         *
+         *     One row per payment (sales + refunds) in [fromDate, toDate] MSK, ordered by
+         *     received_at ASC. Columns: date, clientName, amountRubles, method, subjectKind,
+         *     refundOf, operatorEmail.
+         *
+         *     Query params: ?fromDate=YYYY-MM-DD&toDate=YYYY-MM-DD (alias convention matching
+         *     VisitsReportQuery / RevenueReportQuery siblings via alias_generator=to_camel).
+         *
+         *     Owner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.
+         *     Range cap: 366 days; toDate < fromDate → 422.
+         *     No try/except — errors bubble to _app_error_handler.
+         */
+        get: operations["get_payments_csv"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3340,111 +3632,6 @@ export interface paths {
          *     Owner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.
          */
         get: operations["get_visits_csv"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    /** Phase 115 — Advanced analytics endpoints (TODO Phase 117: regenerate from OpenAPI spec) */
-    "/api/v1/reports/cohort": {
-        parameters: {
-            query?: { cohortMonths?: number };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Cohort retention grid (owner-only; ANL-02) */
-        get: {
-            parameters: {
-                query?: { cohortMonths?: number };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: { 200: { headers: Record<string, unknown>; content: { "application/json": unknown } } };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/reports/anomaly": {
-        parameters: {
-            query?: { fromDate?: string; toDate?: string };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Visit anomaly detection (owner-only; ANL-02) */
-        get: {
-            parameters: {
-                query?: { fromDate?: string; toDate?: string };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: { 200: { headers: Record<string, unknown>; content: { "application/json": unknown } } };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/reports/at-risk": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** At-risk members list (owner-only; ANL-02) */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: { 200: { headers: Record<string, unknown>; content: { "application/json": unknown } } };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/reports/load/now": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Live gym headcount rolling-window approximation (owner-only; ANL-03) */
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: { 200: { headers: Record<string, unknown>; content: { "application/json": unknown } } };
-        };
         put?: never;
         post?: never;
         delete?: never;
@@ -3889,27 +4076,6 @@ export interface paths {
         patch: operations["deactivate_user_endpoint"];
         trace?: never;
     };
-    "/api/v1/users/{user_id}/role": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Change a staff user's role (owner↔reception); 409 on self / last-owner demotion
-         * @description Phase 112 TEAM-01 — self + last-owner guards; UPDATE permission + CSRF required.
-         *     Returns 204 No Content. New role applies on target's NEXT login.
-         */
-        patch: operations["change_user_role_endpoint"];
-        trace?: never;
-    };
     "/api/v1/users/{user_id}/reactivate": {
         parameters: {
             query?: never;
@@ -3928,6 +4094,32 @@ export interface paths {
          * @description USERS-04 / D-43-17 — flip back to active; UPDATE permission + CSRF required.
          */
         patch: operations["reactivate_user_endpoint"];
+        trace?: never;
+    };
+    "/api/v1/users/{user_id}/role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change a staff user's role (owner↔reception); 409 on self / last-owner demotion
+         * @description Phase 112 TEAM-01 — self + last-owner guards; UPDATE permission + CSRF required.
+         *
+         *     RBAC-04 ordering: require_permission declared BEFORE verify_csrf in the
+         *     signature so 401 (auth) fires before 403 (rbac/csrf). Reception gets 403
+         *     from require_permission because (Action.UPDATE, Resource.USERS) is in OWNER_ONLY.
+         *     Role change takes effect on the target's NEXT login (no session invalidation
+         *     per 112-CONTEXT.md effect-timing decision).
+         */
+        patch: operations["change_user_role_endpoint"];
         trace?: never;
     };
     "/api/v1/visits": {
@@ -4061,6 +4253,51 @@ export interface components {
             lastUsedAt: string;
             /** Useragent */
             userAgent: string | null;
+        };
+        /**
+         * AtRiskMember
+         * @description Single at-risk member entry (ANL-02).
+         *
+         *     client_id: UUID string (wire: clientId).
+         *     name: full_name from clients table (wire: name).
+         *     membership_type: membership plan name (wire: membershipType).
+         *     last_visit_date: 'YYYY-MM-DD' of last check-in, None if never visited (wire: lastVisitDate).
+         *     days_since_visit: integer days since last visit; AT_RISK_THRESHOLD_DAYS+1 used for
+         *                       never-visited (service fills; wire: daysSinceVisit).
+         *     last_visit_label: pre-formatted Russian string, e.g. '18 дней назад' or 'не посещал'
+         *                       (wire: lastVisitLabel).
+         *     Wire: { clientId, name, membershipType, lastVisitDate, daysSinceVisit, lastVisitLabel }
+         */
+        AtRiskMember: {
+            /** Clientid */
+            clientId: string;
+            /** Dayssincevisit */
+            daysSinceVisit: number;
+            /** Lastvisitdate */
+            lastVisitDate: string | null;
+            /** Lastvisitlabel */
+            lastVisitLabel: string;
+            /** Membershiptype */
+            membershipType: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * AtRiskMembersResponse
+         * @description GET /api/v1/reports/at-risk payload (ANL-02).
+         *
+         *     count: total at-risk clients (may exceed items if capped by AT_RISK_MAX_ITEMS).
+         *     items: at-risk member list (capped at AT_RISK_MAX_ITEMS).
+         *     threshold_days: threshold used (AT_RISK_THRESHOLD_DAYS constant).
+         *     Wire: { count, items, thresholdDays }
+         */
+        AtRiskMembersResponse: {
+            /** Count */
+            count: number;
+            /** Items */
+            items: components["schemas"]["AtRiskMember"][];
+            /** Thresholddays */
+            thresholdDays: number;
         };
         /**
          * AttachmentUploadResponse
@@ -5265,6 +5502,52 @@ export interface components {
             withinDays: number;
         };
         /**
+         * CohortEntry
+         * @description Single cohort row — membership-start month + per-month retention points (ANL-02).
+         *
+         *     cohort_month: 'YYYY-MM' — truncated membership start month (Europe/Moscow).
+         *     label: short Russian label (e.g. 'янв 2026') for chart axes.
+         *     months: ordered list of retention points, offset 0..N.
+         *     Wire: { cohortMonth, label, months: [CohortMonthEntry] }
+         */
+        CohortEntry: {
+            /** Cohortmonth */
+            cohortMonth: string;
+            /** Label */
+            label: string;
+            /** Months */
+            months: components["schemas"]["CohortMonthEntry"][];
+        };
+        /**
+         * CohortMonthEntry
+         * @description Per-offset retention point within a cohort (ANL-02).
+         *
+         *     offset: months after cohort start (0 = cohort month itself).
+         *     retention_pct: % of cohort with ≥1 visit in that month offset;
+         *                    None when cohort_size == 0 (never div-by-zero).
+         *     Wire: { offset, retentionPct }
+         */
+        CohortMonthEntry: {
+            /** Offset */
+            offset: number;
+            /** Retentionpct */
+            retentionPct: number | null;
+        };
+        /**
+         * CohortRetentionResponse
+         * @description GET /api/v1/reports/cohort payload (ANL-02).
+         *
+         *     cohorts: one entry per cohort month, ordered chronologically.
+         *     max_offset: maximum months_since seen across all cohorts (0 when empty).
+         *     Wire: { cohorts, maxOffset }
+         */
+        CohortRetentionResponse: {
+            /** Cohorts */
+            cohorts: components["schemas"]["CohortEntry"][];
+            /** Maxoffset */
+            maxOffset: number;
+        };
+        /**
          * EmergencyContact
          * @description Free-shape contact owned by UI (D-17). Same E.164 phone as Client.phone.
          */
@@ -5422,6 +5705,28 @@ export interface components {
         InvitationRevokeRequest: {
             /** Reason */
             reason?: string | null;
+        };
+        /**
+         * LoadNowResponse
+         * @description GET /api/v1/reports/load/now payload — rolling-window in-gym headcount (ANL-03).
+         *
+         *     count: distinct clients with checked_in_at in the last window_minutes.
+         *     as_of: server UTC timestamp of the query (wire: asOf).
+         *     window_minutes: rolling window length used (wire: windowMinutes).
+         *
+         *     Approximation: Visit model has only checked_in_at (no checkout column).
+         *     Window = LOAD_NOW_WINDOW_MINUTES (≈ average session length).
+         */
+        LoadNowResponse: {
+            /**
+             * Asof
+             * Format: date-time
+             */
+            asOf: string;
+            /** Count */
+            count: number;
+            /** Windowminutes */
+            windowMinutes: number;
         };
         /**
          * LoginRequest
@@ -6091,6 +6396,17 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** PaginatedData[PromoCodeListItemResponse] */
+        PaginatedData_PromoCodeListItemResponse_: {
+            /** Items */
+            items: components["schemas"]["PromoCodeListItemResponse"][];
+            /** Page */
+            page: number;
+            /** Pagesize */
+            pageSize: number;
+            /** Total */
+            total: number;
+        };
         /** PaginatedData[PtPackagePlanResponse] */
         PaginatedData_PtPackagePlanResponse_: {
             /** Items */
@@ -6225,6 +6541,23 @@ export interface components {
             email: string;
         };
         /**
+         * PaymentRefundRequest
+         * @description POST /api/v1/payments/{payment_id}/refund body (Phase 112 REF-01).
+         *
+         *     ``reason`` is required, min 3 chars (per D-112 decision).
+         *     ``amount_kopecks`` is required; must be > 0 and <= original (validated in service).
+         *     BackendSchemaBase sets extra='forbid' automatically.
+         */
+        PaymentRefundRequest: {
+            /**
+             * Amountkopecks
+             * @description Refund amount in kopecks; must not exceed original payment amount.
+             */
+            amountKopecks: number;
+            /** Reason */
+            reason: string;
+        };
+        /**
          * PaymentResponse
          * @description Outbound representation of a Payment ledger row (Phase 32 PAY-08).
          *
@@ -6248,11 +6581,8 @@ export interface components {
              * Format: date-time
              */
             receivedAt: string;
-            /**
-             * Receivedbyuserid
-             * Format: uuid
-             */
-            receivedByUserId: string;
+            /** Receivedbyuserid */
+            receivedByUserId?: string | null;
             /** Refundof */
             refundOf?: string | null;
             /**
@@ -6380,6 +6710,133 @@ export interface components {
             email?: string | null;
             /** Fullname */
             fullName?: string | null;
+        };
+        /**
+         * PromoCodeCreateRequest
+         * @description POST /api/v1/promo-codes body (PROMO-01).
+         */
+        PromoCodeCreateRequest: {
+            /** Applicableto */
+            applicableTo?: string | null;
+            /** Code */
+            code: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Discounttype
+             * @enum {string}
+             */
+            discountType: "percentage" | "fixed";
+            /** Discountvalue */
+            discountValue: number;
+            /** Maxuses */
+            maxUses?: number | null;
+            /** Perclientlimit */
+            perClientLimit?: number | null;
+            /** Validfrom */
+            validFrom?: string | null;
+            /** Validuntil */
+            validUntil?: string | null;
+        };
+        /**
+         * PromoCodeListItemResponse
+         * @description Item shape for GET /api/v1/promo-codes list — includes used_count aggregate.
+         */
+        PromoCodeListItemResponse: {
+            /** Applicableto */
+            applicableTo: string | null;
+            /** Code */
+            code: string;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Description */
+            description: string | null;
+            /** Discounttype */
+            discountType: string;
+            /** Discountvalue */
+            discountValue: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Isactive */
+            isActive: boolean;
+            /** Maxuses */
+            maxUses: number | null;
+            /** Perclientlimit */
+            perClientLimit: number | null;
+            /** Usedcount */
+            usedCount: number;
+            /** Validfrom */
+            validFrom: string | null;
+            /** Validuntil */
+            validUntil: string | null;
+        };
+        /**
+         * PromoCodeResponse
+         * @description Response shape for POST (create) and PATCH (edit) — full row.
+         */
+        PromoCodeResponse: {
+            /** Applicableto */
+            applicableTo: string | null;
+            /** Code */
+            code: string;
+            /**
+             * Createdat
+             * Format: date-time
+             */
+            createdAt: string;
+            /** Description */
+            description: string | null;
+            /** Discounttype */
+            discountType: string;
+            /** Discountvalue */
+            discountValue: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Isactive */
+            isActive: boolean;
+            /** Maxuses */
+            maxUses: number | null;
+            /** Perclientlimit */
+            perClientLimit: number | null;
+            /** Validfrom */
+            validFrom: string | null;
+            /** Validuntil */
+            validUntil: string | null;
+        };
+        /**
+         * PromoCodeUpdateRequest
+         * @description PATCH /api/v1/promo-codes/{id} body — partial edit (PROMO-01).
+         *
+         *     All fields optional; service applies only those provided (exclude_unset).
+         */
+        PromoCodeUpdateRequest: {
+            /** Applicableto */
+            applicableTo?: string | null;
+            /** Code */
+            code?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Discounttype */
+            discountType?: ("percentage" | "fixed") | null;
+            /** Discountvalue */
+            discountValue?: number | null;
+            /** Maxuses */
+            maxUses?: number | null;
+            /** Perclientlimit */
+            perClientLimit?: number | null;
+            /** Validfrom */
+            validFrom?: string | null;
+            /** Validuntil */
+            validUntil?: string | null;
         };
         /**
          * PtPackageCancelRequest
@@ -6881,6 +7338,10 @@ export interface components {
             /** Shareurl */
             shareUrl: string;
         };
+        /** ResponseEnvelope[AtRiskMembersResponse] */
+        ResponseEnvelope_AtRiskMembersResponse_: {
+            data: components["schemas"]["AtRiskMembersResponse"];
+        };
         /** ResponseEnvelope[AttachmentUploadResponse] */
         ResponseEnvelope_AttachmentUploadResponse_: {
             data: components["schemas"]["AttachmentUploadResponse"];
@@ -6961,9 +7422,17 @@ export interface components {
         ResponseEnvelope_ClientsReportResponse_: {
             data: components["schemas"]["ClientsReportResponse"];
         };
+        /** ResponseEnvelope[CohortRetentionResponse] */
+        ResponseEnvelope_CohortRetentionResponse_: {
+            data: components["schemas"]["CohortRetentionResponse"];
+        };
         /** ResponseEnvelope[GymInfoResponse] */
         ResponseEnvelope_GymInfoResponse_: {
             data: components["schemas"]["GymInfoResponse"];
+        };
+        /** ResponseEnvelope[LoadNowResponse] */
+        ResponseEnvelope_LoadNowResponse_: {
+            data: components["schemas"]["LoadNowResponse"];
         };
         /** ResponseEnvelope[LoginResponse] */
         ResponseEnvelope_LoginResponse_: {
@@ -7058,6 +7527,10 @@ export interface components {
         ResponseEnvelope_PaginatedData_PayrollAccrualResponse__: {
             data: components["schemas"]["PaginatedData_PayrollAccrualResponse_"];
         };
+        /** ResponseEnvelope[PaginatedData[PromoCodeListItemResponse]] */
+        ResponseEnvelope_PaginatedData_PromoCodeListItemResponse__: {
+            data: components["schemas"]["PaginatedData_PromoCodeListItemResponse_"];
+        };
         /** ResponseEnvelope[PaginatedData[PtPackagePlanResponse]] */
         ResponseEnvelope_PaginatedData_PtPackagePlanResponse__: {
             data: components["schemas"]["PaginatedData_PtPackagePlanResponse_"];
@@ -7094,6 +7567,10 @@ export interface components {
         ResponseEnvelope_PaginatedData_VisitResponse__: {
             data: components["schemas"]["PaginatedData_VisitResponse_"];
         };
+        /** ResponseEnvelope[PaymentResponse] */
+        ResponseEnvelope_PaymentResponse_: {
+            data: components["schemas"]["PaymentResponse"];
+        };
         /** ResponseEnvelope[PayrollAccrualResponse] */
         ResponseEnvelope_PayrollAccrualResponse_: {
             data: components["schemas"]["PayrollAccrualResponse"];
@@ -7101,6 +7578,10 @@ export interface components {
         /** ResponseEnvelope[PayrollPreviewResponse] */
         ResponseEnvelope_PayrollPreviewResponse_: {
             data: components["schemas"]["PayrollPreviewResponse"];
+        };
+        /** ResponseEnvelope[PromoCodeResponse] */
+        ResponseEnvelope_PromoCodeResponse_: {
+            data: components["schemas"]["PromoCodeResponse"];
         };
         /** ResponseEnvelope[PtPackagePlanResponse] */
         ResponseEnvelope_PtPackagePlanResponse_: {
@@ -7146,6 +7627,18 @@ export interface components {
         ResponseEnvelope_SlotResponse_: {
             data: components["schemas"]["SlotResponse"];
         };
+        /** ResponseEnvelope[StaffInboxResponse] */
+        ResponseEnvelope_StaffInboxResponse_: {
+            data: components["schemas"]["StaffInboxResponse"];
+        };
+        /** ResponseEnvelope[StaffMessageItem] */
+        ResponseEnvelope_StaffMessageItem_: {
+            data: components["schemas"]["StaffMessageItem"];
+        };
+        /** ResponseEnvelope[StaffThreadHistoryResponse] */
+        ResponseEnvelope_StaffThreadHistoryResponse_: {
+            data: components["schemas"]["StaffThreadHistoryResponse"];
+        };
         /** ResponseEnvelope[TelegramStartResponse] */
         ResponseEnvelope_TelegramStartResponse_: {
             data: components["schemas"]["TelegramStartResponse"];
@@ -7181,6 +7674,10 @@ export interface components {
         /** ResponseEnvelope[UserCreateResponse] */
         ResponseEnvelope_UserCreateResponse_: {
             data: components["schemas"]["UserCreateResponse"];
+        };
+        /** ResponseEnvelope[VisitAnomalyResponse] */
+        ResponseEnvelope_VisitAnomalyResponse_: {
+            data: components["schemas"]["VisitAnomalyResponse"];
         };
         /** ResponseEnvelope[VisitResponse] */
         ResponseEnvelope_VisitResponse_: {
@@ -7510,6 +8007,115 @@ export interface components {
             kind: "tg" | "ig";
             /** Label */
             label: string;
+        };
+        /**
+         * StaffInboxResponse
+         * @description Paginated staff inbox response (Phase 116 MSG-01).
+         *
+         *     items: list of all client threads ordered by last_message_at DESC.
+         *     total: total thread count (same as len(items) — inbox is not paginated in v1).
+         */
+        StaffInboxResponse: {
+            /** Items */
+            items: components["schemas"]["StaffThreadItem"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * StaffMessageItem
+         * @description Single message row in the staff thread history (Phase 116 MSG-01).
+         *
+         *     id: message UUID.
+         *     role: 'client' or 'staff'.
+         *     body: message text.
+         *     sent_at (→ sentAt on wire): when the message was sent.
+         */
+        StaffMessageItem: {
+            /** Body */
+            body: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Role */
+            role: string;
+            /**
+             * Sentat
+             * Format: date-time
+             */
+            sentAt: string;
+        };
+        /**
+         * StaffReplyRequest
+         * @description Request body for POST /api/v1/messages/threads/{id}/reply (Phase 116 MSG-02).
+         *
+         *     extra='forbid' (inherited from BackendSchemaBase) rejects unknown fields.
+         *     body must be non-empty and non-whitespace-only.
+         *     max_length=4000 mirrors SendMessageRequest validation.
+         *
+         *     WR-05: min_length=1 alone does NOT reject whitespace-only input ("   " has
+         *     length 3 and passes). The backend is the trust boundary — an API caller can
+         *     bypass the FE trim — so a model_validator rejects whitespace-only body,
+         *     mirroring SendMessageRequest.body_or_attachment_required (preserves T-90-09).
+         */
+        StaffReplyRequest: {
+            /** Body */
+            body: string;
+        };
+        /**
+         * StaffThreadHistoryResponse
+         * @description Full history of a single client↔gym thread (Phase 116 MSG-01).
+         *
+         *     thread_id (→ threadId on wire): the thread UUID.
+         *     messages: list of all messages in the thread, chronological order (oldest first).
+         */
+        StaffThreadHistoryResponse: {
+            /** Messages */
+            messages: components["schemas"]["StaffMessageItem"][];
+            /**
+             * Threadid
+             * Format: uuid
+             */
+            threadId: string;
+        };
+        /**
+         * StaffThreadItem
+         * @description Single thread row in the staff inbox list (Phase 116 MSG-01).
+         *
+         *     id: thread UUID.
+         *     client_id (→ clientId on wire): the client's UUID.
+         *     client_name (→ clientName on wire): first_name + last_name.
+         *     client_initials (→ clientInitials on wire): 1-2 char uppercase initials.
+         *     last_message_at (→ lastMessageAt on wire): when the last message was sent; None if empty.
+         *     last_message_body (→ lastMessageBody on wire): body of the latest message; None if empty.
+         *     last_message_role (→ lastMessageRole on wire): sender role of latest message; None if empty.
+         *     staff_unread_count (→ staffUnreadCount on wire): count of client messages newer than
+         *         staff_last_read_at (or all client messages if staff_last_read_at IS NULL).
+         */
+        StaffThreadItem: {
+            /**
+             * Clientid
+             * Format: uuid
+             */
+            clientId: string;
+            /** Clientinitials */
+            clientInitials: string;
+            /** Clientname */
+            clientName: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Lastmessageat */
+            lastMessageAt?: string | null;
+            /** Lastmessagebody */
+            lastMessageBody?: string | null;
+            /** Lastmessagerole */
+            lastMessageRole?: string | null;
+            /** Staffunreadcount */
+            staffUnreadCount: number;
         };
         /**
          * TelegramStartResponse
@@ -7888,6 +8494,17 @@ export interface components {
             id: string;
             role: components["schemas"]["Role"];
         };
+        /**
+         * UserRoleChangeRequest
+         * @description PATCH /api/v1/users/{user_id}/role body (Phase 112 TEAM-01).
+         *
+         *     BackendSchemaBase sets extra='forbid' automatically, so unknown fields
+         *     in the request body raise 422 (defence-in-depth; mirrors UserCreateRequest).
+         *     ``role`` is the target role — either the role enum variant.
+         */
+        UserRoleChangeRequest: {
+            role: components["schemas"]["Role"];
+        };
         /** ValidationError */
         ValidationError: {
             /** Context */
@@ -7900,6 +8517,49 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /**
+         * VisitAnomalyPoint
+         * @description Single daily observation in the anomaly series (ANL-02).
+         *
+         *     date: 'YYYY-MM-DD' gym_date (MSK).
+         *     count: visit count for that day.
+         *     is_anomaly: True when |count - trailing_mean| > ANOMALY_SIGMA * trailing_std.
+         *     direction: 'spike' (above mean) | 'drop' (below mean) | None (not anomalous).
+         *     label: short Russian label (e.g. '12 июн') for chart tooltips.
+         *     Wire: { date, count, isAnomaly, direction, label }
+         */
+        VisitAnomalyPoint: {
+            /** Count */
+            count: number;
+            /** Date */
+            date: string;
+            /** Direction */
+            direction: ("spike" | "drop") | null;
+            /** Isanomaly */
+            isAnomaly: boolean;
+            /** Label */
+            label: string;
+        };
+        /**
+         * VisitAnomalyResponse
+         * @description GET /api/v1/reports/anomaly payload (ANL-02).
+         *
+         *     points: gap-filled daily series (contiguous, no missing days).
+         *     window_days: trailing mean window used (ANOMALY_WINDOW_DAYS constant).
+         *     sigma_threshold: sigma threshold used (ANOMALY_SIGMA constant).
+         *     anomaly_count: number of flagged points in the series.
+         *     Wire: { points, windowDays, sigmaThreshold, anomalyCount }
+         */
+        VisitAnomalyResponse: {
+            /** Anomalycount */
+            anomalyCount: number;
+            /** Points */
+            points: components["schemas"]["VisitAnomalyPoint"][];
+            /** Sigmathreshold */
+            sigmaThreshold: number;
+            /** Windowdays */
+            windowDays: number;
         };
         /**
          * VisitCreateRequest
@@ -10308,6 +10968,97 @@ export interface operations {
             422: components["responses"]["422_ValidationError"];
         };
     };
+    staff_list_threads: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_StaffInboxResponse_"];
+                };
+            };
+        };
+    };
+    staff_get_thread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_StaffThreadHistoryResponse_"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    staff_mark_thread_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    staff_send_reply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaffReplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_StaffMessageItem_"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
     refund_membership_online: {
         parameters: {
             query?: never;
@@ -10563,6 +11314,33 @@ export interface operations {
             422: components["responses"]["422_ValidationError"];
         };
     };
+    refund_payment_endpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaymentRefundRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PaymentResponse_"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
     list_payroll_accruals: {
         parameters: {
             query: {
@@ -10707,6 +11485,104 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ResponseEnvelope_TrainerCompConfigResponse_"];
                 };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    list_promo_codes_endpoint: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                active?: boolean | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PaginatedData_PromoCodeListItemResponse__"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    create_promo_code_endpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PromoCodeCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PromoCodeResponse_"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    edit_promo_code_endpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                promo_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PromoCodeUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_PromoCodeResponse_"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    deactivate_promo_code_endpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                promo_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             422: components["responses"]["422_ValidationError"];
         };
@@ -11203,6 +12079,50 @@ export interface operations {
             422: components["responses"]["422_ValidationError"];
         };
     };
+    get_anomaly_report: {
+        parameters: {
+            query?: {
+                fromDate?: string | null;
+                toDate?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_VisitAnomalyResponse_"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    get_at_risk_report: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_AtRiskMembersResponse_"];
+                };
+            };
+        };
+    };
     get_clients_report: {
         parameters: {
             query: {
@@ -11234,6 +12154,71 @@ export interface operations {
                 fromDate: string;
                 toDate: string;
                 within?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    get_cohort_report: {
+        parameters: {
+            query?: {
+                cohortMonths?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_CohortRetentionResponse_"];
+                };
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
+    get_load_now: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseEnvelope_LoadNowResponse_"];
+                };
+            };
+        };
+    };
+    get_payments_csv: {
+        parameters: {
+            query: {
+                fromDate: string;
+                toDate: string;
             };
             header?: never;
             path?: never;
@@ -12003,6 +12988,31 @@ export interface operations {
             422: components["responses"]["422_ValidationError"];
         };
     };
+    change_user_role_endpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserRoleChangeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["422_ValidationError"];
+        };
+    };
     list_visits: {
         parameters: {
             query?: {
@@ -12118,70 +13128,6 @@ export interface operations {
                     };
                 };
             };
-        };
-    };
-    /** Phase 112 REF-01 — POST /api/v1/payments/{payment_id}/refund (owner-only) */
-    refund_payment_endpoint: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                payment_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** @description Refund amount in kopecks; must not exceed original payment amount. */
-                    amountKopecks: number;
-                    /** @description Reason for the refund (min 3 chars, saved to audit log). */
-                    reason: string;
-                };
-            };
-        };
-        responses: {
-            /** @description New refund payment row created. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        data: components["schemas"]["PaymentResponse"];
-                    };
-                };
-            };
-            422: components["responses"]["422_ValidationError"];
-        };
-    };
-    /** Phase 112 TEAM-01 — PATCH /api/v1/users/{user_id}/role (owner-only) */
-    change_user_role_endpoint: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                user_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** @description New role for the target user. */
-                    role: "owner" | "reception";
-                };
-            };
-        };
-        responses: {
-            /** @description Role updated; new role applies on target's next login. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            422: components["responses"]["422_ValidationError"];
         };
     };
 }
