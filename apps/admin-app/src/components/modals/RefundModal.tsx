@@ -58,7 +58,7 @@ function handleRefundError(err: unknown) {
     if (err.code === 'over_refund') {
       toast.error('Возврат невозможен: сумма превышает доступный остаток');
     } else if (err.code === 'already_refunded') {
-      toast.error('Возврат невозможен: сумма превышает доступный остаток');
+      toast.error('Этот платёж уже был возвращён');
     } else if (err.code === 'cannot_refund_refund') {
       toast.error('Нельзя оформить возврат на возврат');
     } else {
