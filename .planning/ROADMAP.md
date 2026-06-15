@@ -495,7 +495,7 @@ Plans:
 **Plans**: 3 plans
 - [x] 113-01-PLAN.md — Backend admin CRUD + migration 0072 + RBAC parity (permissions.py/can.ts/registry/parity test)
 - [x] 113-02-PLAN.md — Backend integration tests (RBAC 403, CRUD happy path, normalization/conflict, used_count, CSRF)
-- [ ] 113-03-PLAN.md — Frontend wiring (features/promoCodes seam, PromoCodeModal, PromoCard + PlansPage section mock→real)
+- [x] 113-03-PLAN.md — Frontend wiring (features/promoCodes seam, PromoCodeModal, PromoCard + PlansPage section mock→real)
 **UI hint**: yes
 
 ### Phase 114: Attendance Analytics on Existing Reports
@@ -577,7 +577,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 112. Critical Money & Access | 3/3 | Complete   | 2026-06-15 |
-| 113. Promo Codes CRUD | 2/3 | In Progress|  |
+| 113. Promo Codes CRUD | 3/3 | Complete   | 2026-06-15 |
 | 114. Attendance Analytics on Existing Reports | 0/TBD | Not started | - |
 | 115. Live & Advanced Analytics | 0/TBD | Not started | - |
 | 116. Chat Inbox & Exports | 0/TBD | Not started | - |
