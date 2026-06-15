@@ -525,7 +525,11 @@ Plans:
   2. Owner sees a "сейчас в зале" live-load count on the Load page, backed by a new `GET /api/v1/reports/load/now` endpoint returning the current in-gym headcount.
   3. Dashboard activity feed shows real recent events (from audit log or visits/payments read endpoints); top-trainer KPIs and plans sales chart render real data — mock widgets are removed.
 
-**Plans**: TBD
+**Plans**: 4 plans
+- [ ] 115-01-PLAN.md — Backend: cohort / anomaly / at-risk / load-now aggregate routes (raw-SQL window functions on existing reports module; owner-only)
+- [ ] 115-02-PLAN.md — Backend: ASGITransport integration tests (owner-200 + reception-403 + empty/small-sample) for the four new endpoints
+- [ ] 115-03-PLAN.md — Frontend: reports Zod/hooks + CohortRetentionCard / VisitAnomalyCard / AtRiskWidget + LiveNowCard wiring on Load page
+- [ ] 115-04-PLAN.md — Frontend: dashboard ActivityFeed→audit-log mapper/hook + real TopTrainers/RevenueChart verification (mock removal, ANL-04)
 **UI hint**: yes
 
 ### Phase 116: Chat Inbox & Exports
