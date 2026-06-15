@@ -696,6 +696,100 @@ type _OwnerSettingsNotificationsPutBody = AssertNonNever<
   paths['/api/v1/settings/notifications']['put']['requestBody']
 >
 
+// --- v3.2 surface (Phases 112-116: refund + role-change + promo CRUD + analytics + messages + CSV) ---
+// Fifteen path×method guards — one AssertNonNever alias per new v3.2 path×method.
+// Plus requestBody realisation probes for mutating endpoints and responses['200'] anchors
+// for list/CSV routes (declared as compile-time type aliases outside the runtime tuple).
+//
+// Path set (verified against openapi.json regenerated in Phase 117 Plan 01):
+//   POST  /api/v1/payments/{payment_id}/refund        (REF-01 — Phase 112)
+//   PATCH /api/v1/users/{user_id}/role                (TEAM-01 — Phase 112)
+//   GET   /api/v1/promo-codes                         (PROMO-01 — Phase 113)
+//   POST  /api/v1/promo-codes                         (PROMO-01 — Phase 113)
+//   PATCH /api/v1/promo-codes/{promo_id}              (PROMO-01 — Phase 113)
+//   PATCH /api/v1/promo-codes/{promo_id}/deactivate   (PROMO-02 — Phase 113)
+//   GET   /api/v1/reports/cohort                      (ANL-01 — Phase 115)
+//   GET   /api/v1/reports/anomaly                     (ANL-02 — Phase 115)
+//   GET   /api/v1/reports/at-risk                     (ANL-02 — Phase 115)
+//   GET   /api/v1/reports/load/now                    (ANL-03 — Phase 115)
+//   GET   /api/v1/messages/threads                    (MSG-01 — Phase 116)
+//   GET   /api/v1/messages/threads/{thread_id}        (MSG-01 — Phase 116)
+//   POST  /api/v1/messages/threads/{thread_id}/reply  (MSG-02 — Phase 116)
+//   POST  /api/v1/messages/threads/{thread_id}/read   (MSG-01 — Phase 116)
+//   GET   /api/v1/reports/payments.csv               (EXP-02 — Phase 116; anchored via responses['200'])
+type _PaymentRefundPost = AssertNonNever<paths['/api/v1/payments/{payment_id}/refund']['post']>
+type _UsersRolePatch = AssertNonNever<paths['/api/v1/users/{user_id}/role']['patch']>
+type _PromoCodesListGet = AssertNonNever<paths['/api/v1/promo-codes']['get']>
+type _PromoCodesPost = AssertNonNever<paths['/api/v1/promo-codes']['post']>
+type _PromoCodePatch = AssertNonNever<paths['/api/v1/promo-codes/{promo_id}']['patch']>
+type _PromoCodeDeactivatePatch = AssertNonNever<paths['/api/v1/promo-codes/{promo_id}/deactivate']['patch']>
+type _ReportsCohortGet = AssertNonNever<paths['/api/v1/reports/cohort']['get']>
+type _ReportsAnomalyGet = AssertNonNever<paths['/api/v1/reports/anomaly']['get']>
+type _ReportsAtRiskGet = AssertNonNever<paths['/api/v1/reports/at-risk']['get']>
+type _ReportsLoadNowGet = AssertNonNever<paths['/api/v1/reports/load/now']['get']>
+type _MessagesThreadsListGet = AssertNonNever<paths['/api/v1/messages/threads']['get']>
+type _MessagesThreadGet = AssertNonNever<paths['/api/v1/messages/threads/{thread_id}']['get']>
+type _MessagesThreadReplyPost = AssertNonNever<paths['/api/v1/messages/threads/{thread_id}/reply']['post']>
+type _MessagesThreadReadPost = AssertNonNever<paths['/api/v1/messages/threads/{thread_id}/read']['post']>
+// CSV route — reachability anchor on 200 response (no JSON body; parallel to _ReportsRevenueCsvGet pattern)
+type _ReportsPaymentsCsvGet = AssertNonNever<
+  paths['/api/v1/reports/payments.csv']['get']['responses']['200']
+>
+
+// Body realisation probes — verify requestBody is non-never for mutating endpoints (compile-time only)
+type _PaymentRefundPostBody = AssertNonNever<
+  paths['/api/v1/payments/{payment_id}/refund']['post']['requestBody']
+>
+type _UsersRolePatchBody = AssertNonNever<
+  paths['/api/v1/users/{user_id}/role']['patch']['requestBody']
+>
+type _PromoCodesPostBody = AssertNonNever<
+  paths['/api/v1/promo-codes']['post']['requestBody']
+>
+type _PromoCodePatchBody = AssertNonNever<
+  paths['/api/v1/promo-codes/{promo_id}']['patch']['requestBody']
+>
+type _MessagesThreadReplyPostBody = AssertNonNever<
+  paths['/api/v1/messages/threads/{thread_id}/reply']['post']['requestBody']
+>
+// responses['200'] anchors for list GETs (compile-time only)
+type _PromoCodesListGetOk = AssertNonNever<
+  paths['/api/v1/promo-codes']['get']['responses']['200']
+>
+type _MessagesThreadsListGetOk = AssertNonNever<
+  paths['/api/v1/messages/threads']['get']['responses']['200']
+>
+
+// Static checks for v3.2 surface — 22 entries (15 path×method guards + 5 requestBody + 2 responses['200']);
+// each must resolve to true at compile time.
+const _v32Checks: [
+  _PaymentRefundPost,
+  _UsersRolePatch,
+  _PromoCodesListGet,
+  _PromoCodesPost,
+  _PromoCodePatch,
+  _PromoCodeDeactivatePatch,
+  _ReportsCohortGet,
+  _ReportsAnomalyGet,
+  _ReportsAtRiskGet,
+  _ReportsLoadNowGet,
+  _MessagesThreadsListGet,
+  _MessagesThreadGet,
+  _MessagesThreadReplyPost,
+  _MessagesThreadReadPost,
+  _ReportsPaymentsCsvGet,
+  _PaymentRefundPostBody,
+  _UsersRolePatchBody,
+  _PromoCodesPostBody,
+  _PromoCodePatchBody,
+  _MessagesThreadReplyPostBody,
+  _PromoCodesListGetOk,
+  _MessagesThreadsListGetOk,
+] = [
+  true, true, true, true, true, true, true, true, true, true, true,
+  true, true, true, true, true, true, true, true, true, true, true,
+]
+
 // Static checks for v3.1 surface — each must resolve to true at compile time.
 const _v31Checks: [
   _StaffAuthMePatch,
@@ -775,5 +869,9 @@ describe('schema.contract', () => {
 
   it('compiles against the regenerated v3.1 surface (auth profile/password + Settings persistence — Phases 107-110)', () => {
     expect(_v31Checks).toHaveLength(14)
+  })
+
+  it('compiles against the regenerated v3.2 surface (refund + role-change + promo CRUD + analytics + messages + payments.csv — Phases 112-116)', () => {
+    expect(_v32Checks).toHaveLength(22)
   })
 })
