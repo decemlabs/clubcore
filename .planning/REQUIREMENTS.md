@@ -17,8 +17,8 @@
 
 ### Promo Codes (P1 — backend ready)
 
-- [ ] **PROMO-01**: Owner can create, edit, and deactivate/archive promo codes (percentage or fixed, with limits) via the Plans page, persisted to the existing `promo_codes` backend.
-- [ ] **PROMO-02**: The Plans «Скидки и акции» section lists real promo codes from the backend (replacing the mock cards).
+- [x] **PROMO-01**: Owner can create, edit, and deactivate/archive promo codes (percentage or fixed, with limits) via the Plans page, persisted to the existing `promo_codes` backend.
+- [x] **PROMO-02**: The Plans «Скидки и акции» section lists real promo codes from the backend (replacing the mock cards).
 
 ### Attendance & Load Analytics (P1 — on existing reports)
 
@@ -69,8 +69,8 @@
 |-------------|-------|--------|
 | REF-01 | 112 | Complete |
 | TEAM-01 | 112 | Complete |
-| PROMO-01 | 113 | Pending |
-| PROMO-02 | 113 | Pending |
+| PROMO-01 | 113 | Complete |
+| PROMO-02 | 113 | Complete |
 | ANL-01 | 114 | Pending |
 | ANL-02 | 115 | Pending |
 | ANL-03 | 115 | Pending |
