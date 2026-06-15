@@ -77,7 +77,7 @@ export function useThreads() {
   return useQuery({
     queryKey: messagesKeys.threads(),
     queryFn: async () => {
-      const raw = await staffRequest('get', '/api/v1/messages/threads')
+      const raw = await staffRequest('get', '/api/v1/messages/threads' as never)
       return StaffInboxSchema.parse(raw).data
     },
     staleTime: 0,

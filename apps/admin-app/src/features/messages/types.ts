@@ -125,7 +125,7 @@ export interface StaffThread {
 
 export interface StaffMessage {
   id: string
-  role: 'client' | 'staff' // open string, but 116-01 ships exactly these two values
+  role: string // open string per 116-01 (backend ships 'client'|'staff'; forward compat)
   body: string
   sentAt: string // ISO
 }

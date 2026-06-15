@@ -1,5 +1,5 @@
 /**
- * AttendancePage — страница «Посещаемость» (Phase 103-02 ATT-01).
+ * AttendancePage — страница «Посещаемость» (Phase 103-02 ATT-01, updated Phase 116-03).
  *
  * Wired to real GET /api/v1/visits via useAttendanceList from @/features/attendance/api.
  *
@@ -10,14 +10,20 @@
  *
  * Renders: page head (date-range picker + check-in button) + total KPI + real visits list with pagination.
  * Roles: reception + owner (ATT-01 — NOT owner-only).
+ * Phase 116-03: «Экспорт CSV» button (owner-only EXP-02; visits.csv over current range).
  */
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { useAttendanceList } from '@/features/attendance/api';
+import { useSession } from '@/features/auth/api';
+import { can } from '@/shared/session/can';
+import { downloadCsv } from '@/api/csv';
 import { PageLoading, PageError } from '@/components/feedback/PageState';
+import { Button } from '@/components/ui/button';
+import { Activity, Download, Loader2 } from '@/components/icons';
 import { AttendancePageHead } from './components/AttendancePageHead';
 import { VisitsList } from './components/VisitsList';
 import { DateRangePicker } from '@/components/common/DateRangePicker';
-import { Activity } from '@/components/icons';
 import { formatDateRu, mskTodayISO, mskDaysAgoISO } from '@/lib/format';
 
 // ---------------------------------------------------------------------------
@@ -60,6 +66,11 @@ export function AttendancePage() {
   const [from, setFrom] = useState(DEFAULT_FROM);
   const [to, setTo] = useState(DEFAULT_TO);
   const [page, setPage] = useState(1);
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  // Derive role for owner-gated export button
+  const session = useSession();
+  const role = session.data?.role ?? 'reception';
 
   const filter = { from, to, page, pageSize: PAGE_SIZE };
 
@@ -79,6 +90,40 @@ export function AttendancePage() {
     setPage(1);
   }
 
+  async function handleExport() {
+    setIsDownloading(true);
+    try {
+      await downloadCsv(
+        '/api/v1/reports/visits.csv',
+        `visits-${from}-${to}.csv`,
+        { fromDate: from, toDate: to },
+      );
+    } catch {
+      toast.error('Не удалось экспортировать файл. Попробуйте ещё раз.');
+    } finally {
+      setIsDownloading(false);
+    }
+  }
+
+  const exportButton = can(role, 'view', 'reports') ? (
+    <Button
+      variant="outline"
+      size="sm"
+      disabled={isDownloading}
+      onClick={() => void handleExport()}
+      aria-busy={isDownloading}
+      aria-label="Экспорт CSV"
+      className="h-[34px] shrink-0 gap-1.5 rounded-full px-3.5 text-[13px] font-semibold"
+    >
+      {isDownloading ? (
+        <Loader2 className="size-3.5 animate-spin" />
+      ) : (
+        <Download className="size-3.5" strokeWidth={2.2} />
+      )}
+      <span className="max-sm:hidden">Экспорт CSV</span>
+    </Button>
+  ) : undefined;
+
   return (
     <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-4 px-4 pb-10 pt-5 sm:px-6 sm:pb-12 sm:pt-6 lg:px-7">
       <AttendancePageHead
@@ -86,6 +131,7 @@ export function AttendancePage() {
         dateRangePicker={
           <DateRangePicker from={from} to={to} onChange={handleRangeChange} />
         }
+        exportButton={exportButton}
       />
 
       <TotalVisitsKpi total={data.total} from={from} to={to} />

@@ -1,9 +1,9 @@
 /**
- * CashboxPageHead — page header for the cash ledger (Phase 103-03).
+ * CashboxPageHead — page header for the cash ledger (Phase 103-03, updated Phase 116-03).
  *
  * Shows title «Касса», subtitle with date range + total count,
  * and the DateRangePicker in the actions area.
- * ShiftPill and shift-related state removed — no shift endpoint.
+ * Phase 116-03: optional exportButton slot for owner-gated «Экспорт CSV».
  */
 import type { ReactNode } from 'react';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -14,11 +14,13 @@ export function CashboxPageHead({
   to,
   total,
   dateRangePicker,
+  exportButton,
 }: {
   from: string;
   to: string;
   total: number;
   dateRangePicker: ReactNode;
+  exportButton?: ReactNode;
 }) {
   const fromLabel = formatDateRu(from, 'd MMM yyyy');
   const toLabel = formatDateRu(to, 'd MMM yyyy');
@@ -31,7 +33,12 @@ export function CashboxPageHead({
           {fromLabel} – {toLabel} · {total} операций
         </>
       }
-      actions={dateRangePicker}
+      actions={
+        <div className="flex flex-wrap items-center gap-2">
+          {dateRangePicker}
+          {exportButton}
+        </div>
+      }
       actionsClassName="items-start"
     />
   );

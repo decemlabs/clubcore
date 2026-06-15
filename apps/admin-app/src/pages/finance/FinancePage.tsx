@@ -1,5 +1,5 @@
 /**
- * FinancePage — owner-only 2-tab Finance screen (Phase 103-04).
+ * FinancePage — owner-only 2-tab Finance screen (Phase 103-04, updated Phase 116-03).
  *
  * RBAC: early-return Lock-EmptyState BEFORE any data hook fires.
  * Reception makes ZERO API calls when navigating to /finance.
@@ -8,21 +8,23 @@
  *   «Выручка»       — GET /api/v1/reports/revenue via useRevenueReport
  *   «Онлайн-платежи» — GET /api/v1/payments?method=online via useOnlinePayments
  *
- * Removed (no backend): «Неудачные», «Выплаты тренерам», CSV «Экспорт» button.
- *
+ * Phase 116-03: «Экспорт CSV» button (owner-only EXP-01; payments.csv over current range).
  * Revenue chart: zero-filled via fillRevenueBuckets (no NaN); groupBy day|month toggle.
  * All-zero → inline EmptyState instead of flat-zero chart.
  * Signed netKopecks formats correctly (negative = refund-heavy period).
  */
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { useSession } from '@/features/auth/api';
 import { useRevenueReport, useOnlinePayments } from '@/features/finance/api';
 import { can } from '@/shared/session/can';
+import { downloadCsv } from '@/api/csv';
 import { fillRevenueBuckets } from '@/features/reports/utils';
 import { PageLoading, PageError } from '@/components/feedback/PageState';
 import { EmptyState } from '@/components/feedback/EmptyState';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Lock, TrendingUp } from '@/components/icons';
+import { Button } from '@/components/ui/button';
+import { Lock, TrendingUp, Download, Loader2 } from '@/components/icons';
 import { DateRangePicker } from '@/components/common/DateRangePicker';
 import { ChipGroup } from '@/components/modals/fields';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -78,6 +80,7 @@ function FinancePageContent({ role }: { role: Role }) {
   const [tab, setTab] = useState('revenue');
   const [groupBy, setGroupBy] = useState<'day' | 'month'>('day');
   const [page, setPage] = useState(1);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   // Revenue tab data — WR-04: pass role directly to avoid session double-waterfall
   const revenueQuery = useRevenueReport({ fromDate, toDate, groupBy }, role);
@@ -96,6 +99,21 @@ function FinancePageContent({ role }: { role: Role }) {
     setGroupBy(value as 'day' | 'month');
   }
 
+  async function handleExport() {
+    setIsDownloading(true);
+    try {
+      await downloadCsv(
+        '/api/v1/reports/payments.csv',
+        `payments-${fromDate}-${toDate}.csv`,
+        { fromDate, toDate },
+      );
+    } catch {
+      toast.error('Не удалось экспортировать файл. Попробуйте ещё раз.');
+    } finally {
+      setIsDownloading(false);
+    }
+  }
+
   function handleTabChange(key: string) {
     setTab(key);
   }
@@ -106,7 +124,27 @@ function FinancePageContent({ role }: { role: Role }) {
         title="Финансы"
         subtitle={`${formatDateRu(fromDate, 'dd.MM.yy')} – ${formatDateRu(toDate, 'dd.MM.yy')} · выручка и онлайн-платежи`}
         actions={
-          <DateRangePicker from={fromDate} to={toDate} onChange={handleRangeChange} />
+          <div className="flex flex-wrap items-center gap-2">
+            <DateRangePicker from={fromDate} to={toDate} onChange={handleRangeChange} />
+            {can(role, 'view', 'finance') && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isDownloading}
+                onClick={() => void handleExport()}
+                aria-busy={isDownloading}
+                aria-label="Экспорт CSV"
+                className="h-[34px] shrink-0 gap-1.5 rounded-full px-3.5 text-[13px] font-semibold"
+              >
+                {isDownloading ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Download className="size-3.5" strokeWidth={2.2} />
+                )}
+                <span className="max-sm:hidden">Экспорт CSV</span>
+              </Button>
+            )}
+          </div>
         }
       />
 
