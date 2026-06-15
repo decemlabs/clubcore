@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v3.1
-milestone_name: Admin — Fill the Gaps
-status: Awaiting next milestone
-stopped_at: Phase 109 UI-SPEC approved
-last_updated: "2026-06-15T03:09:14.303Z"
-last_activity: 2026-06-15 — Milestone v3.1 completed and archived
+milestone: v3.2
+milestone_name: Admin — Wire the Rest
+status: planning
+last_updated: "2026-06-15T03:15:49.190Z"
+last_activity: 2026-06-15
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 17
-  completed_plans: 17
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: Milestone v3.1 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-15 — Milestone v3.1 completed and archived
+Status: Defining requirements
+Last activity: 2026-06-15 — Milestone v3.2 started
 
 ## v3.1 Roadmap Summary
 

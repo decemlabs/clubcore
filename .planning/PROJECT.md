@@ -18,39 +18,27 @@ clubcore — CRM для тренажёрного зала (переименов�
 
 Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
 
-## Current Milestone: v3.1 Admin — Fill the Gaps
+## Current Milestone: v3.2 Admin — Wire the Rest
 
-**Goal:** Довести staff-админку до полнофункционального состояния — закрыть FE-заглушки на текущем backend, проверить вживую отложенный P102, и добавить минимальный backend для редактируемых Настроек (зал/график/запись/уведомления) + профиля.
-
-**Target features:**
-- **Тарифы create/edit** — реальные модалки + мутации для membership-plans и pt-package-plans (вместо toast-заглушек; backend уже есть).
-- **PT-пакеты (instances) UI** — продажа (PtPackageScreen в SubscriptionModal) + cancel/refund в TrainingsTab (хуки готовы, нужен UI).
-- **Client delete из hero-дропдауна** — рабочая мутация вместо заглушки (backend есть, owner-gated).
-- **Live-UAT P102** — брони (create/cancel/complete) + payroll (comp-config/preview/run/mark-paid) на сидированных данных.
-- **Настройки → persist** (новый/расширенный backend): Филиал (карточка зала, возможно через v2.4 `PUT /gym`), График работы (+перерывы/праздники), Запись и слоты (правила онлайн-записи), Уведомления (матрица триггер×канал + подпись + тихие часы, привязка к notification-диспетчеру).
-- **Профиль:** `PATCH /auth/me` (ФИО/email/тема) + смена пароля.
-
-**Key context:** v3.1 сознательно ослабляет wire-only-принцип v3.0 — **разрешены новые backend-эндпоинты**, но минимально и в рамках single-club; переиспользовать существующее где можно (gym-модуль v2.4, notification-диспетчер). Нумерация фаз продолжается с **107**.
-
-**Out of scope (явно):** production deploy/hardening (k8s, live ЮKassa leg, RU email/SMS deliverability, secrets/мониторинг) → v3.2+; настройки Платежи-эквайринг / Биллинг / Интеграции / Брендинг client-app; 2FA; client Chat/Notes; multi-branch (остаётся hide-for-future, D-V30-BRANCH).
-
-## Last Shipped Milestone: v3.0 Production Admin — Backend Wiring
-
-**✅ SHIPPED 2026-06-14** (Phases 100–106, 24 plans, 45 tasks; tag `v3.0`; audit `tech_debt`, 0 blockers, 30/30 requirements). `apps/admin-app` превращён из mock-прототипа в боевую staff-админку на реальном FastAPI backend (`cc_*` session-cookies + CSRF); `apps/admin-web` (~982 файла / ~21K LOC) удалён; CISO-01 RBAC-паритет перенесён в admin-app (41 entry); OpenAPI байт-стабилен (zero new routes per D-V30-SCOPE-WIRE). Live-browser UAT отложен per D-V30-VERSION (v3.0 = wiring; production deploy → v3.1+), но большая часть проверена ad-hoc 2026-06-14 (quick-задачи 260614-hux 8 багов / 260614-j2d GAP-1 / 260614-jt7 REV-01 revoke-invitation, все live-verified). Full audit: `.planning/milestones/v3.0-MILESTONE-AUDIT.md`.
-
-<details>
-<summary>Original v3.0 milestone scope (for reference)</summary>
-
-**Goal:** Превратить `apps/admin-app` из mock-прототипа в боевую staff-админку на реальном backend (одно-клубный срез по уже существующим доменам) и удалить `apps/admin-web`, перенеся его роль RBAC-reference.
+**Goal:** Закрыть операционную полноту staff-админки для одного зала — критичные дыры (возврат произвольного платежа, смена роли сотрудника) и «дожимку» уже готового backend (промокоды, аналитика посещаемости, экспорт, чат-инбокс). Дорогой full-stack (мультифилиальность, нотификации-хаб, persisted-RBAC) — в backlog.
 
 **Target features:**
-- **Абсорбция в монорепо + staff-auth** — `apps/admin-app` (новый staff-frontend: React 18 + Bun + Vite 5 + React Router v6 + TanStack Query v5 + Radix/shadcn + Recharts) входит в репозиторий; механика workspace / пакетного менеджера (Bun → pnpm?) решается на плане Phase 100 (прецедент v2.0 client-pwa). `Login` подключается к живому `/api/v1/auth/*` (staff cookie `sz_*` + CSRF + сессии).
-- **Ядро на реальных данных** — Dashboard (reports-агрегаты), Clients (+detail/edit), Абонементы/Plans (планы + инстансы), Schedule (слоты + брони), Trainers (+payroll), Attendance (visits), Cashbox/Finance (касса + revenue-reports), Audit (audit-log read), Settings (profile/sessions/users). Моки убираются по мере подключения экрана; `queryFn` хуков → боевой API; zod-контракт-слой подключается лениво per-domain (вердикт spike 010 = KEEP).
-- **Удаление `apps/admin-web`** — снос frozen mock-reference; перенос three-way RBAC-паритета (`permissions.py` ↔ `can.ts` ↔ `registry.ts`) + CISO-01 byte-guard — механика решается на плане Phase 100 (сначала прочитать реальную связанность кода); правка CI / pnpm-workspace / OpenAPI drift-gate.
-- **Hide-for-future** — Branches, Branch-Settings, System-Settings (мульти-бранч), ImportExport, Duplicates, Confirmations, staff-Messages, Roles-management спрятаны как «future» (паттерн PWA-плейсхолдеров D-71-09).
-- **OpenAPI handoff** — сохраняем дисциплину byte-stable контракта; staff-drift-gate зелёный (новых backend-доменов нет → контракт почти не меняется).
+- **Возврат произвольного платежа** (P0) — generalize refund за пределы membership/PT; снять READ-ONLY с Кассы/Финансов (закрывает `T-103-03-FAKEREFUND`).
+- **Смена роли сотрудника** (P0) — `PATCH /users/{id}/role` + модалка (модель `User.role` уже есть, миграций не нужно).
+- **Промокоды CRUD** (P1) — staff-CRUD поверх ГОТОВОЙ модели `promo_codes` (v2.0); wire PromoCard на PlansPage.
+- **Тарифы create/edit формы** (P1, закрывает WR-01) — допилить PlanFormModal поверх существующих API-хуков.
+- **Аналитика посещаемости** (P1) — heatmap/hour-curve/day-of-week/peak/frequency/duration на готовом `reports/visits`; затем cohort/anomaly/risk + LiveNow (`/reports/load/now`).
+- **Dashboard/Trainer/Plans виджеты** (P1) — activity-feed, trainer-KPI, plans sales-chart на уже существующих read-эндпоинтах.
+- **Staff chat-inbox** (P2) — staff-REST поверх готового messaging-модуля (v2.5) + wire admin-инбокс.
+- **CSV-экспорт** payments/attendance (P2) — поверх готового `csv_export.py`.
 
-**Key context:** single-club (мульти-бранч — следующие milestone'ы); **wire-only** — никаких новых бизнес-доменов на backend; staff-принципал (не client `cc_*`); `apps/admin-app` уже прогнан через 17 hardening-планов (vitest 58/58, route code-split, query error/loading states на всех страницах, dependency cleanup); нумерация фаз продолжается со **100**.
+**Key context:** приоритизация по **backend-готовности** — большинство фич это дешёвое FE-wiring к уже существующему backend (проверено пробами этой сессии: promo_codes/messaging/reports готовы). Additive-контракт (не byte-stable), `_v32Checks` forward-guard. **Урок v3.0/v3.1 — обязателен в gate:** ≥1 contract-тест на домен, парсящий РЕАЛЬНЫЙ ответ backend (mock↔real schema-дрейф дважды прошёл формальный гейт, пойман только browser-UAT). Нумерация фаз продолжается со **112**.
+
+**Out of scope → backlog:** мультифилиальность (XL, отдельный v4 при появлении 2-го зала), Notifications Hub / рассылки (XL), persisted-RBAC / Roles-editor (XL, ломает CISO-01 byte-parity), import wizard (L), корзина/restore (L), глобальный поиск (M), расширенный settings-security 2FA/API-keys/webhooks (L), client notes-таб.
+
+## Last Shipped Milestone: v3.1 Admin — Fill the Gaps
+
+**✅ SHIPPED 2026-06-15** (Phases 107–111, 17 plans, 23 tasks; tag `v3.1`; audit passed, 13/13 requirements). Каждый оставшийся admin-gap (toast-заглушки тарифов/PT-пакетов, client-delete, редактируемые Настройки зал/график/запись/уведомления, профиль/безопасность) стал реальным backend-действием; отложенный P102 (брони create/cancel/complete + payroll) live-verified; additive OpenAPI regenerated + `_v31Checks` forward-guard; full gate green. **Browser-UAT закрытие** (chrome-devtools-mcp, 33 теста, 2026-06-15): найдено + починено + перепроверено вживую **6 FE↔backend schema-divergence багов** (4 блокирующих) — все FE-only. Full audit: `.planning/milestones/v3.1-MILESTONE-AUDIT.md` + `.planning/v3.1-UAT-BROWSER-AUDIT.md`.
 
 ## Current State
 
