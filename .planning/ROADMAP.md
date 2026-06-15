@@ -509,7 +509,9 @@ Plans:
   2. Owner sees day-of-week breakdown, peak-hour, and visit-frequency distribution widgets — all derived from the same aggregate endpoint without new backend queries.
   3. Owner sees a visit-duration widget (if the backend aggregate carries duration data) or a clearly labeled "coming soon" state if not — no silent mock data.
 
-**Plans**: TBD
+**Plans**: 2 plans
+- [ ] 114-01-PLAN.md — derive.ts pure derivation (day-of-week / peak-hour / daily-volume frequency) + Vitest edge-case coverage
+- [ ] 114-02-PLAN.md — DayOfWeekCard / PeakHourCard / FrequencyCard / DurationPlaceholderCard widgets composed into LoadPage below LoadHeatmapCard
 **UI hint**: yes
 
 ### Phase 115: Live & Advanced Analytics
