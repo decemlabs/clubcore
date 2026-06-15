@@ -1,0 +1,13 @@
+{
+  "data": {
+    "id": "0049442a-4aab-4c02-bd34-6adadad26390",
+    "subjectKind": "refund",
+    "subjectId": "49b20299-0fe2-4ccd-a8c1-7739b1b61802",
+    "amountKopecks": -250000,
+    "method": "cash",
+    "receivedAt": "2026-06-15T14:18:11.269576Z",
+    "receivedByUserId": "9df43fe6-90dc-48eb-b702-90934683bb52",
+    "refundOf": "b7c6ee18-c741-443a-b059-4dc75a88958a",
+    "auditLogId": null
+  }
+}

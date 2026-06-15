@@ -106,6 +106,14 @@ external = ["SVC"]
     "ASYNC221", "S603", "S607",
 ]
 
+# Phase 117 Plan 02: pytest re-export pattern — fixture names in function parameters
+# shadow module-level imports that are there solely for pytest fixture discovery.
+# This is the canonical conftest re-export pattern; F811 is a false positive here.
+"tests/messaging/test_threads_capture.py" = ["F811"]
+# Pre-existing: test_staff_messaging.py has the same re-export pattern + E402 module
+# import not at top of file (re-export from memberships conftest placed after helpers).
+"tests/integration/messaging/test_staff_messaging.py" = ["F811", "E402"]
+
 [format]
 quote-style = "double"
 indent-style = "space"

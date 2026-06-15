@@ -1,0 +1,54 @@
+{
+  "data": {
+    "items": [
+      {
+        "id": "4ef6144e-9314-444e-9ee2-2d9421a7f4c6",
+        "code": "CAPTURE117",
+        "discountType": "percentage",
+        "discountValue": 1000,
+        "maxUses": 50,
+        "perClientLimit": null,
+        "validFrom": null,
+        "validUntil": null,
+        "isActive": true,
+        "applicableTo": null,
+        "description": "117 capture test code",
+        "usedCount": 0,
+        "createdAt": "2026-06-15T14:18:12.010988Z"
+      },
+      {
+        "id": "6f1f5ae1-8a3d-41ee-9ddd-209503679768",
+        "code": "FIRST500",
+        "discountType": "fixed",
+        "discountValue": 50000,
+        "maxUses": 50,
+        "perClientLimit": 1,
+        "validFrom": null,
+        "validUntil": null,
+        "isActive": true,
+        "applicableTo": null,
+        "description": null,
+        "usedCount": 0,
+        "createdAt": "2026-06-15T01:49:38.856369Z"
+      },
+      {
+        "id": "3256cffa-20da-4696-b969-905b9ac0f70f",
+        "code": "FIT10",
+        "discountType": "percentage",
+        "discountValue": 1000,
+        "maxUses": null,
+        "perClientLimit": 1,
+        "validFrom": null,
+        "validUntil": null,
+        "isActive": true,
+        "applicableTo": null,
+        "description": null,
+        "usedCount": 0,
+        "createdAt": "2026-06-15T01:49:38.856369Z"
+      }
+    ],
+    "total": 3,
+    "page": 1,
+    "pageSize": 20
+  }
+}

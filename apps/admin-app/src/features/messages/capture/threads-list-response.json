@@ -1,0 +1,17 @@
+{
+  "data": {
+    "items": [
+      {
+        "id": "325585d8-5114-4336-9bb0-e1e0533c4358",
+        "clientId": "92faf377-8fd6-4e1e-863e-f5d95bcb2131",
+        "clientName": "Иван Захватов",
+        "clientInitials": "ИЗ",
+        "lastMessageAt": "2026-06-15T14:18:13.678669Z",
+        "lastMessageBody": "Привет из capture теста",
+        "lastMessageRole": "client",
+        "staffUnreadCount": 1
+      }
+    ],
+    "total": 1
+  }
+}
