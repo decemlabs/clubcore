@@ -13,18 +13,20 @@ interface TopTrainersProps {
   month: string; // e.g. "июнь 2026"
 }
 
+// Chart-palette tokens (var(--chart-1..5)) so avatar colors adapt to light/dark
+// and stay inside the semantic token system (no raw hex).
 const COLORS = [
-  '#4f46e5',
-  '#0891b2',
-  '#059669',
-  '#d97706',
-  '#dc2626',
+  'var(--chart-1)',
+  'var(--chart-2)',
+  'var(--chart-3)',
+  'var(--chart-4)',
+  'var(--chart-5)',
 ];
 
 function TrainerRowItem({ trainer, first, maxRevenue }: { trainer: TrainerRow; first: boolean; maxRevenue: number }) {
   const initials = getInitials(trainer.trainerNameSnapshot);
   const colorIdx = trainer.trainerId.charCodeAt(0) % COLORS.length;
-  const color = COLORS[colorIdx] ?? '#4f46e5';
+  const color = COLORS[colorIdx] ?? 'var(--chart-1)';
   const barPct = maxRevenue > 0 ? Math.round((trainer.revenueKopecks / maxRevenue) * 100) : 0;
   const revenueRub = Number.isFinite(trainer.revenueKopecks)
     ? Math.max(Math.round(trainer.revenueKopecks / 100), 0)

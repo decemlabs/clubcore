@@ -130,8 +130,8 @@ export function RevenueChart({ data, fromDate, toDate, isPending }: RevenueChart
           <AreaChart data={points} margin={{ top: 10, right: 8, left: 8, bottom: 0 }}>
             <defs>
               <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#2dd4a4" stopOpacity={0.32} />
-                <stop offset="100%" stopColor="#2dd4a4" stopOpacity={0} />
+                <stop offset="0%" stopColor="var(--chart-1)" stopOpacity={0.32} />
+                <stop offset="100%" stopColor="var(--chart-1)" stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid vertical={false} stroke="var(--border)" strokeOpacity={0.55} />
