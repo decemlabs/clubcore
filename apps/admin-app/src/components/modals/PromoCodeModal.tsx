@@ -357,11 +357,7 @@ export function PromoCodeModal({ open, onOpenChange, mode, promo }: PromoCodeMod
             onChange={(e) => setValidFrom(e.target.value)}
           />
         </Field>
-        <Field
-          label="Конец действия"
-          optional
-          hint={isDateRangeInvalid ? undefined : undefined}
-        >
+        <Field label="Конец действия" optional>
           <ModalInput
             type="date"
             value={validUntil}
