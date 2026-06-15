@@ -471,7 +471,14 @@ Plans:
   3. Owner can open a staff user's profile in Team settings and change their role (owner ↔ reception) via a modal; the change persists and the new role is reflected on next login.
   4. Role-change is audited; reception cannot access the role-change UI or endpoint (403).
 
-**Plans**: TBD
+**Plans**: 3 plans, 2 waves
+Plans:
+**Wave 1** *(parallel — disjoint backend modules)*
+- [ ] 112-01-PLAN.md — Backend refund: POST /payments/{id}/refund (by-id, partial allowed, approach-b keeps frozen unique constraint) + new exceptions + ASGITransport tests [REF-01] · wave 1
+- [ ] 112-02-PLAN.md — Backend role-change: PATCH /users/{id}/role + user_role_changed LOCKED audit event + self/last-owner guards + ASGITransport tests [TEAM-01] · wave 1
+
+**Wave 2** *(blocked on 112-01 + 112-02)*
+- [ ] 112-03-PLAN.md — FE wiring: useRefundPayment + useChangeUserRole hooks + RefundModal (Cashbox + Finance, owner-gated) + ChangeRoleModal (Settings Team) + human-verify [REF-01, TEAM-01] · wave 2
 **UI hint**: yes
 
 ### Phase 113: Promo Codes CRUD
@@ -566,7 +573,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 112. Critical Money & Access | 0/TBD | Not started | - |
+| 112. Critical Money & Access | 0/3 | Planned | - |
 | 113. Promo Codes CRUD | 0/TBD | Not started | - |
 | 114. Attendance Analytics on Existing Reports | 0/TBD | Not started | - |
 | 115. Live & Advanced Analytics | 0/TBD | Not started | - |
