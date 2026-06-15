@@ -1,584 +1,822 @@
-# Architecture Research: v2.5 Chat / Messaging — Client↔Gym
-
-**Domain:** WebSocket real-time messaging integration into an existing FastAPI modular monolith
-**Researched:** 2026-06-06
-**Confidence:** HIGH (all findings from live codebase inspection; no guesses from training data)
-
----
-
-## Established Architecture Constraints (DO NOT RE-RESEARCH)
-
-These are locked invariants confirmed by reading `main.py`, `.importlinter`, `telegram_bot.py`, and `client_portal/router.py` directly:
-
-- **Three import-linter contracts** actively enforced:
-  1. `core-not-depend-on-modules`: `app.core` must not import `app.modules.*` (source_modules = app.core)
-  2. `modules-independent`: all listed modules cannot import each other; cross-module reads use raw SQL `text()`, cross-module writes use Protocol slots registered in `app.core.dependencies`
-  3. `integrations-not-depend-on-modules`: `app.integrations` must not import `app.modules.*` (with narrow `ignore_imports` exceptions for `email.dispatcher` importing module-scoped template registries)
-- **`app.main` is exempt** from `core-not-depend-on-modules` because `source_modules = app.core`, not `app`. The composition root can do `from app.modules.X import Y` inside `create_app()` body — this is the established carve-out pattern (D-15, D-10, REG-29-03).
-- **Telegram bot worker** (`app/workers/telegram_bot.py`) is a separate long-polling process. It is NOT an ARQ task. It opens `db_lifespan_manager()` + `redis_lifespan_manager()` independently, registers its own Protocol slots, builds a `HandlerContext` NamedTuple with module references, and passes that context to every handler function. D-06 allows `workers → app.modules.auth.telegram_service`; D-10 allows `workers → app.modules.visits.service`. Further worker→modules edges follow the same documented-exception pattern.
-- **HandlerContext** is a NamedTuple (field order is a stable contract; new fields must be appended at the END). Fields are module references (`visits_service`, `bookings_service`, `schedule_service`, etc.). Handler functions receive the context and dispatch through it — never by importing modules directly (because `integrations ⊥ modules`).
-- **`integrations/telegram/handlers.py`** uses `importlib.import_module` for type-only references that would otherwise break the `integrations ⊥ modules` contract. This is the established Option A pattern for that boundary.
-- **ClientPrincipal**: the `aud="client"` JWT decoded by `decode_client_token`. Carried in the `cc_client_access` httpOnly cookie. The dependency `require_client()` in `app.core.dependencies` resolves it. No role claim; isolation from staff token by `aud` assertion (CISO-01/02).
-- **Client-portal writes** go through Protocol-slot accessors in `app.core.dependencies` only. Direct imports of `app.modules.bookings`, `app.modules.visits`, etc. from `client_portal` are forbidden — evidenced by the 18+ `register_*` calls in `main.py`.
-- **Client-portal reads** use raw SQL `text()` cross-module SELECTs in `client_portal/repository.py` (D-54-08 precedent). No ORM model imports from foreign modules.
-- **IDOR discipline** (D-20-IDOR): `client_id` derived exclusively from `require_client()` principal, never from path/query/body. Non-owned resources → 404-collapse (anti-oracle). This must apply equally to WebSocket connections.
-- **INFRA-15**: all new `LOCKED_AUDIT_EVENTS` entries pre-registered in the frozenset BEFORE any callsite.
-- **Last confirmed migration revision**: around `0063` (Phase 88 trainer bio/photo). v2.5 starts at `0064_*`.
-- **`unmatched_ignore_imports_alerting = warn`** (not `error`) so pre-registered edges for not-yet-shipped module bodies don't fail CI.
-
----
-
-## Question 1: Where Does the WebSocket Endpoint Live?
-
-### The Constraint
-
-The WS endpoint needs:
-1. Access to `app.modules.messaging` service (to persist messages, record read receipts, etc.)
-2. Authentication via `ClientPrincipal` (`require_client()` logic)
-3. Redis pub/sub subscriber loop (to receive fan-out events from other workers/requests)
-
-The `modules-independent` contract forbids `messaging` from being imported into `client_portal` directly.
-
-### The Answer: WS Endpoint Lives in `messaging/router.py`, Mounted at `/client` Prefix
-
-**Why NOT `api layer` (e.g. `app/api/v1/_internal/`)**: The `_internal` prefix is reserved for transport-layer webhooks (email, YooKassa). The WS endpoint is a client-facing endpoint that authenticates with `require_client()` — it belongs under `/api/v1/client/`.
-
-**Why NOT `client_portal/router.py`**: The messaging module owns its own data model (threads, messages, receipts, typing indicators). Putting the WS endpoint in `client_portal` would force either a direct `from app.modules.messaging import service` import (violates `modules-independent`), or routing everything through Protocol slots (excessive for a module that is specifically a messaging endpoint). The precedent for separate client-facing routers mounted at `/client` prefix is already established: `loyalty.router`, `gym.router`, `notifications.router`, and `client_auth.router` all mount at `/client` in `api/v1/router.py` (lines 95-131 of the router file).
-
-**Correct pattern**: Create `app/modules/messaging/router.py` with a `router = APIRouter(tags=["Messaging"])`. Mount it in `app/api/v1/router.py` with prefix `/client`. The messaging module is its own bounded module, registered in `.importlinter`'s `modules-independent` contract.
-
-### WS Auth: How `require_client()` Applies
-
-FastAPI's `@app.websocket()` decorator accepts `Depends()` in the handler signature just like HTTP routes. However, there are two key constraints:
-1. WebSockets carry cookies from the browser's cookie jar automatically — the `cc_client_access` httpOnly cookie is sent on WS handshake.
-2. `require_client()` reads `request.cookies.get("cc_client_access")` — this works with `WebSocket` objects as well as `Request` objects because FastAPI's `WebSocket` also exposes `.cookies`.
-
-**Auth flow for WS**:
-```
-WS GET /api/v1/client/ws/messages
-  → Depends(require_client())  [reads cc_client_access cookie]
-  → decode_client_token(token) [asserts aud="client"]
-  → ClientLoader slot         [loads Client from DB]
-  → returns ClientPrincipal
-```
-
-If the token is missing/expired, FastAPI raises `InvalidAccessToken` BEFORE the WS handshake completes (during the `Depends` resolution phase). This closes the connection with HTTP 401 (the upgrade never completes). The PWA handles this with a reconnect + redirect to login flow.
-
-**CSRF**: WebSocket connections are not subject to CSRF because the browser cannot send `X-CSRF-Token` headers on the WS handshake. The httpOnly cookie already provides sufficient authentication for the origin-same-site channel. The WS endpoint does NOT add `verify_client_csrf` — this is standard and correct.
-
-### Proposed WS Endpoint Signature
-
-```python
-# app/modules/messaging/router.py
-
-@router.websocket("/ws/messages")
-async def client_ws_messages(
-    websocket: WebSocket,
-    client: Annotated[ClientPrincipal, Depends(require_client())],
-    redis: Annotated[Redis, Depends(get_redis)],
-    session: Annotated[AsyncSession, Depends(get_db)],
-) -> None:
-    # 1. Accept the WS connection
-    await websocket.accept()
-    # 2. Subscribe to Redis pub/sub channel for this client
-    # 3. Start fan-out delivery loop (see Question 2)
-```
-
-URL: `GET /api/v1/client/ws/messages` (HTTP → WS upgrade). The mount in `api/v1/router.py`:
-
-```python
-from app.modules.messaging.router import router as messaging_router
-v1.include_router(messaging_router, prefix="/client")
-```
-
-**Import-linter implication**: `app.modules.messaging` must be added to the `modules-independent` contract. The WS router imports `app.modules.messaging.service` directly (not via Protocol slot) because it IS the messaging module. No new `ignore_imports` edges needed — the module is self-contained.
-
-### Dependency on messaging.service from messaging.router
-
-Within the messaging module itself, `messaging/router.py` imports `messaging/service.py` — this is a same-module import, fully permitted. The messaging module does NOT import other modules directly. Cross-module reads (e.g. fetching client name for display) use raw SQL `text()` over the `clients` table (D-54-08 discipline). Cross-module writes (e.g. incrementing notification count in `notifications` module) use Protocol slots registered in `app.core.dependencies`.
-
----
-
-## Question 2: Redis Pub/Sub Fan-Out — Who Owns the Subscriber Loop?
-
-### The Problem
-
-A message persisted in one HTTP worker (POST /client/messages) must reach a WebSocket connection held by a different uvicorn worker process. Redis pub/sub is the established backbone.
-
-### Architecture: Lifespan Task + Per-Connection Subscriber
-
-**Who publishes**: the HTTP handler `POST /client/messages` (in `messaging/service.py`), after persisting the message to Postgres, publishes to a Redis channel `cc:messaging:thread:{thread_id}` using `redis.publish()`. This is a fire-and-forget publish inside the same request handler after the DB commit.
-
-**Who subscribes**: each WebSocket connection owns its own Redis pub/sub subscriber. FastAPI WS handlers are `async` coroutines. The correct pattern is:
-
-```
-For each WS connection:
-  1. Subscribe to a per-client Redis channel: cc:messaging:client:{client_id}
-  2. Run an async loop: await message from pub/sub → forward to websocket
-  3. Simultaneously: receive messages from websocket → process → persist → publish
-  4. On disconnect: unsubscribe
-```
-
-The loop is an asyncio task spawned inside the WS handler coroutine. No separate "subscriber worker" process is needed.
-
-**Why not a global lifespan subscriber task**: A process-wide subscriber task would need to demultiplex connections across all clients — complex bookkeeping (`client_id → set[WebSocket]`), race conditions on connect/disconnect, harder to test. Per-connection subscribers are simpler, standard for FastAPI WS, and Redis pub/sub handles fan-out natively.
-
-**Channel naming**:
-- `cc:messaging:client:{client_id}` — per-client channel. The staff (Telegram bridge) publishes staff-→-client messages here. Multiple WS connections from the same client (multiple browser tabs) all subscribe to this channel and all receive the message (fan-out within a single client is free from Redis pub/sub).
-- The HTTP handler for `POST /client/messages` publishes to this channel after DB commit so the WS loop delivers the persisted message to the client's WS connection even when posted from a different uvicorn worker.
-
-**pub/sub is broadcast, not queue**: Redis pub/sub delivers to all current subscribers. If the client's WS is not connected, the message is not delivered (fire-and-forget). This is correct: the REST history endpoint (`GET /client/messages`) serves as the authoritative message source. The WS channel is a delivery optimization, not the source of truth.
-
-**Implementation sketch** (inside the WS handler coroutine):
-
-```python
-async def client_ws_messages(
-    websocket: WebSocket,
-    client: Annotated[ClientPrincipal, Depends(require_client())],
-    redis: Annotated[Redis, Depends(get_redis)],
-    session: Annotated[AsyncSession, Depends(get_db)],
-) -> None:
-    await websocket.accept()
-    channel = f"cc:messaging:client:{client.id}"
-    
-    # Need a separate Redis connection for pub/sub (blocking subscribe)
-    # The request-scoped redis client is a shared pool — do NOT subscribe on it
-    pubsub = redis.pubsub()
-    await pubsub.subscribe(channel)
-    
-    async def _fan_out_loop() -> None:
-        async for raw in pubsub.listen():
-            if raw["type"] != "message":
-                continue
-            await websocket.send_text(raw["data"])
-    
-    fan_out_task = asyncio.create_task(_fan_out_loop())
-    
-    try:
-        while True:
-            data = await websocket.receive_text()
-            # parse + persist + publish (via messaging.service)
-            ...
-    except WebSocketDisconnect:
-        pass
-    finally:
-        fan_out_task.cancel()
-        await pubsub.unsubscribe(channel)
-        await pubsub.aclose()
-```
-
-**Critical nuance**: `redis.asyncio.Redis.pubsub()` creates a NEW internal connection for the pub/sub protocol. The `get_redis()` dependency returns the shared pool client — calling `.pubsub()` on it is safe and creates a dedicated connection for this subscriber. On WS disconnect, `await pubsub.aclose()` must be called to release the connection.
-
-**App lifespan task ownership**: None required. The WS handler coroutine IS the subscriber task. No lifespan modifications needed. The `combined_lifespan` in `main.py` does not change for messaging.
-
----
-
-## Question 3: Telegram Bridge — How Staff Replies Enter the Messaging Domain
-
-### Bridge Architecture: Worker-to-Messaging via HandlerContext
-
-The Telegram bot worker (`app/workers/telegram_bot.py`) already has a documented exception for importing module service layers (D-06, D-10). The messaging bridge follows the same pattern: the bot worker imports `app.modules.messaging.service` directly, adds it to `HandlerContext`, and calls it from handler functions.
-
-### Data Flow: Staff Reply Path
-
-```
-Staff types reply in Telegram (bot DM or group message)
-    ↓
-telegram_bot.py long-polling receives update
-    ↓
-reply_handler(update, context, ctx)    # new handler in handlers.py
-    ↓
-ctx.messaging_service.record_staff_message(
-    session_factory, thread_id, text=...
-)   # persists to messages table
-    ↓
-messaging_service.record_staff_message()
-    → INSERT into messages (role='staff', ...)
-    → UPDATE thread.last_message_at
-    → redis.publish(f"cc:messaging:client:{thread_id_owner}", json_payload)
-    ↓
-PWA WebSocket receives the published payload
-    ↓
-ChatScreen displays new staff message
-```
-
-### Data Flow: Client Message Path (staff receives it)
-
-```
-Client sends POST /client/messages
-    ↓
-messaging/service.send_client_message()
-    → INSERT into messages (role='client', ...)
-    → UPDATE thread.last_message_at
-    → redis.publish("cc:messaging:staff", json_payload)
-    ↓
-ARQ task (or direct call): enqueue Telegram DM to staff
-    ↓
-Telegram bot (via integrations/telegram/sender.py):
-    send_message(STAFF_TELEGRAM_CHAT_ID, text)
-```
-
-For the client→staff direction, the Telegram DM is a fire-and-forget notification (not a pub/sub subscriber loop). This reuses the existing `telegram_sender` pattern. The staff chat ID (owner's Telegram account) must be configurable via `Settings` (e.g. `STAFF_TELEGRAM_CHAT_ID`). This is an environment variable, not a per-client setting.
-
-### HandlerContext Extension
-
-New fields appended at END of `HandlerContext` NamedTuple (preserving field-order stability contract):
-
-```python
-class HandlerContext(NamedTuple):
-    session_factory: async_sessionmaker[AsyncSession]
-    telegram_service: ModuleType
-    sender: ModuleType
-    visits_service: ModuleType
-    redis: Redis
-    bookings_service: ModuleType
-    schedule_service: ModuleType
-    # NEW — appended at end per HandlerContext stability contract:
-    messaging_service: ModuleType   # app.modules.messaging.service
-```
-
-The bot worker's `main()` function:
-1. Imports `from app.modules.messaging import service as messaging_service` (new D-06-style relaxation documented as e.g. D-90-BRIDGE).
-2. Adds `messaging_service=messaging_service` to the `HandlerContext` construction.
-3. Registers a new PTB command/message handler for staff replies (or simply handles any non-command message DM from the staff account as a reply).
-
-### Reply Threading: Matching Replies to Threads
-
-The bridge must know WHICH client thread a staff reply belongs to. Three approaches:
-
-**Option A (recommended)**: The bot DM to staff includes the `thread_id` (or `client_name + thread_id`) in the message text or as a custom keyboard button. When staff hits "Reply" in Telegram (standard telegram reply-to-message feature), the update carries `message.reply_to_message.message_id`. The bot persists a `telegram_message_id → thread_id` mapping in Redis (`cc:messaging:tg_msg:{tg_message_id}` → `thread_id` with TTL 7 days). When the reply arrives, lookup the thread_id from this mapping.
-
-**Option B (simpler for single-gym v2.5)**: There is only ONE gym, so there is only one active staff member at a time. All staff replies go to the most recently active thread (LIFO). This is fragile if multiple clients write simultaneously — acceptable for MVP if the gym handles one conversation at a time, but breaks immediately with concurrent clients.
-
-**Recommendation**: Option A. The `cc:messaging:tg_msg:{tg_message_id}` Redis key is set when the bot sends the DM to staff, and consumed when the reply arrives. TTL 7 days is sufficient (Telegram messages don't expire that fast). Zero new Postgres tables needed for this — Redis is the mapping store.
-
-### Import-Linter: New Worker→Modules Edge
-
-`app/workers/telegram_bot.py` already has documented exceptions for `auth.telegram_service`, `visits.service`, `bookings.service`, `schedule.service`, `clients.service`, `memberships.service`, `pt_packages.service`, `trainers.service`. Adding `messaging.service` follows the same precedent. No `.importlinter` change needed (workers are NOT in the `source_modules` of any contract — the worker module `app.workers` is not listed as a forbidden-source). The contracts only scope `app.core`, `app.integrations`, and the listed `app.modules.*`. Workers already import freely from modules with the documented exception acknowledgment.
-
-**Verify**: `app.workers` is not listed in `source_modules` of any contract in `.importlinter`. The D-06/D-10 "relaxation" is documented in the module docstring but is NOT enforced by import-linter — it's a team convention. Adding `messaging.service` to the worker requires only updating the module docstring, not `.importlinter`.
-
----
-
-## Question 4: Attachment Storage — Integrations vs. Module
-
-### Attachment Requirements
-
-- Client uploads an image in ChatScreen → it appears in the message thread
-- Image stored server-side, served back via URL
-- Content-type allowlist (JPEG, PNG, WebP only — stored-XSS guard)
-- Max size cap (e.g. 5 MB)
-- XSS-safe serving: correct `Content-Type` response header + `Content-Disposition: attachment` to prevent inline execution
-
-### Where Attachments Live
-
-**Option A — Local filesystem storage in an `integrations/storage/` module**: Simpler for a single-server pet project. Files stored in a volume-mounted directory (e.g. `/app/uploads/`). Served by FastAPI itself with `FileResponse`. Zero external dependencies.
-
-**Option B — S3-compatible storage (e.g. Yandex Object Storage)**: Production-grade, separates storage from compute, enables CDN. Requires a new `app/integrations/object_storage/` adapter.
-
-**Recommendation for v2.5**: Local filesystem storage in `app/integrations/storage/` (Option A). Rationale: this is a pet project on a single server; adding an S3 integration is a separate concern. The integration module provides a clean interface so swapping to S3 later is a 1-file change in `integrations/storage/`. The `messaging` module calls storage through this adapter — it never touches filesystem paths directly.
-
-### Module Placement
-
-`app/integrations/storage/` — NOT a module. Rationale:
-- Attachment storage is infrastructure (like `integrations/email/`, `integrations/yookassa/`), not a business domain.
-- The `integrations ⊥ modules` contract would be violated if `storage` imported from `messaging`. The dependency direction is correct: `messaging` → calls → `storage` (a downstream integration). But wait — `integrations ⊥ modules` forbids `integrations` from importing `modules`, not the reverse. `messaging` importing `integrations.storage` is fine (modules CAN import integrations — the contracts don't forbid it).
-
-**Confirmed**: `messaging/service.py` can import `app.integrations.storage.save_file` — no import-linter violation. The forbidden direction is `integrations → modules`, not `modules → integrations`.
-
-### Serving Attachments
-
-Two patterns:
-1. **Redirect to static URL**: FastAPI serves files via `StaticFiles` mount at `/static/uploads/`. The message `attachment_url` field contains a path like `/static/uploads/{uuid}.jpg`. Simple but exposes upload paths to enumeration.
-2. **Authenticated proxy endpoint**: `GET /client/messages/attachments/{attachment_id}` — resolves to the file, checks that the attachment belongs to a thread owned by the requesting client (IDOR), then returns `FileResponse`. More secure; prevents unauthenticated access to uploaded images.
-
-**Recommendation**: Authenticated proxy endpoint. Pattern: `GET /api/v1/client/messages/attachments/{attachment_id}` gated by `require_client()`. The repository layer verifies the attachment's thread `client_id == principal.client_id` before returning the file path. Return `FileResponse(path, media_type=detected_mime, headers={"Content-Disposition": "attachment"})`.
-
-The `Content-Disposition: attachment` header prevents inline browser execution even if a malicious file slips past the type check. The `media_type` is set from the stored allowlisted MIME type (not re-detected from file contents at serve time — the allowlist check is at upload time).
-
-### Upload Endpoint
-
-`POST /api/v1/client/messages/attachments` — multipart form upload. FastAPI `UploadFile`. Returns `attachment_id` + `previewUrl`. The client then references this `attachment_id` in the subsequent `POST /client/messages` body.
-
-Security checks at upload:
-1. `UploadFile.content_type` must be in `{"image/jpeg", "image/png", "image/webp"}`.
-2. File size: read at most `MAX_ATTACHMENT_BYTES` (5 MB) — reject if `size > limit`.
-3. Magic bytes check: read first 12 bytes of the file and verify against known image magic bytes (JPEG: `FF D8 FF`, PNG: `89 50 4E 47`, WebP: `52 49 46 46 ... 57 45 42 50`). This prevents a renamed `.html` file with `Content-Type: image/jpeg` from being stored.
-4. Save to disk with a UUID filename (no extension in storage — the MIME type is stored in the `message_attachments` DB row).
-
----
-
-## Question 5: Dependency-Ordered Build Sequence
-
-### Schema/Migration Decisions
-
-**New tables** (order matters for FK constraints):
-
-```
-0064_messaging_threads.py
-  — message_threads: id (UUID PK), client_id (FK clients.id), created_at, last_message_at
-
-0065_messaging_messages.py
-  — messages: id, thread_id (FK message_threads.id), role ('client'|'staff'),
-    body TEXT, attachment_id UUID NULL, sent_at TIMESTAMPTZ,
-    read_at TIMESTAMPTZ NULL (staff-reads; staff→client direction)
-    INDEX (thread_id, sent_at DESC)
-
-0066_messaging_attachments.py
-  — message_attachments: id UUID PK, thread_id FK, client_id FK (IDOR),
-    mime_type TEXT, file_path TEXT, size_bytes INT, created_at TIMESTAMPTZ
-    (must come BEFORE messages to satisfy FK if attachment_id references this table,
-     OR messages.attachment_id can be nullable with FK deferred — use separate table)
-
-0067_messaging_unread.py
-  — thread_unread_counts: thread_id FK (1:1), client_unread INT NOT NULL DEFAULT 0
-    (maintained by triggers or application logic; tracks messages unread by client)
-```
-
-**Note on unread count**: a simpler alternative to a separate table is a GENERATED column or an application-maintained counter. The safest approach for v2.5 is an `INTEGER` column on `message_threads` (`client_unread_count DEFAULT 0`) — incremented by `INSERT INTO messages ... WHERE role='staff'` and reset to 0 by the client mark-read endpoint. This avoids a separate table. The counter is not race-prone at single-gym scale.
-
-### REST Foundation Must Come Before WS
-
-The WS endpoint delivers messages; the REST endpoints persist them. The WS endpoint calling `messaging/service` functions means those functions must exist first.
-
-### Build Order (Phase Numbering Starts at Phase 90)
-
-**Phase 90 — Messaging Schema + REST Send/List**
-- Alembic migrations `0064_messaging_threads`, `0065_messaging_messages` (unified or split)
-- `app/modules/messaging/` scaffold: `models.py` + `repository.py` + `service.py` + `router.py` + `schemas.py`
-- REST endpoints only (NO WS yet):
-  - `GET /client/messages` — paginated thread history + `unreadCount`
-  - `POST /client/messages` — send text message (no attachments yet)
-  - `PATCH /client/messages/read` — mark thread as read (reset `client_unread_count`)
-- All under `require_client()` + `verify_client_csrf` on mutations
-- IDOR: `thread_id` resolved from `client_id` (principal); 404-collapse on non-owned
-- Audit events pre-registered: `("message_sent", "message")`, `("message_read", "message")`
-- Register `app.modules.messaging` in `.importlinter` `modules-independent` contract
-- Mount `messaging_router` at `/client` prefix in `api/v1/router.py`
-- Tests: send message → appears in list; IDOR (other client's thread → 404); unread count increments on staff send, resets on client read
-- **No pub/sub yet** — pure Postgres-backed REST
-
-**Phase 91 — WebSocket Transport + Redis Fan-Out**
-- WS endpoint `GET /api/v1/client/ws/messages` in `messaging/router.py`
-- `require_client()` dependency on WS handshake
-- Per-connection Redis pub/sub subscriber loop (see Question 2 above)
-- `POST /client/messages` now publishes to `cc:messaging:client:{client_id}` after DB commit
-- Message payload format over WS: JSON with `type: "new_message" | "typing" | "read_receipt"`
-- PWA WS reconnect strategy: exponential backoff (1s → 2s → 4s → max 30s), reset on successful message receipt
-- Tests: ASGI WS test client (`httpx.AsyncClient` does not support WS — use FastAPI's `TestClient` WS mode or `starlette.testclient.TestClient` WS context manager); verify message published via HTTP arrives on WS subscriber
-- **Depends on Phase 90**
-
-**Phase 92 — Read Receipts + Typing Indicators**
-- Client sends `{"type": "read_receipt", "thread_id": "..."}` over WS → persisted to DB + published to staff pub/sub channel
-- Client sends `{"type": "typing"}` over WS → published to pub/sub (NOT persisted to DB — ephemeral signal with 3s TTL)
-- Staff-side typing indicator: not yet visible (staff side is Telegram which has its own typing indicator); client-side: if staff sends a typing event via Telegram bot, publish to `cc:messaging:client:{client_id}` with `type: "typing"` — PWA shows "зал набирает..."
-- `PATCH /client/messages/read` REST endpoint also persists read state (for polling fallback when WS is disconnected)
-- **Depends on Phase 91**
-
-**Phase 93 — Attachments**
-- `app/integrations/storage/` adapter (local filesystem, UUID filenames, magic-bytes check)
-- Alembic `0066_messaging_attachments`
-- `POST /api/v1/client/messages/attachments` — upload endpoint, returns `attachment_id`
-- `GET /api/v1/client/messages/attachments/{attachment_id}` — authenticated proxy (IDOR-safe, `FileResponse`)
-- `POST /client/messages` extended to accept optional `attachment_id`
-- Size cap + content-type allowlist + magic-bytes check enforced at upload
-- `Content-Disposition: attachment` on serve
-- Tests: upload valid JPEG → GET returns file; upload oversized → 422; upload wrong type → 422; IDOR (another client's attachment → 404)
-- **Depends on Phase 90** (schema); **independent from Phases 91-92** in terms of code, but migration numbering requires sequential order
-
-**Phase 94 — Telegram Bridge (Staff-Side)**
-- `app/modules/messaging/service.py`: add `record_staff_message(session_factory, thread_id, text)` function
-- New handler in `app/integrations/telegram/handlers.py`: `reply_handler` — processes text messages from the staff Telegram account, resolves thread via `cc:messaging:tg_msg:{tg_message_id}` Redis mapping
-- Extend `HandlerContext` NamedTuple: append `messaging_service` field at END
-- `app/workers/telegram_bot.py`:
-  - Import `app.modules.messaging.service as messaging_service` (D-90-BRIDGE documented exception)
-  - Add `messaging_service=messaging_service` to `HandlerContext` construction
-  - Register the reply handler on PTB application
-- Client→Staff: `POST /client/messages` enqueues an ARQ task that sends a Telegram DM to staff (or calls `telegram_sender.send_message(STAFF_TELEGRAM_CHAT_ID, ...)` directly if fire-and-forget)
-- Redis mapping: when bot sends DM to staff, store `cc:messaging:tg_msg:{sent_tg_msg_id}` → `{thread_id}` with TTL 7 days
-- Settings: new `STAFF_TELEGRAM_CHAT_ID: int` in `app/core/config.py` (optional; Telegram bridge disabled if absent)
-- Tests: record_staff_message writes to DB + publishes to pub/sub; reply_handler resolves thread from Redis key; client→staff DM fires (via mock); thread_id mapping round-trip
-- **Depends on Phase 90 + Phase 91** (pub/sub publish in record_staff_message)
-
-**Phase 95 — PWA ChatScreen Wiring + OpenAPI Handoff**
-- Graduate ChatScreen from `D-71-09` placeholder zone (3 de-list spots + `@/data` import pattern — same lesson as v2.4 Phases 86/87/88)
-- Wire `GET /client/messages`, `POST /client/messages`, WS endpoint
-- Implement WS reconnect/backoff in PWA
-- Byte-stable regen `openapi.json` + `schema.d.ts` + `_v25Checks` `AssertNonNever` forward-guards
-- Staff-drift gate green (all staff paths byte-identical to `contract-freeze-v1.11.0`)
-- Full milestone verification gate: backend pytest + mypy strict + lint-imports + redocly + CISO-01 guard
-- **Depends on all prior phases**
+# Architecture Research: v4.0 Production Infrastructure — k3s Integration
+
+**Domain:** On-prem bare-metal k3s; existing full-stack gym CRM containerized and infra-as-code'd
+**Researched:** 2026-06-16
+**Confidence:** HIGH (all mappings derived from live docker-compose.yml + WorkerSettings + Dockerfile; k8s resource choices from established patterns for these workload types)
 
 ---
 
 ## System Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                          apps/client-pwa (PWA)                          │
-│  ChatScreen  →  HTTP REST (send/list)                                   │
-│              →  WebSocket /api/v1/client/ws/messages (real-time)        │
-└──────────────────────────────────┬──────────────────────────────────────┘
-                                   │ HTTP + WS upgrade (cc_client_access cookie)
-┌──────────────────────────────────▼──────────────────────────────────────┐
-│                   FastAPI app (uvicorn, async)                           │
-│  api/v1/router.py  →  messaging/router.py  (prefix="/client")          │
-│    REST: GET /client/messages                                            │
-│          POST /client/messages                                           │
-│          PATCH /client/messages/read                                     │
-│          POST /client/messages/attachments                               │
-│          GET  /client/messages/attachments/{id}                          │
-│    WS:   GET /api/v1/client/ws/messages                                  │
-│               ↓ Depends(require_client()) → ClientPrincipal             │
-│               ↓ messaging/service.py (same-module import, OK)            │
-│               ↓ per-connection pubsub subscriber loop                   │
-└──────────────┬────────────────────────────────────────┬─────────────────┘
-               │ write                                  │ pub/sub
-               ▼                                        ▼
-┌──────────────────────────┐         ┌──────────────────────────────────┐
-│       Postgres 16        │         │         Redis 7 (existing)        │
-│  message_threads         │         │  cc:messaging:client:{id}         │
-│  messages                │         │  cc:messaging:tg_msg:{tg_id}      │
-│  message_attachments     │         │  (pub/sub channels)               │
-└──────────────────────────┘         └──────────────────┬───────────────┘
-                                                        │ subscribe / publish
-┌───────────────────────────────────────────────────────▼────────────────┐
-│              app/workers/telegram_bot.py (long-polling)                 │
-│  HandlerContext.messaging_service = app.modules.messaging.service       │
-│  reply_handler:                                                          │
-│    → read cc:messaging:tg_msg:{tg_msg_id} → thread_id                  │
-│    → messaging_service.record_staff_message(thread_id, text)           │
-│    → publishes to cc:messaging:client:{client_id}                       │
-│  client→staff DM:                                                        │
-│    → telegram_sender.send_message(STAFF_TELEGRAM_CHAT_ID, text)        │
-│    → SET cc:messaging:tg_msg:{sent_msg_id} → thread_id (TTL 7d)        │
-└─────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────── k3s cluster (single bare-metal node) ──┐
+│                                                                                             │
+│  ┌─── Ingress (Traefik/nginx-ingress) ──────────────────────────────────────────────────┐  │
+│  │  admin.example.com → admin-app Service                                               │  │
+│  │  app.example.com   → client-pwa Service                                              │  │
+│  │  api.example.com   → backend Service  (+ /ws/* sticky WS)                           │  │
+│  │  TLS: cert-manager (self-signed local / Let's Encrypt prod)                          │  │
+│  └───────────────────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                             │
+│  ┌── Stateless Workloads (Deployments) ──────────────────────────────────────────────────┐ │
+│  │  backend-api   (replicas=2, HPA optional)   │  admin-app-nginx  (replicas=1)          │ │
+│  │  arq-worker    (replicas=1, SINGLE)         │  client-pwa-nginx (replicas=1)          │ │
+│  │  telegram-bot  (replicas=1, SINGLE)         │                                         │ │
+│  └───────────────────────────────────────────────────────────────────────────────────────┘ │
+│                                                                                             │
+│  ┌── One-Shot Jobs ───────────────────────────────────────────────────────────────────────┐ │
+│  │  migrate-job (Job, backoffLimit=0, runs alembic upgrade head before other pods start) │ │
+│  └───────────────────────────────────────────────────────────────────────────────────────┘ │
+│                                                                                             │
+│  ┌── Stateful Workloads (StatefulSets + PVCs) ───────────────────────────────────────────┐ │
+│  │  postgres-0  (StatefulSet, PVC postgres-data 20Gi)                                    │ │
+│  │  redis-0     (StatefulSet, PVC redis-data 2Gi, appendonly yes + AOF)                  │ │
+│  │  minio-0     (StatefulSet, PVC minio-data 10Gi) — replaces SeaweedFS in prod          │ │
+│  └───────────────────────────────────────────────────────────────────────────────────────┘ │
+│                                                                                             │
+│  ┌── Observability (Namespace: monitoring) ──────────────────────────────────────────────┐ │
+│  │  prometheus  │  grafana  │  loki  │  promtail                                         │ │
+│  └───────────────────────────────────────────────────────────────────────────────────────┘ │
+│                                                                                             │
+│  ┌── Backup CronJobs ────────────────────────────────────────────────────────────────────┐ │
+│  │  pg-backup-cronjob (daily, pg_dump → MinIO)   │  redis-backup-cronjob (weekly RDB)   │ │
+│  └───────────────────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Component Boundaries and Responsibilities
+## Component → K8s Resource Mapping
 
-| Component | Status | Responsibility |
-|---|---|---|
-| `app/modules/messaging/` | **NEW** | Thread + message domain model; REST read/write/receipts; WS endpoint; pub/sub publish |
-| `app/modules/messaging/models.py` | **NEW** | `MessageThread`, `Message`, `MessageAttachment` ORM models |
-| `app/modules/messaging/repository.py` | **NEW** | Raw SQL reads for cross-module data (client name from `clients` table); ORM writes for owned data |
-| `app/modules/messaging/service.py` | **NEW** | `send_client_message`, `record_staff_message`, `mark_thread_read`, `get_thread_history` |
-| `app/modules/messaging/router.py` | **NEW** | REST + WS endpoints; `require_client()` dependency; mounts in `api/v1/router.py` at `/client` |
-| `app/modules/messaging/schemas.py` | **NEW** | `MessageResponse`, `SendMessageRequest`, `AttachmentResponse`, WS payload types |
-| `app/integrations/storage/` | **NEW** | Local filesystem adapter: `save_file`, `get_file_path`, magic-bytes check, MIME allowlist |
-| `app/integrations/telegram/handlers.py` | **MODIFIED** | Add `reply_handler`; `HandlerContext` NamedTuple gains `messaging_service` field appended at END |
-| `app/workers/telegram_bot.py` | **MODIFIED** | Import `messaging.service`; add to `HandlerContext`; register reply handler on PTB application |
-| `app/core/config.py` | **MODIFIED** | Add `STAFF_TELEGRAM_CHAT_ID: int | None` setting |
-| `app/core/audit.py` `LOCKED_AUDIT_EVENTS` | **MODIFIED** | Pre-register `("message_sent", "message")`, `("message_read", "message")`, `("attachment_uploaded", "message")` |
-| `app/api/v1/router.py` | **MODIFIED** | Mount `messaging_router` at prefix `/client` |
-| `apps/backend/.importlinter` | **MODIFIED** | Add `app.modules.messaging` to `modules-independent` contract |
-| Alembic migrations `0064–0066` | **NEW** | `message_threads`, `messages`, `message_attachments` tables |
-| `apps/client-pwa/` ChatScreen | **MODIFIED** | Graduate from D-71-09 placeholder zone; wire REST + WS |
-| `apps/backend/openapi.json` + `schema.d.ts` | **MODIFIED** | Byte-stable regen + `_v25Checks` forward-guards |
+### 1. backend API (FastAPI/uvicorn)
 
----
+**K8s Resource:** `Deployment`
 
-## Import-Linter: Required Changes
+```
+name: backend-api
+replicas: 2  (or 1 for pet project; HPA on CPU/RPS optional — single gym won't need it)
+image: clubcore/backend:SHA  (multi-stage Dockerfile already production-ready, non-root)
+command: uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000
+  (no --reload in prod; Dockerfile CMD already correct)
+```
 
-### `.importlinter` Changes
+**Service:** `ClusterIP` on port 8000. Ingress points at this Service.
 
-1. **Add `app.modules.messaging` to `modules-independent` contract** (in the `modules =` block).
-   - The messaging module does NOT import other modules directly.
-   - Cross-module reads (e.g. `clients.first_name` for display): raw SQL `text()` in `messaging/repository.py` (D-54-08 discipline — zero new `ignore_imports`).
-   - Cross-module writes: if messaging needs to trigger a notification (e.g. increment `in_app_notifications` unread count when a staff message arrives), this goes through a Protocol slot. Add `register_messaging_notification_hook` to `app.core.dependencies`, wired in `main.py`. OR: keep it simple for v2.5 — no cross-module notification write; the `client_unread_count` on the thread itself is the unread signal.
+**Ingress:** One Ingress rule for `api.example.com`:
+- All paths → backend Service
+- `/ws` or `/api/v1/client/ws/*` → same backend Service BUT requires WS sticky annotation (see Ingress/routing section)
 
-2. **No new `ignore_imports` edges expected for Phase 90 (REST foundation)**. The messaging module is self-contained. The WS endpoint is inside the messaging module, not in `client_portal` — so no `client_portal → messaging` cross-module edge is needed.
+**HPA:** Optional for this single-gym pet project. If added: min=1, max=3, CPU target=70%. The WebSocket constraint (see below) means replicas > 1 requires sticky sessions or Redis-backed pub/sub (already in place via Redis channel broadcasting in v2.5 messaging module — pub/sub fan-out makes multi-replica safe for WS).
 
-3. **If in-app notifications need to be triggered by messaging** (e.g. push notification when staff sends a message while PWA is closed): this is a Phase-87-style cross-module edge: `app.modules.messaging.service → app.modules.notifications.service`. This follows the Phase-87 `bookings.service → notifications.service` precedent (already in `.importlinter` `ignore_imports`). Declare the `ignore_imports` edge when the feature is built — not preemptively.
+**Readiness probe:** `GET /healthz` returns 200 (endpoint exists per PROJECT.md). Liveness: same, initialDelaySeconds=10.
 
-### Worker Module (No Import-Linter Change Needed)
-
-`app/workers/telegram_bot.py` is NOT listed as a `source_modules` in any import-linter contract. The contracts scope `app.core`, `app.integrations`, and `app.modules.*`. Workers can import modules freely (with team-convention D-06/D-10 acknowledgment in the module docstring). No `.importlinter` edit required for the bridge.
+**Init dependency on migrate:** Do NOT use initContainers here. Use the Job + `helm hook` ordering pattern (see migrate section). The Helm `post-install` hook on the Job + a `wait-for-migrate` initContainer on the backend Deployment reading a ConfigMap sentinel is the clean approach. Simpler: keep the `depends_on: migrate: service_completed_successfully` semantics by using a Kubernetes Job with a `helm.sh/hook: pre-install,pre-upgrade` annotation.
 
 ---
 
-## IDOR and Principal Discipline for WS
+### 2. telegram-bot worker
 
-The WebSocket endpoint must enforce the same IDOR discipline as all REST endpoints:
+**K8s Resource:** `Deployment`
 
-1. `client_id` is taken ONLY from `require_client()` principal (the `ClientPrincipal` from the cookie-decoded JWT). Never from a WS message payload.
-2. The WS subscriber channel is `cc:messaging:client:{client_id}` — keyed to the principal's `client_id`. A client cannot subscribe to another client's channel.
-3. When the client sends a message over WS, the `client_id` is injected from the principal — the PWA payload does not include `client_id`.
-4. Staff messages arriving via Telegram bridge carry NO client-supplied `client_id` — the thread_id lookup via the Telegram message reply chain is the only source.
-5. The attachment proxy endpoint `GET /client/messages/attachments/{attachment_id}` verifies `message_attachments.client_id == principal.client_id` before returning the file.
+```
+name: telegram-bot
+replicas: 1  ← MUST be exactly 1, forever. Long-polling Telegram API is single-consumer.
+             Multiple replicas = duplicate update processing, duplicate DMs sent.
+```
+
+**No Service** — this pod initiates outbound connections only (to Telegram API + Redis + Postgres). It is never called inbound. No ClusterIP, no Ingress, no ports exposed.
+
+**Restart policy:** `restartPolicy: Always` (Docker compose `restart: unless-stopped` → Deployment's default). Telegram bot reconnects on restart.
+
+**Single-replica enforcement:** No HPA. No PodDisruptionBudget that could create overlap during rolling updates. Use `strategy: Recreate` (not RollingUpdate) to ensure the old pod is killed before the new pod starts. This eliminates the window where two bot instances could both poll Telegram simultaneously.
+
+```yaml
+strategy:
+  type: Recreate
+```
+
+**Ordering:** initContainer or helm hook waiting for migrate Job to complete before bot starts (same as backend-api).
+
+---
+
+### 3. ARQ worker (cron scheduler)
+
+**K8s Resource:** `Deployment`
+
+```
+name: arq-worker
+replicas: 1  ← MUST be exactly 1 for cron correctness.
+```
+
+**Why replicas=1 is mandatory for cron:**
+
+ARQ uses `unique=True` on all cron jobs (confirmed in WorkerSettings — every `cron(...)` call has `unique=True, keep_result=60`). `unique=True` means ARQ stores a Redis key before enqueuing; a second worker instance seeing the same tick will skip it. HOWEVER:
+
+- The `unique=True` guard is "second line of defence" per the code's own comments; SQL-level idempotency is the primary gate.
+- With two workers, if one acquires the Redis unique lock and then crashes mid-job, the other instance will not pick it up until `keep_result` TTL expires (60 seconds). This creates a 60-second blackout window.
+- More importantly: `monitor_stale_fiscal_receipts` runs every 15 minutes (4×/hour) with `FOR UPDATE SKIP LOCKED`; two workers would both dequeue from Redis and attempt concurrent execution.
+- Two ARQ worker processes means two `on_startup` calls, two `build_yookassa_client()` instances, two email dispatcher registrations — the per-process singletons become ambiguous.
+
+**Conclusion:** Keep replicas=1. Use `strategy: Recreate`. No HPA.
+
+**No Service** — outbound only (Redis + Postgres + ЮKassa HTTPS + Yandex email SMTP).
+
+**TZ env must be set:** `TZ: UTC` (locked in docker-compose; the cron schedule hour/minute offsets are UTC-based, e.g. `hour=3, minute=5` = 06:05 Moscow). This env var must be in the Deployment's env.
+
+---
+
+### 4. migrate (Alembic one-shot)
+
+**K8s Resource:** `Job` (not initContainer on every pod)
+
+**Rationale for Job over initContainer:**
+- `~70 migrations` — a cold migrate-from-zero takes 10–30 seconds. Duplicating this as an initContainer on backend + arq-worker + telegram-bot means 3 parallel `alembic upgrade head` runs competing against each other at cluster startup. Alembic has per-revision locking via `alembic_version` table but concurrent runs are a correctness risk.
+- A `Job` with `backoffLimit=0` (fail fast) runs ONCE, completes, and all other Deployments wait for it.
+- Helm lifecycle annotation: `helm.sh/hook: pre-install,pre-upgrade` + `helm.sh/hook-weight: "-1"` runs the Job before any Deployment is created or updated.
+
+**Ordering enforcement pattern:**
+
+Option A (recommended for simplicity): Helm hook ordering. The migrate Job has `pre-install,pre-upgrade` hook annotation. Helm waits for the Job to succeed before proceeding to create Deployments. The Job fails the release if migrations fail.
+
+Option B (belt-and-suspenders): Each Deployment (backend, arq-worker, telegram-bot) has an initContainer running `python -c "import sys; from alembic.runtime.migration import MigrationContext; ..."` that checks the DB version matches HEAD, sleeping 5s and retrying until true. This prevents a race if Helm hooks are bypassed (e.g., `kubectl apply` direct).
+
+**Recommendation:** Use both — Helm hook as primary ordering + a lightweight initContainer on backend that does `alembic check` (exits 0 if already at head, exits 1 otherwise) with retry, so the Deployment self-heals if the Job is still running.
+
+```yaml
+# Job spec
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: migrate
+        command: ["alembic", "upgrade", "head"]
+```
+
+---
+
+### 5. Postgres 16
+
+**K8s Resource:** `StatefulSet` (not an operator)
+
+**Rationale for StatefulSet over operator (e.g., CloudNative-PG):**
+- Pet project, single gym, single node. Operator complexity (CRDs, controller deployments, failover logic) adds operational overhead with no benefit for a single-instance deployment.
+- StatefulSet with a single replica gives stable pod identity (`postgres-0`), stable DNS (`postgres-0.postgres.namespace.svc.cluster.local`), and persistent storage via PVC.
+- CloudNative-PG is worth considering only if HA/failover is needed. It is not for this scope.
+
+```yaml
+name: postgres
+replicas: 1
+image: postgres:16  (pinned digest in prod)
+volumeClaimTemplates:
+  - metadata:
+      name: postgres-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 20Gi
+```
+
+**Service:** Headless Service (`clusterIP: None`) for StatefulSet DNS, plus a regular ClusterIP Service named `postgres` on port 5432 that other pods use. The DNS `postgres.namespace.svc.cluster.local` replaces the docker-compose service name `postgres` in DATABASE_URL.
+
+**Persistence:** PVC backed by local-path provisioner (k3s ships `local-path-provisioner` by default — no extra storage class setup needed on bare metal). For production, pin to a specific node or use `hostPath` + `nodeAffinity`.
+
+**Liveness/readiness:** `exec: pg_isready -U app -d clubcore` — mirrors docker-compose healthcheck exactly.
+
+---
+
+### 6. Redis 7
+
+**K8s Resource:** `StatefulSet`
+
+```yaml
+name: redis
+replicas: 1
+image: redis:7  (pinned digest)
+command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+volumeClaimTemplates:
+  - metadata:
+      name: redis-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 2Gi
+```
+
+**Why StatefulSet:** Redis in this app is NOT a pure cache — it stores sessions (JWT refresh-token families), rate-limit counters, idempotency keys (86400s TTL), circuit-breaker state, ARQ job queue, and WebSocket pub/sub channels. Data loss on pod restart = user sessions invalidated + ARQ queue flushed + in-flight idempotency keys lost. Persistence (AOF + RDB snapshot) is mandatory.
+
+**Service:** ClusterIP on port 6379. DNS `redis.namespace.svc.cluster.local` replaces `redis` in REDIS_URL.
+
+**No Redis operator needed** for single-node, non-HA use case.
+
+---
+
+### 7. Object Storage (MinIO replacing SeaweedFS in production)
+
+**K8s Resource:** `StatefulSet`
+
+**Why MinIO over SeaweedFS in production:**
+- SeaweedFS (`chrislusf/seaweedfs:3.84`) is used in docker-compose dev. It works but has complex multi-daemon architecture (master + volume servers). For single-node prod, MinIO is the standard S3-compatible choice: simpler StatefulSet, well-documented k8s deployment, OCI-compliant image, better k8s tooling ecosystem.
+- The backend uses boto3/aiobotocore S3 API (`S3_ENDPOINT_URL`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_REGION` env vars). MinIO is a drop-in replacement — no code changes needed.
+- Keep SeaweedFS in docker-compose for local dev (already working); switch to MinIO in k8s (prod + kind local-validation).
+
+```yaml
+name: minio
+replicas: 1
+image: minio/minio:RELEASE.2025-xx-xx  (pinned)
+command: ["server", "/data", "--console-address", ":9001"]
+volumeClaimTemplates:
+  - metadata:
+      name: minio-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 10Gi
+```
+
+**Service:** ClusterIP on port 9000 (S3 API). Console on 9001 (optional Ingress for admin).
+
+---
+
+### 8. Static frontends (admin-app + client-pwa)
+
+**K8s Resource:** `Deployment` (each) + `ConfigMap` for nginx.conf
+
+**Image:** Multi-stage — `node:20-alpine` builds Vite SPA → `nginx:stable-alpine` serves `dist/`. No server-side logic.
+
+```
+admin-app-nginx:
+  replicas: 1
+  image: clubcore/admin-app:SHA
+  ports: [80]
+
+client-pwa-nginx:
+  replicas: 1  
+  image: clubcore/client-pwa:SHA
+  ports: [80]
+```
+
+**Service:** ClusterIP on port 80 for each.
+
+**Critical nginx.conf for client-pwa:** The Service Worker MUST NOT cache `/api/*`. The nginx config must set:
+```nginx
+location /api/ {
+    proxy_pass http://backend-api.namespace.svc.cluster.local:8000;
+}
+location /ws/ {
+    proxy_pass http://backend-api.namespace.svc.cluster.local:8000;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+}
+```
+Wait — actually in the k8s model, the nginx frontend pod does NOT proxy to the backend; Ingress does. The nginx config needs `try_files $uri $uri/ /index.html;` for SPA routing, and the Service Worker in the PWA code already has `never caches /api/*` (confirmed in PROJECT.md: "SW (`gym-v3`) never caches `/api/*`"). The nginx serving the SPA only serves static assets; Ingress routes `/api/*` to the backend Service directly.
+
+**nginx.conf pattern for SPAs:**
+```nginx
+server {
+    listen 80;
+    root /usr/share/nginx/html;
+    index index.html;
+    # Cache static assets, not index.html
+    location ~* \.(js|css|png|jpg|svg|woff2)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+    location / {
+        try_files $uri $uri/ /index.html;
+        add_header Cache-Control "no-cache";  # index.html never cached
+    }
+}
+```
+
+---
+
+## Ingress / Routing Design
+
+### Host Layout
+
+```
+api.clubcore.local     → backend-api Service :8000  (HTTP + WS)
+admin.clubcore.local   → admin-app-nginx Service :80
+app.clubcore.local     → client-pwa-nginx Service :80
+```
+
+(Replace `.clubcore.local` with real domain in production.)
+
+### WebSocket Routing
+
+WebSocket connections (`/api/v1/client/ws/{thread_id}`) require:
+
+1. **Ingress annotations** (Traefik or nginx-ingress):
+   - Traefik: `traefik.ingress.kubernetes.io/router.entrypoints: websecure` + sticky sessions if replicas > 1
+   - nginx-ingress: `nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"` + `nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"` + `nginx.ingress.kubernetes.io/configuration-snippet` to set `proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "Upgrade";`
+
+2. **Sticky sessions for WS when replicas > 1:** If backend API has replicas > 1, WS connections must be routed to the same backend pod for the lifetime of the connection. The Redis pub/sub architecture means messages are delivered regardless of which pod handles the connection (the pub/sub fan-out reaches all pods), but the initial WS upgrade handshake and the connection state live on one pod. Use `nginx.ingress.kubernetes.io/affinity: "cookie"` sticky session annotation.
+
+3. **For replicas=1 (single-gym pet project):** Sticky sessions not needed. Simple routing works.
+
+### TLS Termination
+
+cert-manager (`cert-manager.io`) manages TLS:
+- **Local validation (kind):** `ClusterIssuer` with `selfSigned` issuer. Generates a self-signed CA + per-Ingress certificates. No external DNS required.
+- **Production (bare-metal):** `ClusterIssuer` with Let's Encrypt ACME HTTP-01 challenge. Requires the host to be reachable on port 80 from the internet for challenge verification.
+- **Offline production alternative:** ACME DNS-01 challenge with a supported DNS provider, or purchase a certificate and load it as a Secret manually.
+
+```yaml
+# cert-manager ClusterIssuer for local
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: selfsigned-issuer
+spec:
+  selfSigned: {}
+```
+
+Ingress TLS section:
+```yaml
+tls:
+- hosts:
+  - api.clubcore.local
+  secretName: api-tls
+```
+
+---
+
+## Terraform Module Layout
+
+### Separation Principle
+
+**Two module groups, two providers, two state files:**
+
+```
+infra/terraform/
+├── host/                          # bare-metal provisioning (SSH + shell scripts)
+│   ├── main.tf                    # null_resource + remote-exec: install k3s, set up dirs
+│   ├── variables.tf               # host IP, SSH key, k3s version
+│   ├── outputs.tf                 # kubeconfig path, cluster endpoint
+│   └── terraform.tfvars.example  # template (no secrets committed)
+│
+├── cluster/                       # in-cluster resources (kubernetes + helm provider)
+│   ├── main.tf                    # helm_release for each chart, kubernetes_secret for sealed creds
+│   ├── providers.tf               # kubernetes provider + helm provider (kubeconfig from host output)
+│   ├── variables.tf               # image tags, domain names, replica counts
+│   ├── outputs.tf                 # service URLs, ingress IPs
+│   └── terraform.tfvars.example
+│
+└── modules/
+    ├── k3s-install/               # reusable: SSH + k3s install script
+    ├── postgres-statefulset/      # reusable: StatefulSet + Service + PVC
+    ├── redis-statefulset/         # reusable: StatefulSet + Service + PVC
+    └── backend-deployment/        # reusable: Deployment + Service + Ingress
+```
+
+### Local State
+
+```hcl
+# host/main.tf
+terraform {
+  backend "local" {
+    path = "../../.terraform-state/host/terraform.tfstate"
+  }
+}
+```
+
+State file lives outside the repo (add `.terraform-state/` to `.gitignore`). For a solo dev this is sufficient; no remote state needed.
+
+### validate/plan Without a Live Cluster
+
+```
+terraform validate   # parses HCL, resolves variable types, no network calls
+terraform plan       # requires provider connectivity
+```
+
+**Problem:** `terraform plan` for the `cluster/` group (kubernetes/helm provider) requires a running k3s cluster — it calls the K8s API to diff current state vs desired.
+
+**Solution — local validation architecture (see Local Validation section below).**
+
+For `host/` group: `terraform validate` always works (null_resource with remote-exec has no provider API calls at validate time). `terraform plan` also works — the `null_resource` plan shows "will run remote-exec" without actually SSH-ing.
+
+For `cluster/` group: `terraform validate` works (HCL syntax). `terraform plan` requires a kind/k3d cluster to be running. The Makefile target `make plan` should start a kind cluster first if not running.
+
+---
+
+## Helm Chart Structure
+
+### Recommended: Umbrella Chart
+
+```
+helm/
+└── clubcore/
+    ├── Chart.yaml            # name: clubcore, version, appVersion
+    ├── values.yaml           # default values (local/dev)
+    ├── values.prod.yaml      # production overrides (domain, image tags, resources)
+    ├── values.local.yaml     # kind/local overrides (no TLS, NodePort, lower resources)
+    ├── templates/
+    │   ├── NOTES.txt
+    │   ├── _helpers.tpl      # common labels, selector helpers
+    │   ├── namespace.yaml
+    │   ├── configmap.yaml    # DATABASE_URL, REDIS_URL, S3_ENDPOINT_URL, TZ, etc.
+    │   ├── secret.yaml       # refs to pre-existing Secrets (not inline values)
+    │   ├── migrate-job.yaml  # Job with helm.sh/hook: pre-install,pre-upgrade
+    │   ├── backend/
+    │   │   ├── deployment.yaml
+    │   │   ├── service.yaml
+    │   │   └── ingress.yaml
+    │   ├── arq-worker/
+    │   │   └── deployment.yaml
+    │   ├── telegram-bot/
+    │   │   └── deployment.yaml
+    │   ├── postgres/
+    │   │   ├── statefulset.yaml
+    │   │   ├── service.yaml
+    │   │   └── pvc.yaml
+    │   ├── redis/
+    │   │   ├── statefulset.yaml
+    │   │   └── service.yaml
+    │   ├── minio/
+    │   │   ├── statefulset.yaml
+    │   │   └── service.yaml
+    │   ├── admin-app/
+    │   │   ├── deployment.yaml
+    │   │   ├── service.yaml
+    │   │   └── ingress.yaml
+    │   ├── client-pwa/
+    │   │   ├── deployment.yaml
+    │   │   ├── service.yaml
+    │   │   └── ingress.yaml
+    │   ├── networkpolicies/
+    │   │   └── default-deny.yaml
+    │   └── backup/
+    │       ├── pg-backup-cronjob.yaml
+    │       └── redis-backup-cronjob.yaml
+    └── charts/               # subchart dependencies (cert-manager, etc.) if using umbrella deps
+```
+
+**Why umbrella over per-component charts:** Single `helm upgrade clubcore ./helm/clubcore` installs/upgrades the full stack. For a solo dev, the overhead of managing 8+ separate chart releases (with cross-chart value passing) is not worth it. The umbrella chart with `values.local.yaml` vs `values.prod.yaml` is the right tradeoff.
+
+**Values for local vs prod:**
+```yaml
+# values.yaml (defaults / local)
+global:
+  domain: clubcore.local
+  imageRegistry: ""  # local kind registry or "" for local images
+  imagePullPolicy: IfNotPresent
+
+backend:
+  replicas: 1
+  image: clubcore/backend
+  tag: latest
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+
+postgres:
+  storage: 1Gi  # small for local
+  
+ingress:
+  tls: false  # no TLS in kind local
+  className: traefik
+```
+
+```yaml
+# values.prod.yaml (overlay)
+global:
+  domain: clubcore.ru
+  
+backend:
+  replicas: 2
+  tag: "abc123def456"  # pinned SHA
+
+postgres:
+  storage: 20Gi
+
+ingress:
+  tls: true
+  certIssuer: letsencrypt-prod
+```
+
+**Secret refs:** Secrets are never in values files. The `secret.yaml` template references pre-existing Secret names that must be created out-of-band (by SOPS + age/gpg or sealed-secrets):
+```yaml
+# In deployment.yaml
+envFrom:
+- secretRef:
+    name: clubcore-app-secrets   # must exist before helm install
+```
+
+---
+
+## Config / Secrets Flow
+
+### Existing .env.example → ConfigMaps + Secrets
+
+**Split rule:** public non-sensitive config → ConfigMap; credentials/keys → Secret.
+
+| .env.example variable | K8s object | Notes |
+|----------------------|------------|-------|
+| `DATABASE_URL` | Secret `clubcore-app-secrets` | Contains password; entire URL in Secret |
+| `REDIS_URL` | ConfigMap `clubcore-config` | No auth in current setup; move to Secret if AUTH added |
+| `S3_ENDPOINT_URL` | ConfigMap `clubcore-config` | Not sensitive |
+| `S3_BUCKET` | ConfigMap `clubcore-config` | Not sensitive |
+| `S3_ACCESS_KEY_ID` | Secret `clubcore-app-secrets` | Credential |
+| `S3_SECRET_ACCESS_KEY` | Secret `clubcore-app-secrets` | Credential |
+| `S3_REGION` | ConfigMap `clubcore-config` | Not sensitive |
+| `SECRET_KEY` (JWT signing) | Secret `clubcore-app-secrets` | Critical — rotate via new Secret version |
+| `TELEGRAM_BOT_TOKEN` | Secret `clubcore-app-secrets` | Credential |
+| `YOOKASSA_SHOP_ID` | Secret `clubcore-app-secrets` | Credential |
+| `YOOKASSA_SECRET_KEY` | Secret `clubcore-app-secrets` | Credential |
+| `YOOKASSA_TRUSTED_IPS` | ConfigMap `clubcore-config` | Public IP list |
+| `TZ` | ConfigMap `clubcore-config` | `UTC` for arq-worker |
+| SMTP / email config | Secret `clubcore-app-secrets` | API key / password |
+| `CLUB_BRAND` | ConfigMap `clubcore-config` | `Sportzal` placeholder value |
+
+### Secrets Management: SOPS + age (recommended)
+
+**Why SOPS over sealed-secrets:**
+- sealed-secrets requires the controller to be running in the cluster to decrypt. If the cluster is lost, re-sealing requires recreating the controller key.
+- SOPS with age (or gpg) encrypts secrets files that can be stored in git. The age private key lives offline. Decryption + `kubectl apply` is a one-command Makefile target.
+- For a solo dev, SOPS is simpler operational model.
+
+**Workflow:**
+```
+# Encrypt once
+sops --encrypt --age $AGE_PUBLIC_KEY secrets.plaintext.yaml > secrets.enc.yaml
+git add secrets.enc.yaml  # safe to commit
+
+# Deploy
+sops --decrypt secrets.enc.yaml | kubectl apply -f -
+```
+
+The plaintext `secrets.plaintext.yaml` lives on the developer's machine only (in `.gitignore`). `secrets.enc.yaml` is committed.
+
+### NAME-01 CSRF Cookie Rename
+
+The `clubcore_csrf` cookie rename (from `sportzal_csrf`) is already the live cookie name per the memory note ("real staff cookies are cc_access/cc_refresh/clubcore_csrf"). The OpenAPI spec update (additive, not breaking) is a carry-over task for this milestone. Map in ConfigMap as `CSRF_COOKIE_NAME=clubcore_csrf`.
+
+---
+
+## Local Validation Architecture
+
+### Tool Choice: kind (not k3d, not real k3s)
+
+**Recommendation: kind (Kubernetes IN Docker)**
+
+| Tool | Pros | Cons | Decision |
+|------|------|------|----------|
+| kind | Pure Docker, no VM, fast to start/stop, CI-friendly, well-tested with Terraform kubernetes provider | Not k3s (uses kubeadm), Traefik not built-in | **USE THIS** |
+| k3d | k3s in Docker (closer to prod), Traefik built-in | More complex setup, less CI tooling | Consider if Traefik-specific behavior must be validated |
+| real k3s VM | Identical to prod | Requires a VM (CPU/RAM overhead), slow iteration | Prod target, not for local dev loop |
+
+For most validation goals, kind is sufficient. The differences from bare-metal k3s are:
+- kind uses containerd not k3s's embedded containerd (functionally identical)
+- kind lacks k3s's built-in Traefik; install nginx-ingress or Traefik via helm into kind
+- Local-path provisioner behavior is slightly different (kind has its own `local-path` provisioner)
+- No cloud LoadBalancer (use NodePort or port-forward for local access)
+
+### What Local Validation Proves vs Cannot Prove
+
+| Validation | Tool | Proves | Cannot Prove |
+|-----------|------|--------|--------------|
+| `terraform validate` | Terraform | HCL syntax, variable types, resource schema | Provider connectivity, actual resource creation |
+| `terraform plan` (host/) | Terraform + null_resource | Plan output shows correct remote-exec commands | SSH connectivity to real host |
+| `terraform plan` (cluster/) | Terraform + kind running | Kubernetes resource diff, Helm release diff | Actual k3s behavior, bare-metal networking |
+| `helm lint` | Helm | Template syntax, required values, chart structure | Runtime behavior, actual image pull |
+| `helm template` | Helm | Generated manifests are valid YAML + correct labels | Pod scheduling, PVC binding |
+| `helm install` (kind) | kind + Helm | All pods reach Running, Services route correctly, Ingress responds | TLS cert-manager LE prod, external DNS, bare-metal storage |
+| `smoke test` | pytest / curl | API returns 200, DB migrations applied, Redis connected, S3 bucket created | ЮKassa webhook (no live creds), RU email delivery |
+| Image scan | trivy | CVE count, CRITICAL vulnerabilities | Runtime security |
+
+### Local Validation Makefile Targets
+
+```makefile
+# Full local validation pipeline
+validate-all: terraform-validate helm-lint kind-up helm-install-local smoke
+
+terraform-validate:
+	cd infra/terraform/host && terraform init -backend=false && terraform validate
+	cd infra/terraform/cluster && terraform init -backend=false && terraform validate
+
+helm-lint:
+	helm lint helm/clubcore -f helm/clubcore/values.local.yaml
+
+kind-up:
+	kind create cluster --name clubcore-local --config infra/kind/config.yaml
+	kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/.../deploy.yaml
+	helm repo add cert-manager https://charts.jetstack.io
+	helm install cert-manager cert-manager/cert-manager --set installCRDs=true
+
+helm-install-local:
+	# Build local images first
+	docker build -t clubcore/backend:local apps/backend/
+	kind load docker-image clubcore/backend:local --name clubcore-local
+	# Apply secrets (plaintext for local only)
+	kubectl apply -f infra/k8s/local-secrets.yaml
+	# Install chart
+	helm upgrade --install clubcore helm/clubcore \
+	  -f helm/clubcore/values.local.yaml \
+	  --wait --timeout 300s
+
+smoke:
+	# Wait for migrate job, then hit /healthz
+	kubectl wait --for=condition=complete job/clubcore-migrate --timeout=120s
+	kubectl port-forward svc/backend-api 8000:8000 &
+	curl -f http://localhost:8000/healthz
+
+kind-down:
+	kind delete cluster --name clubcore-local
+```
+
+### Differences Between kind and Real Bare-Metal k3s
+
+1. **Ingress controller:** kind needs nginx-ingress installed; k3s ships Traefik. Both handle `Ingress` resources, but annotation keys differ. Use nginx-ingress annotations in Helm templates, OR detect via values.yaml `ingress.className: nginx` vs `traefik`.
+
+2. **Storage:** kind uses a `rancher.io/local-path` provisioner (different name than k3s's); both satisfy `ReadWriteOnce` PVCs. PVC provisioner annotation may differ.
+
+3. **Node labels:** Real k3s node has `node-role.kubernetes.io/master`. kind nodes have different labels. Node affinity rules in Helm templates must handle both or avoid node-specific selectors.
+
+4. **LoadBalancer:** In kind, LoadBalancer Services get no external IP (use NodePort or `cloud-provider-kind` tooling). In real k3s on bare metal with MetalLB, they get a local IP. The Ingress approach (all traffic via Ingress, not LoadBalancer) sidesteps this difference.
+
+5. **Traefik IngressRoute vs standard Ingress:** k3s Traefik supports both standard `networking.k8s.io/v1` Ingress and Traefik-specific `IngressRoute` CRD. Use standard Ingress objects for portability.
+
+---
+
+## Suggested Build Order
+
+Build order follows dependency chains: you cannot write Helm templates before knowing the resource shape; you cannot test locally before the chart works; you cannot do observability before the app is running.
+
+### Phase Dependency Graph
+
+```
+[1] Docker images (hardened)
+      ↓
+[2] Helm chart skeleton + StatefulSets (Postgres, Redis, MinIO)
+      ↓
+[3] migrate Job + backend Deployment (API running in kind)
+      ↓
+[4] Telegram-bot + ARQ-worker Deployments (all app pods running)
+      ↓
+[5] Static frontend Deployments + Ingress + TLS
+      ↓
+[6] Terraform IaC (wrap what's already tested in Helm into TF modules)
+      ↓
+[7] Secrets management (SOPS) + NetworkPolicies
+      ↓
+[8] Observability (Prometheus + Grafana + Loki)
+      ↓
+[9] Backup CronJobs + restore runbook
+      ↓
+[10] CI/CD Makefile + full smoke test
+      ↓
+[11] Documentation runbook
+      ↓
+[12] Operator-pending: live bare-metal apply
+```
+
+### Rationale for Order
+
+1. **Images first** — everything else is blocked on having working container images. Harden the existing Dockerfile (pinned digests, `.dockerignore`, trivy clean), add frontend Dockerfiles (multi-stage Vite build → nginx). No k8s work starts until images build and run correctly.
+
+2. **StatefulSets before Deployments** — app pods need DB + Redis to be running. Postgres and Redis StatefulSets are simpler to write and validate than the app Deployments (no migration ordering complexity). Validate PVC binding in kind first.
+
+3. **migrate Job + backend** — this is the critical ordering problem. Solve it early (Helm hook + initContainer strategy). Once the backend API reaches `/healthz` in kind, the core integration is proven.
+
+4. **Worker Deployments** — arq-worker and telegram-bot are simpler than backend (no Ingress, no Service). They share the same image. Validate the `TZ=UTC` and `replicas=1, strategy: Recreate` constraints here.
+
+5. **Frontends + Ingress + TLS** — nginx static serving is straightforward. Ingress routing is where most debugging happens (host headers, WS upgrade, TLS). Tackle this as a unit.
+
+6. **Terraform** — write Terraform AFTER the Helm chart is working. Terraform wraps tested Helm releases; writing TF for untested resources wastes iteration. `terraform validate` and `terraform plan` against kind prove the HCL is correct.
+
+7. **Secrets + NetworkPolicies** — secrets management (SOPS workflow) needs to be finalized before any real credentials are applied. NetworkPolicies (default-deny + per-pod allow rules) come after the topology is stable so you know which pod→pod paths to allow.
+
+8. **Observability** — Prometheus + Grafana + Loki are installed via community Helm charts into a separate namespace. These don't block the app running; add after the app stack is stable.
+
+9. **Backup** — CronJobs for pg_dump and Redis snapshot. Write the restore runbook and test it (round-trip restore to a fresh PVC) in kind before production.
+
+10. **Makefile CI/CD** — the Makefile is the glue. Write it last when all individual pieces work. One-command `make deploy` = build → load → helm upgrade → smoke.
+
+11. **Runbook documentation** — the production runbook documents what was built. Write it during or after implementation, not before.
+
+12. **Live apply is operator-pending** — per the milestone definition, live bare-metal apply requires real server access + live ЮKassa/email credentials. Autonomous work stops at local validation.
+
+---
+
+## Architectural Patterns
+
+### Pattern 1: Helm Hook for Migration Ordering
+
+**What:** `Job` with `helm.sh/hook: pre-install,pre-upgrade` ensures Alembic runs to completion before Helm creates or updates any Deployment.
+
+**When to use:** Any stateful schema migration that must complete before app code runs. This is the canonical pattern — do not use `initContainers` as the sole ordering mechanism when the migration is heavyweight.
+
+**Trade-offs:** If the Job fails, the Helm release fails (good — you want loud failure). The Job pod stays around for debugging (`backoffLimit=0`, `ttlSecondsAfterFinished: 300`).
+
+### Pattern 2: Recreate Strategy for Single-Instance Workers
+
+**What:** `strategy: type: Recreate` on telegram-bot and arq-worker Deployments.
+
+**When to use:** Any workload where two instances running simultaneously is incorrect. Recreate kills the old pod before starting the new one (zero-overlap guarantee).
+
+**Trade-offs:** Brief downtime during updates (seconds). Acceptable for background workers where the Telegram long-polling reconnects automatically and ARQ resumes from Redis.
+
+### Pattern 3: Redis Pub/Sub Makes Backend API Multi-Replica Safe for WS
+
+**What:** The v2.5 messaging WebSocket uses Redis pub/sub fan-out. Any backend pod subscribed to the channel receives the message and pushes it to its connected WS clients.
+
+**When to use:** Already in use. The architectural implication for k8s: the backend-api Deployment can safely run replicas > 1 even with active WS connections, as long as Ingress has sticky sessions (so a given client's WS stays on the same pod for the connection lifetime).
+
+### Pattern 4: ConfigMap + Secret Separation in Helm
+
+**What:** Public config (URLs without passwords, feature flags, region) in ConfigMap. Credentials in Secret. Deployments reference both via `envFrom`. Secrets are created out-of-band (SOPS) and referenced by name, never templated with `{{ .Values.secretValue }}`.
+
+**When to use:** Always. This pattern ensures `helm template` output (which goes in git or CI artifacts) never contains plaintext credentials.
 
 ---
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: WS Endpoint in `client_portal/router.py`
+### Anti-Pattern 1: ARQ Worker Replicas > 1
 
-**What people do**: add the WS endpoint to `client_portal/router.py` because "it's a client endpoint."
-**Why it's wrong**: forces `client_portal` to import `messaging.service` directly (violates `modules-independent`) or route everything through Protocol slots (overkill for a module that owns its own data model).
-**Do this instead**: the WS endpoint lives in `messaging/router.py`, mounted at `/client` prefix in `api/v1/router.py` — the same pattern as `loyalty.router`, `gym.router`, `notifications.router`.
+**What people do:** Set `replicas: 2` on arq-worker for "availability" — if one pod dies, the other keeps running.
 
-### Anti-Pattern 2: Global Process-Wide Pub/Sub Subscriber in Lifespan
+**Why wrong:** ARQ's `unique=True` cron dedup is best-effort (Redis NX key). Two workers processing the same tick concurrently can execute a cron job twice in the same minute window. The SQL-level idempotency guards (ON CONFLICT DO NOTHING, WHERE status='active') prevent double-charges but the duplicate execution wastes resources and produces duplicate log entries. More importantly, `monitor_stale_fiscal_receipts` and `poll_pending_refunds` run every 15/30 minutes and use `FOR UPDATE SKIP LOCKED` — two worker instances dequeue different rows and both execute concurrently, which is the intended behavior for task queues but not for singleton "sweep" crons.
 
-**What people do**: create a single asyncio task in `combined_lifespan` that subscribes to all channels and dispatches to a `client_id → WebSocket` dict.
-**Why it's wrong**: requires thread-safe global state; hard to clean up on disconnect; harder to test; fanout to multiple tabs from a single subscriber requires extra demultiplex logic.
-**Do this instead**: per-WS-connection subscriber loop (each WS handler spawns its own asyncio task that subscribes and unsubscribes cleanly on disconnect).
+**Instead:** replicas=1, strategy: Recreate. Accept brief downtime during deployments for cron workers. If zero-downtime is required, use a leader election pattern (e.g., a Redis SETNX lease in `on_startup`) — but this is overkill for a single-gym pet project.
 
-### Anti-Pattern 3: Pub/Sub on the Shared `get_redis()` Pool Client
+### Anti-Pattern 2: telegram-bot Rolling Update
 
-**What people do**: call `redis.subscribe()` on the same `Redis` object returned by `get_redis()`.
-**Why it's wrong**: `redis.asyncio` pub/sub puts the connection into subscribe mode — it can no longer be used for regular commands. The shared pool client would be corrupted for other requests.
-**Do this instead**: call `redis.pubsub()` which creates a dedicated internal connection for subscribe protocol. Dispose of it with `await pubsub.aclose()` on WS disconnect.
+**What people do:** Leave default `strategy: RollingUpdate` on the telegram-bot Deployment, which creates the new pod before terminating the old.
 
-### Anti-Pattern 4: Storing Typing Indicators in Postgres
+**Why wrong:** During the rolling update window, both old and new pods call `application.run_polling()` simultaneously. The Telegram Bot API delivers each update to exactly one poller (the one that first calls `getUpdates`). In practice, both pollers compete; some updates are lost (consumed by the dying pod) or processed twice (if the API delivers to both before SIGTERM). Russian-language DMs and `/checkin` responses become unreliable.
 
-**What people do**: INSERT a row into a `typing_events` table on every keystroke.
-**Why it's wrong**: typing indicators are ephemeral (3-5s TTL); persisting them is noise that never needs to be read back.
-**Do this instead**: publish typing events to Redis pub/sub only (not to Postgres). The WS fan-out delivers them in real time; they are not persisted.
+**Instead:** `strategy: Recreate`. The update takes ~5 seconds of bot downtime. Users typing `/checkin` during that window get no response until the pod restarts, then the Telegram API re-delivers the pending update (Telegram queues unacknowledged updates for 24 hours).
 
-### Anti-Pattern 5: Accepting `thread_id` or `client_id` from WS Payload
+### Anti-Pattern 3: SeaweedFS in Production k8s
 
-**What people do**: let the client send `{"type": "send", "thread_id": "...", "client_id": "..."}` in WS messages.
-**Why it's wrong**: breaks IDOR — a client could specify another client's `thread_id` or forge `client_id`.
-**Do this instead**: `client_id` and `thread_id` are resolved server-side from the principal (`ClientPrincipal.id`) at WS handshake time. The client never sends ownership identifiers.
+**What people do:** Lift-and-shift the docker-compose SeaweedFS into k3s as-is.
 
-### Anti-Pattern 6: Serving Attachments via Static Mount Without Auth
+**Why wrong:** SeaweedFS in `server -s3` mode bundles master + volume + filer into a single process, but the image's entrypoint in the compose setup (`chrislusf/seaweedfs:3.84 server -s3 -s3.config=...`) is not designed for k8s restart semantics. Volume re-mount behavior after a pod reschedule is poorly documented. The `healthcheck` in compose relies on a `grep Forbidden` wget — not a standard k8s readiness probe.
 
-**What people do**: `app.mount("/uploads", StaticFiles(directory="uploads"))` and put the URL in the message.
-**Why it's wrong**: uploaded files are accessible to anyone with the URL — no auth, no IDOR check.
-**Do this instead**: authenticated proxy endpoint `GET /client/messages/attachments/{id}` that verifies `message_attachments.client_id == principal.client_id` before `FileResponse`.
+**Instead:** MinIO in prod k8s. The backend S3 client code is identical (boto3/S3 API); only the endpoint changes. Keep SeaweedFS in docker-compose for dev (it works there).
+
+### Anti-Pattern 4: Storing Secrets in Helm values.yaml
+
+**What people do:** Put `TELEGRAM_BOT_TOKEN: "123:ABC..."` in `values.prod.yaml` and commit it.
+
+**Why wrong:** The value ends up in git history, Helm release history (stored in cluster Secrets), and any CI artifact that runs `helm template`. Token rotation is difficult.
+
+**Instead:** Create the Secret out-of-band with SOPS before `helm install`. Helm template references `secretKeyRef: name: clubcore-app-secrets` — it only knows the Secret name, not the value. Rotate by updating and re-applying the SOPS-encrypted file.
 
 ---
 
-## Scaling Considerations (Single Gym — v2.5 Scope)
+## Integration Points
 
-| Concern | At 1 gym (v2.5 target) |
-|---|---|
-| Concurrent WS connections | 1-50 (one gym, few active clients) — no scaling concern |
-| Redis pub/sub | Single-node Redis 7 — adequate; fan-out is trivial at this scale |
-| Attachment storage | Local filesystem — adequate; single server deployment |
-| DB writes per message | 1 INSERT + 1 UPDATE (thread.last_message_at) — trivial |
+### External Services
 
-If this were to scale to multiple gyms (v3.x), the Redis pub/sub channel namespace `cc:messaging:client:{id}` already isolates by client, so horizontal scaling of the FastAPI process is straightforward (all workers subscribe to the same Redis node). Local filesystem storage would need to become shared (NFS or S3) — the `integrations/storage/` adapter makes this a single-file swap.
+| Service | Integration Pattern | Notes |
+|---------|---------------------|-------|
+| ЮKassa | HTTPS webhook POST to `/_internal/yookassa/webhook` | Must be publicly reachable; Ingress must route this path to backend; IP allowlist (`YOOKASSA_TRUSTED_IPS`) verified in backend |
+| Telegram Bot API | Outbound HTTPS from telegram-bot pod | No inbound; requires egress to `api.telegram.org` |
+| Yandex Email (SMTP/SES-V2) | Outbound HTTPS from arq-worker | Requires egress to Yandex Cloud endpoints |
+| cert-manager ACME | Outbound HTTPS from cert-manager pod + inbound HTTP-01 challenge | Requires port 80 reachable from internet for LE |
+
+### Internal Boundaries (pod → pod)
+
+| Boundary | Communication | K8s Implementation |
+|----------|---------------|--------------------|
+| backend-api → postgres | TCP 5432 | ClusterIP Service `postgres:5432` |
+| backend-api → redis | TCP 6379 | ClusterIP Service `redis:6379` |
+| backend-api → minio | HTTP 9000 | ClusterIP Service `minio:9000` |
+| arq-worker → redis | TCP 6379 | Same ClusterIP Service |
+| arq-worker → postgres | TCP 5432 | Same ClusterIP Service |
+| telegram-bot → redis | TCP 6379 | Same ClusterIP Service |
+| telegram-bot → postgres | TCP 5432 | Same ClusterIP Service |
+| arq-worker → minio | HTTP 9000 | Same ClusterIP Service (for forward_to_staff photo task) |
+| ingress → backend-api | HTTP 8000 | ClusterIP Service `backend-api:8000` |
+| ingress → admin-app-nginx | HTTP 80 | ClusterIP Service `admin-app:80` |
+| ingress → client-pwa-nginx | HTTP 80 | ClusterIP Service `client-pwa:80` |
+
+**NetworkPolicy minimum allow rules (after default-deny):**
+- backend-api → postgres: port 5432
+- backend-api → redis: port 6379
+- backend-api → minio: port 9000
+- arq-worker → postgres, redis, minio (same ports)
+- telegram-bot → postgres, redis (same ports)
+- ingress-controller → backend-api, admin-app, client-pwa (HTTP)
+- All pods → kube-dns (UDP 53) — easy to forget, breaks DNS
 
 ---
 
 ## Sources
 
-All findings are HIGH confidence from direct live codebase inspection:
-
-- `apps/backend/app/main.py` — composition root: Protocol slot registration pattern, lifespan structure, composition-root carve-out precedents
-- `apps/backend/app/workers/telegram_bot.py` — HandlerContext pattern, D-06/D-10 relaxations, long-polling process lifecycle, Protocol slot registration in worker
-- `apps/backend/app/integrations/telegram/handlers.py` — HandlerContext NamedTuple definition, field order stability contract, importlib pattern for integrations → modules isolation
-- `apps/backend/app/modules/client_portal/router.py` — require_client() usage, IDOR enforcement, WebSocket dependency pattern (confirmed FastAPI applies Depends on WS routes)
-- `apps/backend/app/core/dependencies.py` — ClientPrincipal Protocol, require_client() implementation reading cc_client_access cookie, Protocol slot registration pattern
-- `apps/backend/app/core/redis.py` — Redis singleton pattern, get_redis() per-request dependency, redis.pubsub() availability on asyncio Redis client
-- `apps/backend/app/core/security.py` — decode_client_token(), aud="client" assertion, cc_client_access cookie name
-- `apps/backend/app/api/v1/router.py` — established pattern of mounting multiple separate routers at `/client` prefix (loyalty, gym, notifications, client_auth, client_portal)
-- `apps/backend/.importlinter` — exact contract text, existing ignore_imports edges, modules-independent module list, worker exemption (workers not in source_modules)
-- `.planning/PROJECT.md` — v2.5 milestone goal, target features, key constraints, out-of-scope items
-
----
-*Architecture research for: clubcore v2.5 — Chat / Messaging — Client↔Gym*
-*Researched: 2026-06-06*
+- Live `apps/backend/docker-compose.yml` — authoritative topology (read 2026-06-16)
+- Live `apps/backend/app/workers/__init__.py` (WorkerSettings) — confirms cron scheduling model, `unique=True` on all cron_jobs, `TZ=UTC` requirement, per-process singleton wiring
+- Live `apps/backend/app/workers/telegram_bot.py` — confirms long-polling model, single process requirement
+- Live `apps/backend/Dockerfile` — multi-stage, non-root, production-ready; no frontend Dockerfiles exist yet
+- `.planning/PROJECT.md` — v4.0 milestone scope, locked decisions (on-prem k3s, local-validation bar, Prometheus+Grafana+Loki, Makefile CI/CD, SOPS/sealed-secrets, NAME-01 CSRF rename)
+- k3s documentation: StatefulSet + local-path provisioner patterns
+- ARQ 0.28 documentation: `unique=True` cron semantics, `keep_result` TTL
+- Helm best practices: hook lifecycle, values overlay pattern
+- cert-manager: selfSigned issuer for local validation

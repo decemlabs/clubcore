@@ -1,427 +1,331 @@
 # Pitfalls Research
 
-**Domain:** Adding WebSocket real-time chat + photo attachments + Telegram bridge to an existing FastAPI modular monolith (clubcore gym CRM, v2.5)
-**Researched:** 2026-06-06
-**Confidence:** HIGH (FastAPI docs + Redis docs + codebase analysis + established patterns from prior milestones)
+**Domain:** Self-hosted bare-metal k3s — containerizing and deploying an existing full-stack gym CRM (FastAPI + ARQ + Telegram long-polling + Postgres 16 + Redis 7 + SeaweedFS/MinIO + two SPA/PWA frontends)
+**Researched:** 2026-06-16
+**Confidence:** HIGH
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: WS Auth — Token in URL Query Param Leaks Into Logs (CSWSH + IDOR Gateway)
+### Pitfall 1: Postgres data loss on StatefulSet rescheduling (bare-metal k3s, local-path-provisioner)
 
 **What goes wrong:**
-The browser WebSocket API (`new WebSocket(url)`) cannot send HTTP headers, so developers reach for `?token=<jwt>` in the URL. That token appears in: (a) server access logs, (b) reverse-proxy logs, (c) Referrer headers when the PWA navigates after connect, and (d) browser history. Any attacker with log access has the client's session token. Separately, because `WebSocket` connections do not enforce Same-Origin Policy by default, any page loaded in the client's browser can open a WebSocket to the gym API with the browser's existing cookies — Cross-Site WebSocket Hijacking (CSWSH).
+k3s ships with `local-path-provisioner` as its default storage class. This creates PVs that are node-affinity-bound — the PV is created in a specific directory on a specific node. If the StatefulSet pod is rescheduled to a different node (node drain, node failure, operator `kubectl delete pod`), the new pod cannot bind the old PV because the path does not exist on the new node. The pod stays Pending forever, or worse — if the PVC is recreated — a fresh empty volume is mounted and the new pod starts with no data.
 
 **Why it happens:**
-HTTP endpoints already work via `cc_client_*` httpOnly cookies, so the developer copies that pattern into the WS handler without noticing that standard `WebSocket` upgrade requests also carry `Cookie` headers — no URL token is needed. The CSWSH gap is invisible in dev (same origin).
+Developers apply a StatefulSet with a `volumeClaimTemplate` and assume Postgres data persists like a named Docker volume does in `docker compose`. Local-path PVs have no cross-node mobility. On a true single-node bare-metal server this is survivable; it becomes a silent trap when any node maintenance or k3s upgrade causes a pod reschedule.
 
 **How to avoid:**
-- Use httpOnly cookie auth for WS exactly like HTTP: FastAPI supports `Cookie(...)` in WS `Depends()`. The `cc_client_access` httpOnly cookie is sent automatically on the WS upgrade request to the same origin.
-- Add an `Origin` header check (allowlist of known PWA origins) at WS connection time. FastAPI does NOT do this automatically. A `Depends(verify_ws_origin)` that compares `websocket.headers.get("origin")` against `settings.allowed_origins` is the correct gate.
-- Never accept `?token=` on the WS endpoint. If the cookie model must change (e.g., cross-origin PWA), use a short-lived one-time token issued by a REST endpoint (`POST /client/ws-ticket` returns a `ws_ticket` valid for 10s, consumed on first connect) — but the existing same-origin cookie model is sufficient for this PWA.
-- The existing `require_client()` dependency reads cookies; adapting it for WS context (`WebSocket` instead of `Request`) is a single typed parameter swap.
+1. Annotate the PVC with `volumeBindingMode: WaitForFirstConsumer` and verify the pod lands back on the same node via a `nodeSelector` or `nodeName` constraint pinning Postgres to the storage node.
+2. Set `terminationGracePeriodSeconds: 60` on the StatefulSet pod so Postgres flushes WAL cleanly before SIGKILL.
+3. Label the storage node explicitly (`kubectl label node <name> clubcore/postgres-storage=true`) and use a `nodeSelector` in the StatefulSet spec.
+4. Before trusting any PVC, execute a full `pg_dump` → destroy pod → `pg_restore` round-trip in the kind/k3s local validation environment. Document the restore time.
+5. Set `reclaimPolicy: Retain` on the StorageClass so a PVC delete does NOT destroy the underlying directory.
 
 **Warning signs:**
-- Any WS endpoint URL containing `token=`, `access_token=`, or `jwt=` as a query param.
-- No `Origin` check in the WS connection handler.
-- Access logs showing JWT strings in WS upgrade request lines.
+- Pod shows `Pending` after a reschedule with event `0/1 nodes are available: 1 node(s) didn't match Pod's node affinity/selector`.
+- PVC shows `Lost` binding.
+- A second PVC with the same name appears with status `Bound` but different PV.
 
 **Phase to address:**
-Phase 90 (WebSocket + messaging domain foundation). The `verify_ws_origin` dependency and cookie-based `require_client_ws()` wrapper must be specced in the plan before any WS endpoint is written. LOCKED INVARIANT: this is an IDOR gateway — a missing Origin check means any JS script on any tab can open a WS to the gym API with the logged-in client's session.
+K8s manifests / Helm phase (StatefulSet authoring); Backup & Recovery phase (restore round-trip test).
 
 ---
 
-### Pitfall 2: IDOR Over WebSocket — Missing Per-Client Authorization on Subscribe
+### Pitfall 2: ARQ cron DOUBLE-FIRE if the worker Deployment scales to replicas > 1 (or during rolling update overlap)
 
 **What goes wrong:**
-The WS endpoint accepts connection from any authenticated client and subscribes them to a Redis pub/sub channel. If the channel name is derived from a `thread_id` or `client_id` taken from the URL/message body (not from the authenticated principal), client A can subscribe to client B's message channel by guessing or probing the channel name. This is the WS equivalent of the IDOR the D-20-IDOR invariant prevents on HTTP endpoints.
+ARQ `unique=True` on a `cron()` entry uses a Redis `SET NX EX` lock keyed on the job name + scheduled time. If two worker pods are alive simultaneously (replicas=2, or during a RollingUpdate where new pod starts before old pod terminates), BOTH pods race to acquire the lock. The loser gets a cache miss for that tick and silently enqueues a second copy of the same cron job into the queue. A second worker then dequeues and executes it. The SQL-level idempotency gates (`WHERE status='active'`, `ON CONFLICT DO NOTHING`) are the real backstop — but `charge_expiring_autopay` initiates real YooKassa API calls and `dispatch_fiscal_receipt` sends real fiscal receipts; SQL-level dedup only prevents the DB row, it does NOT prevent the external API call from firing twice.
 
 **Why it happens:**
-The developer models the WS endpoint as `GET /ws/chat/{thread_id}` and subscribes the connecting socket to channel `chat:{thread_id}`. The `thread_id` is a UUID, "hard to guess," so it feels safe. But the thread ownership check (does this `thread_id` belong to the authenticated `client_id`?) is missing.
+Kubernetes `Deployment` default strategy is `RollingUpdate` with `maxSurge=1`. During a deploy, both old and new pods exist simultaneously. Neither pod knows about the other; the ARQ lock is per-pod-race with a 60-second TTL (`keep_result=60`). If the cron fires during the overlap window, both pods see the lock absent and both attempt enqueue.
 
 **How to avoid:**
-- `client_id` comes ONLY from `require_client_ws()` principal — never from path params, query params, or WS message body.
-- On WS connect: validate that the channel the client is subscribing to is their own thread. Because there is exactly one 1:1 thread per client, the channel name must be `chat:client:{client_id}` (derived from the principal), never from the URL.
-- Reject any WS message that tries to switch channels mid-connection.
-- The 404-collapse pattern applies: if the thread does not exist for this client, close the WS with code `1008` (Policy Violation) without indicating whether the thread exists for another client.
+1. Set `strategy: type: Recreate` on the ARQ worker Deployment. This ensures the old pod is fully terminated before the new one starts — zero overlap window.
+2. Keep `replicas: 1` on the ARQ worker Deployment permanently. There must be exactly one ARQ scheduler instance. Document this as an architectural invariant in the Helm values.
+3. Do NOT use a HorizontalPodAutoscaler on the ARQ worker.
+4. Set `maxSurge: 0, maxUnavailable: 1` if Recreate strategy seems too strong (but Recreate is preferred — brief unavailability of the scheduler is acceptable; double-fire of autopay is not).
+5. The existing `WorkerSettings.on_startup` assertion (`cron_function_names - function_names`) already catches the "cron registered but not in functions" trap at boot. Keep it.
 
 **Warning signs:**
-- WS endpoint has a `thread_id` path parameter that is used as the channel name without cross-checking against the authenticated `client_id`.
-- Redis subscription channel name contains a value from the WebSocket message payload.
-- No test asserting that client A cannot receive client B's messages.
+- Two ARQ worker pods running simultaneously (check `kubectl get pods -l app=arq-worker`).
+- Duplicate `expire_memberships_complete` log lines within the same minute window in Loki.
+- `autopay_charges` table showing two rows for the same `(membership_id, period_end)` pair where the second hit `ON CONFLICT` — the conflict itself is evidence a double-fire occurred.
 
 **Phase to address:**
-Phase 90 (WS + messaging foundation). The channel naming scheme must be locked in the phase plan: `chat:client:{client_id}` derived from principal. LOCKED INVARIANT: breaks D-20-IDOR.
+K8s manifests / Helm phase (Deployment strategy + replicas constraint); documented as an acceptance criterion in the ARQ worker manifest.
 
 ---
 
-### Pitfall 3: SQLAlchemy Async Session Leak Inside Long-Lived WS Handlers (Session-Per-Connection Anti-Pattern)
+### Pitfall 3: Telegram long-polling with replicas > 1 (or RollingUpdate overlap) — double-consume
 
 **What goes wrong:**
-A WS handler opens a DB session at connection time and keeps it open for the duration of the connection (potentially minutes or hours). Each concurrent connection holds a DB connection from the pool indefinitely. With 50 concurrent clients, 50 DB connections are held open even if no messages are in flight. Pool exhaustion causes `TimeoutError` on all new connections (HTTP requests and WS connections alike). SQLAlchemy's idle-in-transaction timeout on Postgres will also kill long-held sessions, causing cryptic `InvalidRequestError` mid-message.
+The Telegram Bot API long-polling model delivers each update ONCE to the poller that calls `getUpdates`. If two `telegram_bot` worker pods are alive simultaneously, both call `getUpdates` to Telegram's API. Telegram will alternate deliveries between the two connections (or drop one). The result is that some updates are processed twice (by both pods racing) and others are dropped (delivered to the pod that did not handle them). `/checkin`, `/book`, and `/start` handlers are idempotent at the DB level but the Telegram bot API does not deduplicate — users receive duplicate confirmation DMs.
 
 **Why it happens:**
-The existing `get_db()` dependency yields a session per HTTP request — short-lived. The developer copies `Depends(get_db)` into the WS handler, which keeps the dependency alive until the WS disconnects.
+Same rolling-update overlap issue as Pitfall 2, but for the Telegram bot there is no Redis lock mechanism at all. The long-polling contract assumes exactly one consumer.
 
 **How to avoid:**
-- Never open a DB session at WS connection time. The WS handler manages the connection lifecycle; sessions are opened per-operation (per-message, per-query) using `async with session_factory() as session`.
-- Inject `session_factory: async_sessionmaker` (from `app.state.sessionmaker`) into the WS handler as a direct state reference, not via `Depends(get_db)`.
-- Pattern: `async with app.state.sessionmaker() as session: await session.execute(...)`  — opened and closed for each message operation, not for the WS lifecycle.
-- The `get_db()` dependency (which yields one session per HTTP request and commits on exit) is explicitly the wrong tool for WS.
+1. Set `strategy: type: Recreate` on the telegram-bot Deployment. This is the only safe strategy for long-polling bots.
+2. Set `replicas: 1` permanently. Document this constraint in the Helm values and the runbook.
+3. Add a readiness probe that checks the Telegram bot token validity on startup — this prevents the new pod from accepting traffic before it is confirmed healthy, but the critical fix is Recreate strategy.
+4. Set `terminationGracePeriodSeconds: 30` so the old pod can drain in-flight `getUpdates` cleanly before SIGKILL.
 
 **Warning signs:**
-- WS handler signature: `async def ws_chat(websocket: WebSocket, session: AsyncSession = Depends(get_db))`.
-- DB connection pool saturation visible in Postgres `pg_stat_activity` with long-idle `idle in transaction` rows.
-- `TimeoutError: QueuePool limit of size N overflow N reached` in logs under concurrent WS test.
+- Two `telegram-bot` pods showing `Running` simultaneously.
+- Users reporting double confirmation DMs for `/checkin` or `/book`.
+- Structlog shows the same `update_id` processed in two different pod log streams.
 
 **Phase to address:**
-Phase 90 (WS handler scaffold). The session usage pattern must be explicit in the plan. Add a pool-saturation test: open N concurrent WS connections, verify DB pool is not exhausted.
+K8s manifests / Helm phase (Deployment strategy + replicas constraint for telegram-bot).
 
 ---
 
-### Pitfall 4: Multi-Worker Fan-Out Failure — Works In Dev, Breaks In Production
+### Pitfall 4: Migrate Job races API/worker boot — API starts before Alembic finishes
 
 **What goes wrong:**
-In dev, one uvicorn worker handles all connections. A client sends a message; the worker broadcasts it back via in-process state or via the WS connection it holds in memory. In production (gunicorn + multiple uvicorn workers), the message write may arrive on worker A (HTTP POST or bot callback) while the client's WS connection lives on worker B. Worker A's in-process pub/sub or dict delivers to nobody. The message is saved to DB but never pushed to the client in real time.
+The Alembic migrate job (~70 migrations) takes several seconds. If the API Deployment and the migrate Job are created simultaneously by `helm install` or `kubectl apply`, the API pod may pass its readiness probe and start serving requests before the `alembic upgrade head` completes. The first request that touches a new column or table fails with a Postgres `column does not exist` error, surfacing as a 500 to users.
 
 **Why it happens:**
-The developer tests with `uvicorn app.main:app` (single worker) and sees messages arrive. CI passes. Multi-worker production is never tested.
+Kubernetes applies all resources in a chart in one pass. Without an explicit ordering gate, pods race. Helm hooks (`pre-upgrade`, `pre-install`) on the Job are the standard fix, but they interact badly with `helm upgrade --atomic` if not configured carefully.
 
 **How to avoid:**
-- Redis pub/sub is the correct fan-out mechanism: when a message is saved, publish to `chat:client:{client_id}`. Every worker that holds a WS connection for that client is subscribed to that channel and forwards the message.
-- The WS handler must establish a Redis subscription on connect and release it on disconnect — Redis pub/sub is per-subscriber (each worker creates its own subscriber connection).
-- Use `redis.asyncio`'s `PubSub` context: `async with redis.pubsub() as pubsub: await pubsub.subscribe(channel)` then `async for message in pubsub.listen()`. The `listen()` loop runs alongside the `receive_text()` loop via `asyncio.gather` or `asyncio.create_task`.
-- Test with `--workers 2` or use two separate in-process `asyncio` event loops in integration tests to simulate the cross-worker scenario.
+1. Declare the migrate Job as a Helm pre-install + pre-upgrade hook: `"helm.sh/hook": pre-install,pre-upgrade` and `"helm.sh/hook-weight": "-5"`. Helm will wait for the Job to complete before deploying the rest of the chart.
+2. Alternatively, use an `initContainer` on the API pod that runs `alembic upgrade head` — but this has a downside: every pod restart re-runs migrations (safe because Alembic is idempotent, but slower startup).
+3. Helm hook approach is preferred: single migration execution, clear separation, does not add startup latency to the API on every restart.
+4. Add `"helm.sh/hook-delete-policy": before-hook-creation` so the Job is cleaned up before the next deploy creates a new one (avoids Job name collision).
+5. Set `activeDeadlineSeconds` on the Job (e.g., 300) so a stuck migration does not block helm forever.
+6. In the `alembic.ini` / `env.py`, set `connection_retries` or wrap the `run_migrations_online` in a retry loop for the DB connection (k3s may take a few seconds to provision the Postgres service endpoint on first install).
 
 **Warning signs:**
-- No Redis pub/sub code anywhere in the WS handler.
-- WS handler stores active connections in a module-level `dict` keyed by `client_id`.
-- Zero test that sends a message from one context (bot callback / HTTP POST) and verifies it arrives on a WS connection opened in a different test coroutine.
+- API pod logs show `column "X" of relation "Y" does not exist` within the first 30 seconds of deployment.
+- Helm upgrade hangs at `Waiting for hook to complete`.
+- `kubectl get jobs` shows migrate Job in `Active` state for longer than 60 seconds.
 
 **Phase to address:**
-Phase 90 (WS + Redis pub/sub scaffold). The cross-worker fan-out test is mandatory before the phase closes. This is the "passes in dev, breaks in prod" pitfall most likely to be missed.
+K8s manifests / Helm phase (Job + hook ordering); Containerization phase (Dockerfile CMD does NOT run migrations — migrate is a separate image CMD).
 
 ---
 
-### Pitfall 5: Redis Pub/Sub At-Most-Once Delivery — No Catch-Up On Reconnect
+### Pitfall 5: Redis data loss on restart — sessions, ARQ queue, WebSocket pub/sub lost
 
 **What goes wrong:**
-Redis pub/sub has no persistence and no message retention. If a client's WS connection drops and reconnects (network glitch, mobile background), all messages published during the disconnection are lost. The client's chat history has a gap. Worse, if the reconnect happens in the same `listen()` loop without a DB catch-up fetch, the client sees an inconsistent thread.
+Redis 7 by default uses RDB snapshots with a save interval (e.g., `save 900 1, save 300 10, save 60 10000`). Between snapshots, data in RAM is not durable. A pod eviction, OOMKill, or node reboot loses up to `save_interval` seconds of data. For clubcore this means: all active JWT sessions logged out, all rate-limit counters reset, all idempotency keys lost (replay window opens), ARQ job queue emptied (in-flight tasks lost, cron locks gone), and the Redis pub/sub channel for WebSocket chat fan-out torn down (connected clients need to reconnect).
 
 **Why it happens:**
-The developer sees Redis pub/sub deliver messages reliably in happy-path tests and assumes it is sufficient. Reconnect logic is not tested (network failures are hard to simulate).
+Redis defaults are optimized for cache use, not durable queues. In a k8s pod, the PVC for Redis is a separate concern from the in-memory state; if the pod is killed ungracefully (OOMKill), data between the last RDB snapshot and the kill is gone.
 
 **How to avoid:**
-- Treat Redis pub/sub as a *notification transport*, not a *message store*. Messages are always written to the DB first (in `chat_messages` table), then a lightweight event is published to Redis: `{"event": "new_message", "message_id": "..."}`.
-- On WS connect (and reconnect), the handler always fetches undelivered messages from DB: `SELECT * FROM chat_messages WHERE thread_id = :thread AND id > :last_seen_id ORDER BY id ASC`. The client sends its `last_seen_message_id` in the connect handshake.
-- The Redis event is only a push notification that causes the client to re-fetch or confirms a delivery it already received. Messages are never sent *only* via pub/sub without a DB record.
-- Include a `last_seen_message_id` in the WS connect handshake (first message from client after upgrade).
+1. Enable AOF persistence: `appendonly yes`, `appendfsync everysec` in the Redis ConfigMap. This reduces data loss to ~1 second in the worst case.
+2. Mount a PVC for Redis (`/data`). Use `local-path-provisioner` with node affinity (same caution as Postgres — Pitfall 1).
+3. Set `maxmemory` in the ConfigMap to ~75% of the pod's memory limit, and `maxmemory-policy: allkeys-lru`. WITHOUT `maxmemory`, Redis will grow until the pod hits its memory limit and is OOMKilled — which triggers the data loss scenario. With `allkeys-lru`, Redis evicts least-recently-used keys under pressure rather than crashing. NOTE: ARQ job queue keys should ideally not be evicted; if the queue is critical, use `maxmemory-policy: volatile-lru` with TTLs only on cache keys, and no TTL on queue keys.
+4. Set `save ""` in the ConfigMap to DISABLE RDB snapshots (to avoid a snapshot blocking the event loop) and rely solely on AOF.
+5. Set `terminationGracePeriodSeconds: 30` on the Redis pod so it has time to flush AOF on SIGTERM.
+6. Set resource limits with enough headroom: if the pod's memory limit equals the Redis dataset size, OOMKill is guaranteed.
 
 **Warning signs:**
-- Chat messages are published directly to Redis and never written to a DB table.
-- WS handler does not fetch any DB history on connect.
-- No test for: disconnect → new messages arrive → reconnect → client receives missed messages.
+- After pod restart, all staff are logged out simultaneously (session keys gone).
+- ARQ cron jobs that should have fired at 06:05 MSK did not fire (queue empty after restart).
+- WebSocket chat clients all disconnect simultaneously and cannot reconnect immediately (pub/sub channels torn down).
+- Redis logs show `BGSAVE` taking >1 second (sign that the dataset is too large for the RDB snapshot interval).
 
 **Phase to address:**
-Phase 90 (messaging foundation + WS design). The DB-first + Redis-notify pattern must be locked as an architectural decision before any code is written. Reconnect test is mandatory.
+K8s manifests / Helm phase (Redis StatefulSet + ConfigMap + PVC); Monitoring phase (alert on `redis_connected_clients` drop to 0).
 
 ---
 
-### Pitfall 6: WS Connection Zombie — No Heartbeat / Ping-Pong / Backpressure
+### Pitfall 6: Sealed Secrets controller key loss with no git remote
 
 **What goes wrong:**
-Mobile clients go to background; NAT/firewall silently drops the TCP connection without sending a TCP FIN. The server's WS handler is stuck `await websocket.receive_text()` on a dead connection indefinitely. The worker's DB subscription or Redis pub/sub subscription remains open. Over time, zombie connections accumulate; Redis pub/sub subscriber count grows; memory and Redis connections leak.
+Sealed Secrets encrypts k8s Secrets against the controller's RSA key pair stored in a k8s Secret in the `kube-system` namespace. If the k3s cluster is rebuilt (node reinstalled, cluster reset), the controller generates a NEW key pair. All existing SealedSecret objects in the repo become permanently undecryptable — the controller cannot unseal them with the new key. Since this project has no git remote and no off-node backup of the key, the controller key exists only on the node. Node failure + cluster rebuild = all secrets permanently lost.
 
 **Why it happens:**
-FastAPI's WS implementation does not send automatic ping frames unless explicitly configured. The developer tests with a desktop browser (which sends WS ping frames) and never sees the issue.
+Sealed Secrets is designed for GitOps where you push SealedSecrets to a remote repo and the controller key is backed up separately. Without a git remote and without an explicit controller key backup, the key lives only in the cluster's etcd (k3s SQLite/etcd backend), which lives on the node.
 
 **How to avoid:**
-- Implement application-level ping/pong: the server sends a `{"type": "ping"}` JSON message every 30s. If no pong (or any message) is received within 60s, the server closes the connection with `1001` (Going Away).
-- Starlette (which FastAPI builds on) does support WS ping at the protocol level; set `websocket.ping_interval` if the underlying transport supports it — but application-level ping is more portable.
-- Use `asyncio.wait_for(websocket.receive_text(), timeout=60.0)` and catch `asyncio.TimeoutError` to detect dead connections.
-- The `finally:` block of the WS handler must unconditionally: cancel the Redis pub/sub task, release the Redis subscriber, and close the WS connection.
+1. After installing the Sealed Secrets controller, immediately export the controller key: `kubectl get secret -n kube-system -l sealedsecrets.bitnami.com/sealed-secrets-key -o yaml > .private/sealed-secrets-controller-key.yaml`. Store this file OFF-NODE (external drive, second PC — the existing backup method is copying the repo to another PC; add this file to that backup).
+2. Document the restore procedure: `kubectl apply -f .private/sealed-secrets-controller-key.yaml` before reinstalling the controller. If the old key is present at controller startup, it uses it instead of generating a new one.
+3. ALTERNATIVE: Use SOPS + age instead of Sealed Secrets. The age private key is a single file that is easier to back up and is independent of the cluster. The age key goes into the same off-node backup. SOPS-encrypted files are decryptable on any machine with the age key, without a running cluster — useful for disaster recovery.
+4. NEVER commit the age private key or the Sealed Secrets controller key to the git repo. Put them in `.gitignore` and the off-node backup.
+5. Test the full unseal round-trip during local validation: destroy the kind cluster, restore the controller key, re-create the cluster, verify all SealedSecrets decrypt successfully.
 
 **Warning signs:**
-- WS handler is `while True: data = await websocket.receive_text()` with no timeout.
-- No `try/finally` in the WS handler.
-- Redis subscriber count grows proportionally to historical connection count (not current connection count).
+- `kubectl get sealedsecrets -A` shows `Error decrypting key` events.
+- Application pods crash with missing environment variables (secret mount fails silently or with `CreateContainerConfigError`).
+- Sealed Secrets controller logs: `no key could decrypt secret`.
 
 **Phase to address:**
-Phase 90 (WS handler lifecycle). Heartbeat logic and `finally` cleanup must be in the WS handler scaffold from day one. Add a zombie detection test.
+Security phase (secrets management + controller key backup procedure); Documentation phase (runbook must include "before cluster rebuild, backup the controller key").
 
 ---
 
-### Pitfall 7: Attachment Stored XSS via Content-Type — SVG and HTML Execution
+### Pitfall 7: k3s Traefik ingress quirks — WebSocket, TLS cert-manager rate limits, and HTTP-to-HTTPS redirect loops
 
-**What goes wrong:**
-A client uploads a file with content `<script>alert(1)</script>` or a crafted SVG containing JS. The server stores it and later serves it with `Content-Type: image/svg+xml` (or worse, `Content-Type: text/html` if content-type is derived from the file extension). The receiving staff member (or another client) opens the "photo" in a browser tab; the JS executes in the gym's origin context, stealing session cookies or making API calls as the victim.
+**What goes wrong (three sub-traps):**
 
-**Why it happens:**
-The developer uses `python-magic` or `mimetypes.guess_type()` on the filename to set the Content-Type, trusting the client-supplied filename. SVG files are valid images but are also XML with embedded script capability.
+**7a. WebSocket through Traefik requires explicit annotation.**
+The FastAPI WebSocket endpoint for chat (`/api/v1/ws/chat/{thread_id}`) requires HTTP Upgrade. Traefik does NOT proxy WebSocket connections by default on IngressRoutes without the proper configuration. Connections silently upgrade then immediately close, appearing as a 400 or 101 followed by 0 bytes.
+
+**7b. Let's Encrypt production rate limits — use staging first.**
+If you point cert-manager's ClusterIssuer directly at `acme.lets-encrypt.org` (production), you get 5 failed validation attempts per hostname per hour before a 1-hour lockout, and 50 certificates per registered domain per week. During iterative local validation where you destroy and recreate the cluster repeatedly, you will hit the rate limit on the first real-hostname attempt. A staging cert (`acme-staging-v02.api.letsencrypt.org`) does not have this limit but produces a self-signed-CA cert (not trusted by browsers). For local validation use staging or a self-signed CA; switch to production only on the final live deploy.
+
+**7c. HTTP to HTTPS redirect loops with TLS termination at ingress.**
+If the ingress terminates TLS and also has a redirect middleware that redirects HTTP to HTTPS, AND the backend also redirects HTTP to HTTPS (e.g., `FORWARDED_ALLOW_IPS` not set, so FastAPI/uvicorn sees HTTP and redirects again), clients get an infinite redirect loop.
 
 **How to avoid:**
-- **Allowlist by magic bytes**, not filename extension: read the first 16–512 bytes of the upload and verify the magic signature matches JPEG (`\xff\xd8\xff`), PNG (`\x89PNG\r\n\x1a\n`), GIF (`GIF87a` / `GIF89a`), or WebP (`RIFF...WEBP`). Reject everything else with `422 unsupported_media_type`.
-- Explicitly **ban SVG and HTML**: even if the magic bytes are otherwise valid, reject `image/svg+xml` and any `text/*` content types.
-- Serve stored files with a **forced Content-Type from the allowlist** (never echo back the client-supplied type) and add `Content-Disposition: attachment` + `X-Content-Type-Options: nosniff`.
-- Host files on a **separate domain or path prefix** (`/uploads/` or a separate CDN subdomain) so even if a stored XSS fires, it is not on the gym's cookie-bearing origin. This is the browser's Same-Origin Policy as a defense-in-depth.
-- The Phase 88 `photo_url` validator (`http(s)`-only) is a precedent but solves a different problem (SSRF via URL); stored upload XSS requires magic-byte validation at write time.
+1. For WebSocket: configure the IngressRoute with a dedicated route for `/api/v1/ws/` using the websocket service port. Test with `wscat` through the ingress during local validation.
+2. For TLS: use a staging ClusterIssuer for all local and iterative testing. Only switch to production issuer on the operator-pending live deploy step.
+3. For redirect loops: set `FORWARDED_ALLOW_IPS=*` (or the cluster CIDR) in the backend ConfigMap so uvicorn respects the `X-Forwarded-Proto: https` header from Traefik and does not issue its own redirect.
+4. Know that k3s Traefik is v2.x (not nginx-ingress) — `nginx.ingress.kubernetes.io/*` annotations are silently ignored. All Traefik-specific annotations use the `traefik.ingress.kubernetes.io/*` prefix.
 
 **Warning signs:**
-- Upload handler checks `content_type` from the multipart request headers (client-controlled).
-- SVG files pass the file-type check.
-- `Content-Type` header on served files is derived from the stored filename or from the upload request.
-- No `X-Content-Type-Options: nosniff` header on attachment serve endpoints.
+- WebSocket connections drop immediately with `101 Switching Protocols` followed by connection close in browser devtools.
+- `kubectl describe certificate` shows `Issuing` state for >5 minutes.
+- cert-manager logs: `429 Too Many Requests` from Let's Encrypt.
+- Browser shows `ERR_TOO_MANY_REDIRECTS`.
 
 **Phase to address:**
-Phase 91 or 92 (attachment upload). Magic-byte validation and Content-Type enforcement must be in the upload handler spec. LOCKED INVARIANT: this is the attachment-XSS guard — missing it violates the stored-XSS discipline established by the Phase 88 `photo_url` validator.
+Networking phase (Traefik ingress configuration + WebSocket annotation + TLS staging/production split); Documentation phase (operator-pending: switch to LE production issuer).
 
 ---
 
-### Pitfall 8: Path Traversal and IDOR on Attachment Serving
+### Pitfall 8: NetworkPolicy denying CoreDNS — pod DNS resolution fails silently
 
 **What goes wrong:**
-Attachments are stored with filenames like `{message_id}_{original_filename}.jpg`. The serve endpoint is `GET /client/attachments/{filename}`. A client crafts `filename=../../etc/passwd` (path traversal) or `filename=other_client_message_uuid.jpg` (IDOR). The server reads an arbitrary file or serves another client's attachment.
+When you apply a `deny-all` default NetworkPolicy and then add allow rules for specific traffic, it is easy to forget to allow egress from application pods to CoreDNS (`kube-system` namespace, port 53 UDP/TCP). The result: all DNS lookups inside the pod fail with `NXDOMAIN` or timeout. Python's `asyncpg` and `httpx` and `python-telegram-bot` all use DNS resolution for their connection strings. The application starts, logs no DNS error, but every outbound connection eventually times out because the hostname never resolves. This is particularly insidious because pods APPEAR healthy (liveness probe against `localhost:8000/healthz` passes), but all real traffic fails.
 
 **Why it happens:**
-The developer builds the file path as `UPLOAD_DIR / filename` and trusts the `filename` path param. Python's `pathlib.Path` resolves `../` automatically, escaping the upload directory.
+NetworkPolicy is additive-deny: if a policy selects a pod, ALL traffic not explicitly allowed is dropped. CoreDNS lives in `kube-system` and must be explicitly allowed in egress rules. Prometheus scraping requires ingress from the `monitoring` namespace. These are the most commonly forgotten allow rules.
 
 **How to avoid:**
-- **Path traversal:** Use `Path(UPLOAD_DIR / filename).resolve()` and assert that the resolved path `is_relative_to(UPLOAD_DIR)`. Reject if not. Never concatenate user input into file paths without this check.
-- **IDOR on serve:** Do not use a guessable filename as the authorization gate. Store files with opaque names (UUID-based) and record the `client_id` owner in the `chat_message_attachments` table. The serve endpoint must look up the file record by ID, verify `owner_client_id == principal.client_id` (D-20-IDOR), then serve. A correctly guessed UUID without an ownership match returns `404`.
-- Alternatively, use **pre-signed URLs** with expiry (HMAC-signed URL valid for 60s, generated at message send time) so the serve endpoint verifies the signature, not the session. This decouples attachment serving from session state.
-- Do not serve attachments from the same path prefix as API routes (`/api/`). Use `/static/uploads/` or a dedicated subdomain.
+1. Add a standard egress rule to ALL application pod NetworkPolicies: `to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}, podSelector: {matchLabels: {k8s-app: kube-dns}}}], ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]`.
+2. Add a Prometheus scrape ingress rule: `from: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}}], ports: [{port: 8000}]`.
+3. Add inter-pod egress rules: backend to postgres, backend to redis, arq-worker to redis, arq-worker to postgres, telegram-bot to redis, telegram-bot to postgres. Be explicit about namespaces and pod selectors.
+4. Test NetworkPolicies with `kubectl exec <pod> -- nslookup postgres-svc` and `kubectl exec <pod> -- curl http://redis-svc:6379` before declaring networking done.
+5. Apply NetworkPolicies LAST in the phase, after all services are confirmed reachable without them.
 
 **Warning signs:**
-- Serve endpoint has `filename: str` as a path param and constructs `UPLOAD_DIR / filename` without `.resolve()` + `is_relative_to()`.
-- Stored filename contains the original client-supplied filename (e.g., `user_photo.jpg`).
-- No DB lookup in the serve endpoint (authorization is purely the path param).
+- Pod logs show connection timeouts to Postgres/Redis hostnames (not refused — timeout means DNS failed, not the service).
+- `kubectl exec <pod> -- nslookup google.com` hangs.
+- Python stack traces show `asyncio.TimeoutError` or `getaddrinfo failed` on DB connection strings.
+- Prometheus shows no targets in the scrape pool for clubcore pods.
 
 **Phase to address:**
-Phase 91 or 92 (attachment upload + serve). IDOR and path traversal prevention must be in the spec. LOCKED INVARIANT: IDOR on attachments breaks D-20-IDOR.
+Networking phase (NetworkPolicy authoring); must include a DNS-resolution smoke test in the local validation checklist.
 
 ---
 
-### Pitfall 9: Telegram Bridge Reply Routing to Wrong Client Thread
+### Pitfall 9: Image pitfalls — non-root + filesystem writes, missing tzdata, uv/venv path, :latest tags
 
-**What goes wrong:**
-Staff member receives client A's message as a Telegram DM from the bot and replies. The reply must be routed to client A's thread. If the routing table (Telegram `chat_id` → `client_id`) is derived from the most recently active thread or from the bot's conversation state (which python-telegram-bot 22 does not persist across restarts), a reply may arrive in client B's thread — who was the last client to message before the restart.
+**What goes wrong (four sub-traps):**
 
-**Why it happens:**
-The existing bot `HandlerContext` holds in-memory state per handler invocation, not per-conversation. The Telegram reply from staff arrives as a plain text message to the bot, with no thread context in the message itself (Telegram does not embed a `reply_to_message_id` on staff-initiated messages unless the staff explicitly hits Reply).
+**9a. Non-root user + filesystem writes.**
+The existing Dockerfile creates a non-root `app` user (UID typically ~999). If any code path writes to a path outside `/app` or `/tmp` (e.g., a temp file written to `/var/`, a log file to `/etc/`), it will fail with `Permission denied` in the container but work fine in `docker compose` where the image ran as root. The migrate job runs `alembic upgrade head` — Alembic writes `alembic/versions/__pycache__` at import time; if the `/app/alembic` directory is owned by root in the builder stage and not re-chowned in the runtime stage, the migrate container will crash.
+
+The current Dockerfile uses `COPY --from=builder --chown=app:app /app /app` which chowns ALL of `/app` including `/app/alembic` — this is correct. Verify this chown is not dropped in a future Dockerfile edit.
+
+**9b. Missing tzdata.**
+`python:3.12-slim-bookworm` does NOT include `tzdata`. The cron jobs use `TZ=UTC` container environment and Python's `ZoneInfo("Europe/Moscow")`. `ZoneInfo` on Python 3.9+ with `tzdata` PyPI package works without system `tzdata`. Verify the `pyproject.toml` includes `tzdata` as a dependency, or install it in the Dockerfile. If absent, `ZoneInfo("Europe/Moscow")` raises `ZoneInfoNotFoundError` at runtime — but only when the code path that constructs the zone object is first called, not at import time. This means the bug appears at 03:05 UTC when `expire_memberships` fires for the first time, not at startup.
+
+**9c. uv/venv PATH.**
+The existing Dockerfile correctly sets `ENV PATH="/app/.venv/bin:$PATH"`. If this ENV line is missing from the runtime stage (e.g., copied from a different template), `python` and `uvicorn` and `alembic` resolve to the system Python which does not have the project dependencies installed. The pod starts but immediately exits with `ModuleNotFoundError`.
+
+**9d. :latest tags.**
+Using `image: clubcore-backend:latest` in Helm values means every `helm upgrade` pulls whatever is currently tagged `latest` in the local image registry. In the no-registry LOCAL setup (Makefile build + `k3s ctr images import`), `:latest` is safe because you control the tag. The risk is using `:latest` in a future registry-backed setup where a different image gets tagged `latest` accidentally. Use explicit version tags (git SHA or semver) from day one.
 
 **How to avoid:**
-- **Require staff to always use Telegram's Reply function** to respond to the bot's forwarded message. The forwarded message contains the client's message as quoted text; the `reply_to_message.message_id` identifies which client message this is a reply to. Store `telegram_message_id → chat_message_id` in the DB when forwarding client messages to the staff Telegram chat.
-- Alternative (more robust): Use a **dedicated Telegram group** per gym (not 1:1 DM to the bot). Forward each client message with a thread prefix: `[Иванов И.] Добрый день...`. Staff replies to the forwarded message, which carries `reply_to_message.message_id`. The bot looks up `telegram_message_id` in the `chat_forwarding_log` table to find the originating `client_id`.
-- Store a `chat_forwarding_log` table: `(telegram_message_id, chat_message_id, client_id, forwarded_at)`. Indexed on `telegram_message_id`. On any incoming bot message with `reply_to_message.message_id`, do `SELECT client_id FROM chat_forwarding_log WHERE telegram_message_id = :reply_to_id`. If not found (staff sent a non-reply message), log a warning and drop — do not route to last-active thread.
-- This follows the D-06 / D-10 worker→modules relaxation: `telegram_bot.py` imports `messaging.service` via the `HandlerContext` pattern already established.
+1. Verify `COPY --from=builder --chown=app:app /app /app` covers all directories the non-root user needs to write to at runtime.
+2. Add `tzdata` to `pyproject.toml` dependencies (or verify it is already present).
+3. Smoke-test the image with `docker run --user app clubcore-backend python -c "from zoneinfo import ZoneInfo; ZoneInfo('Europe/Moscow')"` before deploying.
+4. Use git-SHA tags for all images from day one: `image: clubcore-backend:$(git rev-parse --short HEAD)`.
+5. Pin base images by digest in the Dockerfile: `FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim@sha256:<digest> AS builder`.
 
 **Warning signs:**
-- Bot routing logic reads from an in-memory `dict` or a module-level variable to map the current conversation to a client.
-- No `chat_forwarding_log` table in migrations.
-- Staff can reply to the bot without using Telegram's native Reply function and still have the message routed.
+- Migrate pod exits immediately with `ModuleNotFoundError: No module named 'alembic'`.
+- ARQ worker crashes at 03:05 UTC with `ZoneInfoNotFoundError`.
+- `kubectl exec <pod> -- id` shows UID 0 (image running as root unexpectedly — means USER directive was dropped).
 
 **Phase to address:**
-Phase 93 (Telegram bridge). The `chat_forwarding_log` table and reply-dispatch logic must be specced before implementation. Add a test: staff replies to an old forwarded message → routes to the correct client, not the most recently active one.
+Containerization phase (Dockerfile hardening + tzdata + chown audit); K8s manifests phase (image tag convention).
 
 ---
 
-### Pitfall 10: Telegram Message Loop / Echo Between Bridge and Bot
+### Pitfall 10: PWA service worker caching /api/* + nginx SPA fallback missing
 
 **What goes wrong:**
-Client sends a message → bot forwards to staff Telegram chat → staff replies → bot routes reply back to client → bot also tries to forward the staff reply back to the staff Telegram chat as if it were a new client message → infinite echo loop.
+`apps/client-pwa` has a service worker (`gym-v3`) that caches assets. If the nginx serving the PWA sets `Cache-Control: max-age=86400` on ALL paths (a common nginx static-site pattern), and if the service worker's fetch handler does not explicitly exclude `/api/*`, the SW will cache API responses and serve stale data to clients. More concretely: if someone accidentally adds `/api/v1/...` to the precache manifest, users see stale membership data offline. The existing SW comment says "SW (`gym-v3`) never caches `/api/*`" — but this depends on the nginx configuration not sending a Cache-Control header that confuses the SW, AND on the SW code being preserved correctly in the production build.
 
-**Why it happens:**
-The bot's message handler receives ALL updates in the staff chat, including bot-sent messages. If the handler does not distinguish between "client message forwarded by bot" and "staff reply to bot," it processes bot-forwarded messages as new client messages.
+The nginx SPA fallback pattern `try_files $uri $uri/ /index.html` is required for client-side routing (TanStack Router). Without it, direct navigation to `/plans` returns 404 from nginx.
 
 **How to avoid:**
-- In the Telegram update handler, check `update.message.from_user.is_bot` — if true, skip (do not process bot-forwarded messages as client messages).
-- Additionally, skip any message whose `chat_id` is the staff Telegram group/channel unless it has `reply_to_message.message_id` pointing to a bot-forwarded message (i.e., is a staff reply). Plain staff messages with no reply context are discarded.
-- The `chat_forwarding_log` lookup is the natural loop-breaker: a bot-forwarded message will have its own `telegram_message_id` in the log; when the bot receives it as an "update," it finds that ID in the log and skips it (it is already recorded as a forwarded client message, not a new one).
-- The existing Redis `cc:bot:update:{update_id}` dedup (D-20-3, Phase 20) already deduplicates update IDs — ensure this covers the staff-chat channel too.
+1. nginx server block for the PWA must include: `location /api/ { proxy_pass http://backend-svc:8000; }` (requests to `/api/*` must be proxied to the backend, not served from static files).
+2. nginx config must NOT set `Cache-Control` headers on the service worker file itself (`/sw.js`, `/gym-v3.js`): `location ~* sw\.js$ { add_header Cache-Control "no-cache"; }` for the SW entry point; immutable cache is fine for hashed assets (`/assets/*.js`).
+3. The `try_files $uri $uri/ /index.html` rule must be in BOTH the admin-app nginx block AND the client-pwa nginx block.
+4. Verify during local validation with a browser `Application > Service Workers > Offline` toggle that `/api/*` requests are NOT served from cache.
+5. Add a `Cache-Control: no-store` header on all `/api/*` responses from the FastAPI backend.
 
 **Warning signs:**
-- The Telegram update handler has no `is_bot` check.
-- No dedup key that distinguishes bot-sent from user-sent messages.
-- Running the bot against a test chat shows messages doubling or tripling.
+- Direct navigation to `/plans` returns 404 instead of the SPA.
+- After a deploy, users still see old data (SW served a cached API response).
+- Service worker shows `api/v1/...` in `Cache Storage` in devtools.
 
 **Phase to address:**
-Phase 93 (Telegram bridge). Loop prevention must be in the bot handler spec. Test: simulate a full round-trip (client → staff Telegram → reply → client) and assert exactly one message appears in each direction.
+Containerization phase (nginx config for frontend images); local validation must include a browser smoke test for SPA routing and service worker behavior.
 
 ---
 
-### Pitfall 11: Staff Identity Lost in Telegram Bridge — All Replies Look Like "Зал"
+### Pitfall 11: Resource limits, OOMKill, and slow-starting pods killed by liveness probes
 
-**What goes wrong:**
-Multiple staff members (owner + reception) share the same Telegram group and all reply via the bridge. The client sees all replies as coming from "Зал" with no indication of who replied. In a multi-staff gym, this is acceptable for v2.5, but the `actor_*` audit trail (established in every other module) would be absent from chat messages written via the bot — the `sender_type = 'staff'` row has no `user_id`.
+**What goes wrong (two sub-traps):**
 
-**Why it happens:**
-The Telegram group context has no reliable way to associate a Telegram user to a `users` table row without explicit staff registration (linking Telegram accounts to staff users). This is a hard constraint.
+**11a. OOMKill from no memory limit or wrong limit.**
+Without `resources.limits.memory`, a pod can grow unboundedly and trigger the node's OOM killer — the entire node may kill processes rather than just the pod. Postgres without `shared_buffers` tuning will try to use 25% of system RAM; in a container with a 512Mi limit and `shared_buffers=128MB`, this is fine; without a limit, Postgres grows to exhaust the node. Redis without `maxmemory` (see Pitfall 5) will OOMKill itself.
+
+**11b. Liveness probes killing pods during slow startup.**
+The backend API boots by: importing all Python modules (slow on first start, ~3-5 seconds with ~70 Alembic migrations in metadata), running lifespan managers for Redis and database, registering all protocol slots. If `initialDelaySeconds` on the liveness probe is too short, the probe fires before the app is ready, the pod is killed, restarted, killed again — crash loop. A `startupProbe` with a generous `failureThreshold` (e.g., 30 attempts x 5 second period = 150 seconds) is the correct pattern: the startup probe runs until success, then liveness/readiness take over.
 
 **How to avoid:**
-- Accept the constraint for v2.5: staff messages have `sender_type = 'staff'`, `sender_user_id = NULL`. Document this in the `chat_messages` schema.
-- Record `telegram_user_id` and `telegram_username` in the staff reply row as a nullable audit field (even without a FK to `users`). This gives an operator-visible trace without requiring full staff Telegram registration.
-- Add a LOCKED audit event `chat_staff_reply_sent` with `payload: {telegram_user_id, telegram_username}` — same INFRA-15 discipline as all other audit events.
-- For v2.6 (admin-web chat inbox), the staff identity problem disappears because the reply comes via an authenticated HTTP session.
+1. Set `resources.requests` and `resources.limits` on every pod. Suggested starting values (tune after observing actual usage via Prometheus):
+   - `backend`: requests `cpu: 100m, memory: 256Mi`, limits `cpu: 500m, memory: 512Mi`
+   - `arq-worker`: requests `cpu: 50m, memory: 128Mi`, limits `cpu: 300m, memory: 384Mi`
+   - `telegram-bot`: requests `cpu: 25m, memory: 128Mi`, limits `cpu: 200m, memory: 256Mi`
+   - `postgres`: requests `cpu: 200m, memory: 512Mi`, limits `cpu: 1000m, memory: 1Gi`
+   - `redis`: requests `cpu: 50m, memory: 128Mi`, limits `cpu: 200m, memory: 256Mi`
+2. Use a `startupProbe` that hits `/healthz`: `initialDelaySeconds: 5, periodSeconds: 5, failureThreshold: 30`. Only after the startup probe passes do liveness and readiness probes engage.
+3. Set Postgres `command: ["postgres", "-c", "shared_buffers=256MB", "-c", "max_connections=50"]` in the StatefulSet — the defaults are tuned for large servers, not k8s pods.
 
 **Warning signs:**
-- No `telegram_user_id` or `telegram_username` column on staff reply rows.
-- LOCKED_AUDIT_EVENTS does not include the chat domain events before any chat callsite ships.
+- Pod shows `OOMKilled` in `kubectl describe pod`.
+- Pod restart count climbing in `kubectl get pods` (CrashLoopBackOff).
+- `kubectl logs <pod> --previous` shows the pod was killed mid-startup with no error — the liveness probe killed it before `uvicorn` printed its first request log.
+- `kubectl describe pod` shows `Liveness probe failed: connection refused` during the first 30 seconds.
 
 **Phase to address:**
-Phase 93 (Telegram bridge). Decision must be locked in the phase plan: v2.5 = anonymous staff identity with `telegram_user_id` trace field; full staff identity → v2.6.
+K8s manifests / Helm phase (resource limits + startup/liveness/readiness probes); Monitoring phase (OOMKill alert).
 
 ---
 
-### Pitfall 12: Telegram Bot Rate Limits Under Message Volume
+### Pitfall 12: UTC/MSK timezone: cron fires at wrong wall-clock time, gym_date STORED column miscomputed
 
 **What goes wrong:**
-The Telegram Bot API enforces: 30 messages per second globally, 1 message per second per chat. If the gym has many concurrent active clients and the bridge forwards every message immediately and synchronously, a burst of incoming messages exhausts the rate limit. Telegram returns `429 Too Many Requests` with `retry_after`. The bot crashes or drops messages silently.
+The ARQ cron jobs use UTC-based `hour=` arguments that are manually offset from MSK (e.g., `hour=3, minute=5` = 06:05 MSK = 03:05 UTC). If the deployment environment sets `TZ=Europe/Moscow` on the ARQ worker container (e.g., by copying a compose env file that has this), the cron fires 3 hours late relative to MSK. The `gym_date STORED` column is computed by Postgres using `AT TIME ZONE 'Europe/Moscow'` — if the Postgres container's timezone is changed from UTC, the STORED generated column value is wrong for rows inserted before the change. All uniqueness constraints on `gym_date` break.
 
 **Why it happens:**
-The existing bot uses fire-and-forget `await sender.send_*()` calls (seen in `app/integrations/telegram/sender.py`). Adding a high-frequency chat forwarding path amplifies the request rate.
+`docker-compose.yml` may have `TZ=Europe/Moscow` on some services for developer convenience. When copying env configs to k8s ConfigMaps/Secrets, TZ values are carried over.
 
 **How to avoid:**
-- Wrap staff-notification sends in the existing ARQ task pattern: the WS handler enqueues an ARQ task `dispatch_chat_notification_to_staff` instead of calling the Telegram API directly. The ARQ worker respects the queue and can implement exponential back-off on `429`.
-- Alternatively, python-telegram-bot 22's `Application` class has a `rate_limiter` hook; configure it with the `AIORateLimiter` plugin.
-- For the forwarding flow: staff notifications are best-effort (a message in the DB is the truth; Telegram DM is a convenience). Do not make message commit depend on Telegram delivery.
+1. All containers MUST run `TZ=UTC`. This is the locked Phase 15 Key Decision. Verify it in every ConfigMap and every Helm values template.
+2. Set `timezone = 'UTC'` in the Postgres ConfigMap to ensure the STORED column computation is consistent.
+3. The ARQ worker `__init__.py` documents the UTC offset for every cron job. Do NOT change these offsets when deploying — they are correct as-is.
+4. Run `SELECT NOW() AT TIME ZONE 'Europe/Moscow'` inside the Postgres pod after deployment to verify the MSK wall-clock is correct.
 
 **Warning signs:**
-- `await telegram_sender.send_message(staff_chat_id, ...)` called synchronously inside the message-write transaction.
-- No retry or back-off on `TelegramError` (429) in the forwarding path.
-- Bot process crashes under simulated message burst.
+- `expire_memberships_complete count=0` at 03:05 UTC (correct) but also a second fire at 06:05 UTC (TZ was set to Moscow on the worker).
+- `gym_date` uniqueness violations (`duplicate key value violates unique constraint "uq_visits_client_gym_date"`) for visits inserted after a timezone change.
 
 **Phase to address:**
-Phase 93 (Telegram bridge). The ARQ-mediated forwarding pattern must be in the spec.
-
----
-
-### Pitfall 13: Testing WebSocket Endpoints with ASGITransport — httpx Does Not Support WS Upgrade
-
-**What goes wrong:**
-`httpx.AsyncClient` with `ASGITransport` handles HTTP/1.1 requests but does NOT support the WebSocket upgrade handshake. Attempting `await client.get("ws://...")` or using the WS URL scheme raises `httpx.UnsupportedProtocol`. The developer cannot write ASGITransport-based WS tests using the existing `async_client` fixture pattern.
-
-**Why it happens:**
-The CLAUDE.md constraint mandates `httpx ASGITransport` for all backend tests. The developer assumes this covers WS too, discovers it does not, and either (a) skips WS testing entirely, or (b) spins up a real network stack (real port, `async_client` with `base_url="http://..."`) which is slower and requires real process management.
-
-**How to avoid:**
-- Use **Starlette's `TestClient`** (synchronous) or **`WebSocketTestSession`** (which Starlette's `TestClient.websocket_connect()` returns) for WS endpoint tests. This is the FastAPI-recommended pattern per official docs. Starlette's `TestClient` uses ASGI directly (no real network) and does support WS upgrade.
-- Pattern for an async test suite:
-  ```python
-  from starlette.testclient import TestClient
-  with TestClient(app) as tc:
-      with tc.websocket_connect("/ws/chat") as ws:
-          ws.send_json({"type": "ping"})
-          data = ws.receive_json()
-  ```
-- Because `TestClient` is synchronous but the test suite uses `pytest-asyncio`, WS tests run in a separate `pytest.mark.asyncio(mode="auto")` exemption or are written as sync tests. Wrap the synchronous `TestClient` context in a `threading.Thread` if mixing with async fixtures is required.
-- The WS endpoint itself can still be tested for auth (cookie present/absent), IDOR (wrong client_id), and message routing logic by inspecting what the mock Redis pub/sub delivers — no real Redis needed for unit-level routing tests.
-- For multi-worker fan-out integration tests, use two `TestClient` instances sharing the same ASGI app (which shares in-process state) plus a real Redis (docker-compose up redis) to verify cross-subscriber delivery.
-
-**Warning signs:**
-- `async_client.get("/ws/...")` in a test (will raise `UnsupportedProtocol` at runtime).
-- Zero WS-specific tests in the messaging module test suite.
-- Tests only cover the REST endpoints (`POST /client/messages`) but not the WS delivery path.
-
-**Phase to address:**
-Phase 90 (WS scaffold). The test pattern must be established in the first WS plan before any endpoint is written. A WS test template (connect, authenticate via cookie, send/receive, disconnect) must be the first deliverable of the phase.
-
----
-
-### Pitfall 14: OpenAPI Drift — WS Endpoint and Attachments Are Not in openapi.json
-
-**What goes wrong:**
-WebSocket endpoints do not appear in FastAPI's generated OpenAPI schema by default. Multipart file upload (`UploadFile`) may produce incorrect schema if not annotated properly. The byte-stable `openapi.json` drift gate (CI job) passes because WS endpoints are simply absent — not because they are correctly documented. The `schema.d.ts` codegen for the PWA has no typed client for the messaging REST endpoints either.
-
-**Why it happens:**
-FastAPI's `app.openapi()` generator skips `@app.websocket()` routes. The developer ships the WS endpoint without noticing it is absent from the spec, and the drift gate silently stays green because nothing changed from its perspective.
-
-**How to avoid:**
-- WS endpoints require **manual OpenAPI augmentation**: add a `paths["/ws/chat"]["get"]` entry to the `_customize_openapi()` post-processor (Phase 64 pattern) with the correct `101 Switching Protocols` response and `securitySchemes` reference.
-- REST endpoints for messaging (`GET /client/messages`, `POST /client/messages`, `POST /client/messages/{id}/attachments`) must appear in `openapi.json` with full request/response schemas and the `Client-Portal` tag.
-- Attachment upload endpoint must use `fastapi.UploadFile` with proper `multipart/form-data` annotation so the schema reflects binary upload.
-- The `AssertNonNever` forward-guards in `schema.contract.test.ts` must include the v2.5 messaging paths. The `_v25Checks` tuple is the Phase 95 (OpenAPI handoff) deliverable.
-- The drift gate CI job must be run against the new `openapi.json` after every plan that adds a new endpoint.
-
-**Warning signs:**
-- `openapi.json` does not contain `/client/messages` paths after Phase 90 or 91 ships.
-- `_customize_openapi()` in `main.py` has no WS path entry.
-- `schema.d.ts` has no `ClientSendMessageRequest` or `ClientMessageResponse` types.
-
-**Phase to address:**
-Phase 95 (OpenAPI handoff). But the REST endpoint schemas must be generated correctly from Phase 90 onward — do not hand-stub them. LOCKED INVARIANT: byte-stable `openapi.json` drift gate must remain green throughout.
-
----
-
-### Pitfall 15: import-linter Violation — messaging Module Importing Other Business Modules
-
-**What goes wrong:**
-The `app/modules/messaging/` module needs to know which client a thread belongs to (`clients` table) and possibly query delivery status. If `messaging/service.py` imports `from app.modules.clients.models import Client` or `from app.modules.notifications.service import create_notification`, import-linter's `modules-independent` contract fails immediately. The CI lint gate turns red.
-
-**Why it happens:**
-The messaging module legitimately needs cross-module data (client name for Telegram forwarding, in-app notification creation). The developer reaches for direct ORM imports, which is the pattern inside each module but not across module boundaries.
-
-**How to avoid:**
-- Cross-module reads use **raw SQL `text()` SELECT** per D-54-08 (established in v1.8 reports, reinforced in v2.0–v2.4). `messaging/repository.py` reads `clients` columns via `text("SELECT name FROM clients WHERE id = :id")` — no ORM model import.
-- Cross-module writes (creating an in-app notification on new message) use a **`ignore_imports` edge** in `.importlinter` following the D-87-03 precedent: `app.modules.messaging.service -> app.modules.notifications.service`. This is the minimum necessary edge; register it before the first callsite (INFRA-15 discipline).
-- The `messaging` module must be registered in `.importlinter`'s `modules-independent` contract before any code is written (same INFRA-15 discipline as every prior module).
-- Telegram bot imports follow D-06 / D-10: `telegram_bot.py` imports `messaging.service` as a relaxation; `app.integrations.telegram.handlers` does NOT (integrations ⊥ modules contract).
-
-**Warning signs:**
-- `from app.modules.clients.models import Client` appears in any file under `app/modules/messaging/`.
-- `app.modules.messaging` is not in `.importlinter`'s `modules-independent` contract.
-- CI `lint-imports` gate turns red after Phase 90.
-
-**Phase to address:**
-Phase 90 (messaging module scaffold). `.importlinter` registration + any needed `ignore_imports` edges must be in the plan before the module body is written. LOCKED INVARIANT: breaks the `modules-independent` architectural constraint.
-
----
-
-### Pitfall 16: camelCase Wire Format Inconsistency — Messaging Responses Use snake_case
-
-**What goes wrong:**
-The existing API contract (`contract-freeze-v1.11.0`) uses camelCase wire format for all JSON responses (enforced by `BackendSchemaBase` with `model_config = ConfigDict(populate_by_name=True, alias_generator=to_camel)`). A newly written `MessageResponse` schema that omits `alias_generator` emits `sender_type`, `sent_at`, `thread_id` instead of `senderType`, `sentAt`, `threadId`. The `schema.d.ts` codegen produces the wrong TypeScript field names; the PWA's `clientQueries` mapping breaks.
-
-**Why it happens:**
-The developer writes a new Pydantic model for the messaging domain and forgets to inherit from `BackendSchemaBase` or to configure `alias_generator`.
-
-**How to avoid:**
-- All new schemas must inherit from `BackendSchemaBase` (established project convention, Phase 15 bedrock).
-- All response field names in the OpenAPI spec and `schema.d.ts` must be camelCase. Verify with the drift gate after adding any new schema.
-- The PWA already has `clientFetcher` with camelCase mapping — no change needed on the frontend if the backend schema is correct.
-- Add a schema-level unit test: `assert MessageResponse.model_fields["sent_at"].alias == "sentAt"`.
-
-**Warning signs:**
-- `MessageResponse` or `AttachmentResponse` has fields like `sender_type`, `created_at`, `thread_id` in the serialized JSON (visible in WS `send_json()` payload or REST response body).
-- `schema.d.ts` codegen produces snake_case fields for messaging types.
-
-**Phase to address:**
-Phase 90 (messaging schema design). Verify camelCase output in the first plan that introduces `MessageResponse`. Check with `ruff` and `mypy --strict` from day one.
-
----
-
-### Pitfall 17: Unbounded File Size / Missing Size Cap on Attachment Upload
-
-**What goes wrong:**
-A client uploads a 100 MB video file labeled as `image/jpeg`. The server streams it entirely into memory (or to disk without a size check), exhausting either the container's memory or disk space. Under concurrent uploads, the server OOMs and restarts.
-
-**Why it happens:**
-FastAPI's `UploadFile` streams lazily, but `await file.read()` loads the entire file into memory. If size is checked after `read()`, the damage is already done.
-
-**How to avoid:**
-- Set a `MAX_UPLOAD_SIZE_BYTES` constant (recommend 5 MB for gym chat photos).
-- Check `Content-Length` header before reading: `if int(request.headers.get("content-length", 0)) > MAX_UPLOAD_SIZE_BYTES: raise HTTPException(413)`. Note: `Content-Length` is client-supplied and can be spoofed; combine with chunked read.
-- Read in chunks: `chunk = await file.read(MAX_UPLOAD_SIZE_BYTES + 1)`. If `len(chunk) > MAX_UPLOAD_SIZE_BYTES`, reject with `413 Payload Too Large` and discard.
-- Do NOT use `await file.read()` without a size limit.
-- Add the size limit constant to `app/core/config.py` (`Settings`) so it is configurable via env var.
-
-**Warning signs:**
-- Upload handler calls `data = await file.read()` without any size check.
-- No `413` response path in the upload endpoint.
-- No `MAX_UPLOAD_SIZE_BYTES` constant defined.
-
-**Phase to address:**
-Phase 91 or 92 (attachment upload). Size limit must be in the endpoint spec before implementation.
+K8s manifests / Helm phase (TZ=UTC in all ConfigMaps); local validation checklist must include `kubectl exec arq-worker -- env | grep TZ`.
 
 ---
 
@@ -429,15 +333,12 @@ Phase 91 or 92 (attachment upload). Size limit must be in the endpoint spec befo
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| In-memory connection dict for WS fan-out | Simpler code, no Redis dep | Silent failure in multi-worker prod; zombie connections | Never in this codebase (gunicorn multi-worker) |
-| WS session = `Depends(get_db)` (one session per connection) | Familiar pattern | DB pool exhaustion; Postgres idle-in-transaction timeout kills long sessions | Never |
-| Token in WS URL query param | Works without cookie changes | Token leaked to logs, CSWSH risk | Never |
-| Content-type from client-supplied header | Simpler upload | SVG/HTML stored XSS | Never |
-| Send chat messages via Telegram synchronously in transaction | Simpler code | Telegram 429 rate-limit causes transaction rollback or silent drop | Never — always enqueue ARQ task |
-| Skip origin check on WS endpoint | Fewer lines | CSWSH (cross-site WS hijacking) | Never |
-| Derive attachment serve URL from raw filename | Simpler routing | Path traversal, IDOR | Never |
-| Skip `chat_forwarding_log` table | Simpler bridge | Reply routing ambiguity; wrong client receives staff reply | Never |
-| Register `app.modules.messaging` in importlinter after code is written | Faster first iteration | lint-imports CI gate turns red; architectural invariant violated | Never — INFRA-15 discipline requires pre-registration |
+| `image: :latest` in Helm values | No version management needed | Uncontrolled rollouts; rollback is `helm rollback` but you don't know what image you're rolling back to | Never — use git SHA from day one |
+| Skipping `resources.limits` | Simpler Helm values | Node-level OOMKill; Postgres eats all RAM; k3s becomes unresponsive | Never on stateful pods; only acceptable for one-off debug pods |
+| Single ClusterIssuer pointing at LE production | No staging/production distinction | Rate-limit lockout during iterative testing | Never during local validation; production only on final live deploy |
+| Skipping NetworkPolicies | Faster initial setup | Any compromised pod can reach Postgres directly | Acceptable in local validation only; must be applied before any external exposure |
+| RDB-only Redis (no AOF) | Simpler config | Up to 15 minutes of session/queue data lost on crash | Acceptable in local validation environment only |
+| Recreate strategy on ALL Deployments | Simpler than tuning RollingUpdate | Brief downtime on deploy (~10-30 seconds for backend) | Acceptable for pet project — zero-downtime is a future concern; ARQ/bot REQUIRE Recreate regardless |
 
 ---
 
@@ -445,115 +346,83 @@ Phase 91 or 92 (attachment upload). Size limit must be in the endpoint spec befo
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| FastAPI WebSocket + httpx ASGITransport | `async_client.get("ws://...")` raises UnsupportedProtocol | Use `starlette.testclient.TestClient.websocket_connect()` for WS tests |
-| Redis pub/sub + multi-worker | Module-level connection dict for WS fan-out; works in dev | Subscribe per-worker; publish on message write; one subscriber per WS connection |
-| Redis pub/sub delivery guarantee | Treat pub/sub as message store | Pub/sub = notification only; messages stored in DB; client fetches history on reconnect |
-| Telegram bot reply routing | Read `update.effective_message.text` and route to last active thread | Require staff to use Telegram Reply; look up `chat_forwarding_log` by `reply_to_message.message_id` |
-| python-telegram-bot 22 rate limits | Direct `send_message()` in WS handler | Enqueue ARQ task; use `AIORateLimiter` or exponential backoff on 429 |
-| File upload + magic bytes | `mimetypes.guess_type(filename)` | Read first 16 bytes; match against JPEG/PNG/GIF/WebP magic signatures |
-| SQLAlchemy async + WS | `Depends(get_db)` in WS route (holds session for connection lifetime) | Inject `session_factory`; open session per message operation |
-
----
-
-## Performance Traps
-
-| Trap | Symptoms | Prevention | When It Breaks |
-|------|----------|------------|----------------|
-| DB session held for WS connection lifetime | Pool exhaustion; `QueuePool limit reached` | Session per operation, not per connection | At ~pool_size (default 5) concurrent connections |
-| Redis pub/sub subscriber per connection without cleanup | Redis memory grows; subscriber count never decreases | `finally:` block unsubscribes and closes pub/sub client on WS disconnect | At ~50 concurrent connections |
-| Synchronous Telegram forward in WS message handler | WS handler latency spikes under rate limit; client send appears slow | ARQ task for Telegram delivery; message write confirms separately | At >1 concurrent client message per second |
-| `await file.read()` without size limit on attachment upload | Container OOM on large uploads; all workers affected | Chunked read with `MAX_UPLOAD_SIZE_BYTES + 1` limit | On first large file upload |
-| `asyncio.gather(receive_loop, pub_sub_loop)` with unhandled exception in one task | Other task continues silently with a dead partner | `asyncio.TaskGroup` (Python 3.11+) or explicit exception propagation in `gather` | Immediately on any WS error |
-
----
-
-## Security Mistakes
-
-| Mistake | Risk | Prevention |
-|---------|------|------------|
-| No Origin check on WS endpoint | CSWSH: any tab can open WS as the logged-in client | `verify_ws_origin` dependency checking `websocket.headers["origin"]` against allowlist |
-| client_id from WS path/query param (not principal) | IDOR: client subscribes to another client's chat channel | Channel name = `chat:client:{principal.client_id}` — never from URL |
-| SVG or HTML accepted as photo attachment | Stored XSS: JS executes in gym's origin when "photo" is opened | Magic-byte allowlist; ban SVG; `Content-Disposition: attachment`; `X-Content-Type-Options: nosniff` |
-| Filename used as file path without traversal check | Path traversal: reads arbitrary server files | `Path(UPLOAD_DIR / name).resolve().is_relative_to(UPLOAD_DIR)` |
-| IDOR on attachment serve (filename = auth gate) | Client reads another client's photo | DB lookup by attachment UUID; verify `owner_client_id == principal.client_id` |
-| JWT in WS URL (`?token=...`) | Token leaked to logs, reverse proxies, browser history | httpOnly cookie on WS upgrade (same as HTTP); never URL token |
-| `LOCKED_AUDIT_EVENTS` not extended before chat callsites | AST gate fails; silent audit gap | Pre-register all chat events in `LOCKED_AUDIT_EVENTS` before first `audit.emit()` callsite (INFRA-15) |
-| `app.modules.messaging` missing from `.importlinter` | `modules-independent` contract fails silently until CI | Register in `.importlinter` before writing any module code (INFRA-15) |
+| Traefik (k3s built-in) | Using `nginx.ingress.kubernetes.io/` annotations | Use `traefik.ingress.kubernetes.io/` annotations or IngressRoute CRD |
+| cert-manager + Let's Encrypt | Pointing at production ACME immediately | Use staging issuer during all iterative testing; switch to production on final live deploy only |
+| Sealed Secrets | Assuming controller key is in etcd backup | Explicitly export and back up the controller key immediately after installation |
+| ARQ + Redis | Assuming `unique=True` prevents all double-fires | `unique=True` is a per-tick Redis lock; Recreate strategy + replicas=1 is the real prevention |
+| FastAPI + Traefik TLS | uvicorn redirecting HTTP to HTTPS behind an HTTPS ingress | Set `FORWARDED_ALLOW_IPS` to trust Traefik's X-Forwarded-Proto header |
+| Alembic in k8s | Running migrations as initContainer on every pod | Use a Helm pre-install/pre-upgrade hook Job; one migration per deploy, not one per pod restart |
+| SeaweedFS/MinIO | Assuming the bucket is created on first use | Bucket bootstrap must happen in a Job or the API startup sequence; the existing `ensure_bucket` call in `main.py` handles this — verify it runs before message attachment uploads |
 
 ---
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **WS auth:** Cookie-based `require_client_ws()` implemented; `?token=` URL param is absent from all WS URLs; Origin check in WS dependency.
-- [ ] **IDOR over WS:** Channel name is `chat:client:{principal.client_id}`; no path param used as channel name; test asserts client A cannot receive client B's WS events.
-- [ ] **Multi-worker fan-out:** Redis pub/sub implemented; cross-worker delivery test exists (message written in one context, received on WS in another).
-- [ ] **Reconnect catch-up:** WS connect handshake accepts `last_seen_message_id`; server fetches missed messages from DB and delivers them before starting pub/sub listen.
-- [ ] **WS heartbeat:** Server sends `{"type": "ping"}` every 30s; connection closed with 1001 if no pong within 60s; `finally:` block cleans up pub/sub subscription.
-- [ ] **Attachment magic bytes:** Upload handler rejects non-JPEG/PNG/GIF/WebP by magic signature; SVG/HTML explicitly rejected; test asserts `422` on `<script>` file upload.
-- [ ] **Attachment size cap:** Upload returns `413` for files >5 MB; chunked read used (not `await file.read()`).
-- [ ] **Attachment IDOR:** Serve endpoint does DB lookup + `owner_client_id == principal.client_id`; test asserts client A cannot fetch client B's attachment by guessing UUID.
-- [ ] **Path traversal:** Serve path resolves to within `UPLOAD_DIR`; test asserts `../../etc/passwd` returns `422` or `404`.
-- [ ] **Telegram reply routing:** `chat_forwarding_log` table exists; reply route is via `reply_to_message.message_id` lookup; test: reply to old forwarded message routes to correct client.
-- [ ] **Telegram echo loop:** `is_bot` check in update handler; bot-forwarded messages not re-processed as client messages.
-- [ ] **import-linter:** `app.modules.messaging` in `.importlinter` `modules-independent` contract; `lint-imports` CI gate green after Phase 90.
-- [ ] **OpenAPI drift gate:** All messaging REST endpoints in `openapi.json`; WS path manually documented; `schema.d.ts` contains `ClientMessageResponse`, `ClientSendMessageRequest`; drift gate green.
-- [ ] **camelCase wire format:** All `MessageResponse` fields are camelCase in serialized JSON; `BackendSchemaBase` inherited.
-- [ ] **LOCKED_AUDIT_EVENTS:** All chat/messaging audit events pre-registered before any `audit.emit()` callsite (INFRA-15 discipline).
-- [ ] **Session per operation:** WS handler uses `session_factory()` per message, not `Depends(get_db)`.
-- [ ] **Starlette TestClient for WS tests:** WS tests use `TestClient.websocket_connect()`; no `async_client.get("ws://...")` calls in test files.
+- [ ] **Postgres PVC:** `reclaimPolicy: Retain` verified on the StorageClass — a `kubectl delete pvc` should NOT delete the underlying data directory.
+- [ ] **Redis AOF:** `kubectl exec redis -- redis-cli config get appendonly` returns `yes`.
+- [ ] **Backup restore round-trip:** A `pg_dump` has been taken, the Postgres pod has been deleted and recreated from scratch, and `pg_restore` produced a working database — not just a successful command exit.
+- [ ] **Telegram bot replicas:** `kubectl get deployment telegram-bot -o jsonpath='{.spec.replicas}'` returns `1` and `kubectl get deployment telegram-bot -o jsonpath='{.spec.strategy.type}'` returns `Recreate`.
+- [ ] **ARQ worker replicas:** Same check as above for `arq-worker`.
+- [ ] **Migrate runs before API:** Helm hook ordering verified by `helm template | grep "helm.sh/hook"` — migrate Job shows `pre-install,pre-upgrade`.
+- [ ] **DNS resolution:** `kubectl exec backend-pod -- nslookup postgres-svc` succeeds.
+- [ ] **WebSocket through ingress:** `wscat -c wss://<hostname>/api/v1/ws/chat/test` establishes connection.
+- [ ] **SPA fallback routing:** Direct navigation to `https://<hostname>/plans` (admin-app) and `https://<hostname>/book` (client-pwa) returns 200, not 404.
+- [ ] **PWA service worker:** Browser devtools > Application > Cache Storage shows NO `/api/*` entries.
+- [ ] **TZ=UTC on all pods:** `kubectl exec <each-pod> -- env | grep TZ` returns `TZ=UTC` for backend, arq-worker, telegram-bot.
+- [ ] **Sealed Secrets controller key backed up:** The key YAML file exists on the off-node backup location.
+- [ ] **Trivy scan green:** `trivy image clubcore-backend:<tag>` shows no CRITICAL vulnerabilities.
+
+---
+
+## What Local Validation CANNOT Catch (Operator-Pending Boundary)
+
+These items will NOT be caught by kind/k3s local validation and must be explicitly listed as operator-pending in the runbook:
+
+| Item | Why Local Validation Misses It | Operator Action Required |
+|------|-------------------------------|--------------------------|
+| Let's Encrypt TLS certificate issuance | Local validation uses staging/self-signed; LE production requires a real domain with public DNS | Switch ClusterIssuer to production ACME on live server; verify cert in browser |
+| Postgres data durability on real disk failure | kind/k3s uses a loop device or tmpfs; actual bare-metal disk failure is not simulatable | Verify `pg_dumpall` backup CronJob ran and the output file is on a different physical device from the Postgres PV |
+| Redis AOF on real power loss | kind containers don't survive real node power cycles | On live server: trust AOF + verify `aof-use-rdb-preamble yes` in the running config |
+| YooKassa webhook reachability | Local kind cluster is not internet-accessible; the webhook IP allow-list check cannot be tested end-to-end | Register real webhook URL with YooKassa dashboard; send a test payment in sandbox mode |
+| RU email deliverability (Yandex Postbox) | Local stack has no real SMTP credentials or domain | Verify SPF/DKIM/DMARC pass on a real send to yandex.ru + mail.ru (pre-existing operator-pending from v1.6) |
+| Telegram bot token in production | `SENTINEL_BOT_TOKEN` check prevents bot from starting with the placeholder token | Set real `TELEGRAM_BOT_TOKEN` in the production Secret before applying |
+| Actual node failover (PVC re-bind) | Single-node kind can't simulate node failure | Test by manually draining the node if a second node exists, or document as single-node-only risk |
+| `terraform apply` on real VM | `terraform validate` and `plan` run against a mock provider; `apply` contacts the real host | Operator runs `terraform apply` with real SSH credentials to the bare-metal server |
+| Prometheus alert delivery (Telegram/webhook) | Local Alertmanager has no real notification channel | Configure Alertmanager routes with real Telegram bot token or webhook before going live |
+| `terraform plan` greenness guarantees apply success | Plan validates schema and API calls; it does not simulate race conditions, disk space, or network failures during apply | Operator reviews plan output carefully and applies with `--auto-approve` only after manual inspection |
 
 ---
 
 ## Pitfall-to-Phase Mapping
 
 | Pitfall | Prevention Phase | Verification |
-|---------|-----------------|--------------|
-| Token in URL / CSWSH / Origin check missing (P1) | Phase 90 (WS scaffold) | Test: WS connect from wrong origin rejected; no `?token=` in any WS URL |
-| IDOR over WS subscribe (P2) | Phase 90 (WS scaffold) | Test: client A cannot receive client B's pub/sub messages; channel = principal.client_id |
-| SQLAlchemy session per connection leak (P3) | Phase 90 (WS scaffold) | Load test: 50 concurrent WS connections + DB query; pool not exhausted |
-| Multi-worker fan-out failure (P4) | Phase 90 (WS + Redis pub/sub) | Cross-context delivery test: message written via HTTP POST delivered to WS subscriber |
-| Redis pub/sub at-most-once / no reconnect catch-up (P5) | Phase 90 (messaging design) | Reconnect test: disconnect → new messages arrive → reconnect → all messages received |
-| Zombie connection / no heartbeat (P6) | Phase 90 (WS handler lifecycle) | Timeout test: no message for 60s → server closes connection; finally block fires |
-| Attachment stored XSS via content-type (P7) | Phase 91/92 (attachment upload) | Test: SVG with `<script>` → 422; served files have `X-Content-Type-Options: nosniff` |
-| Path traversal + IDOR on attachment serve (P8) | Phase 91/92 (attachment serve) | Test: `../etc/passwd` filename → 422/404; client A cannot fetch client B's attachment |
-| Telegram reply routing to wrong client (P9) | Phase 93 (Telegram bridge) | Test: staff reply to message A routes to client A, not most-recently-active client |
-| Telegram message echo loop (P10) | Phase 93 (Telegram bridge) | Round-trip test: exactly one message in each direction; no duplicates |
-| Staff identity lost in Telegram bridge (P11) | Phase 93 (Telegram bridge) | Schema review: `telegram_user_id` column on staff reply rows; LOCKED_AUDIT_EVENTS includes `chat_staff_reply_sent` |
-| Telegram rate limit crash (P12) | Phase 93 (Telegram bridge) | Test: burst of 10 messages → all forwarded via ARQ queue (no direct sync Telegram call in handler) |
-| httpx ASGITransport does not support WS (P13) | Phase 90 (WS scaffold) | First WS test uses `starlette.testclient.TestClient.websocket_connect()`; no `async_client.get("ws://...")` anywhere |
-| OpenAPI drift — WS and attachment endpoints absent (P14) | Phase 95 (OpenAPI handoff) | `openapi.json` contains `/client/messages` paths; WS path manually documented; drift gate green |
-| import-linter violation from messaging module (P15) | Phase 90 (messaging scaffold) | `lint-imports` CI gate green after Phase 90; `app.modules.messaging` in `.importlinter` |
-| camelCase wire format inconsistency (P16) | Phase 90 (messaging schema) | Schema unit test: `MessageResponse` fields serialized as camelCase; drift gate green |
-| Unbounded file size (P17) | Phase 91/92 (attachment upload) | Test: 6 MB upload → 413; chunked read code review |
-
----
-
-## Recovery Strategies
-
-| Pitfall | Recovery Cost | Recovery Steps |
-|---------|---------------|----------------|
-| Token-in-URL already in production | HIGH | Rotate all client sessions (Redis `cc:client:*` flush); switch to cookie auth; audit logs for token exposure |
-| IDOR over WS already in production | HIGH | Deploy hotfix: close all WS connections; add origin + principal channel check; notify affected clients |
-| DB pool exhaustion from session-per-connection | MEDIUM | Restart workers; deploy session-per-operation fix; add pool monitoring alert |
-| Multi-worker fan-out broken in production | MEDIUM | Roll back to single worker temporarily; deploy Redis pub/sub; restore multi-worker |
-| Stored XSS attachment in production | HIGH | Purge all attachments; re-validate with magic-byte scan; deploy Content-Disposition fix; notify affected users |
-| Telegram reply routing to wrong client | MEDIUM | Drop `chat_forwarding_log` table, rebuild from message history; deploy routing fix; notify affected clients |
-| import-linter violation breaking CI | LOW | Add raw-SQL `text()` read or `ignore_imports` edge; CI green in one plan |
-| OpenAPI drift gate breaking CI | LOW | Regenerate `openapi.json`; update `schema.d.ts`; re-run drift gate check |
+|---------|------------------|--------------|
+| Postgres node-affinity data loss (P1) | K8s manifests — StatefulSet + PVC + nodeSelector | Restore round-trip test during Backup & Recovery phase |
+| ARQ cron double-fire (P2) | K8s manifests — ARQ worker Deployment strategy=Recreate, replicas=1 | `kubectl get deployment arq-worker` shows strategy=Recreate; no duplicate cron logs in Loki |
+| Telegram double-consume (P3) | K8s manifests — telegram-bot Deployment strategy=Recreate, replicas=1 | No duplicate `/checkin` DMs in smoke test |
+| Migrate race (P4) | K8s manifests / Helm — migrate Job as pre-install hook | `helm template` shows hook annotation; API smoke test completes without `column does not exist` error |
+| Redis data loss on restart (P5) | K8s manifests — Redis ConfigMap (AOF) + PVC + maxmemory | `redis-cli config get appendonly` returns `yes` after pod restart |
+| Sealed Secrets key loss (P6) | Security phase — controller key backup procedure | Key YAML verified present on off-node backup before declaring security done |
+| k3s Traefik quirks (P7) | Networking phase — IngressRoute + WebSocket annotation + staging TLS | `wscat` test through ingress; staging cert shows in browser |
+| NetworkPolicy DNS breakage (P8) | Networking phase — CoreDNS egress rule in all pod policies | `nslookup postgres-svc` from each pod succeeds after NetworkPolicies applied |
+| Image pitfalls (P9) | Containerization phase — tzdata, chown, explicit tags | `docker run --user app` smoke test; ARQ cron fires at correct MSK time |
+| PWA SW caching /api/* (P10) | Containerization phase — nginx config for frontend images | Browser devtools Cache Storage audit; `/plans` direct navigation 200 |
+| OOMKill + liveness probes (P11) | K8s manifests / Helm — resource limits + startupProbe | `kubectl describe pod` shows no OOMKilled events; startup completes before liveness probe engages |
+| UTC/MSK timezone drift (P12) | K8s manifests — TZ=UTC in all ConfigMaps | `env | grep TZ` on all pods; cron fires at 03:05 UTC not 06:05 UTC |
 
 ---
 
 ## Sources
 
-- FastAPI WebSocket docs (authentication via Cookie/Header in WS): https://fastapi.tiangolo.com/advanced/websockets/ — HIGH confidence (official, verified via Context7)
-- FastAPI WebSocket testing docs (`TestClient.websocket_connect`): https://fastapi.tiangolo.com/advanced/testing-websockets/ — HIGH confidence (official)
-- Redis pub/sub delivery semantics (at-most-once, no persistence): https://redis.io/docs/latest/develop/interact/pubsub/ — HIGH confidence (official Redis docs)
-- OWASP CSWSH (Cross-Site WebSocket Hijacking): https://owasp.org/www-community/attacks/Cross_Site_WebSocket_Hijacking — HIGH confidence (OWASP)
-- OWASP Stored XSS via SVG: https://owasp.org/www-community/xss-filter-evasion-cheatsheet — HIGH confidence (OWASP)
-- Python magic bytes / file type detection: https://python-magic.readthedocs.io/ — MEDIUM confidence (library docs)
-- Codebase analysis — `app/workers/telegram_bot.py`, `app/integrations/telegram/handlers.py`, `app/modules/client_portal/router.py`, `app/.importlinter`, `apps/backend/tests/conftest.py` — HIGH confidence (direct source)
-- Existing patterns from prior milestones — D-20-IDOR, D-06, D-10, D-54-08, INFRA-15, D-87-03, D-20-MODULE — HIGH confidence (proven in production-equivalent test suite)
+- ARQ 0.28 codebase: unique cron lock implementation (`arq/cron.py` — `SET NX EX` dedup per job name + tick time)
+- k3s documentation: built-in Traefik v2, local-path-provisioner behavior and node affinity constraints
+- Sealed Secrets: backup/restore documentation (bitnami-labs/sealed-secrets)
+- cert-manager: Let's Encrypt rate limits documentation
+- clubcore codebase: `apps/backend/app/workers/__init__.py` (WorkerSettings, cron_jobs, unique=True, MSK UTC-offset comments, on_startup cron-resolution assertion)
+- clubcore codebase: `apps/backend/Dockerfile` (non-root app user, venv PATH, chown coverage)
+- clubcore PROJECT.md: v4.0 milestone scope, TZ=UTC locked decision (Phase 15 Key Decision), ARQ cron time offset documentation
+- Prior pitfall documentation in codebase: PITFALLS Pitfall 4 (ARQ cron no-op silent trap), PITFALL 14 (structlog contextvars leak across worker runs)
 
 ---
-*Pitfalls research for: v2.5 Chat / Messaging — WebSocket + attachments + Telegram bridge added to clubcore modular monolith*
-*Researched: 2026-06-06*
+*Pitfalls research for: clubcore v4.0 Production Infrastructure — self-hosted bare-metal k3s*
+*Researched: 2026-06-16*

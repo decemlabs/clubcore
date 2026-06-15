@@ -1,345 +1,425 @@
 # Feature Research
 
-**Domain:** 1:1 Customer↔Business Chat — live messaging between a gym client (PWA) and gym staff (Telegram bridge)
-**Researched:** 2026-06-06
-**Confidence:** HIGH — based on codebase inspection of ChatScreen, NotificationsSheet, UIContext, flows.jsx (ChatAttachSheet), clientQueries.ts, telegram_bot.py worker, PROJECT.md v2.5 section, and verified against FastAPI WebSocket docs, python-telegram-bot v22 docs, and industry chat UX standards.
+**Domain:** Production Infrastructure — Self-Hosted k3s (v4.0)
+**Researched:** 2026-06-16
+**Confidence:** HIGH — based on PROJECT.md v4.0 milestone scope, locked decisions (on-prem k3s, local-only CI, Terraform IaC, Prometheus+Grafana+Loki, sealed-secrets/SOPS), existing docker compose topology, and industry standard practices for single-app bare-metal k3s deployments.
 
 ---
 
 ## Context
 
-v2.5 adds a live 1:1 chat channel on top of an existing gym CRM PWA. Key prior art inside the codebase:
+v4.0 is a pure infra/DevOps milestone — no business features, no OpenAPI changes. The starting point is a working `docker compose up` stack:
 
-- **ChatScreen** (`apps/client-pwa/src/screens/ChatScreen.jsx`) — currently a `<ComingSoon>` shell per D-71-08. Props already wired: `initialConv`, `onClearInitial`, `onThreadOpen`. `ui.pendingChat` / `ui.chatThreadOpen` state already lives in `UIContext.jsx`.
-- **ChatAttachSheet** (`flows.jsx:1167`) — a four-option bottom sheet (Фото/Камера/Файл/Голосовое) already mocked. Only Фото+Камера are in v2.5 scope; Файл and Голосовое are explicit out-of-scope.
-- **NotificationsSheet** — the existing system-notification inbox: paginated REST, `unreadCount`, mark-read/mark-all patterns, optimistic updates, pull-to-refresh. The chat inbox must NOT duplicate this — they serve distinct purposes (system events vs human conversation).
-- **Telegram bot worker** (`app/workers/telegram_bot.py`) — already live: long-polling python-telegram-bot v22, DB + Redis pools shared with API process, handler registration pattern established via `HandlerContext`. This is the reuse point for the staff-side bridge.
-- **`websockets` package already in uv.lock** — FastAPI ships websockets as a transitive dependency; no new package needed.
-- **`require_client()` principal** — all client-facing routes use the `ClientPrincipal` (aud="client") stack from v2.0, distinct from the frozen staff contract. WebSocket auth must extend this, not touch the staff auth.
+- **Backend** — FastAPI/uvicorn (Python 3.12, multi-stage Dockerfile exists)
+- **Telegram bot worker** — long-polling single instance
+- **ARQ cron worker** — multiple ARQ cron jobs
+- **Alembic migrate** — one-shot job
+- **Postgres 16** — primary datastore, ~50 Alembic migrations
+- **Redis 7** — sessions / rate-limit / idempotency / circuit-breaker / ARQ queue / chat WS pub/sub
+- **SeaweedFS / S3** — object storage for chat photo attachments
+- **Mailpit** — dev-only mail catcher
+- **Two static frontends** — admin-app + client-pwa, React + Vite, served by nginx
+- **`.github/workflows/ci.yml`** — 7 test gates (ruff, mypy, pytest, typecheck, lint, vitest, Redocly)
 
-The milestone explicitly distinguishes the chat domain from the notification inbox:
-- Notification inbox = system events (bookings confirmed, payments, autopay failures) — already built in v2.4.
-- Chat = human messages between client and gym staff — v2.5.
-- System messages must NOT appear in the chat thread. This is a hard product constraint.
+Locked decisions that drive all categorizations:
+- **On-prem bare-metal k3s** — no managed cloud, no Yandex/AWS
+- **Done = local validation** — kind/k3s deploy + terraform validate/plan + helm lint + smoke; live apply is operator-pending
+- **CI/CD = local Makefile** — no external runner, no git remote (repo copied to backup PC)
+- **Observability = Prometheus + Grafana + Loki** — chosen stack, not under discussion
+- **IaC = Terraform** — chosen, state local
+- **Secrets = sealed-secrets or SOPS** — out-of-repo
 
 ---
 
 ## Feature Landscape
 
-### Category A: Messaging Core
+### Dimension 1: Containerization
 
-Features without which the ChatScreen is unusable.
-
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Send a text message | Base capability — without this there is no chat | LOW | `POST /api/v1/client/messages` body `{text: string}`. Message persisted to `messages` table with `sender='client'`, `created_at`, `id` (UUID). Returns `MessageItem`. Scoped to the single 1:1 thread for the authenticated client (IDOR: `client_id` from `require_client()`, never from body). |
-| Receive messages (history REST) | Client needs to see the conversation when opening the screen | LOW | `GET /api/v1/client/messages?before=<cursor>&limit=30`. Cursor-based pagination (before message UUID + limit, not page numbers) — allows infinite scroll upward and reconnect catch-up without duplicate rows. Returns `{items: MessageItem[], has_more: bool}`. Each `MessageItem`: `{id, sender: 'client'\|'staff', text: string \| null, attachment_url: string \| null, status: 'sent'\|'delivered'\|'read', created_at: ISO8601}`. |
-| Message ordering — strict chronological | Users depend on correct order; a scrambled thread is a broken product | LOW | `ORDER BY created_at ASC, id ASC` in the DB query (id tiebreak for same-millisecond inserts). Client renders in ascending order. Never rely on insertion order alone (UUIDs don't sort chronologically). Store `created_at` as `TIMESTAMPTZ` (UTC). Display in Europe/Moscow for the user. |
-| Unread counter (thread-level) | Tab badge and home-screen badge are expected in every messaging app; missing it feels like a bug | LOW | `GET /api/v1/client/messages` response envelope includes `unreadCount: int` (messages from `sender='staff'` where `read_at IS NULL` and `id > last_read_id` OR simpler: server computes count of unread staff messages). The ChatScreen tab in TabBar already has a badge slot — see the `CONVERSATIONS` mock badge referenced in App.jsx comment. |
-| Mark thread as read | When the client opens the chat, the unread counter must clear | LOW | `PATCH /api/v1/client/messages/read` — marks all staff messages as read (sets `read_at = now()` on all unread staff-sent messages for this client). Returns 204. Called when the ChatScreen becomes visible (not just app-open). Mirror the NotificationsSheet pattern: optimistic update locally, mutate, rollback on error. |
-| Unread badge on Chat tab | Standard PWA navigation expectation — a red dot or count on the tab | LOW | Same pattern as the Home screen's bell badge (NotificationsSheet, INBOX-05): poll `unreadCount` on a short interval (30s via React Query `refetchInterval`) OR push via WS event. The badge is the number of unread staff messages. If WS is connected, badge updates in real time via WS event; if not, REST poll fallback. |
-
-### Category B: Real-Time Delivery (WebSocket)
+**Table Stakes — must have:**
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Real-time message push (client receives staff reply without refresh) | Users expect chat to "just update" — having to pull-to-refresh to see a new message is a broken chat UX | MEDIUM | FastAPI `@router.websocket("/api/v1/client/ws")` endpoint. Auth: `Cookie` dependency reads the `cc_client_*` httpOnly access cookie set during login — cookies are sent automatically on the WS upgrade request, same origin. Validate the JWT before `websocket.accept()`. On validation failure: `await websocket.close(code=4001)`. No short-lived WS token needed — httpOnly cookie is the cleanest pattern for same-origin PWA (confirmed: browser sends httpOnly cookies on WS upgrade; custom `Authorization` headers are NOT sent by the browser WS API). |
-| Redis pub/sub fan-out | Staff sends a message via Telegram → bot publishes to Redis channel → FastAPI WS subscribers receive it | MEDIUM | Each connected client subscribes to a Redis channel `cc:chat:{client_id}`. When the Telegram bridge receives a staff reply, it calls `redis.publish(f"cc:chat:{client_id}", json.dumps(event))`. The FastAPI WS handler has a listener loop on that channel. Redis 7 (already in stack) supports this natively via `aioredis` / `redis-py asyncio`. No additional infrastructure needed. |
-| Reconnect with exponential backoff | PWA clients lose connectivity on mobile (subway, elevator). Chat must recover without user action | MEDIUM | Client-side: `useWebSocket` hook wraps the native `WebSocket` with reconnect logic: initial delay 1s, max delay 30s, jitter ±20%, max attempts before giving up and showing a "переподключение…" badge. On reconnect, the hook re-establishes auth (cookie is still valid) and fetches missed messages via REST (`GET /api/v1/client/messages?before=<last_seen_id>`). |
-| Missed message catch-up on reconnect | Messages sent while disconnected must appear in order on reconnect | LOW | On WS reconnect, the client sends a `{type: "sync", last_seen_id: "uuid"}` message. The server responds with all messages after that ID. Alternatively (simpler): on WS connect, client issues a REST `GET /api/v1/client/messages?after=<last_seen_id>` — REST is more reliable than a WS sync message pattern for catch-up. Use REST catch-up, not a custom WS sync protocol. |
-| WS connection state indicator | Users in areas with poor signal need to know if the "live" channel is active | LOW | The PWA shows a subtle indicator: "В сети" (green dot) vs "Не в сети" (grey dot, REST fallback active). Not a prominent error — a quiet status. If the WS has been disconnected for >60s and reconnect failed, show a `LoadError`-style inline notice with a "Обновить" button that triggers manual REST fetch. |
+| Multi-stage production Dockerfile for backend API | Already exists in project; must be production-hardened (non-root user, slim base, no dev deps) | LOW | Python 3.12-slim or distroless Python. Builder stage installs uv deps; runtime stage copies only the installed packages. Non-root UID (e.g. uid=1000). |
+| Separate image for telegram-bot worker | Bot is a long-polling process with its own runtime; sharing an image with the API is workable but a separate image is cleaner for independent restarts | LOW | Same base as backend; different CMD. Can share a base layer. |
+| Separate image for ARQ worker | ARQ worker has separate process lifecycle (cron jobs, different resource needs) | LOW | Same base as backend; different CMD. |
+| Alembic migrate as a Kubernetes Job image | Migrate must run once before the API starts; Job semantic is correct | LOW | Same Python image, CMD `alembic upgrade head`. |
+| nginx-served static frontends (admin-app + client-pwa) | Both frontends are already Vite-built static SPAs; nginx is the correct server | LOW | Two separate nginx containers or one with two server blocks. `npm run build` in builder stage, `nginx:alpine` in runtime stage. |
+| `.dockerignore` for each app | Without it, Docker COPY sends node_modules, `.git`, `__pycache__` to the build context, causing slow builds and large layers | LOW | Standard practice; easy to forget. |
+| Healthcheck INSTRUCTION in Dockerfiles | k8s probes can use exec healthchecks; Docker-level HEALTHCHECK also useful for local compose debugging | LOW | Backend: `GET /healthz`. Frontends: check nginx process. |
+| Non-root user in all images | CIS Docker Benchmark baseline; prevents container breakout privilege escalation | LOW | `RUN adduser --system --uid 1000 appuser; USER appuser` |
+| Pinned base image digests (not just tags) | `python:3.12-slim` tags can change silently; production should use `@sha256:...` digests | MEDIUM | Adds friction to updates but is the correct production discipline. Can be a per-phase hardening step. |
 
-### Category C: Read Receipts and Typing Indicator
+**Differentiators — justified for this project:**
 
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| "Delivered" status (message reached server) | Standard in every chat app since iMessage popularized the pattern (2011). Missing it feels like a toy | LOW | "Delivered" = server persisted the message. The `POST /api/v1/client/messages` response returning 200 with the saved `MessageItem` is itself proof of delivery. The client renders a single checkmark (✓) immediately on 200. No separate delivery event needed. If the request fails (network error), the message stays in a "sending" state with a retry button. |
-| "Read" status (staff has seen the message in Telegram) | Expected by anyone who has used WhatsApp or iMessage. Without it, users cannot tell if their message was noticed | MEDIUM | When the Telegram bridge delivers a client message to the staff Telegram chat AND the staff views it (Telegram `read_at` is a property of the Telegram message, but Telegram does NOT expose per-message read receipts to bots). **Practical implementation:** "Read" is set when the STAFF REPLIES. When the bot receives a reply from the staff and stores it, it marks all prior client messages for that client as `read_at = now()`. Then publishes a `{type: "read_receipt", client_message_ids: [...]}` event to `cc:chat:{client_id}`. Client renders double checkmark (✓✓) on those messages. This is the WhatsApp pattern: read = recipient replied, not "opened". Simpler, avoids needing Telegram read events (which the bot API doesn't expose). |
-| Typing indicator ("Администратор печатает...") | Users expect this when a staff member is composing a reply | MEDIUM | Staff side: the Telegram bot detects `ChatAction.TYPING` from the staff. This is a Telegram API `sendChatAction` event emitted when staff is composing. The bot subscribes to typing updates on the gym's staff Telegram chat. When detected, publishes `{type: "typing", is_typing: true}` to `cc:chat:{client_id}` Redis channel. Expiry: 5-second TTL — if no new typing event within 5s, client auto-dismisses the indicator. This avoids needing an explicit "stop typing" event. The Telegram `sendChatAction` is fired every ~5s while the user types, so the pattern naturally refreshes. |
-| Client typing indicator (to staff side) | Staff might want to know the client is composing before sending — reduces "did they read my message?" uncertainty | LOW | Client sends `{type: "typing", is_typing: bool}` via WS when the input field transitions empty→non-empty (start) or non-empty→empty (stop) or after 3s idle debounce (stop). Server relays by publishing `{type: "client_typing"}` to a `cc:chat:staff:{client_id}` Redis channel. The Telegram bridge subscribes and sends `sendChatAction(chat_id, ChatAction.TYPING)` to the staff Telegram chat. **Complexity driver:** The bot worker must subscribe to a separate Redis channel while also handling long-polling — this requires either `asyncio.gather` or `select` pattern inside the bot event loop. |
-| "New messages" divider on reconnect | Industry standard (WhatsApp, iMessage): a divider line at the point in history where new messages start | LOW | Client-side only. On reconnect, record the `last_seen_message_id`. Any message with `id > last_seen_id` renders below a "Новые сообщения" divider row. Dismiss the divider on scroll-to-bottom or after 3s. |
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| Distroless Python runtime image | Smaller attack surface, no shell, no package manager in the final image | MEDIUM | `gcr.io/distroless/python3` is a real option; requires that all deps are installed in the builder stage. Tradeoff: harder to debug. Justified for the API container (longest-running, most attack surface). Bot and ARQ workers can use slim. |
+| Layer caching discipline (deps copied before source) | Faster rebuilds — uv/pip install layer is reused if only source changes | LOW | Standard multi-stage discipline: COPY pyproject.toml uv.lock first, install, THEN COPY source. Already a best practice but easy to do wrong. |
 
-**Read receipt implementation decision:** Using reply-as-read is preferred over trying to get Telegram read signals (which are not available to bots). It is accurate enough for single-gym customer support context: if staff replied, they clearly read the message. This is the approach used by most Telegram-bridged customer support tools.
+**Anti-Features — do NOT do:**
 
-### Category D: Photo Attachments
+| Feature | Why Requested | Why It's Wrong Here | What to Do Instead |
+|---------|---------------|---------------------|-------------------|
+| Separate images for each ARQ cron function | "Isolation between cron tasks" | All ARQ cron jobs run in the same worker process; splitting them into separate images means reimplementing the ARQ scheduler in Kubernetes CronJob semantics — more complexity, more images to maintain, no benefit at 1 gym | One ARQ worker container; k8s CronJob triggers are not needed — ARQ handles its own schedule internally |
+| Image signing (Sigstore/Cosign) | "Supply chain security" | At solo pet-project scale with no image registry and no team, image signing provides zero practical benefit — there is no one to verify signatures | Pinned digests give sufficient provenance for this deployment |
+| Multi-arch builds (arm64 + amd64) | "Works on any hardware" | Unless the bare-metal host is ARM, this adds build complexity for zero benefit | Single arch matching the production host (amd64) |
+| Docker content trust / Notary | Enterprise supply-chain feature | No external registry, no team, notary is not configured by default in k3s | Skip entirely |
 
-| Feature | Why Expected | Complexity | Notes |
-|---------|--------------|------------|-------|
-| Send a photo from the gallery | "Send a photo" is the most common non-text chat action in customer support (show injury, show membership card, show payment receipt). The ChatAttachSheet already has "Фото — Из галереи" as the first option | HIGH | Client: `<input type="file" accept="image/*">` triggered by the ChatAttachSheet "Фото" button. PWA does `multipart/form-data POST /api/v1/client/messages/upload` with the image file. Server: validate MIME type (allowlist: `image/jpeg`, `image/png`, `image/webp`, `image/gif`), enforce size cap (5 MB), store file, return `{attachment_url: string}`. Client then calls `POST /api/v1/client/messages` with `{attachment_url}` (not `text`). Alternatively: single endpoint that accepts both text and file. |
-| Take a photo from camera | The ChatAttachSheet "Камера — Сделать снимок" option | LOW | Same flow as gallery, but the `<input>` uses `capture="environment"` attribute. No new backend surface — same upload endpoint. |
-| Image thumbnail in the chat bubble | Standard: show a small preview in the message list; tapping opens full-size | MEDIUM | Server stores the original image and generates a thumbnail (or the PWA generates one client-side before upload using Canvas API). Options: (A) server-side thumbnail generation via `Pillow` (already a common Python dep, or add it); (B) client-side canvas resize to 300px width before upload; (C) serve original and use CSS `object-fit: contain` with `max-height: 200px`. Option C is simplest for MVP — no Pillow needed. If images are stored on the filesystem or an object store, serve via a dedicated `GET /api/v1/client/messages/media/{filename}` endpoint with `require_client()` access control (no unauthenticated access to images). |
-| Photo access control (no unauthenticated URLs) | Gym photos may contain sensitive content (injury documentation, payment receipts). Public CDN URLs are an IDOR risk | HIGH | The file serving endpoint must be behind `require_client()` and must verify that the requesting client owns the conversation containing the attachment. No permanent public CDN URL. The `attachment_url` stored in the DB is a relative path (`/api/v1/client/messages/media/{filename}`) — the PWA sends the cookie on every fetch, just like REST API calls. |
-| Content-type guard (XSS prevention) | Uploading a disguised `.html` file as `image/jpeg` is a stored-XSS vector | HIGH | Server-side MIME sniff: use `python-magic` or Pillow's `Image.verify()` to confirm the file is actually an image, not just checking the `Content-Type` header (which is client-controlled). Set `Content-Type: image/jpeg` (etc.) explicitly on the served response, add `X-Content-Type-Options: nosniff`, and `Content-Disposition: inline` (not attachment). This follows the `photo_url` validator precedent established in Phase 88 (TrainerDetailSheet). |
-| File size cap | Without a server-side cap, large photos will cause memory pressure or slow uploads | LOW | 5 MB per attachment. Return 413 with `{code: "attachment_too_large", message: "Максимальный размер файла — 5 МБ"}` if exceeded. Enforce at the FastAPI level (`UploadFile` + content-length check before reading into memory). |
-| Storage — local filesystem vs object store | Single-gym pet project at low volume does not need S3/Minio | MEDIUM | Local filesystem is sufficient for v2.5 at single-gym scale. Store under a configurable `MEDIA_ROOT` path (env var). Use UUID-based filenames (`{message_id}_{suffix}.jpg`) to prevent enumeration. Path traversal prevention: validate filename before writing (strip `/`, `..`). Note this decision as a future-migration item if the project scales. |
+---
 
-**Out-of-scope attachments (ChatAttachSheet has these but v2.5 excludes them):**
-- "Файл — PDF, doc, до 10 МБ": file types other than images are out of scope per PROJECT.md.
-- "Голосовое — Удерживай для записи": voice messages are out of scope.
+### Dimension 2: IaC (Terraform)
 
-### Category E: Telegram Bridge (Staff Channel)
+**Table Stakes — must have:**
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Forward client message to staff Telegram | The primary business value of the bridge — staff must see the message | MEDIUM | When `POST /api/v1/client/messages` is called by the client, the messaging service publishes a `cc:chat:new_client_msg:{client_id}` event to Redis. The bot worker subscribes to this channel. On receiving the event, the bot sends a Telegram message to the configured staff chat ID (`TELEGRAM_STAFF_CHAT_ID` env var — a group chat or individual admin's chat). Format: `"[Имя Клиента] написал(а):\n{text}"`. If there's a photo attachment, the bot sends `sendPhoto`. |
-| Staff replies via Telegram → stored in DB + pushed to client | Core bridge behavior — staff just uses Telegram normally to reply | MEDIUM | The existing bot long-polling handler adds a new `MessageHandler` that listens to text messages in the staff chat. When a message arrives from a staff user in the staff chat (not a command, plain text or photo): parse the `client_id` from the thread context (stored in a Redis key `cc:chat:telegram_thread:{telegram_message_id}` → `client_id`), create a DB row in `messages` with `sender='staff'`, publish `{type: "new_message", ...}` to `cc:chat:{client_id}`. The WS fan-out then delivers it to the connected PWA. |
-| Thread context — linking Telegram messages to client IDs | The bot must know which client a Telegram reply is intended for | MEDIUM | Store the mapping: when the bot forwards a client message to Telegram, Redis stores `cc:chat:telegram_thread:{telegram_message_id} → {client_id, client_name}` with TTL 7 days. Staff replies by replying to that forwarded message in Telegram (using Telegram's "Reply" feature). The incoming `Update.message.reply_to_message.message_id` is used as the lookup key. If staff writes a new (non-reply) message in the staff chat, it is ignored (or treated as a broadcast, which is out of scope). This is the standard Telegram customer-support bridge pattern. |
-| Staff photo attachments via Telegram → PWA | Staff may want to send images too (exercise demonstrations, schedule photos) | MEDIUM | When the bot receives a `Photo` message (not text) from staff, download the photo via `Bot.get_file()`, store it to `MEDIA_ROOT` using the same UUID-filename convention, insert a DB message row with `sender='staff'`, `attachment_url` pointing to the file. Then publish the WS event. This reuses the same photo storage infrastructure as client-side uploads. |
-| Client name shown in forwarded Telegram message | Staff needs to know who is writing | LOW | Include `{client.full_name} (id: {client_id[:8]})` in the forwarded message header. The messaging service fetches the client name at message-creation time via a raw-SQL read (following D-20-MODULE discipline — no cross-module service import; read client name directly via `SELECT full_name FROM clients WHERE id = :client_id`). |
-| Notification to staff (unread indicator) | If staff is not watching the Telegram chat, they need a nudge | LOW | The Telegram forward itself is the notification — Telegram's own notification system alerts the staff chat. No additional push mechanism needed. If the staff chat uses a notification group (no sound), this is an operator configuration concern, not a code concern. |
+| `terraform validate` and `terraform plan` green locally | The stated done-bar for v4.0; live apply is operator-pending | LOW | Local state backend (`backend "local"`). No remote state (no git remote, no S3). |
+| k3s installation module (on-prem host) | Terraform provisions the k3s binary + service on the bare-metal host via `null_resource` + `remote-exec` or a `local-exec` Ansible call | MEDIUM | k3s has a documented install script (`curl -sfL https://get.k3s.io | sh`). Terraform wraps this. Alternatively: Terraform provisions the VM/host config, k3s install is a separate shell step — splitting is cleaner. |
+| Kubernetes/Helm Terraform providers for in-cluster resources | Using Terraform for both host provisioning AND k8s resources is a common pattern; keeps everything in one IaC layer | MEDIUM | `hashicorp/kubernetes` and `hashicorp/helm` providers. Authenticate via the k3s-generated kubeconfig. |
+| Namespace definitions in Terraform | `clubcore` namespace (and `monitoring` for Prometheus/Grafana/Loki) should be declared in Terraform | LOW | Simple `kubernetes_namespace` resources. |
+| ConfigMap/Secret declarations for non-sensitive config | Terraform manages the k8s objects that Helm won't manage | LOW | Database URL (without password), Redis URL, env flags |
+| Module structure: `modules/k3s-host`, `modules/k8s-apps` | Separating host provisioning from in-cluster resources is the standard two-layer Terraform pattern for k3s | MEDIUM | `modules/k3s-host/` — SSH, k3s install, firewall. `modules/k8s-apps/` — namespaces, secrets from SOPS, Helm releases. |
+| `terraform.tfvars.example` | Documents required variables without committing secrets | LOW | Standard practice; easy to miss. |
 
-### Category F: PWA Screen Wiring
+**Differentiators — justified for this project:**
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| SOPS-encrypted `.tfvars` for secrets | Secrets (DB password, Redis password, YooKassa key, Telegram token) stay encrypted in-repo but are decryptable locally | MEDIUM | `mozilla/sops` with age encryption. Simpler than Vault, no server required, fits the no-remote-registry solo-dev workflow. Alternative: sealed-secrets (k8s-native). SOPS is better for Terraform variables specifically; sealed-secrets is better for k8s Secrets in Helm. Use both: SOPS for `.tfvars` / Helm values, sealed-secrets for k8s Secret objects. |
+| Separate `terraform plan` output saved to file | Enables reviewing planned changes before apply, especially useful when AI agents drive execution | LOW | `terraform plan -out=tfplan` + `terraform show tfplan`. One Makefile target. |
+
+**Anti-Features — do NOT do:**
+
+| Feature | Why Requested | Why It's Wrong Here | What to Do Instead |
+|---------|---------------|---------------------|-------------------|
+| Remote Terraform state (S3/GCS/Terraform Cloud) | "Best practice for teams" | No team, no git remote — remote state adds an external dependency with no collaborator benefit. State file on the local machine (or backed up with the repo) is correct here. | `backend "local"` with the state file in `.terraform/` (gitignored) |
+| Terragrunt | "DRY Terraform configuration" | Terragrunt is a wrapper that adds complexity for multi-account/multi-region patterns. Single-server single-env does not benefit from it. | Clean Terraform module structure is sufficient |
+| Full CIS Kubernetes benchmark via Terraform | "Hardened cluster configuration" | CIS k8s benchmark is hundreds of controls; implementing them all in Terraform would take longer than the rest of the milestone. k3s defaults are already more locked-down than vanilla k8s. | PodSecurityAdmission (built into k3s 1.24+), NetworkPolicies for least-privilege networking, and pod security contexts cover the practical threat model |
+| Terraform Cloud / Atlantis for plan/apply automation | "GitOps IaC" | No git remote exists. Atlantis requires a git webhook. | Local `make tf-plan`, `make tf-apply` targets |
+| Multiple environments (dev/staging/prod workspaces) | "Proper environment separation" | One gym, one server, one environment. Terraform workspaces add cognitive overhead with zero benefit. | Single workspace, single state file |
+
+---
+
+### Dimension 3: K8s / Helm
+
+**Table Stakes — must have:**
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Graduate ChatScreen from ComingSoon | Without this, the entire milestone has no user-visible surface | LOW | Follow the exact graduation pattern from v2.4 (GymInfoSheet Phase 86, NotificationsSheet Phase 87, TrainerDetailSheet Phase 88): de-list from D-71-09 ESLint placeholder zone (3 spots), import data hooks via `@/data` swap seam. The `initialConv`, `onClearInitial`, `onThreadOpen` props are already in `ChatRoute` and `UIContext` — they just need real implementations. |
-| Message list with send input | The core chat UI: scrollable message list + text input + send button | MEDIUM | Render ascending chronological list of message bubbles: client messages right-aligned, staff messages left-aligned. Each bubble shows text or photo thumbnail. Show `created_at` time (HH:MM format, Europe/Moscow). Infinite scroll upward (load older messages on scroll-to-top using cursor pagination). Input: `<textarea>` with auto-expand, send on Enter or tap ✈ button, disabled while sending. |
-| Send button state (sending / error / sent) | Users need feedback that their message was accepted or failed | LOW | Three states: (1) "sending" — spinner in bubble, no timestamp; (2) "sent" (server 200) — single ✓, show timestamp; (3) "error" — bubble shows red border + "Retry" tap target. Retry = re-send same payload. Maintain a local "pending" queue (array of unsent messages) that clears on 200. |
-| Photo picker integration | The ChatAttachSheet is already built but not wired | LOW | The `onOpenChat → __openChatAttach()` flow already exists in `UIContext`. Wire the "Фото" and "Камера" options to `<input type="file">` with the respective `accept` and `capture` attributes. On file selected: show upload progress in the input area, call upload endpoint, then send message with the returned URL. On error: show "Не удалось загрузить фото" inline. |
-| Photo preview in message bubble | Tapping a photo in the thread should show it full-size | LOW | Tap on thumbnail → full-screen image viewer. PWA-native pattern: a fullscreen `<div>` overlay with `<img>` at natural size, close on tap or swipe-down. No library needed — match the visual style of the rest of the app. Preload the full image on tap (the thumbnail is already loaded). |
-| WS connection in ChatScreen | The real-time layer | MEDIUM | A `useChat` hook: (1) opens a `WebSocket` to `/api/v1/client/ws` on ChatScreen mount (or even on app mount if the chat badge needs real-time updates), (2) handles the reconnect loop with exponential backoff, (3) dispatches incoming events (`new_message`, `typing`, `read_receipt`) to local state, (4) tears down cleanly on unmount / logout. The WS is separate from the React Query poll — REST poll is the fallback when WS is disconnected. |
-| Tab badge for unread messages | App-level indicator that new messages arrived | LOW | The Tab Bar's chat tab shows a badge count. The count comes from `unreadCount` in `GET /api/v1/client/messages` (polled every 30s via React Query). When WS is connected, the count is updated in real-time from WS `new_message` events. On WS disconnect, the polling fallback takes over. This is the same bell badge pattern used by Home screen + NotificationsSheet. |
-| Remove ChatAttachSheet dead options (Файл, Голосовое) | The existing ChatAttachSheet shows 4 options; only 2 are in scope | LOW | Either: (A) modify the ChatAttachSheet to render only Фото and Камера options; (B) disable/grey-out Файл and Голосовое with a "Скоро" label. Option A is cleaner — remove dead code from the shipped product. No user expects to be shown options that don't work. |
+| Deployment for backend API (uvicorn) | Core app; Deployment is the correct k8s primitive for a stateless replicated service | LOW | `replicas: 1` to start (single-node cluster). Resource requests and limits set. `terminationGracePeriodSeconds: 30` (uvicorn graceful shutdown). |
+| Deployment for telegram-bot worker | Long-polling worker; must be a single instance (Telegram requires one polling connection) | LOW | `replicas: 1`. No HPA (would break Telegram long-polling). |
+| Deployment for ARQ worker | Cron job runner; single instance is correct (ARQ handles internal scheduling + `unique=True` on cron jobs) | LOW | `replicas: 1`. No HPA. |
+| StatefulSet + PersistentVolumeClaim for Postgres 16 | Postgres requires stable storage and stable network identity; StatefulSet is the correct primitive | MEDIUM | PVC backed by local-path provisioner (k3s default). `storageClassName: local-path`. Size: 10–20 GB initial. |
+| StatefulSet + PVC for Redis 7 | Redis persistence (AOF + RDB snapshots); requires stable storage | MEDIUM | Same local-path provisioner. Redis 7 with `appendonly yes`. |
+| StatefulSet + PVC for object storage (MinIO) | Chat photo attachments currently use SeaweedFS; MinIO is a simpler S3-compatible alternative for k8s — or SeaweedFS if it's already containerized | MEDIUM | MinIO is better supported in k8s with Helm charts. Consider migrating from SeaweedFS to MinIO here. PVC for data volume. |
+| Alembic migrate as a Kubernetes Job | One-shot migration before the API starts; Job semantic + `initContainer` or a pre-deploy Job is the correct pattern | MEDIUM | Helm `hook: pre-install,pre-upgrade`. Requires the same database credentials as the API. |
+| ConfigMaps for non-secret configuration | Environment variables that are not secret (app name, timezone, log level, API URLs) should be in ConfigMaps, not baked into the image | LOW | One ConfigMap per component or a shared app ConfigMap. |
+| Kubernetes Secrets for sensitive config | Database passwords, Redis password, JWT secret, YooKassa API key, Telegram bot token | LOW | Populated from SOPS-decrypted values at deploy time. NOT committed to git in plaintext. |
+| Liveness and readiness probes for all Deployments | Without probes, k8s cannot know when a container is healthy; traffic may be sent to an unready pod | LOW | Backend: `GET /healthz`. Readiness fails during startup (DB not yet ready). Liveness kills loops. Bot worker: TCP or exec probe. ARQ worker: exec probe (check process). |
+| Resource requests and limits for all containers | Without limits, a runaway process (e.g., ARQ job bug) can starve the entire single-node cluster | MEDIUM | Start conservative: backend `requests: {cpu: 100m, memory: 256Mi}`, `limits: {cpu: 500m, memory: 512Mi}`. Adjust after observability data is collected. |
+| Helm chart(s) for the application stack | Helm provides templating, release management, upgrade/rollback; essential for a repeatable deploy | MEDIUM | One umbrella chart `charts/clubcore/` with subcharts or one flat chart. Values split: `values.yaml` (defaults) + `values-prod.yaml` (production overrides, gitignored or SOPS-encrypted). |
+| `helm lint` passing in CI | The stated done-bar; validates chart syntax | LOW | One Makefile target. |
+
+**Differentiators — justified for this project:**
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| Helm `pre-upgrade` hook for Alembic migrate | Ensures migrations always run before the new API version starts; prevents version skew on upgrades | MEDIUM | `helm.sh/hook: pre-install,pre-upgrade` annotation on the Job. `helm.sh/hook-delete-policy: before-hook-creation` to avoid stale Jobs. |
+| Pod anti-affinity for Postgres (soft) | Prevents Postgres from being scheduled on the same node as the API if additional nodes are added later | LOW | `preferredDuringSchedulingIgnoredDuringExecution`. Trivial to add but demonstrates correct thinking. |
+| Separate namespace `monitoring` for observability stack | Isolates Prometheus/Grafana/Loki from the app namespace; cleaner RBAC boundaries | LOW | `kubectl create namespace monitoring` (or via Terraform). |
+
+**Anti-Features — do NOT do:**
+
+| Feature | Why Requested | Why It's Wrong Here | What to Do Instead |
+|---------|---------------|---------------------|-------------------|
+| HPA (Horizontal Pod Autoscaler) for backend API | "Auto-scale under load" | Single-node cluster: HPA has nowhere to schedule new pods. At 1-gym scale, the load is predictably low (dozens of concurrent users at peak). HPA configuration also requires accurate resource metrics from metrics-server. | Set `replicas: 1`. Revisit if the project ever runs on multi-node. |
+| PodDisruptionBudget for stateful services | "High availability during node drain" | Single node means there is always exactly one pod. A PDB of `minAvailable: 1` on a single-replica StatefulSet will prevent the node from being drained at all. | Skip PDB on single-node. Add when multi-node topology is introduced. |
+| Separate HelmRelease per microservice (FluxCD/ArgoCD) | "GitOps continuous deployment" | No git remote. GitOps CD requires a remote repo that the controller polls. The entire GitOps premise is incompatible with the no-remote-registry constraint. | Local Makefile `make helm-upgrade` target. |
+| Istio / Linkerd service mesh | "Observability and traffic management" | Service mesh adds per-pod sidecar proxies, a control plane, and significant operational complexity. For a handful of services on a single node, the overhead is not justified. Prometheus scraping provides the observability needed. | Direct service-to-service communication via k8s DNS. NetworkPolicies for security. Prometheus for metrics. |
+| Kustomize overlays in addition to Helm | "DRY manifests" | Helm already provides templating and values files. Adding Kustomize on top creates a two-layer configuration system with no benefit at single-env scale. | Helm values files are sufficient |
+| Argo Rollouts / canary deployments | "Zero-downtime deployments" | At 1 gym with predictable maintenance windows, a rolling update (default Kubernetes) is sufficient. Canary complexity is for multi-replica, production-critical deployments with real traffic SLAs. | `strategy: RollingUpdate` with `maxUnavailable: 0, maxSurge: 1` (on single replica, this means: bring up new before killing old — works if resource headroom exists) |
+
+---
+
+### Dimension 4: Networking
+
+**Table Stakes — must have:**
+
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| Ingress for backend API (`/api/v1/*` and `/healthz`) | External traffic must reach the FastAPI backend | LOW | k3s ships Traefik as the default ingress controller. Alternatively, replace with nginx-ingress. Traefik is fine for this scale. Ingress rule: host `api.clubcore.local` (dev) or real domain (prod). |
+| Ingress for admin-app frontend | Staff admin panel must be reachable | LOW | Separate Ingress or path-based routing. Host: `admin.clubcore.local` / `admin.yourdomain.ru`. |
+| Ingress for client-pwa frontend | Client-facing PWA must be reachable | LOW | Host: `app.clubcore.local` / `app.yourdomain.ru`. |
+| TLS via cert-manager (self-signed in local validation) | HTTPS is required for PWA (Service Workers, WebCrypto, httpOnly cookies work over HTTPS only) | MEDIUM | cert-manager with a `ClusterIssuer`. Local: self-signed. Production: Let's Encrypt (`letsencrypt-prod`). |
+| Internal service-to-service DNS via k8s DNS | Backend connects to Postgres, Redis by service name (e.g., `postgres.clubcore.svc.cluster.local`) | LOW | k3s includes CoreDNS. No additional work — just use k8s Service names in environment variables instead of hostnames. |
+| NodePort or LoadBalancer for ingress (bare-metal) | Bare-metal k3s has no cloud load balancer; ingress must be exposed via NodePort or MetalLB | MEDIUM | k3s default: Traefik uses NodePort. For a single-node bare-metal deployment, NodePort on port 80/443 is sufficient. MetalLB adds complexity with no benefit at single-node. |
+
+**Differentiators — justified for this project:**
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| NetworkPolicy: deny-all default + explicit allow rules | Implements least-privilege network access; prevents a compromised container from scanning the internal network | MEDIUM | `default-deny-all` NetworkPolicy in the `clubcore` namespace. Explicit allow: backend → postgres, backend → redis, backend → object-storage, bot-worker → redis, arq-worker → postgres + redis. Frontends do not need to reach the database directly (they don't — they talk to the API). |
+| TLS redirect: HTTP → HTTPS at ingress level | Prevents accidental unencrypted access to the app | LOW | Traefik annotation `traefik.ingress.kubernetes.io/redirect-entry-point: https`. One-line config. |
+
+**Anti-Features — do NOT do:**
+
+| Feature | Why Requested | Why It's Wrong Here | What to Do Instead |
+|---------|---------------|---------------------|-------------------|
+| MetalLB for load balancing | "Proper bare-metal load balancing" | Single-node cluster: MetalLB allocates IP addresses for LoadBalancer services, but there is only one node to route to. NodePort achieves the same result with zero additional components. | NodePort on 80/443, or `hostPort` on Traefik. Revisit if multi-node. |
+| Calico / Cilium CNI replacement | "Better NetworkPolicy support" | k3s ships Flannel by default. Flannel supports NetworkPolicy via a companion policy controller. Replacing the CNI on a working cluster is a risky low-value operation. | Flannel + NetworkPolicy (k3s includes the policy controller). |
+| External DNS automation | "Automatic DNS record management" | No git remote, no cloud DNS API integration. External DNS requires a DNS provider API key and a GitOps workflow. DNS records can be set manually once when going to production. | Manual DNS record pointing to the bare-metal server IP. |
+| mTLS between services (via Istio/Linkerd) | "Encrypted inter-service communication" | All services are in the same cluster. Traffic between pods in the same namespace does not traverse untrusted networks. NetworkPolicies provide the access control needed. mTLS would require a service mesh. | NetworkPolicies + TLS at ingress only |
+
+---
+
+### Dimension 5: Security
+
+**Table Stakes — must have:**
+
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| Secrets out of repository (sealed-secrets or SOPS) | Plaintext secrets in git is an immediate disqualifier for any production system | MEDIUM | SOPS with age key for Terraform variables and Helm values. For k8s Secrets managed by Helm, use `helm-secrets` plugin with SOPS. Or: sealed-secrets for k8s Secrets + SOPS for Terraform `.tfvars`. Both are acceptable; sealed-secrets is more k8s-native. |
+| Non-root pod security context for all containers | Defense-in-depth; a process running as root inside a container can more easily exploit a container escape | LOW | `securityContext: runAsNonRoot: true, runAsUser: 1000`. Enforced at the Deployment spec level. Consistent with the non-root user in the Dockerfile. |
+| `readOnlyRootFilesystem: true` where possible | Prevents an attacker from writing malicious files to the container filesystem | LOW | Backend API and frontends can run with a read-only root. Exceptions: Postgres and Redis need writable data directories (handled by PVC mounts). |
+| `allowPrivilegeEscalation: false` | Prevents a process from gaining more privileges than its parent | LOW | One-line addition to every container's `securityContext`. |
+| Drop all Linux capabilities | Containers should not have NET_ADMIN, SYS_ADMIN, etc. unless explicitly needed | LOW | `capabilities: drop: ["ALL"]`. None of the app containers need elevated capabilities. |
+| Trivy image scan in `make scan` | Detect known CVEs in base images before deploying | LOW | `trivy image <image-name>` on each built image. Run locally as part of the build pipeline. Accept HIGH/CRITICAL threshold; fail on CRITICAL by default. |
+| PodSecurityAdmission (built-in k3s 1.24+) | Cluster-level enforcement that pods meet a security baseline | LOW | Set namespace label `pod-security.kubernetes.io/enforce: restricted` for the `clubcore` namespace. Note: `restricted` profile requires non-root + read-only root filesystem — must be implemented first. |
+| CSRF rename: `sportzal_csrf` → `clubcore_csrf` | NAME-01 carry-over from v4.0 scope; additive cookie rename | LOW | Already scoped in PROJECT.md as an additive change (`cc_access`/`cc_refresh`/`clubcore_csrf` are the real names; the v3.0 migration already happened). Verify and document. |
+
+**Differentiators — justified for this project:**
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| Kubernetes RBAC for service accounts | Each workload (backend, bot, arq) should have a dedicated ServiceAccount with only the permissions it needs within the cluster | MEDIUM | Create `ServiceAccount` for each Deployment. The backend SA does not need to call the k8s API at all (it only calls Postgres/Redis/MinIO). Minimal RBAC: no ClusterRole needed for app services. Only the metrics-reader SA for Prometheus needs get/list/watch permissions. |
+| Network egress restrictions for non-network services | The Alembic migrate Job should not be able to reach the internet during runtime | LOW | NetworkPolicy with `egress: [{to: [{podSelector: {app: postgres}}]}]` on the migrate Job. |
+
+**Anti-Features — do NOT do:**
+
+| Feature | Why Requested | Why It's Wrong Here | What to Do Instead |
+|---------|---------------|---------------------|-------------------|
+| HashiCorp Vault | "Enterprise secret management" | Vault is a production secret management platform that requires its own HA deployment, unsealing procedure, and lease management. For a single-gym pet project, it's more infrastructure than the app itself. SOPS with a local age key stored on the operator's machine is sufficient. | SOPS + age key |
+| OPA / Gatekeeper policy enforcement | "Policy as code" | OPA Gatekeeper is a validating admission webhook that enforces custom policies. For a single developer, PodSecurityAdmission (built into k3s) covers the practical security needs. OPA requires writing Rego policies and maintaining a separate webhook deployment. | PodSecurityAdmission `restricted` profile |
+| Full CIS Kubernetes Benchmark implementation | "Hardened cluster" | The CIS benchmark has 100+ controls. Implementing all of them would consume more time than the rest of the milestone combined. Many controls (e.g., etcd encryption, audit logging to external system) are irrelevant for a single-node pet project. | Non-root pods + NetworkPolicies + PodSecurityAdmission covers the relevant threat model |
+| Image vulnerability scanning in a remote registry (Trivy + registry webhook) | "Continuous CVE monitoring" | No remote registry. Local `make scan` before deploy is sufficient for the solo-dev workflow. | Local `trivy image` in the Makefile |
+| Runtime security (Falco) | "Detect anomalous container behavior at runtime" | Falco is a kernel-level eBPF/ptrace security monitor. Excellent for production multi-tenant environments. Adds a privileged DaemonSet and alert noise for a single-user system. | Standard logging via Loki — application logs capture security-relevant events (audit log already has 69 locked events) |
+| Mutual TLS between services | Already listed in Networking anti-features | See above | NetworkPolicies |
+
+---
+
+### Dimension 6: Observability
+
+**Table Stakes — must have:**
+
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| Prometheus + kube-state-metrics + node-exporter | Cluster-level metrics: pod status, CPU/memory, node health | MEDIUM | Deploy via `kube-prometheus-stack` Helm chart (bundles Prometheus, Alertmanager, kube-state-metrics, node-exporter, Grafana). One chart deploys the full stack. |
+| FastAPI metrics endpoint (`/metrics`) | Application-level metrics: request rate, latency by endpoint, error rate, active connections | MEDIUM | `prometheus-fastapi-instrumentator` library. Expose `GET /metrics` (Prometheus text format). Add a `ServiceMonitor` CRD so Prometheus scrapes it automatically. |
+| Grafana with pre-built dashboards | Visualize metrics; the stated done-bar requires dashboards for latency/errors/resources/cron | MEDIUM | Import community dashboards: FastAPI dashboard (ID: 14282 or equivalent), node-exporter dashboard (ID: 1860), Postgres dashboard (ID: 9628), Redis dashboard (ID: 11835). Persist Grafana data in a PVC. |
+| Loki + Promtail for structured log aggregation | structlog JSON logs from the backend must be queryable | MEDIUM | Deploy Loki + Promtail (Grafana Loki stack Helm chart). Promtail as a DaemonSet reads container logs from `/var/log/pods/`. Loki stores them. Grafana connects to Loki as a data source. |
+| JSON log format from backend (structlog) | Loki benefits from structured logs; structlog JSON is already used | LOW | Already implemented. Verify the Promtail pipeline parses JSON correctly and indexes `level`, `event`, `module` fields as labels. |
+| Basic alerting rules (Alertmanager) | Operator needs to know when the service is down, not just when they check manually | MEDIUM | Critical alerts: pod CrashLoopBackOff, pod OOMKilled, Postgres unavailable, disk > 80%, TLS cert expiry < 14 days. Route to Telegram (Alertmanager has a Telegram receiver) — consistent with the existing Telegram notification channel. |
+| ARQ cron job success/failure metrics | The 7 cron jobs (expire memberships, send notifications, mark no-show, etc.) must be observable | MEDIUM | Options: (1) ARQ exposes job metrics via a custom endpoint; (2) structlog emits a `cron_job_completed` event with result, which Loki captures and can be alerted on. Option 2 is simpler — no ARQ metrics plugin needed. Add a Loki-based alert rule: no `cron_job_completed` event for `expire_memberships` in the last 26 hours. |
+
+**Differentiators — justified for this project:**
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| Telegram Alertmanager receiver | Alerts arrive where the operator already works (Telegram), not in a separate system | LOW | Alertmanager Telegram integration: `telegram_configs` in alertmanager.yaml. Sends to the operator's personal Telegram or a dedicated alerts group. Consistent with the existing bot infrastructure. |
+| Grafana dashboard for ЮKassa payment success/failure rate | Payment failures are high-priority operational events; a dashboard panel makes them visible without log-searching | MEDIUM | Requires a counter metric in the backend: `yookassa_webhook_received_total` with labels `event_type` (payment.succeeded, payment.canceled, refund.succeeded). One Prometheus counter, one Grafana panel. |
+| Uptime/availability SLI panel in Grafana | A single "is it up?" panel is the most useful thing for a solo operator | LOW | Probe endpoint with `blackbox-exporter` or simply use the backend `GET /healthz` scrape success metric from Prometheus. |
+
+**Anti-Features — do NOT do:**
+
+| Feature | Why Requested | Why It's Wrong Here | What to Do Instead |
+|---------|---------------|---------------------|-------------------|
+| Distributed tracing (Jaeger, Tempo, OpenTelemetry) | "End-to-end request tracing" | Distributed tracing shines when requests span multiple independently deployed services. This is a monolith — a FastAPI request goes to one process. structlog's correlation IDs + Loki log search achieves the same debugging goal. Tracing adds an entire new storage backend (Tempo) and instrumentation overhead. | structlog `request_id` in every log line. Loki query `{app="backend"} |= "request_id=abc123"` traces a request. |
+| SLO/SLA tracking with error budget burn rates | "Reliability engineering" | Error budgets make sense when there is a team and release velocity to optimize. Solo developer with AI agents does not need burn-rate alerts. | Simple error rate alert (>5% 5xx in 5 minutes → alert). |
+| Synthetic monitoring (endpoint probing from multiple regions) | "Global availability monitoring" | The gym is in one city, clients are in one city. Multi-region probing is meaningless. | Single `blackbox-exporter` probe from within the cluster or from the host. |
+| PagerDuty / Opsgenie integration | "On-call rotation management" | No team, no on-call rotation. Telegram alert is sufficient. | Alertmanager → Telegram |
+| More than 10 alert rules | "Comprehensive alerting" | Alert fatigue is a real problem. 10 well-tuned alerts are better than 100 noisy ones. For this app, 5-7 critical alerts are sufficient. | Pod down, OOM, disk >80%, error rate, cert expiry, Postgres lag (replication if added), no cron in 26h |
+| Log retention > 30 days in Loki | "Audit trail" | The application already has a Postgres-backed, 69-event `audit_log` table for business audit. Loki is for operational debugging, not business audit. 30 days of logs is sufficient for debugging recent incidents. | `loki.retention: 30d`. The audit_log table is the business record. |
+
+---
+
+### Dimension 7: Backup and Recovery
+
+**Table Stakes — must have:**
+
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| Postgres backup CronJob → object storage | Postgres is the single source of truth for all business data (clients, memberships, payments, audit log). Loss = catastrophic. | MEDIUM | k8s CronJob using `pg_dump` → gzip → `mc` (MinIO client) → object storage bucket. Daily at 03:00 MSK. Retention: 7 daily + 4 weekly. Use a dedicated `backup` ServiceAccount with minimal permissions. |
+| Tested restore procedure (documented runbook) | A backup that has never been tested is not a backup. The project already has a precedent: v1.10 DB rename round-trip was verified. | MEDIUM | Runbook: (1) download latest backup from object storage, (2) `pg_restore` to a test Postgres instance, (3) verify row counts, (4) verify application startup against restored DB. Document in `infra/runbooks/restore.md`. Mark as operator-pending (requires live MinIO + production backup to exist). |
+| Redis backup (RDB snapshot) | Redis holds active sessions, rate-limit state, idempotency keys, circuit-breaker state, ARQ queue, and WS pub/sub state. Losing Redis means all active sessions are invalidated and in-flight ARQ jobs are lost. | LOW | Redis 7 RDB snapshot (`SAVE` command or `save 3600 1` config). Snapshots copied to object storage by the same backup CronJob. On restore: copy RDB file to the Redis PVC and restart the pod. |
+| Object storage backup (MinIO → external) | Chat photo attachments are stored in MinIO. Loss = permanent loss of user-uploaded content. | LOW | `mc mirror minio/photos external-backup/photos` — periodic sync to another storage location (local disk snapshot, external USB, or a second object store bucket). Low priority at current scale (chat is a secondary feature), but should be documented. |
+| Backup retention policy declared | Without a retention policy, backups accumulate indefinitely and fill the disk | LOW | 7 daily + 4 weekly + 3 monthly Postgres dumps. Implemented in the backup script via `mc rm --older-than` or a lifecycle policy on the MinIO bucket. |
+| RTO and RPO targets declared (for documentation) | Defines what "recovery" means for this project; prevents scope creep | LOW | **RPO: 24 hours** (daily backup; acceptable for a single gym — at worst, yesterday's data is restored, manual re-entry for the day). **RTO: 4 hours** (restore Postgres from backup, redeploy k3s cluster, verify). These are pet-project targets, not SLA commitments. |
+
+**Differentiators — justified for this project:**
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| Backup verification CronJob (weekly pg_restore smoke) | A weekly smoke test that restores the latest backup to a test database and checks row counts — catches backup corruption before an actual disaster | HIGH | This is the most valuable backup feature. Creates a temporary Postgres pod, restores the latest backup, runs a SQL count query, posts result to Telegram. Teardown after verification. Complexity is high but the value justifies it as a differentiator. Mark as operator-pending if it doesn't fit in v4.0 scope. |
+| Grafana alert: last successful backup > 25 hours old | If the backup job fails silently, the operator needs to know | MEDIUM | The backup CronJob emits a structured log line on success. Loki alert: no `backup_completed` log in 25 hours → Alertmanager → Telegram. |
+
+**Anti-Features — do NOT do:**
+
+| Feature | Why Requested | Why It's Wrong Here | What to Do Instead |
+|---------|---------------|---------------------|-------------------|
+| Continuous WAL archiving / point-in-time recovery (PITR) | "Recover to any point in time" | PITR requires WAL archiving configuration, a separate WAL archive storage, and a complex restore procedure. For a pet project with RPO=24h, daily `pg_dump` is sufficient and simpler. PITR infrastructure (pgBackRest, Barman) is enterprise complexity. | Daily `pg_dump` + 7-day retention |
+| Velero for full cluster backup | "Kubernetes-native cluster backup" | Velero backs up k8s resources (Deployments, ConfigMaps, Secrets, PVCs). For a pet project where the k8s manifests are in Helm/Terraform (and therefore reproducible), only the data volumes need backup. | Postgres pg_dump + Redis RDB + MinIO sync. Kubernetes manifests are reproduced from Helm/Terraform. |
+| Multi-region backup replication | "Geo-redundancy" | One gym, one server, one operator. Multi-region replication adds S3/Yandex Object Storage costs and configuration complexity for zero practical benefit until the project scales. | Local disk backup + manual off-site copy (the repo already gets copied to another PC — the same discipline applies to backup files). |
+| Backup encryption at rest | "Data protection compliance" | For a Russian single-gym pet project, backup files contain gym CRM data (member names, attendance records). Encryption adds a key management burden. The backup storage (MinIO on the same server) is already protected by OS-level access controls. The threat model (server theft) is addressed by the risk acceptance. | Document the risk; implement if regulatory requirements emerge. |
+
+---
+
+### Dimension 8: CI/CD and Makefile Automation
+
+**Table Stakes — must have:**
+
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| `make build` — build all Docker images | Single command to build all images (backend, bot, arq, migrate, admin-app nginx, client-pwa nginx) | LOW | `docker build -t clubcore/backend:$(VERSION) -f apps/backend/Dockerfile .` × 6 images. VERSION from git describe or a `.version` file. |
+| `make lint` — helm lint + terraform validate | Pre-deploy quality gate | LOW | `helm lint charts/clubcore/` + `terraform -chdir=infra validate`. Fast. |
+| `make tf-plan` — terraform plan | Review infrastructure changes before applying | LOW | `terraform -chdir=infra plan -out=infra/tfplan` |
+| `make tf-apply` — terraform apply (operator-confirmed) | Apply the planned infrastructure changes | LOW | `terraform -chdir=infra apply infra/tfplan`. Operator-confirmed because live apply is outside the v4.0 done-bar. |
+| `make deploy` — helm upgrade --install + smoke | Deploy the application to the k3s cluster | MEDIUM | `helm upgrade --install clubcore charts/clubcore/ --values values-prod.yaml --namespace clubcore --wait`. Then run smoke tests. |
+| `make smoke` — smoke test against the deployed cluster | Verify the deployment is alive | LOW | Hit `GET /healthz`, verify 200. Optionally: hit the frontend URLs, verify they serve HTML. |
+| `make down` — tear down the local kind cluster | Clean up after local development | LOW | `kind delete cluster --name clubcore-local` |
+| `make up` — stand up a local kind cluster | Reproducible local k8s environment for testing Helm charts and Terraform | MEDIUM | `kind create cluster --config kind-config.yaml` + load images + deploy. This is the primary local validation workflow. |
+| `make scan` — trivy scan all images | Security gate before deploy | LOW | `trivy image --exit-code 1 --severity CRITICAL clubcore/backend:$(VERSION)` × images |
+| `VERSION` variable from git or explicit | Ensures images and Helm releases are versioned consistently | LOW | `VERSION ?= $(shell git describe --tags --always)` in the Makefile header. |
+
+**Differentiators — justified for this project:**
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| `make rollback` — helm rollback to previous release | The most important operational command after a bad deploy; must be a single command | LOW | `helm rollback clubcore -n clubcore`. Documents the release number to roll back to (from `helm history clubcore`). |
+| `make logs` — tail logs from all pods | Faster than `kubectl logs -f deploy/backend -n clubcore` | LOW | `kubectl logs -f -l app.kubernetes.io/instance=clubcore -n clubcore --prefix=true`. One Makefile alias. |
+| `make psql` — open a psql shell to the Postgres pod | Essential for operational debugging without exposing Postgres externally | LOW | `kubectl exec -it statefulset/postgres -n clubcore -- psql -U clubcore`. |
+| `make backup` — trigger a manual backup | On-demand backup before risky operations (migrations, upgrades) | LOW | `kubectl create job --from=cronjob/postgres-backup postgres-backup-manual-$(date +%s) -n clubcore` |
+
+**Anti-Features — do NOT do:**
+
+| Feature | Why Requested | Why It's Wrong Here | What to Do Instead |
+|---------|---------------|---------------------|-------------------|
+| GitHub Actions / GitLab CI pipeline for deploy | "Automated CI/CD" | No git remote. CI runners require a remote repository to pull from. The existing `.github/workflows/ci.yml` runs the test gates (ruff, mypy, pytest, etc.) — these should continue to be runnable locally. There is no remote to trigger them on. | `make test` runs the same gates locally. `make build && make deploy` is the deploy workflow. |
+| ArgoCD / FluxCD GitOps | "Continuous deployment from git" | Requires a git remote, a running CD controller in the cluster, and reconciliation loops. Incompatible with the no-remote-registry constraint. | `make deploy` is the CD pipeline. |
+| Semantic versioning automation (semantic-release) | "Automatic version bumps from commit messages" | Solo developer with AI agents; the overhead of semantic-release (npm package, configuration, CI integration) is not worth the automation at this scale. | Manual version tag (`git tag v4.0`) before deployment. `make build VERSION=v4.0`. |
+| Container registry (Harbor, Docker Hub push) | "Central image registry" | No git remote. Pushing images to a registry requires either a local registry (which k3s can load from) or a remote one (incompatible with the no-registry constraint). k3s supports `ctr images import` or `kind load docker-image` for local image loading. | `make load-images` — `kind load docker-image` or `k3s ctr images import` for loading images into the cluster without a registry. |
+| Automated secret rotation | "Security best practice" | SOPS-encrypted secrets with an age key are rotated manually when needed. Automated rotation requires a secret store (Vault) and a rotation policy engine — overkill for a pet project. | Document the manual rotation procedure in the runbook. |
+| Blue/green or canary deployment | Already listed in k8s anti-features | See above | Rolling update |
 
 ---
 
 ## Feature Dependencies
 
 ```
-New DB module: app/modules/messaging/
-  ├── messages table (Alembic migration)
-  │   ├── id UUID PK
-  │   ├── client_id FK → clients.id (IDOR boundary)
-  │   ├── sender ENUM('client', 'staff')
-  │   ├── text TEXT nullable
-  │   ├── attachment_url TEXT nullable
-  │   ├── status ENUM('sent', 'delivered', 'read') default 'sent'
-  │   ├── read_at TIMESTAMPTZ nullable
-  │   └── created_at TIMESTAMPTZ default now()
-  │
-  ├── GET /api/v1/client/messages → cursor-based list + unreadCount
-  │     └── requires── messages table
-  │     └── called by── ChatScreen load + React Query polling
-  │
-  ├── POST /api/v1/client/messages → create text or attachment message
-  │     └── requires── messages table
-  │     └── requires── file already uploaded (if attachment)
-  │     └── triggers── Redis publish cc:chat:new_client_msg:{client_id}
-  │
-  ├── POST /api/v1/client/messages/upload → multipart upload, returns attachment_url
-  │     └── requires── MEDIA_ROOT filesystem path
-  │     └── requires── python-magic or Pillow for MIME validation
-  │     └── precedes── POST /api/v1/client/messages (client sends URL, not file)
-  │
-  ├── GET /api/v1/client/messages/media/{filename} → serve stored file, authed
-  │     └── requires── require_client() + ownership check
-  │     └── requires── file stored by upload endpoint
-  │
-  ├── PATCH /api/v1/client/messages/read → mark all staff messages read
-  │     └── requires── messages table
-  │     └── triggers── publishes read_receipt event to cc:chat:{client_id}
-  │
-  └── WS /api/v1/client/ws → real-time channel
-        └── requires── Redis 7 pub/sub (already in stack)
-        └── requires── ClientPrincipal auth via httpOnly cookie (already in stack)
-        └── subscribes to── cc:chat:{client_id} Redis channel
-        └── pushes── new_message, typing, read_receipt events to PWA
+Containerization (hardened images)
+  └──required by──> K8s/Helm (Deployments reference images)
+  └──required by──> CI/CD (make build produces images)
+  └──required by──> Security (trivy scans images)
 
-Telegram bridge extension (in app/workers/telegram_bot.py)
-  ├── NEW: subscribe to cc:chat:new_client_msg:{client_id} Redis channels
-  │     └── requires── asyncio subscription alongside existing long-poll loop
-  │     └── forwards── client message to staff Telegram chat (sendMessage/sendPhoto)
-  │     └── stores── cc:chat:telegram_thread:{telegram_msg_id} → client_id (Redis TTL 7d)
-  │
-  ├── NEW: MessageHandler for plain staff text/photo replies
-  │     └── triggers── lookup client_id from reply_to_message.message_id
-  │     └── inserts── messages row with sender='staff'
-  │     └── publishes── new_message event to cc:chat:{client_id}
-  │     └── triggers── mark prior client messages as 'read' (reply-as-read receipt)
-  │
-  └── NEW: ChatAction.TYPING detection → publish typing event to cc:chat:{client_id}
+IaC / Terraform
+  └──required by──> K8s cluster existence (k3s install via Terraform)
+  └──required by──> Namespace + ServiceAccount creation
+  └──used by──> Secrets management (SOPS-decrypted values fed to Terraform)
 
-PWA ChatScreen (apps/client-pwa/src/screens/ChatScreen.jsx)
-  ├── requires── de-listing from D-71-09 ESLint placeholder zone
-  ├── requires── GET /api/v1/client/messages (history REST)
-  ├── requires── POST /api/v1/client/messages (send)
-  ├── requires── POST /api/v1/client/messages/upload (photo)
-  ├── requires── PATCH /api/v1/client/messages/read (mark read on open)
-  ├── requires── WS /api/v1/client/ws (real-time push)
-  └── uses── existing ChatAttachSheet (flows.jsx, already wired via __openChatAttach)
+Secrets management (SOPS/sealed-secrets)
+  └──required by──> K8s Secrets (Helm releases need DB password, JWT secret, etc.)
+  └──required by──> Terraform (`.tfvars` contain infrastructure credentials)
+
+K8s/Helm (Deployments, StatefulSets, Jobs)
+  └──required by──> Networking (Ingress needs Services to exist)
+  └──required by──> Observability (ServiceMonitor references Services)
+  └──required by──> Backup (CronJobs need PVCs to exist)
+
+Networking (Ingress + TLS)
+  └──required by──> Frontends being reachable
+  └──required by──> TLS cert-manager (must be deployed before issuing certs)
+  └──depends on──> cert-manager Helm chart
+
+Observability (Prometheus + Grafana + Loki)
+  └──depends on──> K8s cluster running (deploys as Helm charts into monitoring namespace)
+  └──depends on──> Backend /metrics endpoint (for FastAPI metrics)
+  └──depends on──> Alertmanager → Telegram (requires Telegram bot token from secrets)
+
+Backup CronJob
+  └──depends on──> MinIO running (backup target)
+  └──depends on──> Postgres StatefulSet running
+  └──depends on──> Secrets (backup credentials for MinIO)
+
+Makefile automation
+  └──wraps──> All of the above (orchestration layer)
+  └──depends on──> kind (local k3s simulation)
+  └──depends on──> terraform CLI, helm CLI, kubectl CLI, trivy CLI installed locally
 ```
 
 ### Dependency Notes
 
-- **WebSocket auth depends on existing ClientPrincipal cookie infrastructure:** The `cc_client_*` httpOnly cookies set at login are sent automatically on WS upgrade. The same `require_client()` dependency logic applies — just adapted for WS (`Cookie` param instead of `Header`). No new auth infrastructure.
-- **Telegram bridge depends on a working Redis pub/sub loop alongside long-polling:** The existing bot worker runs an event loop for long-polling. Adding a Redis subscriber requires either a separate asyncio task (via `asyncio.create_task`) or restructuring the main loop to `asyncio.gather([long_poll_task, redis_subscriber_task])`. This is the highest architectural risk in the Telegram bridge.
-- **File upload must complete before message send:** The `POST /api/v1/client/messages/upload` → receive URL → `POST /api/v1/client/messages` {attachment_url} is a two-step sequence. If the upload succeeds but the message POST fails, the file is orphaned on disk. MVP accepts this as a minor leakage (low frequency, no sensitive data risk for image files). Cleanup cron is a v2.6 concern.
-- **Read receipts depend on Telegram reply-chaining:** The `reply_to_message.message_id` lookup is only available if the staff REPLIES (using Telegram's reply feature) rather than sending a new message. If staff sends a free-standing message in the chat, the bot cannot identify the target client. The operator must be told: always use Telegram reply to respond to client messages.
-- **`clientPortalKeys.messages` must be added to `clientQueries.ts`** to maintain the existing key factory pattern.
+- **Alembic migrate Job must run before backend API Pod becomes ready.** Implemented as a Helm pre-install/pre-upgrade Job hook. If the migration fails, Helm rolls back. The API should have a readiness probe that fails until Postgres is reachable.
+- **cert-manager must be deployed before the Ingress is created**, or the `Certificate` resource will remain in a pending state. Deploy cert-manager as a Helm chart dependency with `--wait` before the app chart.
+- **Loki requires Promtail to be running on every node** (DaemonSet). On a single-node cluster, this is trivially one pod.
+- **Telegram bot token is needed by both the bot worker (application) AND Alertmanager (observability).** These should use the same token (same bot) with separate chat targets, or different tokens/bots. Deduplicate the secret.
+- **SOPS age key must be present on the operator's machine** before any `make tf-plan` or `make deploy` can run. This is the single point of failure for the entire secret management scheme. Document prominently in the runbook.
 
 ---
 
-## MVP Definition
+## MVP Definition (Phase ordering implications)
 
-### v2.5 Ships With
+### Phase group 1: Foundation (must be first)
+- [x] Containerization — production images for all 6 components
+- [x] IaC foundation — Terraform modules for k3s host + namespaces
+- [x] Secrets management — SOPS setup + initial secrets encrypted
 
-- [ ] `messages` table (Alembic migration) + `app/modules/messaging/`
-- [ ] `GET /api/v1/client/messages` — cursor list + unreadCount
-- [ ] `POST /api/v1/client/messages` — send text message
-- [ ] `POST /api/v1/client/messages/upload` — photo upload (JPEG/PNG/WebP/GIF, 5 MB cap, MIME validated)
-- [ ] `GET /api/v1/client/messages/media/{filename}` — authenticated file serving
-- [ ] `PATCH /api/v1/client/messages/read` — mark all read
-- [ ] `WS /api/v1/client/ws` — real-time channel with httpOnly cookie auth + Redis pub/sub
-- [ ] WS events: `new_message`, `typing` (staff→client), `read_receipt`
-- [ ] Telegram bridge: forward client message to staff chat, handle staff reply, store in DB, fan-out via WS
-- [ ] Telegram typing detection → relay to PWA
-- [ ] ChatScreen wired (de-listed from D-71-09, real API + WS)
-- [ ] Message list UI: bubbles, timestamps, photo thumbnails, full-screen viewer
-- [ ] Send input: text + photo picker, sending/sent/error states
-- [ ] Read receipt display: single ✓ (sent), double ✓✓ (read = staff replied)
-- [ ] Typing indicator display ("Администратор печатает…")
-- [ ] Reconnect with exponential backoff + REST catch-up
-- [ ] Tab badge for unread messages (React Query poll + WS real-time)
-- [ ] ChatAttachSheet: Фото + Камера only (remove/disable Файл + Голосовое)
-- [ ] OpenAPI handoff: byte-stable regen + `_v25Checks` AssertNonNever + staff drift gate green
+### Phase group 2: Core k8s (requires group 1)
+- [x] Helm chart — all Deployments, StatefulSets, ConfigMaps, Secrets
+- [x] Alembic migrate Job as Helm pre-upgrade hook
+- [x] Resource limits + liveness/readiness probes
 
-### Defer to v2.6+
+### Phase group 3: Networking + Security (requires group 2)
+- [x] Ingress + TLS (cert-manager, self-signed locally)
+- [x] NetworkPolicies (default-deny + explicit allow)
+- [x] Pod security contexts (non-root, read-only root fs, drop capabilities)
+- [x] Trivy scan in Makefile
 
-- [ ] **Client-side typing → staff Telegram**: the asyncio complexity of bidirectional bridge events is deprioritized if it introduces instability. Ship staff→client typing first; add client→staff typing if the bridge loop design allows it cleanly.
-- [ ] **Message edit / delete**: no current UI for it; moderate complexity; out of scope.
-- [ ] **Message search**: not in mock; out of scope.
-- [ ] **Admin-web chat inbox**: frozen; v2.6 milestone.
-- [ ] **File attachments (non-photo)**: out of scope per PROJECT.md.
-- [ ] **Voice messages**: out of scope per PROJECT.md.
-- [ ] **Push notifications for new chat messages**: `client_push_tokens` table exists (v2.4 INBOX-04 storage-only). Real web-push for chat messages = v2.6.
-- [ ] **Orphaned file cleanup cron**: low priority at single-gym scale.
-- [ ] **Object store migration** (S3/MinIO): local filesystem is correct at single-gym scale.
+### Phase group 4: Observability (requires group 2)
+- [x] kube-prometheus-stack (Prometheus + Grafana + Alertmanager)
+- [x] Loki + Promtail
+- [x] FastAPI /metrics endpoint
+- [x] Grafana dashboards (FastAPI, node-exporter, Postgres, Redis)
+- [x] Alert rules (pod down, OOM, disk, cert expiry, error rate)
+- [x] Alertmanager → Telegram
 
----
+### Phase group 5: Backup + Runbook (requires group 2 + 3)
+- [x] Postgres backup CronJob → MinIO
+- [x] Redis RDB backup
+- [x] Restore runbook (documented, operator-pending execution)
+- [x] Production runbook (topology, deploy, rollback, backup/restore, troubleshooting)
 
-## Anti-Features (Explicitly Out of Scope for Single-Gym Pet-Project Scale)
-
-| Feature | Why Requested | Why It's Wrong Here | What to Do Instead |
-|---------|---------------|---------------------|-------------------|
-| System messages in the chat thread | "It would be nice to see booking confirmations in the chat" | Hard product constraint from PROJECT.md: system events (bookings, payments) MUST stay in the notification inbox. Mixing system events into the human chat thread creates a cluttered, confusing UX and means two different code paths writing to the same table. | Notification inbox covers system events. Human chat is human-only. Keep strict separation. |
-| Group chats or broadcast | "I want to message all clients at once" | Group chat is a different domain (pub/sub to N recipients, permission model, moderation). Adding it here would turn a customer support feature into a broadcast channel. | Broadcast is a marketing feature. Out of scope for v2.5. Future: a separate "announcement" inbox type in v2.6+. |
-| Per-message receipt (WhatsApp-style three ticks per message) | "I want to see exactly when each message was read" | Telegram bots have no access to per-message read timestamps from the staff side. Implementing client-side per-message read events (when PWA scrolls past each message) adds a high-frequency event stream that overwhelms the WS pub/sub for no real gain at 1 gym. | Thread-level read (reply-as-read) is accurate enough for a customer support context. |
-| Typing indicator: debounce < 1s | "More real-time typing feel" | At <1s debounce, the client sends a typing event on every keystroke. One gym, one client — but still wastes WS bandwidth and Redis publish calls. The perception difference between 1s and 100ms debounce is imperceptible to users. | Debounce at 1–2s on client. Auto-expire at 5s on server. |
-| WebSocket horizontal scaling (multi-instance) | "What if we run multiple backend processes?" | Single-gym pet project does not need horizontal scaling. The Redis pub/sub pattern already handles cross-process fanout IF multiple instances are ever needed. But over-engineering for HA clustering adds configuration complexity with zero benefit at 1 gym. | Redis pub/sub is the correct architecture for future scaling. No additional work needed now. |
-| End-to-end encryption | "Messages should be encrypted so staff can't see them" | Staff IS the intended reader of messages — the entire feature is client→staff communication. E2E encryption is contradictory here. | Server-side TLS (HTTPS/WSS) is sufficient. |
-| Offline message queue with at-least-once delivery | "What if the server is down when I send?" | This requires a local SQLite offline queue in the PWA, conflict resolution, and idempotent message creation. Overkill for a single-gym CRM that runs on a single VPS. | Clear error state with retry button on send failure. "В сети" / "Не в сети" indicator. That's sufficient. |
-| Message reactions / emoji responses | "Fun to react to messages" | Adds a new DB table (reactions), new API endpoint, new WS event type, new UI components. Zero business value for customer support. | Not a chat feature — it's a social feature. |
-| Read receipt privacy (disable receipts) | "I don't want staff to know when I read their messages" | The product is a gym CRM's customer support channel, not a peer social chat. Privacy settings for read receipts are appropriate for social networks, not support tools. | Skip the privacy toggle entirely. |
-| Pinned messages / starred messages | Complexity with no discernible value at single-gym scale | — | Not implemented |
-| Multi-device sync (client on web + mobile) | The PWA is the only client surface | Redis pub/sub naturally handles multiple WS connections for the same client_id (both would receive events). But there's no other client surface to sync with in v2.5. | WS fanout to all connections for the same client_id is free with the pub/sub design — no extra work needed. |
-
----
-
-## Feature Prioritization Matrix
-
-| Feature | User Value | Implementation Cost | Priority |
-|---------|------------|---------------------|----------|
-| Send/receive text message | HIGH | LOW | P1 |
-| Unread counter + tab badge | HIGH | LOW | P1 |
-| Mark as read on open | HIGH | LOW | P1 |
-| WS real-time delivery | HIGH | MEDIUM | P1 |
-| Reconnect + REST catch-up | HIGH | MEDIUM | P1 |
-| Telegram bridge: forward client msg to staff | HIGH | MEDIUM | P1 |
-| Telegram bridge: staff reply → DB + WS | HIGH | MEDIUM | P1 |
-| Thread context (reply-to-message mapping) | HIGH | MEDIUM | P1 |
-| Photo upload (gallery) | MEDIUM | HIGH | P1 |
-| Photo thumbnail in bubble | MEDIUM | LOW | P1 |
-| Content-type guard (XSS prevention) | HIGH (security) | MEDIUM | P1 |
-| Authenticated file serving | HIGH (security) | LOW | P1 |
-| Read receipt display (reply-as-read) | MEDIUM | LOW | P1 |
-| Typing indicator (staff→client) | MEDIUM | MEDIUM | P1 |
-| "Delivered" single checkmark on send | MEDIUM | LOW | P1 |
-| Take photo with camera | LOW | LOW | P2 |
-| Typing indicator (client→staff) | LOW | HIGH | P2 |
-| Full-screen photo viewer | MEDIUM | LOW | P2 |
-| WS connection state indicator | LOW | LOW | P2 |
-| "New messages" divider on reconnect | LOW | LOW | P2 |
-| Staff photo via Telegram → PWA | MEDIUM | MEDIUM | P2 |
-
----
-
-## Implementation Notes: Behavior Specification
-
-### Message Send/Delivery Lifecycle
-
-1. User types text or selects photo, taps send.
-2. Message appears in thread immediately with a spinner (optimistic local state). No DB row yet.
-3. If photo: upload to `POST /client/messages/upload` first (progress indicator in input area). On upload success, proceed to step 4.
-4. `POST /client/messages` — server inserts DB row, responds with `MessageItem` including server-assigned `id` and `created_at`.
-5. Local optimistic row replaced with server-confirmed row. Single ✓ (sent) displayed.
-6. Redis: server publishes `{type: "new_client_msg", message_id, client_id, text, attachment_url}` to `cc:chat:new_client_msg:{client_id}`.
-7. Telegram bridge: bot picks up event, calls `send_message` / `send_photo` to staff chat. Stores `telegram_message_id → client_id` in Redis.
-8. When staff REPLIES (Telegram reply to that message): bot stores `sender='staff'` row, marks prior client messages `read_at = now()`, publishes `{type: "new_message", ...}` + `{type: "read_receipt", message_ids: [...]}` to `cc:chat:{client_id}`.
-9. WS delivers both events to PWA. Client message bubbles update to double ✓✓. Staff message appears in thread.
-
-### Unread Count Behavior
-
-- `unreadCount` = count of `messages WHERE client_id = ? AND sender = 'staff' AND read_at IS NULL`.
-- Computed server-side. Returned in every `GET /api/v1/client/messages` response.
-- On WS `new_message` event with `sender='staff'`: increment local unread count by 1.
-- On `PATCH /api/v1/client/messages/read` (called when ChatScreen mounts or becomes visible): set local unread count to 0. The tab badge clears.
-- On WS `read_receipt` event (triggered by staff reply): unread count is not affected (only client→staff read state is tracked in read receipts; staff messages are marked read when the CLIENT opens the chat).
-
-### Typing Indicator Behavior
-
-- **Staff→client**: Bot detects `Update.message.chat.send_action` typing event from staff. Publishes `{type: "typing", is_typing: true}` to Redis. PWA WS handler shows "Администратор печатает…" bubble. Auto-dismiss after 5s if no new typing event.
-- **Client→staff**: Input field onChange: if transitioning from empty to non-empty, send `{type: "typing", is_typing: true}` via WS. If idle >2s or field cleared, send `{type: "typing", is_typing: false}`. Server relays to `cc:chat:staff:{client_id}`, bot sends Telegram `sendChatAction`.
-- **Typing state is ephemeral — never stored in DB.**
-
-### Reconnect Catch-Up Behavior
-
-1. WS disconnects (network loss, app backgrounded).
-2. Client saves `last_received_message_id` in component state.
-3. Reconnect attempt: 1s → 2s → 4s → 8s → 16s → 30s (capped). Jitter ±20%.
-4. On successful reconnect: client calls `GET /api/v1/client/messages?after={last_received_message_id}` (a "since" cursor, complement of the "before" history cursor). Server returns all messages created after that ID.
-5. Messages merged into the local list (deduplication by `id`). "Новые сообщения" divider inserted before the first catch-up message.
-6. If the WS has been down >5 minutes: show "Переподключение…" in the ChatScreen header. On reconnect: show a brief "Обновлено" toast.
-
----
-
-## Existing Codebase Integration Points
-
-| Existing Part | How v2.5 Connects |
-|---------------|-------------------|
-| `ChatScreen.jsx` — `ComingSoon` shell | Replace with real component. Props (`initialConv`, `onClearInitial`, `onThreadOpen`) already wired in `ChatRoute`. |
-| `UIContext.jsx` — `chatThreadOpen`, `pendingChat`, `chatAttachOpen` | Already defined. `chatAttachOpen` opens the attachment picker. `chatThreadOpen` hides the TabBar. |
-| `flows.jsx:ChatAttachSheet` | Already renders Фото/Камера/Файл/Голосовое. Remove Файл + Голосовое options. Wire Фото + Камера to `<input>` triggers. |
-| `clientQueries.ts` — `clientPortalKeys` key factory | Add `messages` keys: `messages: (cursor?) => [...all, 'messages', cursor ?? ''] as const`. Add `sendMessage`, `uploadAttachment`, `markRead` hooks. |
-| `data/index.js` swap seam | Export new hooks from `@/data` (same pattern as NotificationsSheet). |
-| `App.jsx` TabBar chat tab | Already has a badge slot for unread count. Wire `unreadCount` from the messages query. |
-| `TabBar.jsx` | Check for existing badge rendering — likely needs a `chatUnread` prop passed from `App.jsx`. |
-| `app/workers/telegram_bot.py` | Extend `HandlerContext` with `messaging_service`. Add Redis subscriber loop + new message handler. |
-| Redis 7 (already running) | Add pub/sub channels: `cc:chat:{client_id}`, `cc:chat:new_client_msg:{client_id}`, `cc:chat:staff:{client_id}`. |
-| `app/modules/client_portal/` | Mount new messaging router under the existing client-portal module or as a sibling module. |
-| `LOCKED_AUDIT_EVENTS` frozenset | Add: `message_sent_by_client`, `message_sent_by_staff`, `message_read`. Register before callsites (INFRA-15). |
-| D-71-09 ESLint placeholder zone | De-list ChatScreen (3 spots). Follow the v2.4 lesson exactly. |
+### Phase group 6: Makefile + Local Validation (continuous, wraps all above)
+- [x] `make up/down/build/deploy/smoke/rollback/scan/logs/psql/backup`
+- [x] `make lint` (helm lint + terraform validate)
+- [x] `make tf-plan` green
+- [x] kind-based local k3s smoke test
 
 ---
 
 ## Sources
 
-- Codebase: `apps/client-pwa/src/screens/ChatScreen.jsx` — current ComingSoon shell + D-71-08 note
-- Codebase: `apps/client-pwa/src/context/UIContext.jsx` — `chatThreadOpen`, `pendingChat`, `chatAttachOpen` state
-- Codebase: `apps/client-pwa/src/App.jsx` — `ChatRoute`, `__openChatAttach`, `pendingChat` push-tap routing
-- Codebase: `apps/client-pwa/src/screens/sheets/flows.jsx:1167` — `ChatAttachSheet` (4 options mock)
-- Codebase: `apps/client-pwa/src/screens/sheets/NotificationsSheet.jsx` — reference for unread/mark-read/optimistic patterns
-- Codebase: `apps/client-pwa/src/lib/clientQueries.ts` — key factory + query hook patterns
-- Codebase: `apps/backend/app/workers/telegram_bot.py` — existing long-poll bot worker + `HandlerContext` pattern
-- Codebase: `.planning/PROJECT.md` — v2.5 milestone scope, constraints, out-of-scope list
-- FastAPI WebSocket docs — Cookie auth on WS upgrade: https://github.com/tiangolo/fastapi/blob/master/docs/en/docs/advanced/websockets.md
-- Industry article — WS auth via httpOnly cookies (same-origin, no custom header needed): https://thecodeforge.io/python/fastapi-websockets/
-- Industry article — FastAPI WS + Redis pub/sub + read receipts + typing: https://python.elitedev.in/python/build-real-time-chat-app-with-fastapi-websockets-redis-react-complete-tutorial-f1b42bf1/
-- Industry standard — read receipt semantics (delivered vs read vs server ACK): https://trtc.io/blog/details/reliable-chat-sdk-architecture-prevent-message-loss-offline-push-read-receipts-and-message-history-issues
-- Industry standard — typing indicator TTL, auto-expire behavior: https://vibe-studio.ai/insights/building-a-realtime-chat-ui-with-typing-indicators-and-read-receipts
-- MUI X Chat docs — read events and unreadCount semantics: https://mui.com/x/react-chat/multi-conversation/read-receipts/
-- python-telegram-bot v22 — `ReplyParameters`, message handler, ChatAction: https://docs.python-telegram-bot.org/en/stable/telegram.message.html
+- PROJECT.md — v4.0 milestone scope, locked decisions, existing topology
+- PROJECT.md — no git remote constraint, local Makefile CI/CD requirement
+- k3s documentation — default ingress (Traefik), CNI (Flannel), local-path provisioner, PodSecurityAdmission
+- kube-prometheus-stack Helm chart — standard observability bundle for k8s
+- Grafana Loki Helm chart — log aggregation for k8s
+- cert-manager documentation — TLS automation for bare-metal k3s
+- SOPS + age — secret encryption without a secret server
+- mozilla/sops + helm-secrets plugin — Helm values encryption pattern
+- Trivy — container image CVE scanning
+- ARQ documentation — internal cron scheduler (no k8s CronJob needed for ARQ cron)
+- Existing codebase: `docker compose` topology, `apps/backend/Dockerfile` (already exists), `.github/workflows/ci.yml` (7 gates)
 
 ---
 
-*Feature research for: v2.5 Chat / Messaging — 1:1 client↔gym live chat with Telegram staff bridge*
-*Researched: 2026-06-06*
+*Feature research for: v4.0 Production Infrastructure — Self-Hosted k3s*
+*Researched: 2026-06-16*

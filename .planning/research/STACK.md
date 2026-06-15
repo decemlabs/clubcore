@@ -1,423 +1,482 @@
-# Stack Research
+# Stack Research — v4.0 Production Infrastructure
 
-**Domain:** Gym CRM — v2.5 Chat / Messaging (real-time 1:1 WebSocket messaging + Redis pub/sub fan-out + photo attachments + Telegram bridge)
-**Researched:** 2026-06-06
-**Confidence:** HIGH for WebSocket + Redis pub/sub (FastAPI native pattern, well-documented); HIGH for WS auth (query-param JWT, established pattern); HIGH for Telegram bridge (existing PTB 22.7 codebase, MessageHandler patterns confirmed); MEDIUM for attachment storage (Yandex Object Storage vs local volume — ops decision depends on deployment target; both are S3-compatible via aioboto3 already in stack); LOW for httpx-ws version compat (latest 0.9.0 released 2026-03-28, not yet tested in this project)
-
----
-
-## Executive Summary
-
-v2.5 is the heaviest new-surface milestone in the project. Four genuinely new technical areas:
-
-1. **FastAPI native WebSocket** — zero new framework; Starlette's `WebSocket` class is already part of FastAPI 0.115+. Redis pub/sub fan-out uses the `redis` library (already in `pyproject.toml` at `>=5,<6`) via an async subscribe loop. No new broker dependency.
-
-2. **WS authentication** — query-param JWT is the pragmatic choice for browser WebSocket clients (browsers cannot set `Authorization` headers on WS handshake). The existing `require_client()` / `ClientPrincipal` / PyJWT stack covers this exactly; the only addition is a WS-specific dependency that reads `token` from the query string instead of a cookie.
-
-3. **Photo attachment storage** — `aioboto3` is already in `pyproject.toml` (`>=13.0,<14`) for the Yandex Postbox SES email adapter. The same session pattern covers S3-compatible object storage (Yandex Object Storage endpoint `storage.yandexcloud.net`, region `ru-central1`). For local dev, a self-hosted S3-compatible backend replaces MinIO (which was archived in February 2026). Content-type validation needs one new pure-Python library: `filetype` 1.2.0 (magic-bytes, no C extension, no libmagic dependency).
-
-4. **Telegram bridge** — the existing `python-telegram-bot` 22.7 long-polling worker is extended with a `MessageHandler(filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND, ...)`. Staff DM → client thread routing uses a Redis key (`cc:chat:tg_to_client:{staff_tg_user_id}` or a thread-id lookup table) to map the Telegram staff user's `chat_id` to the open `messaging_thread_id`. No new Telegram library; the existing `application.add_handler` pattern applies directly.
-
-**PWA side:** A small reconnect-capable WebSocket hook using native browser `WebSocket` + a custom hook (no library needed for a single-endpoint chat; `react-use-websocket` is available as optional if hook complexity grows). Incoming WS events call `queryClient.invalidateQueries` on the messages key to pull fresh data — no separate WS state store.
-
-**Zero heavyweight additions:** No Django Channels, no Socket.IO, no Celery, no separate message broker. Redis 7 already in stack handles pub/sub. FastAPI native WS handles the transport.
+**Domain:** Self-hosted bare-metal k3s deployment, IaC, observability, secrets, backup
+**Researched:** 2026-06-16
+**Confidence:** HIGH (all versions verified via GitHub releases / ArtifactHub, June 2026)
 
 ---
 
-## New Stack Additions (what changes from v2.4)
+## 1. Kubernetes Platform
 
-### Backend — New Python Packages
+### Local Validation Cluster
 
-| Package | Version to add | Purpose | Why This, Not Alternative |
-|---------|---------------|---------|--------------------------|
-| `filetype` | `>=1.2.0,<2` | Magic-byte image MIME validation (JPEG/PNG/WebP allowlist) | Pure Python, no C extension, no libmagic system dep — installable in any container without apt-get. `python-magic` requires `libmagic` shared lib which complicates Docker builds. `puremagic` also pure-Python but has a larger footprint; `filetype` is 50 lines for image detection which is all needed here. |
-| `httpx-ws` | `>=0.9.0,<1` | WebSocket testing via ASGI transport (dev/test only) | Starlette's `TestClient.websocket_connect` is sync-only; `httpx-ws` provides `AsyncWebSocketSession` + `ASGIWebSocketTransport` compatible with `pytest-asyncio` + `httpx.AsyncClient` already in the test suite. Latest: 0.9.0 (2026-03-28). |
+**Use k3d v5.9.0** (released 2026-06-02) — not kind.
 
-**No new packages for:** WebSocket transport (FastAPI/Starlette native), Redis pub/sub (existing `redis>=5` client has async pub/sub), Telegram bridge (existing `python-telegram-bot>=22.7`), S3 uploads (existing `aioboto3>=13`).
+k3d wraps k3s in Docker, so local testing uses the **same binary** that runs on the bare-metal target. kind runs a different vanilla Kubernetes distribution, which can hide k3s-specific behaviour (built-in Traefik, ServiceLB, local-path-provisioner). For a project that deploys to k3s on-prem, k3d is the only tool that gives genuine parity.
 
-### Frontend — New npm Packages
+```bash
+# Install
+brew install k3d           # macOS
+# or
+curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | TAG=v5.9.0 bash
 
-| Package | Version | Purpose | Why |
-|---------|---------|---------|-----|
-| `react-use-websocket` | `>=4.x` | Optional: managed WS hook with reconnect backoff | If the inline custom WS hook in `ChatScreen.jsx` becomes complex (connection lifecycle, queue-on-close, exponential backoff). Not mandatory — native `WebSocket` with a `useEffect` hook is sufficient for MVP and avoids a dependency. Add only if the custom hook exceeds ~60 lines. |
+# Create a 1-node cluster (mirrors single bare-metal host)
+k3d cluster create clubcore \
+  --k3s-arg "--disable=traefik@server:0" \   # managed via HelmChartConfig instead
+  --port "80:80@loadbalancer" \
+  --port "443:443@loadbalancer"
+```
 
-**MVP recommendation:** Start with a native `useEffect`-managed `WebSocket` hook in `ChatScreen.jsx`. The reconnect pattern (1s → 2s → 4s → cap 30s with jitter) is ~40 lines of TypeScript. Add `react-use-websocket` only if the implementation grows unwieldy.
+### Production Runtime
 
-### Infrastructure — Dev Environment
+**k3s — stable channel = v1.33.x** (as of June 2026; stable is pinned at v1.33; k3s maintainers mark a minor version stable only at patch .3/.4). Latest in the v1.33 line is v1.33.12+k3s1.
 
-| Service | Image | Purpose | Notes |
-|---------|-------|---------|-------|
-| SeaweedFS or Garage | `chrislusf/seaweedfs` or `dxflrs/garage` | S3-compatible local dev object storage | **MinIO Community Edition is archived (Feb 2026, read-only, no security patches).** SeaweedFS is the most production-mature OSS alternative (Apache 2.0, Go, 12+ years). Garage is Rust-based, lighter, designed for self-hosted. For local dev only — prod uses Yandex Object Storage. Either exposes S3 API, so aioboto3 config is endpoint_url + bucket only. |
+Do NOT run latest (v1.36.x) on production without waiting for the stable channel to advance.
+
+```bash
+# Install on bare-metal host
+curl -sfL https://get.k3s.io | INSTALL_K3S_CHANNEL=stable sh -
+# Or pin to exact version:
+curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=v1.33.12+k3s1 sh -
+```
+
+### kubectl
+
+Ships with k3s (`k3s kubectl`) and is also installed standalone via `brew install kubectl`. Pin to same minor as cluster (1.33).
 
 ---
 
-## Existing Stack (no changes — confirmed reuse)
+## 2. Package Management — Helm
 
-| Technology | Existing Version | Role in v2.5 |
-|------------|-----------------|-------------|
-| FastAPI | 0.115+ | Native `WebSocket` class + `WebSocketDisconnect` exception |
-| Starlette | (bundled with FastAPI) | `WebSocket.accept()`, `.receive_text()`, `.send_text()` |
-| SQLAlchemy 2.0 async | 2.0 | `messages`, `message_threads` ORM models; raw-SQL reads in `messaging/repository.py` |
-| Alembic async | current | New migrations 0064+ for `message_threads`, `messages` tables |
-| Pydantic v2 | 2.11+ | WS message envelope schemas (inbound events + outbound payloads) |
-| redis | >=5,<6 | Pub/sub backbone: `await client.publish(channel, payload)` + `pubsub.subscribe()` async listen loop |
-| python-telegram-bot | 22.7 | Extend existing long-polling worker with `MessageHandler` for staff DM → thread routing |
-| aioboto3 | >=13,<14 (in pyproject.toml) | S3 presigned PUT (client upload) + presigned GET (client download) for photo attachments |
-| PyJWT | 2.12.1+ | WS auth — decode `token` query param using existing `aud:"client"` validation logic |
-| structlog | 24.0+ | WS connection/disconnection events, pub/sub errors |
-| Postgres 16 | 16 | Persist messages, threads, read receipts; `JSONB` for typing events optional |
-| ARQ | 0.26+ | Existing job queue — no new tasks for v2.5 core; photo virus-scan deferred |
-| httpx | 0.27+ | Not needed for WS; continues to serve YooKassa adapter |
+**Use Helm v3.21.1** (released 2026-05-14, latest v3 as of June 2026).
+
+Helm 4 (released November 2025) exists but has breaking schema changes in the `helm_release` Terraform provider. Migrating a new infra milestone to Helm 4 adds no value and introduces upgrade risk. Helm 3 receives security patches through February 2027. Pin v3 until a dedicated migration sprint.
+
+```bash
+brew install helm@3           # macOS
+# or
+curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+```
 
 ---
 
-## Architecture: WebSocket + Redis Pub/Sub
+## 3. Infrastructure as Code — Terraform
 
-### Single-process dev (uvicorn with 1 worker)
+**Use Terraform v1.15.6** (released 2026-05-27, latest stable as of June 2026).
 
-In-process `ConnectionManager` dict: `client_id → WebSocket`. No Redis pub/sub needed. Messages from the Telegram bridge (which runs in a separate process) reach the API via Redis.
+OpenTofu v1.12.0 (2026-05-14) is the open-source fork and a drop-in swap if BSL becomes a concern. For this project (no CI/CD runner, no BSL concern, solo developer, local state), HashiCorp Terraform is fine.
 
-```python
-# app/modules/messaging/ws_manager.py
-class ConnectionManager:
-    def __init__(self) -> None:
-        self._connections: dict[str, WebSocket] = {}
+**Local state** — `backend "local"` in `terraform.tfstate`. No S3/remote state needed for a single-operator project with no git remote.
 
-    async def connect(self, client_id: str, ws: WebSocket) -> None:
-        await ws.accept()
-        self._connections[client_id] = ws
+### Terraform Providers
 
-    async def disconnect(self, client_id: str) -> None:
-        self._connections.pop(client_id, None)
+| Provider | Version | Purpose |
+|----------|---------|---------|
+| `hashicorp/kubernetes` | `3.2.0` (2026-06-04) | Deploy K8s resources (Secrets, ConfigMaps, Jobs) via Terraform |
+| `hashicorp/helm` | `3.2.0` (2026-06-04) | Manage Helm releases via Terraform `helm_release` resource |
+| `hashicorp/null` | `3.x` | `null_resource` + `local-exec` for shell steps (k3s install on host via SSH) |
+| `hashicorp/local` | `2.x` | Write kubeconfig, rendered manifests to local files |
 
-    async def send(self, client_id: str, payload: str) -> None:
-        ws = self._connections.get(client_id)
-        if ws:
-            await ws.send_text(payload)
-```
+**Important:** `hashicorp/helm` v3.0 (released June 2025) switched from SDK v2 to Plugin Framework — breaking schema changes. `set`, `set_list`, and `set_sensitive` are now lists of nested objects, not blocks. If upgrading from an existing helm provider pin, update all `helm_release` resource configs.
 
-### Multi-worker prod (uvicorn with N workers)
-
-Each worker has its own `ConnectionManager`. Worker A may hold the WS for client X; worker B handles the incoming message POST from the Telegram bridge. Fan-out via Redis pub/sub:
-
-```
-Telegram bridge writes message → publishes to Redis channel cc:chat:thread:{thread_id}
-All API workers subscribe → each checks local ConnectionManager → delivers to connected client
-```
-
-The subscriber loop runs as a background task started in the `lifespan`. Pattern:
-
-```python
-# Pseudocode — actual implementation in messaging/pubsub.py
-async def _subscribe_loop(redis: Redis, manager: ConnectionManager) -> None:
-    async with redis.pubsub() as pubsub:
-        await pubsub.subscribe("cc:chat:*")  # pattern subscribe
-        async for message in pubsub.listen():
-            if message["type"] == "pmessage":
-                data = json.loads(message["data"])
-                await manager.send(data["client_id"], json.dumps(data["payload"]))
-```
-
-**Key constraint:** The subscriber loop is a long-lived asyncio task. It must be started in the `combined_lifespan` and cancelled on shutdown — same pattern as the ARQ pool (`app.state.arq_pool`).
-
----
-
-## WS Authentication: Query-Param JWT
-
-**Pattern chosen:** `wss://host/api/v1/client/ws/chat?token=<jwt_access_token>`
-
-**Why query-param, not cookie or subprotocol:**
-- Browsers cannot set `Authorization` headers or custom headers on WebSocket handshake. Cookies ARE sent automatically on same-origin WS, but the client PWA's JWT auth uses `cc_client_access` httpOnly cookie — reading httpOnly cookies from JavaScript is impossible by design, making the cookie approach require a separate non-httpOnly WS token.
-- The subprotocol hack (`Sec-WebSocket-Protocol` header carrying the base64 token) works but adds complexity in both client and server parsing with no security advantage over query-param.
-- **Query-param is the pragmatic standard** for browser WS auth with short-lived JWTs. The token is the existing `aud:"client"` JWT (60-minute expiry). The WS connection lifetime is bounded (client navigates away → browser closes WS). Log scrubbing at the structlog level avoids token leakage into server logs.
-
-**Implementation:**
-
-```python
-@router.websocket("/ws/chat")
-async def chat_ws(
-    websocket: WebSocket,
-    token: str = Query(...),
-    db: AsyncSession = Depends(get_db),
-    redis: Redis = Depends(get_redis),
-) -> None:
-    try:
-        principal = await verify_client_ws_token(token, db)  # reuses PyJWT + ClientPrincipal logic
-    except AuthError:
-        await websocket.close(code=1008)  # Policy Violation — standard code for auth failure
-        return
-    await manager.connect(principal.client_id, websocket)
-    try:
-        while True:
-            raw = await websocket.receive_text()
-            # handle typing events, read receipts (lightweight; messages go via HTTP POST)
-    except WebSocketDisconnect:
-        await manager.disconnect(principal.client_id)
-```
-
-**Security notes:**
-- Token is validated on connect only. If the token expires mid-session, the WS remains open (acceptable for 60-minute JWT; client re-connects on next page load).
-- WS endpoint does NOT accept message sends (client sends messages via `POST /client/messages` — keeps idempotency + audit trail intact). WS is receive-only from the server's perspective for message delivery; client sends small event frames (typing indicators, read receipts).
-- `wss://` enforced in production (COOKIE_SECURE gate equivalent for WS).
-
----
-
-## Telegram Bridge Routing
-
-### Existing bot worker (confirmed from `apps/backend/app/workers/telegram_bot.py`)
-
-Library: `python-telegram-bot` 22.7 (confirmed from `telegram.ext import CallbackQueryHandler` import + pyproject.toml `>=22.7,<23`).
-
-Long-polling, separate process: `python -m app.workers.telegram_bot`. The worker opens its own DB + Redis pools (existing `db_lifespan_manager()` + `redis_lifespan_manager()` pattern).
-
-### New handler: staff DM → thread routing
-
-```python
-# In app/workers/telegram_bot.py — add after existing handlers
-application.add_handler(
-    MessageHandler(
-        filters.TEXT & filters.ChatType.PRIVATE & ~filters.COMMAND,
-        staff_reply_handler,
-    )
-)
-```
-
-**Routing lookup:** When a staff member sends a DM reply, the bot receives `update.message.from_user.id` (staff Telegram user ID) and `update.message.text`. To know WHICH client thread to route this reply to, a Redis lookup key stores the mapping:
-
-```
-cc:chat:active_thread:{staff_tg_user_id} → {thread_id, client_id}  TTL: 24h
-```
-
-This key is written when a client sends a message (client → staff DM triggers, sets the key). When staff replies, the handler reads this key to resolve the thread, writes the message to the `messages` table, and publishes to `cc:chat:thread:{thread_id}` for WS fan-out.
-
-**Limitation acknowledged (MEDIUM confidence):** If a staff member receives DMs from multiple clients simultaneously, only the last active thread is tracked per staff user. For a single-gym pet project this is acceptable — only one owner/receptionist responds at a time. Multi-staff routing is a v2.6+ concern.
-
-**Client → staff DM:** When a client sends `POST /client/messages`, the API:
-1. Writes the message to the DB.
-2. Publishes to Redis channel for WS fan-out (client's own connection gets immediate echo).
-3. Calls `bot.send_message(chat_id=STAFF_TELEGRAM_GROUP_OR_DM_ID, text=...)` — the staff_chat_id is a server-side config constant (`STAFF_TELEGRAM_CHAT_ID` env var), not client-controlled (IDOR-safe).
-4. Sets `cc:chat:active_thread:{STAFF_TG_USER_ID}` → `{thread_id, client_id}` in Redis.
-
-The bot's `send_message` call from the API process uses the `_otp_bot` pattern already established in `app/main.py` (a bare `Bot` instance for outbound-only DMs, not the full `Application` long-polling instance).
-
----
-
-## Photo Attachment Storage
-
-### Storage architecture
-
-**Chosen approach:** S3-compatible object storage via `aioboto3` (already in stack). The API handles:
-1. Client requests a presigned PUT URL via `POST /client/messages/upload-url`.
-2. Client uploads directly to the bucket (bypassing the API server — no streaming through Python).
-3. Client sends `POST /client/messages` with `attachment_key` (the S3 object key, not the full URL).
-4. API stores the object key; when serving message history, generates a short-lived presigned GET URL.
-
-**Why presigned URLs, not API proxy:**
-- Avoids streaming binary through the FastAPI process (memory + CPU overhead).
-- Single-process and multi-worker behave identically (no in-memory upload state).
-- Consistent with how modern backend-for-frontend patterns work (PWA → S3 directly).
-
-### Environments
-
-| Environment | Storage Backend | Config |
-|-------------|----------------|--------|
-| Local dev | SeaweedFS (Docker) — or skip storage, use local filesystem fallback | `AWS_ENDPOINT_URL=http://localhost:8333`, `S3_BUCKET=clubcore-dev` |
-| Production | Yandex Object Storage | `AWS_ENDPOINT_URL=https://storage.yandexcloud.net`, region `ru-central1`, `S3_BUCKET=clubcore-prod` |
-
-Yandex Object Storage is confirmed S3-compatible with `boto3`/`aioboto3` via `endpoint_url + region_name='ru-central1' + signature_version='s3v4'`. Presigned URLs confirmed working (official Yandex docs).
-
-**aioboto3 presigned URL pattern (async-safe):**
-
-```python
-async def generate_upload_url(key: str) -> str:
-    async with aioboto3.Session().client(
-        "s3",
-        endpoint_url=settings.s3_endpoint_url,
-        region_name="ru-central1",
-        aws_access_key_id=settings.s3_access_key,
-        aws_secret_access_key=settings.s3_secret_key,
-    ) as s3:
-        # Note: generate_presigned_url is synchronous in aiobotocore — use run_in_executor
-        # or use the aiobotocore async variant (aioboto3 >=13 wraps this correctly)
-        url = await s3.generate_presigned_url(
-            "put_object",
-            Params={"Bucket": settings.s3_bucket, "Key": key, "ContentType": "image/jpeg"},
-            ExpiresIn=300,
-        )
-    return url
-```
-
-**Note on aioboto3 version:** The existing `pyproject.toml` pins `aioboto3>=13.0,<14`. Current latest is 15.5.0 (Oct 2025). The `<14` upper bound will need relaxing if the project moves to Python 3.13 or needs newer aiobotocore features, but for v2.5 the existing constraint is fine.
-
-### Content-type validation (magic bytes)
-
-```python
-import filetype
-
-ALLOWED_MIME_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
-MAX_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
-
-async def validate_attachment(data: bytes) -> str:
-    if len(data) > MAX_SIZE_BYTES:
-        raise ValidationError("attachment_too_large")
-    kind = filetype.guess(data)
-    if kind is None or kind.mime not in ALLOWED_MIME_TYPES:
-        raise ValidationError("attachment_type_not_allowed")
-    return kind.mime
-```
-
-`filetype` reads only the first 261 bytes (magic numbers). Only call `validate_attachment` on the first chunk or the full buffer if the client streams the upload through the API. For the presigned-URL pattern, validation happens on `POST /client/messages` when the client submits `attachment_key` — the API fetches the object header (`HeadObject`) and validates `ContentType` stored by Yandex Object Storage from the original PUT.
-
-**Note on `filetype` maintenance:** The library is at version 1.2.0, last released ~2023. It is lightweight and the magic bytes for JPEG/PNG/WebP are stable. MEDIUM confidence on long-term maintenance — if this becomes a concern, `puremagic` (actively maintained, pure Python) is a drop-in alternative.
-
----
-
-## PWA WebSocket Client
-
-### Recommended approach: custom hook (no new dependency for MVP)
-
-The PWA uses React 19 + TanStack Query 5 + Vite 6 (no TypeScript strict in client-pwa — it uses JSX with `allowJs`). The pattern for WS integration with TanStack Query is:
-
-1. WS delivers event frames (new message notification, typing indicator, read receipt update).
-2. On receiving a `message_new` event, call `queryClient.invalidateQueries({ queryKey: messagesKeys.thread(threadId) })`.
-3. TanStack Query refetches the thread via `GET /client/messages` (existing HTTP endpoint).
-4. WS does NOT carry the full message payload — only event type + IDs. This keeps WS messages small and avoids a parallel data store.
-
-```javascript
-// apps/client-pwa/src/hooks/useChatSocket.js
-import { useEffect, useRef, useCallback } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
-import { messagesKeys } from '@/data/messages'
-
-export function useChatSocket({ token, threadId }) {
-  const queryClient = useQueryClient()
-  const wsRef = useRef(null)
-  const retryDelay = useRef(1000)
-
-  const connect = useCallback(() => {
-    const url = `${import.meta.env.VITE_WS_BASE_URL}/api/v1/client/ws/chat?token=${token}`
-    const ws = new WebSocket(url)
-    wsRef.current = ws
-
-    ws.onmessage = (event) => {
-      const msg = JSON.parse(event.data)
-      if (msg.type === 'message_new' || msg.type === 'read_receipt') {
-        queryClient.invalidateQueries({ queryKey: messagesKeys.thread(threadId) })
-      }
-    }
-
-    ws.onclose = () => {
-      const delay = Math.min(retryDelay.current, 30_000)
-      retryDelay.current = delay * 2 + Math.random() * 500  // jitter
-      setTimeout(connect, delay)
-    }
-
-    ws.onopen = () => { retryDelay.current = 1000 }  // reset on successful connect
-  }, [token, threadId, queryClient])
-
-  useEffect(() => {
-    connect()
-    return () => { wsRef.current?.close() }
-  }, [connect])
+```hcl
+terraform {
+  required_version = ">= 1.15.0"
+  required_providers {
+    kubernetes = { source = "hashicorp/kubernetes", version = "~> 3.2" }
+    helm       = { source = "hashicorp/helm",       version = "~> 3.2" }
+    null       = { source = "hashicorp/null",       version = "~> 3.0" }
+    local      = { source = "hashicorp/local",      version = "~> 2.0" }
+  }
+  backend "local" {}
 }
 ```
 
-**If hook complexity grows:** Add `react-use-websocket` (maintained, TypeScript-first, built-in exponential backoff). Do NOT add `reconnecting-websocket` (npm package) — last published in 2019, unmaintained. Do NOT add Socket.IO client — incompatible with FastAPI native WS without Socket.IO server adapter.
-
-### Token sourcing for WS
-
-The JWT access token is in an httpOnly cookie — not readable from JavaScript. Two options:
-
-1. **Dedicated WS token endpoint:** `POST /client/ws-token` returns a short-lived (5 min) token whose only claim is WS auth. Avoids exposing the main JWT. Adds one round trip on chat open.
-2. **Re-use the OTP flow token pattern:** The client PWA already has access to a `clientToken` in React state (set after OTP verify). Pass this as the WS query param.
-
-**Recommendation:** Option 2 for MVP. The `clientToken` is available in the React session context (set at login). The JWT is short-lived (60 min). Token rotation happens on re-login. For production hardening, upgrade to option 1 (dedicated WS token) in v3.0.
-
 ---
 
-## Installation (new packages only)
+## 4. TLS / Ingress
+
+### Ingress Controller — Traefik v3 (bundled with k3s)
+
+**CRITICAL: ingress-nginx was officially retired and archived March 2026.** No security patches will ever be issued for it again. Do not install ingress-nginx. k3s ships Traefik v3 by default — use it.
+
+Traefik in k3s is managed via a `HelmChartConfig` CRD. Override values at the cluster level without running a separate Helm release.
+
+```yaml
+# k3s HelmChartConfig to tune Traefik
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    ports:
+      web:
+        redirectTo: websecure
+    logs:
+      general:
+        level: ERROR
+```
+
+Use standard `Ingress` resources with `ingressClassName: traefik`. Traefik-specific middleware (rate-limit, IP allowlist, redirect) goes in `Middleware` CRDs and is referenced via the annotation `traefik.io/router.middlewares`.
+
+### TLS — cert-manager v1.20.2
+
+**cert-manager v1.20.2** (released 2026-04-11, latest stable as of June 2026). Supports Kubernetes 1.32–1.35. For local validation use a `ClusterIssuer` with `selfSigned` issuer or Let's Encrypt staging. For production use Let's Encrypt ACME HTTP-01 (or DNS-01 if wildcard needed).
 
 ```bash
-# Backend (add to pyproject.toml dependencies)
-uv add "filetype>=1.2.0,<2"
-
-# Backend dev only (add to [dependency-groups] dev)
-uv add --dev "httpx-ws>=0.9.0,<1"
-
-# Frontend (add only if custom hook grows unwieldy)
-pnpm --filter @clubcore/client-pwa add react-use-websocket
+helm install cert-manager jetstack/cert-manager \
+  --namespace cert-manager --create-namespace \
+  --version v1.20.2 \
+  --set crds.enabled=true
 ```
 
 ---
 
-## What NOT to Add
+## 5. Observability Stack
 
-| Avoid | Why | Use Instead |
-|-------|-----|-------------|
-| Django Channels | Requires Django ORM + separate ASGI layer + channel layers — complete framework swap for a single feature | FastAPI native `WebSocket` (Starlette) + Redis pub/sub |
-| Socket.IO (server + client) | Requires `python-socketio` on server; `socket.io-client` on PWA; custom protocol incompatible with native browser `WebSocket`. Adds ~120 kB to PWA bundle. | Native browser `WebSocket` API |
-| `fastapi-websocket-pubsub` | Adds opinionated pub/sub abstraction over WS, not over Redis — does not solve the multi-worker fan-out problem. Unmaintained (last release 2022). | Direct `redis.pubsub()` async subscribe loop |
-| Celery | Heavy broker-based task queue — ARQ already handles background tasks. Adding Celery for WS fan-out is massive overkill. | Existing ARQ + Redis pub/sub |
-| NATS / RabbitMQ | Additional broker infra — Redis 7 is already running and has pub/sub. | `redis.pubsub()` |
-| MinIO Community Edition | GitHub repo archived February 2026, read-only, no security patches. | SeaweedFS (`chrislusf/seaweedfs`) or Garage (`dxflrs/garage`) for local dev; Yandex Object Storage for prod |
-| `python-magic` | Requires `libmagic` system library — complicates Docker build, not portable. | `filetype` (pure Python) |
-| `aioyookassa` community library | Unvetted; existing httpx adapter pattern is sufficient. | Existing `YooKassaClient` |
-| `reconnecting-websocket` npm | Last published 2019, unmaintained. | Custom hook or `react-use-websocket` |
-| Separate WS auth middleware | FastAPI's `Depends()` works inside `@router.websocket()` — no custom middleware needed. | `token: str = Query(...)` + existing PyJWT validation |
-| `anyio` for WS background tasks | `asyncio.create_task()` is sufficient for the pub/sub subscriber loop within the lifespan context. | `asyncio.create_task()` wrapped in lifespan |
+### Prometheus + Grafana — kube-prometheus-stack
+
+**Use kube-prometheus-stack v86.2.3** (released 2026-06-13, appVersion Prometheus Operator v0.91.0).
+
+This chart bundles Prometheus Operator, Prometheus, Alertmanager, Grafana, node-exporter, kube-state-metrics, and pre-built dashboards. One chart replaces what would otherwise be 4-5 separate installs. The "overkill for single-node" argument does not apply — the chart supports single-node with minimal resources via values overrides.
+
+```bash
+helm install kube-prometheus-stack \
+  oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack \
+  --version 86.2.3 \
+  --namespace monitoring --create-namespace \
+  -f monitoring-values.yaml
+```
+
+Minimum values for single-node (avoids OOM on a small bare-metal host):
+```yaml
+prometheus:
+  prometheusSpec:
+    retention: 7d
+    resources:
+      requests: { memory: 256Mi, cpu: 100m }
+      limits:   { memory: 512Mi }
+grafana:
+  resources:
+    requests: { memory: 128Mi, cpu: 50m }
+alertmanager:
+  alertmanagerSpec:
+    resources:
+      requests: { memory: 64Mi }
+```
+
+### Log Aggregation — Loki
+
+**MIGRATION NOTE (March 2026):** The Loki Helm chart for OSS users moved from the `grafana/grafana` repo to `grafana-community/helm-charts`. The last old-repo release was `6.55.0`. Current community repo release is **loki-17.3.1** (released 2026-06-10, appVersion Loki 3.7.x).
+
+```bash
+helm repo add grafana-community https://grafana-community.github.io/helm-charts
+helm install loki grafana-community/loki \
+  --version 17.3.1 \
+  --namespace monitoring \
+  -f loki-values.yaml
+```
+
+Deploy in **monolithic mode** (single Deployment, single PVC). Microservices/scalable mode is for multi-TB workloads — overkill for a single gym.
+
+Use **Grafana Alloy** (successor to promtail + grafana-agent, now the single recommended log shipper) to tail pod logs and push to Loki. Alloy is included as a sub-chart in the Loki community chart.
+
+### FastAPI Metrics — prometheus-fastapi-instrumentator
+
+**Version to pin: v7.1.0** (released 2025-03-19).
+
+**Do NOT use v8.0.0** at this time. v8 is a breaking release that requires `starlette>=1.0.0` and `fastapi>=0.133.0`. The clubcore backend currently pins `fastapi>=0.115`. FastAPI 0.133.0 (released 2026-02-24) added Starlette v1 support, but upgrading FastAPI is a separate task that needs its own regression gate (729 backend tests, auth stack, middleware). Do not couple that upgrade to the infra milestone.
+
+v7.1.0 works with `fastapi>=0.115` + current Starlette <1.0.
+
+```python
+# apps/backend/app/main.py  (additive — no business logic change)
+from prometheus_fastapi_instrumentator import Instrumentator
+Instrumentator().instrument(app).expose(app)
+```
+
+Dependency pin:
+```toml
+# pyproject.toml addition
+"prometheus-fastapi-instrumentator>=7.1.0,<8"
+```
 
 ---
 
-## Alternatives Considered
+## 6. Secrets Management
 
-| Decision | Recommended | Alternative | Why Alternative Rejected |
-|----------|-------------|-------------|--------------------------|
-| WS auth | Query-param JWT | Cookie (httpOnly) | httpOnly cookies not readable from JS; cannot inject into WS URL |
-| WS auth | Query-param JWT | Subprotocol header hack | Same security profile, more parsing complexity, non-standard |
-| WS auth | Query-param JWT | First-message auth | Connection is accepted before auth — allows unauthenticated clients to hold connections briefly; complicates rate limiting |
-| Fan-out | Redis pub/sub | In-process broadcast | Fails across multiple uvicorn workers in production |
-| Fan-out | Redis pub/sub | Server-Sent Events (SSE) | One-directional; cannot carry typing events from client; separate endpoint needed for client sends anyway |
-| Storage | Presigned URLs (S3) | API proxy upload | Streams binary through Python process; memory + CPU pressure; no benefit for this scale |
-| Storage | Yandex Object Storage (prod) | AWS S3 | Geo-blocked risk for RU region (political environment); Yandex Object Storage is S3-compatible, RU-domiciled |
-| Storage | SeaweedFS (local dev) | MinIO | MinIO Community archived Feb 2026; SeaweedFS Apache 2.0, actively maintained |
-| Content-type validation | `filetype` magic bytes | Client Content-Type header | Client header is trivially spoofable; magic bytes are ground truth |
-| Telegram bridge routing | Redis key per staff user | DB table lookup | Redis lookup is O(1), avoids a DB read on every staff DM reply; data is ephemeral (TTL 24h) |
-| PWA WS client | Custom hook | `react-use-websocket` | Custom hook is ~40 lines for this use case; avoids a dependency; `react-use-websocket` available as upgrade path |
+**Use sealed-secrets v0.37.0** (released 2026-05-21).
+
+Reasoning for this project context:
+
+| Option | Verdict | Reason |
+|--------|---------|--------|
+| **sealed-secrets** | **USE THIS** | Encrypts K8s Secrets with a cluster key; `SealedSecret` manifests are safe to store on-disk or in-repo; `kubeseal` CLI seals on the dev machine |
+| SOPS + age | Skip | More powerful but more moving parts — separate key management, per-file encryption ceremony. Overkill for solo no-remote project |
+| External Secrets Operator + Vault | Do NOT add | Vault is explicitly in the "what not to add" list; ESO adds an entire control-plane component |
+
+For a no-git-remote project, sealed-secrets is ideal: the `SealedSecret` YAML files can live in the repo tree without exposing plaintext; they can only be decrypted by the controller running in the cluster. If the cluster key is lost, re-seal with a new key (single operator, acceptable risk).
+
+```bash
+# Install controller
+kubectl apply -f https://github.com/bitnami-labs/sealed-secrets/releases/download/v0.37.0/controller.yaml
+
+# Install kubeseal CLI
+brew install kubeseal
+
+# Seal a secret
+kubectl create secret generic db-creds \
+  --from-literal=password=... \
+  --dry-run=client -o yaml \
+  | kubeseal --format yaml > infra/secrets/db-creds-sealed.yaml
+```
 
 ---
 
-## Version Compatibility
+## 7. Object Storage
 
-| Package | Pinned Constraint | Notes |
-|---------|------------------|-------|
-| `python-telegram-bot` | `>=22.7,<23` (existing) | v22.7 is current latest; `filters.ChatType.PRIVATE` confirmed available in v22+ |
-| `redis` | `>=5,<6` (existing) | Async pub/sub via `redis.asyncio` works in v5+; `aio-pika` pattern NOT needed |
-| `aioboto3` | `>=13.0,<14` (existing) | Presigned URL async support confirmed in v13+; upper bound `<14` is conservative — v15.5.0 is current, but constraint works for v2.5 |
-| `filetype` | `>=1.2.0,<2` (new) | 1.2.0 is current; no major version churn expected (magic bytes are stable) |
-| `httpx-ws` | `>=0.9.0,<1` (new, dev only) | 0.9.0 released 2026-03-28; `ASGIWebSocketTransport` API stable since 0.7.x |
-| `fastapi` | `>=0.115` (existing) | `WebSocket`, `WebSocketDisconnect`, `WebSocketException` all stable since 0.100+ |
+**Keep SeaweedFS. Do NOT switch to MinIO.**
+
+MinIO's community (`minio/minio`) GitHub repository was **archived April 25, 2026**. Pre-compiled binary releases for the community version are discontinued. The community Helm chart at `charts.min.io` is frozen. MinIO now requires building from source (Go) or the commercial AIStor product.
+
+SeaweedFS is the correct call for this project:
+- Already in the stack (docker-compose uses `chrislusf/seaweedfs:3.84`)
+- S3-compatible API — zero app code changes (same boto3/aioboto3 client)
+- Actively maintained — Helm chart **v4.33.0** released 2026-06-11
+- AGPLv3 open-source, no paywall
+- Single-node standalone mode matches the existing docker-compose topology
+
+```bash
+helm repo add seaweedfs https://seaweedfs.github.io/seaweedfs/helm
+helm install seaweedfs seaweedfs/seaweedfs \
+  --version 4.33.0 \
+  --namespace storage --create-namespace \
+  -f seaweedfs-values.yaml
+```
+
+---
+
+## 8. Stateful Services — Postgres and Redis
+
+### Postgres 16 — CloudNativePG operator
+
+**Do NOT use Bitnami PostgreSQL Helm chart.** Broadcom moved all Bitnami Docker images and Helm chart OCI packages behind a paid subscription in 2025. The `bitnami` org images are now `bitnamilegacy` and receive no updates or security patches.
+
+**Use CloudNativePG (CNPG) operator** — CNCF Sandbox project, fully open-source, uses its own PostgreSQL images (no Broadcom dependency).
+
+```bash
+helm repo add cnpg https://cloudnative-pg.github.io/charts
+helm install cnpg cnpg/cloudnative-pg \
+  --namespace cnpg-system --create-namespace --wait
+```
+
+Then declare a `Cluster` resource:
+```yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: clubcore-pg
+  namespace: app
+spec:
+  instances: 1          # single-gym: 1 instance is correct; add replica later
+  imageName: ghcr.io/cloudnative-pg/postgresql:16-bookworm
+  storage:
+    size: 20Gi
+  bootstrap:
+    initdb:
+      database: clubcore
+      owner: app
+      secret:
+        name: pg-app-secret
+```
+
+CNPG handles the `migrate` Job sequencing: the Alembic Job connects after the CNPG cluster reaches `Ready`. CNPG also provides built-in point-in-time recovery and WAL archiving to object storage (SeaweedFS S3 endpoint) — which is the primary Postgres backup mechanism.
+
+For single-gym scale, `instances: 1` is correct. Bump to 2 for HA when needed.
+
+### Redis 7 — plain StatefulSet
+
+For Redis, use a **plain StatefulSet + Service** — no operator, no Helm chart, just ~80 lines of YAML. Redis 7 official image from Docker Hub (`redis:7-alpine`) is unaffected by the Bitnami situation.
+
+The Bitnami Redis chart (even from the legacy org) still functions for Redis since the risk of unpatched Redis images is lower than for a full database, but a plain StatefulSet is simpler and has no vendor dependency at all.
+
+Redis at single-gym scale (sessions + rate-limits + ARQ queue + pub/sub) has no HA requirement. A PVC with local-path-provisioner volume is sufficient.
+
+---
+
+## 9. Image Scanning — Trivy
+
+**Use Trivy v0.71.0** (released 2026-06-01) in the local Makefile. No cluster component needed.
+
+Trivy integrates into the `make build` step: scan each image immediately after `docker build`, block on CRITICAL/HIGH CVEs.
+
+```makefile
+IMAGES := backend telegram-bot arq-worker admin-app client-pwa
+
+.PHONY: scan
+scan:
+	@for img in $(IMAGES); do \
+	  echo "==> Scanning $$img"; \
+	  trivy image --exit-code 1 --severity CRITICAL,HIGH \
+	    --ignore-unfixed clubcore/$$img:$(TAG); \
+	done
+```
+
+Install:
+```bash
+brew install trivy          # macOS
+# or
+curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | \
+  sh -s -- -b /usr/local/bin v0.71.0
+```
+
+---
+
+## 10. Manifest Validation — kubeconform
+
+**Use kubeconform v0.8.0** (released 2026-06-04). Kubeval is deprecated and unmaintained; kubeconform is the active replacement.
+
+```bash
+# Validate all Helm-rendered manifests before apply
+helm template clubcore ./charts/clubcore | kubeconform -strict -summary
+```
+
+Install:
+```bash
+brew install kubeconform
+# or
+go install github.com/yannh/kubeconform/cmd/kubeconform@v0.8.0
+```
+
+---
+
+## 11. Makefile Automation (CI/CD)
+
+No external CI runner. No git remote. All automation lives in a root-level `Makefile`.
+
+```
+Makefile targets:
+  make build         # docker build all images (multi-stage, pinned)
+  make scan          # trivy scan all built images
+  make push          # push to local registry (k3d built-in registry)
+  make tf-plan       # terraform validate + plan
+  make tf-apply      # terraform apply (IaC: k3s install + provider bootstrap)
+  make helm-lint     # helm lint charts/*
+  make helm-validate # helm template | kubeconform -strict
+  make deploy        # helm upgrade --install all charts
+  make smoke         # wait for pods ready + curl /healthz
+  make up            # full pipeline: build → scan → push → deploy → smoke
+  make down          # k3d cluster delete (local) / helm uninstall (remote)
+```
+
+Local registry: `k3d cluster create` supports `--registry-create` to spin up a local Docker registry at `k3d-registry.localhost:5000`. Images are pushed there; k3d nodes pull directly without internet.
+
+---
+
+## 12. Backup — Postgres + SeaweedFS + Redis
+
+### Postgres (CNPG)
+CloudNativePG supports scheduled WAL archiving + base backups to S3 (SeaweedFS endpoint). Configure the `Cluster.spec.backup` stanza pointing at the SeaweedFS S3 endpoint. This is the cleanest backup path — no separate CronJob.
+
+### SeaweedFS
+Daily `CronJob` that runs `weed shell` or `mc mirror` to copy bucket contents to a second PVC (local backup) or another S3 bucket. Retention: 7 daily, 4 weekly.
+
+### Redis
+Redis RDB snapshot via `CONFIG SET save "3600 1"` — persisted via PVC. Restore = copy RDB file to new pod. Sufficient for a single-gym context.
+
+---
+
+## 13. What NOT to Add
+
+This section is as important as the stack above.
+
+| Tool | Why NOT for this project |
+|------|--------------------------|
+| **Service mesh (Istio, Linkerd, Cilium mesh)** | Single-node, single-gym, monolith. mTLS between Pods on the same node adds zero security benefit and real ops cost. |
+| **ArgoCD / Flux** | GitOps CD requires a git remote. The project deliberately has no git remote — backups are manual file copies to another PC. ArgoCD would be an infrastructure component that cannot function. |
+| **Vault** | Sealed-secrets covers the secret management need at 1/20th the operational complexity. Vault requires its own HA setup, unseal ceremony, and audit log. |
+| **Multi-node k3s HA** | Single gym = single host. Etcd HA requires minimum 3 nodes. Over-engineering for a pet project. |
+| **ingress-nginx** | **RETIRED March 2026**. No security patches will ever be issued. Use Traefik (bundled with k3s). |
+| **Helm 4** | Helm 4 (released Nov 2025) has breaking provider schema changes for terraform-provider-helm. Helm 3 is supported through Feb 2027. Migrate in a dedicated sprint, not inside an infra milestone. |
+| **Prometheus Adapter / KEDA** | HPA based on custom metrics — irrelevant for a single-gym app where load is deterministic and small. |
+| **OPA / Kyverno** | Policy-as-code admission controllers. Adds a blocking webhook to every pod admission. For a solo dev single cluster, the benefit (enforce pod security standards) is met more simply by `securityContext` fields in Helm chart values. |
+| **Separate log shipping (Fluentd, Logstash)** | Grafana Alloy (sub-chart in Loki 17.x) does the job. Fluentd/Logstash are overengineered for < 10 pods. |
+| **MinIO** | Community repo archived April 2026. No prebuilt binaries. Keep SeaweedFS which is already in the stack and actively maintained. |
+| **Bitnami Helm charts (Postgres/Redis)** | Images moved behind Broadcom paywall 2025. Use CloudNativePG for Postgres; plain StatefulSet for Redis. |
+| **prometheus-fastapi-instrumentator v8** | Requires FastAPI >=0.133 + Starlette v1. Current stack pins fastapi>=0.115. Upgrading FastAPI mid-infra-milestone risks breaking the 729-test auth stack. Use v7.1.0 now; schedule the FastAPI upgrade separately. |
+
+---
+
+## 14. Version Compatibility Summary
+
+| Component | Version | Verified date | Notes |
+|-----------|---------|---------------|-------|
+| k3s | v1.33.12+k3s1 (stable channel) | 2026-06-16 | Latest stable; k3d wraps same binary locally |
+| k3d | v5.9.0 | 2026-06-02 | Local cluster for `make smoke` |
+| kubectl | v1.33.x | — | Ships with k3s |
+| Helm | v3.21.1 | 2026-05-14 | v3 EOL security Feb 2027; Helm 4 deferred |
+| Terraform | v1.15.6 | 2026-05-27 | Latest stable; local backend |
+| tf-provider-kubernetes | v3.2.0 | 2026-06-04 | — |
+| tf-provider-helm | v3.2.0 | 2026-06-04 | Breaking schema change from 2.x; new list syntax |
+| Traefik | v3 (bundled k3s) | — | ingress-nginx retired March 2026; do not use |
+| cert-manager | v1.20.2 | 2026-04-11 | Helm chart; supports k8s 1.32-1.35 |
+| kube-prometheus-stack | 86.2.3 | 2026-06-13 | Prometheus Operator v0.91.0 |
+| Loki (community chart) | 17.3.1 | 2026-06-10 | Moved to grafana-community repo March 2026 |
+| Grafana Alloy | sub-chart in Loki 17.x | — | Successor to promtail; use this, not promtail |
+| sealed-secrets | v0.37.0 | 2026-05-21 | Controller + `kubeseal` CLI |
+| SeaweedFS Helm | v4.33.0 | 2026-06-11 | Replaces docker-compose `chrislusf/seaweedfs:3.84` |
+| CloudNativePG operator | current via cnpg chart | — | CNCF; image: ghcr.io/cloudnative-pg/postgresql:16-bookworm |
+| Redis (plain StatefulSet) | redis:7-alpine | — | No Helm chart needed |
+| prometheus-fastapi-instrumentator | v7.1.0 | 2025-03-19 | Do NOT use v8 (needs FastAPI >=0.133) |
+| Trivy | v0.71.0 | 2026-06-01 | Local Makefile scan, not in-cluster |
+| kubeconform | v0.8.0 | 2026-06-04 | Manifest validation; kubeval is dead |
+
+---
+
+## 15. Integration with Existing Stack (docker-compose to k8s mapping)
+
+| docker-compose service | K8s equivalent | Notes |
+|------------------------|----------------|-------|
+| `backend` | `Deployment` (1 replica) + `Service` + `Ingress` | Same multi-stage Dockerfile, non-root user already set |
+| `telegram-bot` | `Deployment` (1 replica, **no HPA**) | Telegram long-polling = single instance only; `strategy: Recreate` |
+| `arq-worker` | `Deployment` (1 replica) | ARQ uses `unique=True` cron tasks; single replica avoids duplicate cron fires |
+| `migrate` | `Job` (pre-install Helm hook) | `alembic upgrade head`; runs before backend pods start via `helm.sh/hook: pre-install,pre-upgrade` |
+| `postgres` | CNPG `Cluster` (1 instance) | PVC via local-path-provisioner; WAL archive to SeaweedFS |
+| `redis` | `StatefulSet` (1 replica) + `Service` | Plain YAML, redis:7-alpine, PVC for RDB snapshot |
+| `s3` (SeaweedFS) | SeaweedFS Helm chart, standalone mode | `S3_ENDPOINT_URL` env points to in-cluster ClusterIP Service |
+| `mailpit` | Omit from K8s | Dev-only; not part of production cluster |
 
 ---
 
 ## Sources
 
-- FastAPI docs: WebSocket with Dependencies — [https://fastapi.tiangolo.com/advanced/websockets/](https://fastapi.tiangolo.com/advanced/websockets/) — Cookie/Header/Query deps in WS confirmed (HIGH)
-- Redis pub/sub fan-out pattern — [https://medium.com/@nandagopal05/scaling-websockets-with-pub-sub-using-python-redis-fastapi-b16392ffe291](https://medium.com/@nandagopal05/scaling-websockets-with-pub-sub-using-python-redis-fastapi-b16392ffe291) — multi-worker fan-out architecture (MEDIUM, community article, pattern is sound)
-- httpx-ws PyPI — [https://pypi.org/project/httpx-ws/](https://pypi.org/project/httpx-ws/) — v0.9.0 (2026-03-28) confirmed, `ASGIWebSocketTransport` (MEDIUM)
-- python-telegram-bot v22.7 filters — [https://docs.python-telegram-bot.org/en/stable/telegram.ext.filters.html](https://docs.python-telegram-bot.org/en/stable/telegram.ext.filters.html) — `filters.ChatType.PRIVATE` confirmed (HIGH)
-- filetype PyPI — [https://pypi.org/project/filetype/](https://pypi.org/project/filetype/) — v1.2.0, pure Python, no C extension (HIGH)
-- Yandex Object Storage presigned URLs — [https://yandex.cloud/en/docs/storage/concepts/pre-signed-urls](https://yandex.cloud/en/docs/storage/concepts/pre-signed-urls) — S3-compatible, `ru-central1`, `signature_version='s3v4'` (HIGH)
-- Yandex Object Storage boto3 guide — [https://cloud.yandex.com/en-ru/docs/storage/tools/boto](https://cloud.yandex.com/en-ru/docs/storage/tools/boto) — endpoint `storage.yandexcloud.net` confirmed (HIGH)
-- MinIO archived — [https://productimpossible.com/articles/self-hosted-s3-after-minio/](https://productimpossible.com/articles/self-hosted-s3-after-minio/) — archived Feb 2026, SeaweedFS recommended (MEDIUM, secondary source — verify before committing to SeaweedFS in Docker Compose)
-- SeaweedFS alternatives — [https://lowcloud.io/en/blog/minio-alternatives](https://lowcloud.io/en/blog/minio-alternatives) — SeaweedFS/Garage/RustFS comparison (MEDIUM)
-- TanStack Query + WebSocket integration — [https://tkdodo.eu/blog/using-web-sockets-with-react-query](https://tkdodo.eu/blog/using-web-sockets-with-react-query) — invalidateQueries on WS events pattern (HIGH, TkDodo is TanStack Query maintainer)
-- aioboto3 version history — [https://github.com/terricain/aioboto3/blob/main/CHANGELOG.rst](https://github.com/terricain/aioboto3/blob/main/CHANGELOG.rst) — v13.4.0 last in v13 series (HIGH)
-- Codebase: `apps/backend/pyproject.toml` — confirmed `python-telegram-bot>=22.7,<23`, `aioboto3>=13.0,<14`, `redis>=5,<6`
-- Codebase: `apps/backend/app/workers/telegram_bot.py` — confirmed PTB long-polling pattern, `build_application`, `add_handler`, `CallbackQueryHandler`
-- Codebase: `apps/backend/app/main.py` — confirmed `_otp_bot` bare Bot pattern for outbound-only DMs
-- Codebase: `apps/backend/alembic/versions/` — last migration is `0063_seed_trainer_profiles.py` → next is `0064`
+- https://github.com/k3s-io/k3s/releases — k3s v1.36.1+k3s1 latest; stable channel = v1.33.x (verified 2026-06-16)
+- https://github.com/k3s-io/k3s/discussions/12950 — stable channel tracks .3/.4 patch (confirmed)
+- https://github.com/k3d-io/k3d/releases/tag/v5.9.0 — k3d v5.9.0 (2026-06-02)
+- https://github.com/helm/helm/releases — Helm v3.21.1 latest v3 (2026-05-14); v3 EOL note confirmed
+- https://github.com/helm/helm-www/blob/main/blog/2026-06-02-helm3-eol.md — Helm 3 EOL timeline official
+- https://developer.hashicorp.com/terraform/install — Terraform v1.15.6 (verified 2026-06-16)
+- https://github.com/hashicorp/terraform-provider-kubernetes/releases — v3.2.0 (2026-06-04)
+- https://github.com/hashicorp/terraform-provider-helm/releases — v3.2.0 (2026-06-04)
+- https://kubernetes.io/blog/2025/11/11/ingress-nginx-retirement/ — ingress-nginx retirement announced
+- https://dev.to/devpops/how-to-properly-set-up-k3s-on-your-homelab-or-server-2026-edition-595 — ingress-nginx archived March 2026 confirmed
+- https://cert-manager.io/docs/releases/ — v1.20.2 latest stable (2026-04-11)
+- https://artifacthub.io/packages/helm/prometheus-community/kube-prometheus-stack — v86.2.3 (2026-06-13)
+- https://github.com/grafana-community/helm-charts/releases/tag/loki-17.3.1 — Loki community chart v17.3.1 (2026-06-10)
+- https://grafana.com/docs/loki/latest/setup/upgrade/upgrade-to-community/ — Loki repo migration official docs
+- https://github.com/bitnami-labs/sealed-secrets/releases/tag/v0.37.0 — v0.37.0 (2026-05-21)
+- https://artifacthub.io/packages/helm/seaweedfs/seaweedfs — SeaweedFS Helm v4.33.0 (2026-06-11)
+- https://github.com/minio/minio — minio/minio repo ARCHIVED April 25, 2026
+- https://github.com/aquasecurity/trivy/releases/tag/v0.71.0 — Trivy v0.71.0 (2026-06-01)
+- https://newreleases.io/project/github/yannh/kubeconform/release/v0.8.0 — kubeconform v0.8.0 (2026-06-04)
+- https://github.com/trallnag/prometheus-fastapi-instrumentator/releases — v8.0.0 breaking (Starlette v1); v7.1.0 for FastAPI >=0.115
+- https://github.com/fastapi/fastapi/releases/tag/0.133.0 — FastAPI 0.133.0 = first Starlette v1 release (2026-02-24)
+- https://www.youngju.dev/blog/database/2026-04-11-kubernetes-database-operators-guide.en — Bitnami paywall + CNPG recommendation
+- https://jasongodson.com/blog/cloudnative-pg-migration/ — Bitnami images moved to bitnamilegacy, no updates
+- https://itnext.io/minio-alternative-seaweedfs-41fe42c3f7be — SeaweedFS as MinIO replacement (2026-01-30)
 
 ---
-
-*Stack research for: clubcore v2.5 Chat / Messaging — WebSocket + Redis pub/sub + photo attachments + Telegram bridge*
-*Researched: 2026-06-06*
+*Stack research for: clubcore v4.0 Production Infrastructure (on-prem k3s)*
+*Researched: 2026-06-16*
