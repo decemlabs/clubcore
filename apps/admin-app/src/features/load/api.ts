@@ -1,5 +1,5 @@
 /**
- * Load feature API hooks (Phase 103-03 — wire from mock to real).
+ * Load feature API hooks (Phase 103-03 — wire from mock to real; Phase 115-03 extended).
  *
  * Wraps useVisitsReport and applies client-side zero-fill so the
  * IntensityHeatmap / AreaTrendChart always receive complete arrays (no NaN).
@@ -12,6 +12,9 @@
  * (can(role,'view','reports') inside reports/api.ts).
  *
  * No default-mock branch — removed entirely (Phase 103-03).
+ *
+ * Phase 115-03: re-exports useLoadNow, useCohortReport, useVisitAnomaly, useAtRiskMembers
+ * for colocation with LoadPage (import from '@/features/load/api', not '@/features/reports/api').
  */
 import { useVisitsReport } from '@/features/reports/api';
 import { fillHourlyBuckets, fillDailyBuckets } from '@/features/reports/utils';
@@ -19,6 +22,7 @@ import type { VisitsReportQuery } from '@/features/reports/schemas';
 import type { Role } from '@/shared/session/types';
 
 export { reportsQueryKeys as loadKeys } from '@/features/reports/keys';
+export { useLoadNow, useCohortReport, useVisitAnomaly, useAtRiskMembers } from '@/features/reports/api';
 
 /**
  * Load page data hook (OWNER_ONLY, zero-filled).
