@@ -58,9 +58,11 @@ class Resource(StrEnum):
     AUDIT_LOG = "audit-log"
     # Phase 86 GYM-02 — gym-info owner-only write; value mirrors registry.ts Resource union
     GYM = "gym"
+    # Phase 113 — promo-codes CRUD: reception retains (LIST, PROMO_CODES). Count grows 42 -> 45.
+    PROMO_CODES = "promo-codes"  # kebab (mirrors MEMBERSHIP_PLANS, SCHEDULE_SLOTS)
 
 
-# Verbatim mirror of apps/admin-app/src/shared/session/can.ts (41 entries after Phase 86 GYM-02).
+# Verbatim mirror of apps/admin-app/src/shared/session/can.ts (45 entries after Phase 113).
 # frozenset for set-membership lookup in can() and parity-set equality in Phase 6.
 OWNER_ONLY: frozenset[tuple[Action, Resource]] = frozenset(
     {
@@ -148,6 +150,10 @@ OWNER_ONLY: frozenset[tuple[Action, Resource]] = frozenset(
         # Resource.SETTINGS already exists in the enum (value "settings").
         # (VIEW, SETTINGS) is already in OWNER_ONLY above — only the EDIT pair is new.
         (Action.EDIT, Resource.SETTINGS),
+        # Phase 113 — promo-codes CRUD: reception retains (LIST, PROMO_CODES). Count 42 -> 45.
+        (Action.CREATE, Resource.PROMO_CODES),
+        (Action.EDIT, Resource.PROMO_CODES),
+        (Action.DELETE, Resource.PROMO_CODES),  # deactivate maps to DELETE
     }
 )
 

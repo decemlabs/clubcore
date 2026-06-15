@@ -79,6 +79,11 @@ export const OWNER_ONLY: ReadonlyArray<{ action: Action; resource: Resource }> =
   // v2.7 (Phase 108 CFG-02/03/04 — settings write; mirror permissions.py (Action.EDIT, Resource.SETTINGS)).
   // (Action.VIEW, Resource.SETTINGS) already exists at line 17 — only EDIT is new.
   { action: 'edit', resource: 'settings' },
+  // Phase 113 — promo-codes write actions owner-only; reception retains list/view.
+  // Mirror permissions.py PROMO_CODES block (count grows 42 -> 45).
+  { action: 'create', resource: 'promo-codes' },
+  { action: 'edit', resource: 'promo-codes' },
+  { action: 'delete', resource: 'promo-codes' }, // deactivate maps to 'delete'
 ]
 
 export function can(role: Role, action: Action, resource: Resource): boolean {

@@ -37,11 +37,11 @@ from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.dependencies import CurrentUser
 from app.core.exceptions import AppError, ValidationAppError
 from app.modules.promo_codes.models import PromoRedemption
 
 if TYPE_CHECKING:
-    from app.modules.auth.models import User
     from app.modules.promo_codes.models import PromoCode
     from app.modules.promo_codes.schemas import (
         PromoCodeCreateRequest,
@@ -455,7 +455,7 @@ async def record_promo_redemption(
 
 async def create_promo_code(
     session: AsyncSession,
-    actor: User,
+    actor: CurrentUser,
     payload: PromoCodeCreateRequest,
 ) -> PromoCode:
     """Create a promo code (PROMO-01).
@@ -501,7 +501,7 @@ async def create_promo_code(
 
 async def update_promo_code(
     session: AsyncSession,
-    actor: User,
+    actor: CurrentUser,
     promo_id: UUID,
     payload: PromoCodeUpdateRequest,
 ) -> PromoCode:
@@ -549,7 +549,7 @@ async def update_promo_code(
 
 async def deactivate_promo_code(
     session: AsyncSession,
-    actor: User,
+    actor: CurrentUser,
     promo_id: UUID,
 ) -> None:
     """Deactivate (soft - sets is_active=False) an alive promo code (PROMO-01).
