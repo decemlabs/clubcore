@@ -46,14 +46,32 @@
 - Redocly warnings (client WS 101-only response; ambiguous path) are pre-existing and not part of the v3.2 surface.
 - mock↔real schema-drift lesson (v3.0/v3.1) structurally closed: each new v3.2 domain has a contract test parsing a REAL captured backend response with the real FE Zod schema (phase 117-02).
 
-### KNOWN ISSUE / DEBT — full backend pytest not run to green (operator-accepted 2026-06-15)
+### KNOWN ISSUE / DEBT — full backend pytest not run to green (operator-accepted; precisely diagnosed 2026-06-16)
 
-The full ~3000-test backend suite was NOT confirmed green this run. Root cause is a **local-environment Postgres deadlock**, not a v3.2 code defect:
+The full ~3000-test backend suite cannot complete in the local docker env due to a **SYSTEMIC,
+PRE-EXISTING test-isolation deadlock** — NOT a v3.2 code defect, NOT environment pollution
+(reproduced on a clean `down -v` + fresh-migrate + seed DB, single sequential run — corrects the
+earlier "overlapping-runs pollution" hypothesis).
 
-- A migration-reversibility step runs `alembic downgrade` whose `DELETE FROM working_hours_config` blocks on a row lock held by a connection left `idle in transaction` (verified via `pg_stat_activity` / `pg_blocking_pids`: blocked pid `blocked by` the idle-in-transaction pid). All offending connections originated from the host test process (`client_addr 192.168.65.1`), not the dev backend container.
-- The condition appeared after the local `clubcore` DB was polluted by interrupted/overlapping pytest runs during this session (initial mistake: three concurrent runs auto-backgrounded, then SIGKILL'd, leaving zombie locked transactions). Zombies were terminated, but a single clean re-run reproduced the same `alembic downgrade ↔ working_hours_config` block.
-- Evidence the suite is otherwise healthy: it WAS running in this same environment before the executor's session limit (original gate header), and phases 112–116 executed their tests successfully.
+- **Root cause (Explore agent + `pg_blocking_pids`):** the function-scoped `autouse=True` fixture
+  `permissive_booking_config` (`tests/integration/conftest.py` + `.../bookings/conftest.py`) runs
+  `UPDATE working_hours_config SET schedule=…` on the SAVEPOINT `db_session` and leaves that
+  transaction OPEN. ANY second connection touching `working_hours_config` deadlocks: the migration
+  round-trip tests' `_run_alembic("downgrade")` subprocess (`DELETE FROM working_hours_config`), and
+  bookings/settings tests' separate `direct_engine_session` (`UPDATE working_hours_config`).
+- Confirmed twice: deadlock at suite start, and again at ~7% after deselecting the 3 alembic/migration
+  round-trip files. Possible only since v3.1 Phase 108 added `working_hours_config`; entirely pre-v3.2.
+  Almost certainly why the ORIGINAL gate executor "hung" (header). The ~7% reached never got to the
+  v3.2 domains (payments/users/promo_codes/reports/messaging sort later) — so the suite can neither
+  confirm nor deny v3.2-domain status; that coverage comes from the targeted tests below.
 
-**Verified-green substitutes covering v3.2 correctness:** mypy --strict, lint-imports, v3.2-scoped ruff, admin-app typecheck/lint/test(410)/build, api-client typecheck/test(23)/codegen-zero-diff, Redocly, OWNER_ONLY=46 source-confirmed, 5 FE real-backend contract tests.
+**Verified-green substitutes covering v3.2 correctness:** mypy --strict, lint-imports, v3.2-scoped
+ruff, admin-app typecheck/lint/test(410)/build, api-client typecheck/test(23)/codegen-zero-diff,
+Redocly, OWNER_ONLY=46 source-confirmed, 5 FE real-backend contract tests (real captured ASGITransport
+JSON × real Zod), api-client `_v32Checks` forward-guard.
 
-**Deferred resolution (non-destructive):** `docker compose down -v` → `alembic upgrade head` → seed → single `uv run pytest` with `--timeout` (pytest-timeout) so any future deadlock fails the culprit test instead of hanging. Tracked as v3.2 milestone debt.
+**Real fix (separate test-infra task, out of v3.2 scope):** refactor `permissive_booking_config` so it
+does not hold `working_hours_config` open across a test (commit/rollback before any second connection,
+scope it away from migration round-trip + direct-engine tests, or share their connection). Exact
+mechanism, deselect command, and clean-DB setup (incl. the VARCHAR(64) `alembic_version` workaround)
+are recorded in `117-HUMAN-UAT.md`.
