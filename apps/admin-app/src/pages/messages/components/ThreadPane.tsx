@@ -12,30 +12,16 @@
  * Empty-thread placeholder: shown when no thread is selected.
  */
 import { useEffect, useRef, useState } from 'react';
-import type { LucideIcon } from 'lucide-react';
 import { isSameDay, parseISO, subDays } from 'date-fns';
-import { toast } from 'sonner';
 import { cn } from '@/lib/cn';
 import { Initials } from '@/components/ui/initials';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-  Archive,
   Check,
-  CheckCircle2,
-  Clock,
   Info,
   MessageSquare,
-  MoreHorizontal,
   Paperclip,
   Send,
   Smile,
-  User,
 } from '@/components/icons';
 import { PageLoading } from '@/components/feedback/PageState';
 import { can } from '@/shared/session/can';
@@ -43,8 +29,6 @@ import { useThread, useSendReply } from '@/features/messages/api';
 import type { Role } from '@/shared/session/types';
 import type { Bubble, ThreadItem } from '@/features/messages/types';
 import type { StaffMessage, StaffThread } from '@/features/messages/types';
-
-type ComposeMode = 'reply' | 'note' | 'resolve';
 
 const HTBTN =
   'grid size-8 shrink-0 place-items-center rounded-lg border-[0.5px] border-border text-fg-muted transition-colors hover:border-border-strong hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
@@ -148,38 +132,6 @@ function MsgBubble({ b }: { b: Bubble }) {
   );
 }
 
-function ModeTab({
-  active,
-  icon: Icon,
-  label,
-  note,
-  onClick,
-}: {
-  active: boolean;
-  icon: LucideIcon;
-  label: string;
-  note?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        active
-          ? note
-            ? 'bg-[#fef3c7] text-[#713f12] dark:bg-[rgba(234,179,8,0.16)] dark:text-[#fde68a]'
-            : 'bg-surface-3 text-fg'
-          : 'text-fg-muted hover:text-fg',
-      )}
-    >
-      <Icon className="size-3.5" />
-      {label}
-    </button>
-  );
-}
-
 function NoThreadPlaceholder() {
   return (
     <div className="flex flex-1 items-center justify-center px-6 text-center">
@@ -213,7 +165,6 @@ function LoadedThreadPane({
   const isSending = sendReply.isPending;
 
   const items = staffMessagesToThreadItems(messages);
-  const [mode, setMode] = useState<ComposeMode>('reply');
   const [text, setText] = useState('');
   const msgsRef = useRef<HTMLDivElement>(null);
 
@@ -246,54 +197,10 @@ function LoadedThreadPane({
             Чат в приложении
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => toast('Переназначить диалог')}
-          className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-fg px-2.5 text-[12px] font-semibold text-bg transition-colors hover:bg-black dark:bg-primary dark:text-[#06120c] dark:hover:bg-[#5ee9b8] max-sm:hidden"
-        >
-          <User className="size-3.5" />
-          Маша К.
-        </button>
-        <button
-          type="button"
-          className={HTBTN}
-          aria-label="Отложить"
-          title="Отложить"
-          onClick={() => toast.success('Диалог отложен на 3 часа')}
-        >
-          <Clock className="size-4" />
-        </button>
-        <button
-          type="button"
-          className={HTBTN}
-          aria-label="Архив"
-          title="Архив"
-          onClick={() => toast.success('Диалог архивирован')}
-        >
-          <Archive className="size-4" />
-        </button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button type="button" className={HTBTN} aria-label="Ещё" title="Ещё">
-              <MoreHorizontal className="size-4" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-[200px]">
-            <DropdownMenuItem onSelect={() => toast.success('Отмечено непрочитанным')}>
-              Отметить непрочитанным
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => toast('Профиль клиента')}>
-              Профиль клиента
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-danger focus:text-danger"
-              onSelect={() => toast.success('Клиент заблокирован')}
-            >
-              Заблокировать
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/* IN-04: reassign / snooze / archive / mark-unread / block header actions
+            were toast-only stubs with no backend — removed so they do not imply
+            (on a live data screen) that a dialog was archived/blocked. Re-add each
+            when a real endpoint backs it. */}
       </div>
 
       {/* Сообщения */}
@@ -326,27 +233,13 @@ function LoadedThreadPane({
       {/* Composer — owner-only via can(role,'create','messages'); absent for reception */}
       {canCompose && (
         <div className="shrink-0 border-t-[0.5px] border-border bg-surface px-4 pb-3.5 pt-2">
+          {/* WR-02: only a genuine client reply is supported. The "Заметка"/"Решить"
+              modes were removed — they had no backend and silently delivered the text
+              to the client as a normal message (internal-note leak). */}
           <div className="flex items-center justify-between gap-2">
-            <div className="flex gap-1">
-              <ModeTab
-                active={mode === 'reply'}
-                icon={MessageSquare}
-                label="Ответ"
-                onClick={() => setMode('reply')}
-              />
-              <ModeTab
-                active={mode === 'note'}
-                icon={Info}
-                label="Заметка"
-                note
-                onClick={() => setMode('note')}
-              />
-              <ModeTab
-                active={mode === 'resolve'}
-                icon={CheckCircle2}
-                label="Решить"
-                onClick={() => setMode('resolve')}
-              />
+            <div className="inline-flex items-center gap-1.5 rounded-lg bg-surface-3 px-2.5 py-1.5 text-[12px] font-semibold text-fg">
+              <MessageSquare className="size-3.5" />
+              Ответ
             </div>
             <div className="text-[11.5px] text-fg-subtle max-md:hidden">
               Ответ на{' '}
