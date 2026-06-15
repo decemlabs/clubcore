@@ -220,6 +220,7 @@ export function PlansPage() {
   const canEditPtPackagePlans = can(role, 'edit', 'pt-package-plans')
   const canDeletePtPackagePlans = can(role, 'delete', 'pt-package-plans')
   const canCreatePromoCodes = can(role, 'create', 'promo-codes')
+  const canListPromoCodes = can(role, 'list', 'promo-codes')
 
   // Mock data for not-yet-wired sections (sales chart, KPIs, page head)
   const mockData = plansPageData
@@ -443,9 +444,10 @@ export function PlansPage() {
           }
         />
 
-        {promoCodesQuery.isPending && <PageLoading />}
-
-        {promoCodesForbidden && (
+        {/* WR-05: when can(list) is false the query is enabled:false and stays
+            isPending forever — render the Lock EmptyState directly instead of a
+            never-resolving spinner. */}
+        {!canListPromoCodes && (
           <EmptyState
             icon={Lock}
             title="Недостаточно прав"
@@ -453,11 +455,21 @@ export function PlansPage() {
           />
         )}
 
-        {promoCodesQuery.isError && !promoCodesForbidden && (
+        {canListPromoCodes && promoCodesQuery.isPending && <PageLoading />}
+
+        {canListPromoCodes && promoCodesForbidden && (
+          <EmptyState
+            icon={Lock}
+            title="Недостаточно прав"
+            message="Этот раздел доступен только владельцу. Обратитесь к владельцу клуба."
+          />
+        )}
+
+        {canListPromoCodes && promoCodesQuery.isError && !promoCodesForbidden && (
           <PageError onRetry={() => void promoCodesQuery.refetch()} />
         )}
 
-        {promoCodesQuery.isSuccess && promoCodesQuery.data.items.length === 0 && (
+        {canListPromoCodes && promoCodesQuery.isSuccess && promoCodesQuery.data.items.length === 0 && (
           <EmptyState
             icon={Tag}
             title="Промокодов пока нет"
@@ -473,7 +485,7 @@ export function PlansPage() {
           />
         )}
 
-        {promoCodesQuery.isSuccess && promoCodesQuery.data.items.length > 0 && (
+        {canListPromoCodes && promoCodesQuery.isSuccess && promoCodesQuery.data.items.length > 0 && (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {promoCodesQuery.data.items.map((p) => (
               <PromoCard
