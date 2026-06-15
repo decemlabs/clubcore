@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v3.1
 milestone_name: Admin — Fill the Gaps
-status: verifying
-stopped_at: Phase 109 UI-SPEC approved
-last_updated: "2026-06-14T22:46:54.267Z"
-last_activity: 2026-06-14
+status: milestone-built-awaiting-archival
+stopped_at: v3.1 — all 5 phases (107–111) complete + audited PASSED; milestone archival PAUSED by user pending browser-UAT
+last_updated: "2026-06-15T00:00:00.000Z"
+last_activity: 2026-06-15
 progress:
   total_phases: 5
   completed_phases: 5
@@ -161,6 +161,10 @@ Last activity: 2026-06-14
 
 ### Blockers/Concerns
 
+- **v3.1 milestone close PAUSED (2026-06-15, user choice).** All 5 phases (107–111) built, verified, and committed; milestone audit PASSED (13/13 reqs, full gate green, P102 live-verified incl. live-HTTP uvicorn smoke). Archival/tag/REQUIREMENTS.md-removal NOT done — deferred so the user can run browser-UAT first. **Resume:** run browser UAT then `/gsd-complete-milestone v3.1`.
+  - Deferred browser-UAT (code-verified, browser-visual pending): Phase 107 (10), Phase 108 (13), Phase 109 (10) — see each `1NN-UAT.md`. Run `/gsd-verify-work 107` / `108` / `109`.
+  - Dev stack left RUNNING for UAT: Postgres :5432 (clubcore, app/app, migrations 0001..0071), Redis :6379, SeaweedFS S3 :8333. Seed owner = `owner@clubcore.dev` / `ownerpass12345`; P102 walkthrough data seeded (`uv run python -m scripts.seed_p102_walkthrough`). Tear down with `docker compose down` (add `-v` to reset DB) in `apps/backend/`.
+  - Tracked follow-up: gym-card field-coverage gap (capacity/description/amenities — spawned task), `can.ts` 2 dead duplicate entries, drop the new FE `as never` casts now that schema.d.ts is regenerated.
 - Dev DB carry-over: stale `ix_referral_codes_client_id` (migration 0067 amended in place) + possibly polluted `referral_config`. Run `docker compose down -v` + migrate + seed before Phase 106 manual verification. (Non-blocking for test suites — they rebuild schema.)
 
 ### Quick Tasks Completed
