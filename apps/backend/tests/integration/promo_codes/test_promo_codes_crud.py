@@ -30,7 +30,6 @@ import pytest
 from httpx import AsyncClient
 
 from app.modules.promo_codes.models import PromoCode, PromoRedemption
-
 from tests.integration.promo_codes.conftest import _csrf_headers
 
 pytestmark = pytest.mark.asyncio
