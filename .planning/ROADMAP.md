@@ -455,7 +455,7 @@ Plans:
 - [ ] **Phase 114: Attendance Analytics on Existing Reports (P1)** — heatmap/hour-curve/day-of-week/peak/frequency/duration FE widgets wired to existing `reports/visits` aggregate
 - [ ] **Phase 115: Live & Advanced Analytics (P1)** — cohort/anomaly/risk (new window-function queries) + LiveNow (`/reports/load/now`) + dashboard activity-feed/trainer-KPI/plans sales-chart on existing read endpoints
 - [ ] **Phase 116: Chat Inbox & Exports (P2)** — staff REST over existing messaging module (list threads, send/reply) + CSV exports over existing `csv_export.py`
-- [ ] **Phase 117: OpenAPI Handoff + Milestone Gate** — additive `openapi.json` + `schema.d.ts` regen for new v3.2 routes + `_v32Checks` forward-guard + ≥1 real-backend contract test per new domain + full gate green
+- [x] **Phase 117: OpenAPI Handoff + Milestone Gate** — additive `openapi.json` + `schema.d.ts` regen for new v3.2 routes + `_v32Checks` forward-guard + ≥1 real-backend contract test per new domain + full gate green (completed 2026-06-15)
 
 ## Phase Details
 
@@ -474,11 +474,14 @@ Plans:
 **Plans**: 3 plans, 2 waves
 Plans:
 **Wave 1** *(parallel — disjoint backend modules)*
+
 - [x] 112-01-PLAN.md — Backend refund: POST /payments/{id}/refund (by-id, partial allowed, approach-b keeps frozen unique constraint) + new exceptions + ASGITransport tests [REF-01] · wave 1
 - [x] 112-02-PLAN.md — Backend role-change: PATCH /users/{id}/role + user_role_changed LOCKED audit event + self/last-owner guards + ASGITransport tests [TEAM-01] · wave 1
 
 **Wave 2** *(blocked on 112-01 + 112-02)*
+
 - [x] 112-03-PLAN.md — FE wiring: useRefundPayment + useChangeUserRole hooks + RefundModal (Cashbox + Finance, owner-gated) + ChangeRoleModal (Settings Team) + human-verify [REF-01, TEAM-01] · wave 2
+
 **UI hint**: yes
 
 ### Phase 113: Promo Codes CRUD
@@ -493,9 +496,11 @@ Plans:
   3. The Plans page «Скидки и акции» section lists real promo codes from `GET /api/v1/promo-codes` — mock cards are replaced; empty state renders correctly.
 
 **Plans**: 3 plans
+
 - [x] 113-01-PLAN.md — Backend admin CRUD + migration 0072 + RBAC parity (permissions.py/can.ts/registry/parity test)
 - [x] 113-02-PLAN.md — Backend integration tests (RBAC 403, CRUD happy path, normalization/conflict, used_count, CSRF)
 - [x] 113-03-PLAN.md — Frontend wiring (features/promoCodes seam, PromoCodeModal, PromoCard + PlansPage section mock→real)
+
 **UI hint**: yes
 
 ### Phase 114: Attendance Analytics on Existing Reports
@@ -510,8 +515,10 @@ Plans:
   3. Owner sees a visit-duration widget (if the backend aggregate carries duration data) or a clearly labeled "coming soon" state if not — no silent mock data.
 
 **Plans**: 2 plans
+
 - [x] 114-01-PLAN.md — derive.ts pure derivation (day-of-week / peak-hour / daily-volume frequency) + Vitest edge-case coverage
 - [x] 114-02-PLAN.md — DayOfWeekCard / PeakHourCard / FrequencyCard / DurationPlaceholderCard widgets composed into LoadPage below LoadHeatmapCard
+
 **UI hint**: yes
 
 ### Phase 115: Live & Advanced Analytics
@@ -526,10 +533,12 @@ Plans:
   3. Dashboard activity feed shows real recent events (from audit log or visits/payments read endpoints); top-trainer KPIs and plans sales chart render real data — mock widgets are removed.
 
 **Plans**: 4 plans
+
 - [x] 115-01-PLAN.md — Backend: cohort / anomaly / at-risk / load-now aggregate routes (raw-SQL window functions on existing reports module; owner-only)
 - [x] 115-02-PLAN.md — Backend: ASGITransport integration tests (owner-200 + reception-403 + empty/small-sample) for the four new endpoints
 - [x] 115-03-PLAN.md — Frontend: reports Zod/hooks + CohortRetentionCard / VisitAnomalyCard / AtRiskWidget + LiveNowCard wiring on Load page
 - [x] 115-04-PLAN.md — Frontend: dashboard ActivityFeed→audit-log mapper/hook + real TopTrainers/RevenueChart verification (mock removal, ANL-04)
+
 **UI hint**: yes
 
 ### Phase 116: Chat Inbox & Exports
@@ -547,11 +556,14 @@ Plans:
 **Plans**: 3 plans, 2 waves
 Plans:
 **Wave 1** *(parallel — disjoint backend modules)*
+
 - [x] 116-01-PLAN.md — Backend staff messaging: staff_router (list/history/reply/mark-read) + repo/service/schemas reusing existing dispatch + atomic Resource.MESSAGES RBAC parity + migration 0073 staff_last_read_at + ASGITransport tests [MSG-01, MSG-02] · wave 1
 - [x] 116-02-PLAN.md — Backend payments CSV: CSV_PAYMENTS_HEADERS + fetch_payments_for_csv (raw-SQL) + payments_csv_rows (sanitized) + GET /reports/payments.csv StreamingResponse (owner-only) + ASGITransport tests (BOM/403/Cyrillic) [EXP-01] · wave 1
 
 **Wave 2** *(blocked on 116-01 + 116-02)*
+
 - [x] 116-03-PLAN.md — FE wiring: features/messages real hooks (mock removed) + MessagesPage/ThreadPane wire + owner-only composer gate + owner-gated CSV export buttons (payments Cashbox/Finance, visits Attendance) + human-verify [MSG-01, MSG-02, EXP-01, EXP-02] · wave 2
+
 **UI hint**: yes
 
 ### Phase 117: OpenAPI Handoff + Milestone Gate
@@ -568,9 +580,10 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
+
 - [x] 117-01-PLAN.md — Regenerate openapi.json + schema.d.ts additively, add _v32Checks forward-guard, drop temporary path casts
 - [x] 117-02-PLAN.md — Real-backend contract tests: ASGITransport capture per domain + FE Zod parse of captured JSON (+ payments.csv backend assertion)
-- [ ] 117-03-PLAN.md — Full milestone gate fix-to-green (backend + FE + api-client + CISO-01 parity 46) + 13-requirement trace
+- [x] 117-03-PLAN.md — Full milestone gate fix-to-green (backend + FE + api-client + CISO-01 parity 46) + 13-requirement trace
 
 ## Backlog
 
@@ -599,7 +612,7 @@ Plans:
 | 114. Attendance Analytics on Existing Reports | 2/2 | Complete   | 2026-06-15 |
 | 115. Live & Advanced Analytics | 4/4 | Complete   | 2026-06-15 |
 | 116. Chat Inbox & Exports | 3/3 | Complete   | 2026-06-15 |
-| 117. OpenAPI Handoff + Milestone Gate | 2/3 | In Progress|  |
+| 117. OpenAPI Handoff + Milestone Gate | 3/3 | Complete    | 2026-06-15 |
 
 <details>
 <summary>✅ v3.1 Admin — Fill the Gaps (Phases 107-111) — Progress (SHIPPED 2026-06-15)</summary>
