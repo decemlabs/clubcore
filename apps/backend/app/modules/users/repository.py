@@ -386,6 +386,32 @@ async def atomic_consume_invitation_token_by_id(
     return row.id if row else None
 
 
+async def update_user_role(
+    session: AsyncSession,
+    *,
+    target_user_id: UUID,
+    new_role: Role,
+) -> None:
+    """Phase 112 TEAM-01 — single UPDATE setting role on the target user row.
+
+    Defence-in-depth predicate ``deleted_at IS NULL`` mirrors the pattern in
+    ``deactivate_user`` / ``reactivate_user`` (IN-02 lineage): a tombstoned row
+    cannot have its role silently mutated by a race against a soft-delete.
+
+    NO commit / flush — service (caller) owns the transactional moment (D-03 /
+    SVC001). The UPDATE is co-transactional with the audit.emit row inserted
+    by the service.
+    """
+    await session.execute(
+        update(User)
+        .where(
+            User.id == target_user_id,
+            User.deleted_at.is_(None),
+        )
+        .values(role=new_role)
+    )
+
+
 async def count_active_owners_excluding(session: AsyncSession, *, excluded_user_id: UUID) -> int:
     """D-43-16 last-owner guard — lock candidate owner ROWS, count Python-side.
 

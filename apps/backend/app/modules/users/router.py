@@ -69,6 +69,7 @@ from app.modules.users.schemas import (
     UserCreateResponse,
     UserListItemResponse,
     UserListQuery,
+    UserRoleChangeRequest,
 )
 
 router = APIRouter(tags=["Users"])
@@ -144,6 +145,30 @@ async def reactivate_user_endpoint(
 ) -> None:
     """USERS-04 / D-43-17 — flip back to active; UPDATE permission + CSRF required."""
     await service.reactivate_user(session, actor, user_id)
+    return None
+
+
+@router.patch(
+    "/{user_id}/role",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Change a staff user's role (owner↔reception); 409 on self / last-owner demotion",
+)
+async def change_user_role_endpoint(
+    user_id: UUID,
+    payload: UserRoleChangeRequest,
+    actor: Annotated[CurrentUser, Depends(require_permission(Action.UPDATE, Resource.USERS))],
+    _csrf: Annotated[None, Depends(verify_csrf)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    """Phase 112 TEAM-01 — self + last-owner guards; UPDATE permission + CSRF required.
+
+    RBAC-04 ordering: require_permission declared BEFORE verify_csrf in the
+    signature so 401 (auth) fires before 403 (rbac/csrf). Reception gets 403
+    from require_permission because (Action.UPDATE, Resource.USERS) is in OWNER_ONLY.
+    Role change takes effect on the target's NEXT login (no session invalidation
+    per 112-CONTEXT.md effect-timing decision).
+    """
+    await service.change_user_role(session, actor, user_id, payload.role)
     return None
 
 

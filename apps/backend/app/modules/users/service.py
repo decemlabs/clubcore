@@ -52,6 +52,8 @@ from app.core.dependencies import (
     get_user_session_invalidator,
 )
 from app.core.exceptions import (
+    CannotChangeLastOwnerRoleError,
+    CannotChangeOwnRoleError,
     CannotDeactivateLastOwnerError,
     CannotDeactivateSelfError,
     CannotDeleteLastOwnerError,
@@ -324,6 +326,59 @@ async def reactivate_user(session: AsyncSession, actor: CurrentUser, target_user
         resource_id=target_user_id,
         audit_correlation_id=None,  # IN-01 — terminal event, no downstream chain
         reactivated_user_id=str(target_user_id),
+    )
+    await session.flush()
+    await session.commit()
+
+
+async def change_user_role(
+    session: AsyncSession,
+    actor: CurrentUser,
+    target_user_id: UUID,
+    new_role: Role,
+) -> None:
+    """Phase 112 TEAM-01 — self + last-owner demotion guards, then UPDATE + audit.
+
+    Effect timing: role persists immediately; the new role is reflected on the
+    target's NEXT login. No session invalidation — existing sessions keep the old
+    role until re-auth (per 112-CONTEXT.md D-112 effect-timing decision;
+    T-112-13 accepted risk).
+
+    Guard chain (mirrors deactivate_user guard order):
+      1. get_alive → 404 UserNotFoundError if None (deleted or missing).
+      2. target.id == actor.id → 409 CannotChangeOwnRoleError.
+      3. Demoting owner → non-owner: count_active_owners_excluding row-lock;
+         if count < 1 → 409 CannotChangeLastOwnerRoleError.
+         Guard fires ONLY when target is currently OWNER and new_role != OWNER,
+         so an owner→owner request never mis-fires the guard (no-op promotion).
+    """
+    target = await repository.get_alive(session, target_user_id)
+    if target is None:
+        raise UserNotFoundError("user_not_found")
+    if target.id == actor.id:
+        raise CannotChangeOwnRoleError("cannot_change_own_role")
+    if target.role == Role.OWNER and new_role != Role.OWNER:
+        # Demoting an owner — guard against stranding the gym with zero owners.
+        # count_active_owners_excluding locks candidate-owner rows (CR-02/WR-05
+        # lineage from deactivate_user) so parallel demotion attempts serialise.
+        active_owner_count = await repository.count_active_owners_excluding(
+            session, excluded_user_id=target_user_id
+        )
+        if active_owner_count < 1:
+            raise CannotChangeLastOwnerRoleError("cannot_change_last_owner_role")
+
+    await repository.update_user_role(session, target_user_id=target_user_id, new_role=new_role)
+
+    await audit.emit(
+        session,
+        "user_role_changed",
+        actor_user_id=actor.id,
+        resource_type="user",
+        resource_id=target_user_id,
+        audit_correlation_id=None,  # IN-01 — terminal event, no downstream chain
+        changed_user_id=str(target_user_id),
+        old_role=target.role.value,
+        new_role=new_role.value,
     )
     await session.flush()
     await session.commit()
