@@ -17,7 +17,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 
 from app.core.pagination import PageQuery
 from app.core.schemas import BackendSchemaBase, ResponseData
@@ -61,6 +61,17 @@ class PromoCodeCreateRequest(BackendSchemaBase):
             raise ValueError(
                 "discount_value for percentage must be <= 10000 (i.e. 100%)"
             )
+
+    @model_validator(mode="after")
+    def validate_validity_window(self) -> PromoCodeCreateRequest:
+        # WR-02: valid_until must not precede valid_from.
+        if (
+            self.valid_from is not None
+            and self.valid_until is not None
+            and self.valid_until < self.valid_from
+        ):
+            raise ValueError("valid_until must be >= valid_from")
+        return self
 
 
 class PromoCodeUpdateRequest(BackendSchemaBase):
