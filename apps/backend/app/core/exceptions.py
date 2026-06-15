@@ -472,6 +472,33 @@ class UnsupportedMediaTypeError(AppError):
     status_code = 415
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 112 payments domain errors (REF-01).
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class CannotRefundRefundError(ConflictError):
+    """Raised when the actor tries to refund a refund row itself (Phase 112 REF-01).
+
+    A refund row has subject_kind='refund'; issuing a second-order refund is
+    semantically invalid in the append-only ledger model.
+    """
+
+    code = "cannot_refund_refund"
+    status_code = 409
+
+
+class OverRefundError(ConflictError):
+    """Raised when requested amount_kopecks > original payment amount (Phase 112 REF-01).
+
+    The service compares amount_kopecks against the original sale row's
+    amount_kopecks before inserting the negative-amount refund row.
+    """
+
+    code = "over_refund"
+    status_code = 409
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Attach AppError handler to the FastAPI app. Called once during create_app()."""
 

@@ -73,3 +73,18 @@ class MembershipRefundRequest(BackendSchemaBase):
             "Refund reason (REF-06). Backend rejects extra fields including amountKopecks (REF-05)."
         ),
     )
+
+
+class PaymentRefundRequest(BackendSchemaBase):
+    """POST /api/v1/payments/{payment_id}/refund body (Phase 112 REF-01).
+
+    ``reason`` is required, min 3 chars (per D-112 decision).
+    ``amount_kopecks`` is required; must be > 0 and <= original (validated in service).
+    BackendSchemaBase sets extra='forbid' automatically.
+    """
+
+    amount_kopecks: int = Field(
+        gt=0,
+        description="Refund amount in kopecks; must not exceed original payment amount.",
+    )
+    reason: str = Field(min_length=3, max_length=500)
