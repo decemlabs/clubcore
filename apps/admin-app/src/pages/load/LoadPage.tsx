@@ -23,6 +23,10 @@ import { DateRangePicker } from '@/components/common/DateRangePicker';
 import { LoadPageHead } from './components/LoadPageHead';
 import { LoadKpis } from './components/LoadKpis';
 import { LoadHeatmapCard } from './components/LoadHeatmapCard';
+import { DayOfWeekCard } from './components/DayOfWeekCard';
+import { PeakHourCard } from './components/PeakHourCard';
+import { FrequencyCard } from './components/FrequencyCard';
+import { DurationPlaceholderCard } from './components/DurationPlaceholderCard';
 import { mskTodayISO, mskDaysAgoISO } from '@/lib/format';
 import type { Role } from '@/shared/session/types';
 
@@ -93,7 +97,17 @@ function LoadPageContent({ role }: { role: Role }) {
           className="py-24"
         />
       ) : (
-        <LoadHeatmapCard hourly={hourly} daily={daily} />
+        <>
+          <LoadHeatmapCard hourly={hourly} daily={daily} />
+          <section aria-label="Дополнительная аналитика" className="flex flex-col gap-4">
+            <DayOfWeekCard daily={daily} />
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <PeakHourCard hourly={hourly} />
+              <FrequencyCard daily={daily} />
+            </div>
+            <DurationPlaceholderCard />
+          </section>
+        </>
       )}
     </div>
   );
