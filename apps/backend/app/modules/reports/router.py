@@ -43,14 +43,20 @@ from app.modules.reports.constants import (
     CSV_VISITS_HEADERS,
 )
 from app.modules.reports.schemas import (
+    AtRiskMembersResponse,
     AuditLogItem,
     AuditLogQuery,
     ClientsReportQuery,
     ClientsReportResponse,
+    CohortRetentionQuery,
+    CohortRetentionResponse,
+    LoadNowResponse,
     RevenueReportQuery,
     RevenueReportResponse,
     TrainerUsageReportQuery,
     TrainerUsageReportResponse,
+    VisitAnomalyQuery,
+    VisitAnomalyResponse,
     VisitsReportQuery,
     VisitsReportResponse,
 )
@@ -270,6 +276,124 @@ async def get_trainers_csv(
     filename = f"trainer-usage-{query.from_date.isoformat()}-{query.to_date.isoformat()}.csv"
     rows = await service.trainer_usage_csv_rows(session, query)
     return csv_export.make_csv_streaming_response(iter(rows), CSV_TRAINER_USAGE_HEADERS, filename)
+
+
+# ---------------------------------------------------------------------------
+# Advanced analytics routes (Phase 115 ANL-02..04)
+# All owner-only via require_permission(Action.VIEW, Resource.REPORTS).
+# No try/except — AppError bubbles to _app_error_handler.
+# TODO Phase 117: regen openapi.json + schema.d.ts + _v32Checks for
+#   /reports/cohort | /reports/anomaly | /reports/at-risk | /reports/load/now
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/cohort",
+    response_model=ResponseEnvelope[CohortRetentionResponse],
+    summary="Cohort retention grid (owner-only; ANL-02)",
+    description=(
+        "Cohort = membership-start month; retention = % of cohort with ≥1 visit "
+        "per subsequent month. Query param: ?cohortMonths=6 (default 6, max 12). "
+        "Owner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403."
+    ),
+)
+async def get_cohort_report(
+    query: Annotated[CohortRetentionQuery, Depends()],
+    _actor: Annotated[CurrentUser, Depends(require_permission(Action.VIEW, Resource.REPORTS))],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[CohortRetentionResponse]:
+    """Cohort retention grid for owner analytics dashboard (ANL-02).
+
+    Returns nested { cohorts: [{ cohortMonth, label, months: [{ offset, retentionPct }] }],
+    maxOffset } — matches UI-SPEC CohortRetentionSchema.
+
+    Owner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.
+    cohort_months validated 1..12 → 422 on out-of-range.
+    No try/except — AppError bubbles to _app_error_handler.
+    """
+    result = await service.get_cohort_retention(session, query)
+    return envelope(result)
+
+
+@router.get(
+    "/anomaly",
+    response_model=ResponseEnvelope[VisitAnomalyResponse],
+    summary="Visit-anomaly daily series with >2-sigma spike/drop flags (owner-only; ANL-02)",
+    description=(
+        "Daily visit counts flagged when count deviates > 2 sigma from a trailing "
+        "14-day rolling mean. Optional date range: ?fromDate=...&toDate=... "
+        "(default: last 90 days MSK). Owner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403."
+    ),
+)
+async def get_anomaly_report(
+    query: Annotated[VisitAnomalyQuery, Depends()],
+    _actor: Annotated[CurrentUser, Depends(require_permission(Action.VIEW, Resource.REPORTS))],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[VisitAnomalyResponse]:
+    """Visit-anomaly detection for owner analytics dashboard (ANL-02).
+
+    Returns contiguous daily series with is_anomaly/direction flags.
+    Gap days (no visits) are filled with count=0; std==0 → no anomaly (guarded).
+
+    Owner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.
+    to < from → 422; range > 366 days → 422.
+    No try/except — AppError bubbles to _app_error_handler.
+    """
+    result = await service.get_visit_anomaly(session, query)
+    return envelope(result)
+
+
+@router.get(
+    "/at-risk",
+    response_model=ResponseEnvelope[AtRiskMembersResponse],
+    summary="At-risk member list: active membership + last visit >14 days ago (owner-only; ANL-02)",
+    description=(
+        "Returns clients with an active membership whose last visit was >14 days ago "
+        "(or who have never visited). Capped at 50 items. "
+        "Owner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403."
+    ),
+)
+async def get_at_risk_report(
+    _actor: Annotated[CurrentUser, Depends(require_permission(Action.VIEW, Resource.REPORTS))],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[AtRiskMembersResponse]:
+    """At-risk member list for owner churn-prevention dashboard (ANL-02).
+
+    Returns { count, items: [AtRiskMember], thresholdDays }.
+    Never-visited clients are included (lastVisitDate=null).
+
+    Owner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.
+    No try/except — AppError bubbles to _app_error_handler.
+    """
+    result = await service.get_at_risk_members(session)
+    return envelope(result)
+
+
+@router.get(
+    "/load/now",
+    response_model=ResponseEnvelope[LoadNowResponse],
+    summary="Live gym headcount — rolling-window approximation (owner-only; ANL-03)",
+    description=(
+        "Distinct clients with checked_in_at in the last 120 minutes. "
+        "Approximation: no checkout column on Visit; window ≈ average session. "
+        "Returns { count, asOf, windowMinutes }. "
+        "Owner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403."
+    ),
+)
+async def get_load_now(
+    _actor: Annotated[CurrentUser, Depends(require_permission(Action.VIEW, Resource.REPORTS))],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> ResponseEnvelope[LoadNowResponse]:
+    """Live in-gym headcount counter for the Load page (ANL-03).
+
+    Returns { count, asOf, windowMinutes } — point-in-time snapshot.
+    count = 0 when no clients checked in within the rolling window.
+
+    Owner-only: (VIEW, REPORTS) ∈ OWNER_ONLY; reception → 403.
+    No try/except — AppError bubbles to _app_error_handler.
+    """
+    result = await service.get_load_now(session)
+    return envelope(result)
 
 
 # ---------------------------------------------------------------------------

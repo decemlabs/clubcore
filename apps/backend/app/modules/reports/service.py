@@ -16,9 +16,11 @@ INVARIANTS (locked):
 from __future__ import annotations
 
 import json
+import math
+from collections import defaultdict
 from collections.abc import AsyncIterator
-from datetime import date
-from typing import cast
+from datetime import UTC, date, datetime, timedelta
+from typing import Literal, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,12 +28,29 @@ from app.core.audit import LOCKED_AUDIT_EVENTS
 from app.core.exceptions import ValidationAppError
 from app.core.pagination import PaginatedData
 from app.modules.reports import csv_export, repository
-from app.modules.reports.constants import GRAIN_MONTH, TRAINER_REPORT_REVENUE_NOTE
+from app.modules.reports.constants import (
+    ANOMALY_LOOKBACK_DAYS,
+    ANOMALY_SIGMA,
+    ANOMALY_WINDOW_DAYS,
+    AT_RISK_MAX_ITEMS,
+    AT_RISK_THRESHOLD_DAYS,
+    COHORT_MAX_MONTHS,
+    GRAIN_MONTH,
+    LOAD_NOW_WINDOW_MINUTES,
+    TRAINER_REPORT_REVENUE_NOTE,
+)
 from app.modules.reports.schemas import (
+    AtRiskMember,
+    AtRiskMembersResponse,
     AuditLogItem,
     AuditLogQuery,
     ClientsReportQuery,
     ClientsReportResponse,
+    CohortEntry,
+    CohortMonthEntry,
+    CohortRetentionQuery,
+    CohortRetentionResponse,
+    LoadNowResponse,
     RevenueBucket,
     RevenueBucketByMethod,
     RevenueBucketBySubjectKind,
@@ -40,6 +59,9 @@ from app.modules.reports.schemas import (
     TrainerUsageReportQuery,
     TrainerUsageReportResponse,
     TrainerUsageRow,
+    VisitAnomalyPoint,
+    VisitAnomalyQuery,
+    VisitAnomalyResponse,
     VisitsDailyBucket,
     VisitsHourlyBucket,
     VisitsReportQuery,
@@ -452,6 +474,307 @@ async def trainer_usage_csv_rows(
         ]
         for row in r.trainers
     ]
+
+
+# ---------------------------------------------------------------------------
+# Advanced analytics service functions (Phase 115 ANL-02..04)
+# ---------------------------------------------------------------------------
+
+# Russian month abbreviations for chart labels (MSK-pinned, no runtime locale switching).
+_RU_MONTH_ABBR: tuple[str, ...] = (
+    "янв", "фев", "мар", "апр", "май", "июн",
+    "июл", "авг", "сен", "окт", "ноя", "дек",
+)
+
+# Russian day abbreviations for anomaly chart labels.
+_RU_DAY_ABBR: tuple[str, ...] = (
+    "янв", "фев", "мар", "апр", "май", "июн",
+    "июл", "авг", "сен", "окт", "ноя", "дек",
+)
+
+
+def _ru_month_label(month_start: date) -> str:
+    """Short Russian month label for a given month-start date, e.g. 'янв 2026'."""
+    return f"{_RU_MONTH_ABBR[month_start.month - 1]} {month_start.year}"
+
+
+def _ru_day_label(d: date) -> str:
+    """Short Russian day label for a given date, e.g. '12 июн'."""
+    return f"{d.day} {_RU_DAY_ABBR[d.month - 1]}"
+
+
+def _msk_today() -> date:
+    """Current date in Europe/Moscow (UTC+3 fixed offset — no DST in MSK since 2014)."""
+    # MSK = UTC+3; use fixed-offset calculation consistent with DB 'Europe/Moscow'.
+    return (datetime.now(UTC) + timedelta(hours=3)).date()
+
+
+def _compute_anomaly(
+    daily_points: list[dict[str, int]],
+    window_days: int,
+    sigma: float,
+) -> list[dict[str, object]]:
+    """Flag anomalous days using a trailing rolling mean + population std (ANL-02).
+
+    Args:
+        daily_points: list of {'date': date, 'count': int}, contiguous, sorted ascending.
+        window_days: number of preceding days used for rolling mean/std computation.
+        sigma: deviation threshold (e.g. 2.0 → flag if |x - mean| > 2 * std).
+
+    Returns:
+        Same points enriched with is_anomaly (bool), direction (str|None), label (str).
+
+    Guards:
+        - std == 0 or nan → no anomaly (avoid div-by-zero / NaN propagation, T-115-02).
+        - Fewer than window_days preceding points → no anomaly (insufficient baseline).
+        - Empty input → [] (no error).
+
+    Pure Python — no stdlib statistics import needed; uses only arithmetic.
+    """
+    result: list[dict[str, object]] = []
+    for i, pt in enumerate(daily_points):
+        d = pt["date"]
+        count = pt["count"]
+        label = _ru_day_label(d) if isinstance(d, date) else str(d)
+
+        # Collect the trailing window (up to window_days preceding points).
+        window = daily_points[max(0, i - window_days) : i]
+        is_anomaly = False
+        direction: str | None = None
+
+        if len(window) >= window_days:
+            counts = [w["count"] for w in window]
+            mean = sum(counts) / len(counts)
+            variance = sum((c - mean) ** 2 for c in counts) / len(counts)
+            std = math.sqrt(variance)
+            # std == 0 means all window values are identical → no anomaly
+            if std > 0 and not (math.isnan(std) or math.isinf(std)):
+                deviation = abs(count - mean)
+                if deviation > sigma * std:
+                    is_anomaly = True
+                    direction = "spike" if count > mean else "drop"
+
+        result.append(
+            {
+                "date": d.isoformat() if isinstance(d, date) else str(d),
+                "count": count,
+                "is_anomaly": is_anomaly,
+                "direction": direction,
+                "label": label,
+            }
+        )
+    return result
+
+
+async def get_load_now(session: AsyncSession) -> LoadNowResponse:
+    """Live gym headcount — rolling-window approximation (ANL-03/ANL-04).
+
+    Window length: LOAD_NOW_WINDOW_MINUTES (≈ average session; no checkout column on Visit).
+    count = distinct clients with checked_in_at >= now() - window_minutes.
+
+    Read-only: NO session.commit(), NO session.flush().
+    Empty (no recent visits) → count=0.
+    """
+    count = await repository.fetch_load_now_count(session, LOAD_NOW_WINDOW_MINUTES)
+    return LoadNowResponse(
+        count=count,
+        as_of=datetime.now(UTC),
+        window_minutes=LOAD_NOW_WINDOW_MINUTES,
+    )
+
+
+async def get_at_risk_members(session: AsyncSession) -> AtRiskMembersResponse:
+    """At-risk members: active membership + last visit > AT_RISK_THRESHOLD_DAYS ago (ANL-02).
+
+    Includes never-visited clients (last_visit_date=None) — treated as maximally at-risk.
+    Items are capped at AT_RISK_MAX_ITEMS (DoS guard, T-115-05).
+    last_visit_label is pre-formatted in Russian.
+
+    Read-only: NO session.commit(), NO session.flush().
+    Empty (no active memberships or all visited recently) → count=0, items=[].
+    """
+    rows = await repository.fetch_at_risk_members(
+        session, AT_RISK_THRESHOLD_DAYS, AT_RISK_MAX_ITEMS
+    )
+    items: list[AtRiskMember] = []
+    for row in rows:
+        last_visit_date_raw = row.get("last_visit_date")
+        last_visit_date_str: str | None = None
+        if last_visit_date_raw is not None:
+            d = last_visit_date_raw
+            last_visit_date_str = d.isoformat() if isinstance(d, date) else str(d)
+
+        days = int(row["days_since_visit"])  # type: ignore[call-overload]
+
+        # Russian label: 'N дней назад' or 'не посещал' for never-visited.
+        if last_visit_date_str is None:
+            label = "не посещал"
+        else:
+            # Simple plural form for дней/день/дня
+            if days % 100 in range(11, 20):
+                day_form = "дней"
+            elif days % 10 == 1:
+                day_form = "день"
+            elif days % 10 in (2, 3, 4):
+                day_form = "дня"
+            else:
+                day_form = "дней"
+            label = f"{days} {day_form} назад"
+
+        items.append(
+            AtRiskMember(
+                client_id=str(row["client_id"]),
+                name=str(row["name"]),
+                membership_type=str(row["membership_type"]),
+                last_visit_date=last_visit_date_str,
+                days_since_visit=days,
+                last_visit_label=label,
+            )
+        )
+
+    return AtRiskMembersResponse(
+        count=len(items),
+        items=items,
+        threshold_days=AT_RISK_THRESHOLD_DAYS,
+    )
+
+
+async def get_cohort_retention(
+    session: AsyncSession,
+    query: CohortRetentionQuery,
+) -> CohortRetentionResponse:
+    """Cohort retention grid: membership-start month x months_since retention (ANL-02).
+
+    cohort_months validated 1..COHORT_MAX_MONTHS → ValidationAppError otherwise.
+    retention_pct = retained_count / cohort_size * 100 (guarded: cohort_size==0 → None).
+    labels in Russian short format (e.g. 'янв 2026').
+    max_offset = maximum months_since seen across all cohorts (0 if empty).
+
+    Read-only: NO session.commit(), NO session.flush().
+    Empty (no eligible memberships) → cohorts=[], max_offset=0.
+    """
+    if query.cohort_months < 1 or query.cohort_months > COHORT_MAX_MONTHS:
+        raise ValidationAppError(
+            f"cohort_months must be between 1 and {COHORT_MAX_MONTHS}, "
+            f"got {query.cohort_months}"
+        )
+
+    rows = await repository.fetch_cohort_retention(session, query.cohort_months)
+
+    if not rows:
+        return CohortRetentionResponse(cohorts=[], max_offset=0)
+
+    # Group flat rows into nested CohortEntry list.
+    # Key: cohort_month (date object from Postgres date_trunc result).
+    grouped: dict[date, list[dict[str, object]]] = defaultdict(list)
+    for row in rows:
+        cohort_month_raw = row["cohort_month"]
+        cohort_month: date = (
+            cohort_month_raw
+            if isinstance(cohort_month_raw, date)
+            else date.fromisoformat(str(cohort_month_raw))
+        )
+        grouped[cohort_month].append(row)
+
+    cohort_entries: list[CohortEntry] = []
+    max_offset = 0
+
+    for cohort_month in sorted(grouped.keys()):
+        month_rows = grouped[cohort_month]
+        month_entries: list[CohortMonthEntry] = []
+
+        for row in month_rows:
+            offset = int(row["months_since"])  # type: ignore[call-overload]
+            cohort_size = int(row["cohort_size"])  # type: ignore[call-overload]
+            retained_count = int(row["retained_count"])  # type: ignore[call-overload]
+
+            if offset > max_offset:
+                max_offset = offset
+
+            # Guard: cohort_size == 0 → retention_pct = None (never div-by-zero).
+            retention_pct: float | None
+            if cohort_size > 0:
+                retention_pct = round(retained_count / cohort_size * 100, 1)
+            else:
+                retention_pct = None
+
+            month_entries.append(CohortMonthEntry(offset=offset, retention_pct=retention_pct))
+
+        cohort_entries.append(
+            CohortEntry(
+                cohort_month=cohort_month.strftime("%Y-%m"),
+                label=_ru_month_label(cohort_month),
+                months=sorted(month_entries, key=lambda e: e.offset),
+            )
+        )
+
+    return CohortRetentionResponse(cohorts=cohort_entries, max_offset=max_offset)
+
+
+async def get_visit_anomaly(
+    session: AsyncSession,
+    query: VisitAnomalyQuery,
+) -> VisitAnomalyResponse:
+    """Visit-anomaly daily series with >sigma deviation flagging (ANL-02).
+
+    Date range defaults to last ANOMALY_LOOKBACK_DAYS days (MSK today) when
+    from_date/to_date are None.  Range validated: to >= from.
+    Gap-fills sparse repo output into a contiguous daily series (count=0 for missing days).
+    _compute_anomaly flags days deviating > ANOMALY_SIGMA from the trailing
+    ANOMALY_WINDOW_DAYS rolling mean.  std==0 → no anomaly (guarded).
+
+    Read-only: NO session.commit(), NO session.flush().
+    Empty range or no visits → points=[], anomaly_count=0.
+    Fewer than ANOMALY_WINDOW_DAYS preceding points → no anomalies (insufficient baseline).
+    """
+    today = _msk_today()
+
+    # Resolve date range.
+    from_date: date = query.from_date if query.from_date is not None else (
+        today - timedelta(days=ANOMALY_LOOKBACK_DAYS - 1)
+    )
+    to_date: date = query.to_date if query.to_date is not None else today
+
+    _validate_date_range(from_date, to_date)
+
+    # Fetch sparse daily counts from repository.
+    raw_rows = await repository.fetch_visit_anomaly_daily(session, from_date, to_date)
+
+    # Build lookup: date → count.
+    count_map: dict[date, int] = {}
+    for row in raw_rows:
+        d_raw = row["d"]
+        d: date = d_raw if isinstance(d_raw, date) else date.fromisoformat(str(d_raw))
+        count_map[d] = int(row["cnt"])  # type: ignore[call-overload]
+
+    # Gap-fill contiguous daily series.
+    daily: list[dict[str, int]] = []
+    cur = from_date
+    while cur <= to_date:
+        daily.append({"date": cur, "count": count_map.get(cur, 0)})  # type: ignore[dict-item]
+        cur += timedelta(days=1)
+
+    # Compute anomaly flags.
+    flagged = _compute_anomaly(daily, ANOMALY_WINDOW_DAYS, ANOMALY_SIGMA)
+    anomaly_count = sum(1 for p in flagged if p["is_anomaly"])
+
+    points = [
+        VisitAnomalyPoint(
+            date=str(p["date"]),
+            count=cast(int, p["count"]),
+            is_anomaly=bool(p["is_anomaly"]),
+            direction=cast("Literal['spike', 'drop'] | None", p["direction"]),
+            label=str(p["label"]),
+        )
+        for p in flagged
+    ]
+
+    return VisitAnomalyResponse(
+        points=points,
+        window_days=ANOMALY_WINDOW_DAYS,
+        sigma_threshold=ANOMALY_SIGMA,
+        anomaly_count=anomaly_count,
+    )
 
 
 async def audit_log_csv_rows(
