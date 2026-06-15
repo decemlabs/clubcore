@@ -764,7 +764,7 @@ function handle409(err: unknown) {
       toast.error('Нельзя деактивировать себя');
     } else if (err.code === 'cannot_deactivate_last_owner') {
       toast.error('Нельзя деактивировать единственного владельца');
-    } else if (err.code === 'already_inactive') {
+    } else if (err.code === 'user_already_inactive') {
       toast.error('Пользователь уже неактивен');
     } else {
       toast.error('Не удалось выполнить действие. Попробуйте ещё раз.');
