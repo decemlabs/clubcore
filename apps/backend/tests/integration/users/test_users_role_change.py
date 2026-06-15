@@ -34,9 +34,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit_models import AuditLog
 from app.core.models import User
 from app.core.permissions import Role
-from app.core.security import hash_password
-
-from .conftest import OWNER_EMAIL, _csrf_headers
 
 pytestmark = pytest.mark.asyncio
 
@@ -57,7 +54,9 @@ def _csrf(client: AsyncClient) -> dict[str, str]:
     return {"X-CSRF-Token": client.cookies.get("clubcore_csrf") or ""}
 
 
-async def _seed_reception(db_session: AsyncSession, *, email: str = "role-test-reception@example.com") -> User:
+async def _seed_reception(
+    db_session: AsyncSession, *, email: str = "role-test-reception@example.com"
+) -> User:
     """Insert an active reception user; return the ORM row."""
     user = User(
         email=email,
