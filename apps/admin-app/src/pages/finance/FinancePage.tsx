@@ -128,6 +128,7 @@ function FinancePageContent({ role }: { role: Role }) {
           page={page}
           pageSize={PAGE_SIZE}
           onPageChange={setPage}
+          role={role}
         />
       ) : null}
     </div>
@@ -222,11 +223,13 @@ function OnlineTab({
   page,
   pageSize,
   onPageChange,
+  role,
 }: {
   onlineQuery: OnlineQueryResult;
   page: number;
   pageSize: number;
   onPageChange: (page: number) => void;
+  role: Role;
 }) {
   const { data, isPending, isFetching, isError, refetch } = onlineQuery;
 
@@ -259,6 +262,7 @@ function OnlineTab({
       page={page}
       pageSize={pageSize}
       onPageChange={onPageChange}
+      role={role}
     />
   );
 }

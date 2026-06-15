@@ -1,5 +1,5 @@
 /**
- * CashboxPage — owner-only cash ledger (Phase 103-03).
+ * CashboxPage — owner-only cash ledger (Phase 103-03, extended Phase 112-03).
  *
  * RBAC: early-return Lock-EmptyState BEFORE any data hook fires.
  * Reception makes ZERO API calls when navigating to /cashbox.
@@ -8,7 +8,7 @@
  * KPIs: client-side sums — Приход / Возвраты / Нетто.
  * Daily totals: computeDailyTotals via useCashbox.
  * ShiftDrawer removed — no shift endpoint.
- * «Оформить возврат» removed from TransactionsCard — no /payments refund endpoint.
+ * Phase 112: «Оформить возврат» row action wired (owner-only REF-01).
  */
 import { useState } from 'react';
 import { useCashbox } from '@/features/cashbox/api';
@@ -43,6 +43,10 @@ export function CashboxPage() {
 }
 
 function CashboxPageContent() {
+  // Derive role for TransactionsCard (role prop threads down for can() gating)
+  const session = useSession();
+  const role = session.data?.role ?? 'reception';
+
   const [receivedFrom, setReceivedFrom] = useState(() => mskDaysAgoISO(29));
   const [receivedTo, setReceivedTo] = useState(() => mskTodayISO());
 
@@ -89,7 +93,7 @@ function CashboxPageContent() {
           className="py-24"
         />
       ) : (
-        <TransactionsCard items={items} dailyTotals={dailyTotals} />
+        <TransactionsCard items={items} dailyTotals={dailyTotals} role={role} />
       )}
     </div>
   );

@@ -6,24 +6,31 @@
  * Refund rows (refundOf != null):
  *   - Icon chip: bg-danger-soft text-danger with Undo2 icon
  *   - Title: «Возврат»
- *   - Amount: text-danger with «−» (U+2212) prefix, READ-ONLY
+ *   - Amount: text-danger with «−» (U+2212) prefix, READ-ONLY (no action menu)
  *
- * Non-refund rows:
+ * Non-refund rows (owner only):
  *   - Icon chip: based on subjectKind
  *   - Amount: text-fg with «+» prefix
- *
- * REMOVED: «Оформить возврат» dropdown item — there is no /payments refund
- * endpoint. Refund rows are READ-ONLY display only. The refund action lives on
- * membership/PT detail (P101). This prevents a fake/no-op refund control
- * per T-103-03-FAKEREFUND.
+ *   - Owner sees «Оформить возврат» destructive DropdownMenuItem (Phase 112 REF-01)
+ *   - Reception sees NO menu trigger (hidden entirely, not disabled — T-112-14)
  *
  * Daily-total separators are injected between date groups using DailyTotal[].
  * Negative daily totals shown in text-danger.
  */
+import { useState } from 'react';
 import { cn } from '@/lib/cn';
 import { Card, CardHeader } from '@/components/layout/Card';
 import { formatRub, formatWeekdayLongRu } from '@/lib/format';
-import { CreditCard, Undo2, User } from '@/components/icons';
+import { CreditCard, MoreHorizontal, Undo2, User } from '@/components/icons';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { RefundModal } from '@/components/modals/RefundModal';
+import { can } from '@/shared/session/can';
+import type { Role } from '@/shared/session/types';
 import type { PaymentData } from '@/features/payments/schemas';
 import type { DailyTotal } from '@/features/payments/schemas';
 
@@ -54,12 +61,25 @@ function getTitle(subjectKind: string, isRefund: boolean): string {
 // Payment row
 // ---------------------------------------------------------------------------
 
-function PaymentRow({ payment, first }: { payment: PaymentData; first: boolean }) {
+function PaymentRow({
+  payment,
+  first,
+  role,
+  onRefund,
+}: {
+  payment: PaymentData;
+  first: boolean;
+  role: Role;
+  onRefund: (payment: PaymentData) => void;
+}) {
   const isRefund = payment.refundOf != null;
   const Icon = getIcon(payment.subjectKind, isRefund);
   const chipClass = getChipClass(payment.subjectKind, isRefund);
   const title = getTitle(payment.subjectKind, isRefund);
   const absAmount = Math.abs(payment.amountKopecks);
+
+  // Owner-gated refund action — hidden entirely for reception (T-112-14)
+  const canRefund = can(role, 'refund', 'finance');
 
   return (
     <div
@@ -77,15 +97,39 @@ function PaymentRow({ payment, first }: { payment: PaymentData; first: boolean }
           {payment.method === 'cash' ? 'Наличные' : 'Онлайн'} · {payment.receivedAt.slice(11, 16)}
         </div>
       </div>
-      <div
-        className={cn(
-          'whitespace-nowrap text-right text-[14.5px] font-bold tabular-nums',
-          isRefund ? 'text-danger' : 'text-fg',
-        )}
-      >
-        {/* U+2212 minus sign for refunds, + for payments */}
-        {isRefund ? '−' : '+'}
-        {formatRub(absAmount / 100)}
+      <div className="flex items-center gap-2">
+        <div
+          className={cn(
+            'whitespace-nowrap text-right text-[14.5px] font-bold tabular-nums',
+            isRefund ? 'text-danger' : 'text-fg',
+          )}
+        >
+          {/* U+2212 minus sign for refunds, + for payments */}
+          {isRefund ? '−' : '+'}
+          {formatRub(absAmount / 100)}
+        </div>
+        {/* Owner-only row action — completely hidden for reception and for refund rows */}
+        {canRefund && !isRefund ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label="Действия"
+                className="grid size-7 place-items-center rounded-lg text-fg-subtle transition-colors hover:bg-surface-3 hover:text-fg"
+              >
+                <MoreHorizontal className="size-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() => onRefund(payment)}
+              >
+                Оформить возврат
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
       </div>
     </div>
   );
@@ -120,15 +164,20 @@ function DailyTotalRow({ total }: { total: DailyTotal }) {
 
 /**
  * Cash ledger card. Renders payments grouped by date with daily-total separator rows.
- * Refund rows are READ-ONLY — no action button (T-103-03-FAKEREFUND).
+ * Owner sees «Оформить возврат» action on non-refund rows (Phase 112 REF-01).
+ * Reception sees no action trigger (T-112-14 — hidden entirely, not disabled).
  */
 export function TransactionsCard({
   items,
   dailyTotals,
+  role,
 }: {
   items: PaymentData[];
   dailyTotals: DailyTotal[];
+  role: Role;
 }) {
+  const [refundPayment, setRefundPayment] = useState<PaymentData | null>(null);
+
   // Build a map of date → DailyTotal for O(1) lookup during render
   const totalsMap = new Map(dailyTotals.map((t) => [t.date, t]));
 
@@ -165,10 +214,23 @@ export function TransactionsCard({
               key={row.payment.id}
               payment={row.payment}
               first={row.firstOfDate}
+              role={role}
+              onRefund={setRefundPayment}
             />
           );
         })}
       </div>
+
+      {/* RefundModal — opens when owner clicks «Оформить возврат» on a payment row */}
+      {refundPayment ? (
+        <RefundModal
+          payment={refundPayment}
+          open={refundPayment !== null}
+          onOpenChange={(open) => {
+            if (!open) setRefundPayment(null);
+          }}
+        />
+      ) : null}
     </Card>
   );
 }

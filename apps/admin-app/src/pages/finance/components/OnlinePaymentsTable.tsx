@@ -1,19 +1,31 @@
 /**
- * OnlinePaymentsTable — paginated table of online payments (Phase 103-04).
+ * OnlinePaymentsTable — paginated table of online payments (Phase 103-04, extended Phase 112-03).
  *
  * Renders PaymentData rows filtered to method='online'.
  * Row anatomy mirrors TransactionsCard (cashbox) — reuses the same visual treatment:
  *   - Refund rows (refundOf != null): Undo2 icon chip bg-danger-soft, «Возврат» title,
- *     amount text-danger with «−» (U+2212) prefix — READ-ONLY.
+ *     amount text-danger with «−» (U+2212) prefix — no action menu.
  *   - Non-refund rows: CreditCard/User chip, «Абонемент»/«PT-пакет» title, «+» prefix.
+ *     Owner sees «Оформить возврат» destructive DropdownMenuItem (Phase 112 REF-01).
+ *     Reception sees NO menu trigger — hidden entirely (T-112-14).
  * Amount: formatRub(Math.abs(amountKopecks) / 100).
  * Date: formatDateRu(receivedAt) + time slice.
  */
+import { useState } from 'react';
 import { cn } from '@/lib/cn';
 import { Card, CardHeader } from '@/components/layout/Card';
 import { Pagination } from '@/components/data/Pagination';
 import { formatRub, formatDateRu } from '@/lib/format';
-import { CreditCard, Undo2, User } from '@/components/icons';
+import { CreditCard, MoreHorizontal, Undo2, User } from '@/components/icons';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { RefundModal } from '@/components/modals/RefundModal';
+import { can } from '@/shared/session/can';
+import type { Role } from '@/shared/session/types';
 import type { PaymentData } from '@/features/payments/schemas';
 
 // ---------------------------------------------------------------------------
@@ -42,7 +54,17 @@ function getTitle(subjectKind: string, isRefund: boolean): string {
 // Payment row
 // ---------------------------------------------------------------------------
 
-function PaymentRow({ payment, first }: { payment: PaymentData; first: boolean }) {
+function PaymentRow({
+  payment,
+  first,
+  role,
+  onRefund,
+}: {
+  payment: PaymentData;
+  first: boolean;
+  role: Role;
+  onRefund: (payment: PaymentData) => void;
+}) {
   const isRefund = payment.refundOf != null;
   const Icon = getIcon(payment.subjectKind, isRefund);
   const chipClass = getChipClass(payment.subjectKind, isRefund);
@@ -52,6 +74,9 @@ function PaymentRow({ payment, first }: { payment: PaymentData; first: boolean }
   // Format date: 'dd MMMM' + time from receivedAt
   const dateLabel = formatDateRu(payment.receivedAt);
   const timeLabel = payment.receivedAt.slice(11, 16);
+
+  // Owner-gated refund action — hidden entirely for reception (T-112-14)
+  const canRefund = can(role, 'refund', 'finance');
 
   return (
     <div
@@ -69,15 +94,39 @@ function PaymentRow({ payment, first }: { payment: PaymentData; first: boolean }
           Онлайн · {dateLabel} · {timeLabel}
         </div>
       </div>
-      <div
-        className={cn(
-          'whitespace-nowrap text-right text-[14.5px] font-bold tabular-nums',
-          isRefund ? 'text-danger' : 'text-fg',
-        )}
-      >
-        {/* U+2212 minus sign for refunds, + for payments */}
-        {isRefund ? '−' : '+'}
-        {formatRub(absAmount / 100)}
+      <div className="flex items-center gap-2">
+        <div
+          className={cn(
+            'whitespace-nowrap text-right text-[14.5px] font-bold tabular-nums',
+            isRefund ? 'text-danger' : 'text-fg',
+          )}
+        >
+          {/* U+2212 minus sign for refunds, + for payments */}
+          {isRefund ? '−' : '+'}
+          {formatRub(absAmount / 100)}
+        </div>
+        {/* Owner-only row action — completely hidden for reception and for refund rows */}
+        {canRefund && !isRefund ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label="Действия"
+                className="grid size-7 place-items-center rounded-lg text-fg-subtle transition-colors hover:bg-surface-3 hover:text-fg"
+              >
+                <MoreHorizontal className="size-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() => onRefund(payment)}
+              >
+                Оформить возврат
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
       </div>
     </div>
   );
@@ -93,6 +142,7 @@ export interface OnlinePaymentsTableProps {
   page: number;
   pageSize: number;
   onPageChange: (page: number) => void;
+  role: Role;
 }
 
 export function OnlinePaymentsTable({
@@ -101,8 +151,10 @@ export function OnlinePaymentsTable({
   page,
   pageSize,
   onPageChange,
+  role,
 }: OnlinePaymentsTableProps) {
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const [refundPayment, setRefundPayment] = useState<PaymentData | null>(null);
 
   return (
     <Card as="section" className="flex flex-col">
@@ -112,7 +164,13 @@ export function OnlinePaymentsTable({
       />
       <div>
         {items.map((payment, i) => (
-          <PaymentRow key={payment.id} payment={payment} first={i === 0} />
+          <PaymentRow
+            key={payment.id}
+            payment={payment}
+            first={i === 0}
+            role={role}
+            onRefund={setRefundPayment}
+          />
         ))}
       </div>
       {pageCount > 1 ? (
@@ -123,6 +181,17 @@ export function OnlinePaymentsTable({
           total={total}
           noun="платежей"
           onPageChange={onPageChange}
+        />
+      ) : null}
+
+      {/* RefundModal — opens when owner clicks «Оформить возврат» on a payment row */}
+      {refundPayment ? (
+        <RefundModal
+          payment={refundPayment}
+          open={refundPayment !== null}
+          onOpenChange={(open) => {
+            if (!open) setRefundPayment(null);
+          }}
         />
       ) : null}
     </Card>
