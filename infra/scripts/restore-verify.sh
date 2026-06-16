@@ -45,7 +45,6 @@
 set -euo pipefail
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo "/app")"
 LIVE_CLUSTER_NAME="${LIVE_CLUSTER_NAME:-clubcore-postgres}"
 LIVE_NAMESPACE="${LIVE_NAMESPACE:-default}"
 SCRATCH_NAMESPACE="clubcore-restore-verify-scratch"
