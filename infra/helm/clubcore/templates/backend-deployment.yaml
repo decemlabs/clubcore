@@ -25,8 +25,12 @@ Image:
   Shared backend image from plan 01: {{ .Values.image.repository }}:{{ .Values.image.tag }}
   Command: uvicorn factory (prod — NO --reload).
 
-Security:
-  securityContext stub (non-root) present.  Full SEC-03 hardening is Phase 119 scope.
+Security (SEC-03 Phase 119 hardening):
+  Pod-level:   runAsNonRoot + runAsUser:1000 + seccompProfile:RuntimeDefault
+  Container:   allowPrivilegeEscalation:false + readOnlyRootFilesystem:true + drop ALL caps
+  initContainer (alembic-check): same container-level hardening
+  emptyDir mounts:
+    /tmp — uvicorn writes temp socket files + asyncpg/asyncio temp files; Python stdlib uses /tmp
 */}}
 apiVersion: apps/v1
 kind: Deployment
@@ -54,11 +58,23 @@ spec:
         {{- include "clubcore.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: backend
     spec:
-      # Security context stub — full SEC-03 hardening (readOnlyRootFilesystem,
-      # drop ALL capabilities) is Phase 119 scope.
+      # Pod-level securityContext — SEC-03 hardened (Phase 119).
+      # runAsNonRoot + runAsUser enforce non-root at pod level.
+      # seccompProfile RuntimeDefault restricts the syscall surface to a safe default set.
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+
+      # emptyDir volumes for writable scratch paths.
+      # readOnlyRootFilesystem: true (on every container) means NO writes to the container
+      # filesystem — all writable paths must be explicit emptyDir mounts.
+      volumes:
+        # /tmp — uvicorn uses temp socket files; asyncpg/asyncio use temp files;
+        # Python stdlib (tempfile) defaults to /tmp.  Required for SEC-03 read-only root.
+        - name: tmp
+          emptyDir: {}
 
       # -------------------------------------------------------------------
       # initContainer: alembic-check (P4 belt-and-suspenders)
@@ -89,9 +105,16 @@ spec:
                 name: {{ include "clubcore.fullname" . }}-config
             - secretRef:
                 name: {{ include "clubcore.fullname" . }}-app-secret
+          # Container-level securityContext — SEC-03 hardened (Phase 119).
+          # Rendered via clubcore.hardenedSecurityContext helper (_helpers.tpl).
+          # Effective fields: allowPrivilegeEscalation: false, readOnlyRootFilesystem: true,
+          # capabilities: { drop: ["ALL"] }, runAsNonRoot: true, runAsUser: 1000
           securityContext:
-            runAsNonRoot: true
-            runAsUser: 1000
+            {{- include "clubcore.hardenedSecurityContext" (dict "runAsUser" 1000) | nindent 12 }}
+          volumeMounts:
+            # /tmp — alembic may write temp files during schema introspection
+            - name: tmp
+              mountPath: /tmp
           resources:
             requests:
               cpu: "50m"
@@ -175,9 +198,19 @@ spec:
             successThreshold: 1
             timeoutSeconds: {{ .Values.backend.probes.readiness.timeoutSeconds | default 3 }}
 
+          # Container-level securityContext — SEC-03 hardened (Phase 119).
+          # Rendered via clubcore.hardenedSecurityContext helper (_helpers.tpl).
+          # Effective fields: allowPrivilegeEscalation: false, readOnlyRootFilesystem: true,
+          # capabilities: { drop: ["ALL"] }, runAsNonRoot: true, runAsUser: 1000
           securityContext:
-            runAsNonRoot: true
-            runAsUser: 1000
+            {{- include "clubcore.hardenedSecurityContext" (dict "runAsUser" 1000) | nindent 12 }}
+
+          volumeMounts:
+            # /tmp — uvicorn writes temp socket/PID files; asyncpg/asyncio use temp files;
+            # Python stdlib tempfile.gettempdir() resolves to /tmp.
+            # Required because readOnlyRootFilesystem: true blocks all other writes.
+            - name: tmp
+              mountPath: /tmp
 
           # Resource requests + limits — single-node tuned (modest for k3d dev).
           # Override for production sizing: --set backend.resources.limits.memory=1Gi etc.

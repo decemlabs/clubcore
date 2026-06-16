@@ -36,9 +36,11 @@ Postgres wait initContainer:
   (CNPG operator reconcile loop has latency on fresh install); the initContainer
   polls until the service is reachable before running alembic upgrade head.
 
-Security context:
-  runAsNonRoot: true stub — full SEC-03 securityContext hardening is Phase 119 scope.
-  runAsUser: 1000 (matches the "app" user created in backend.Dockerfile).
+Security context (SEC-03 Phase 119 hardening):
+  Pod-level:  runAsNonRoot + runAsUser:1000 + seccompProfile:RuntimeDefault
+  Containers: allowPrivilegeEscalation:false + readOnlyRootFilesystem:true + drop ALL caps
+              (both wait-for-postgres initContainer AND alembic-migrate main container)
+  emptyDir:   /tmp — alembic + asyncpg + Python stdlib write temp files; required for read-only root
 */}}
 apiVersion: batch/v1
 kind: Job
@@ -83,11 +85,19 @@ spec:
       # Never restart the pod — Job-level backoffLimit: 0 controls failure handling.
       restartPolicy: Never
 
-      # Security context stub (non-root user from backend.Dockerfile USER app).
-      # Full SEC-03 pod-level securityContext hardening is Phase 119 scope.
+      # Pod-level securityContext — SEC-03 hardened (Phase 119).
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+
+      # emptyDir volumes for writable scratch paths (readOnlyRootFilesystem: true).
+      volumes:
+        # /tmp — alembic upgrade head + asyncpg + Python stdlib (tempfile) write temp files here;
+        # required because readOnlyRootFilesystem: true blocks all other writes.
+        - name: tmp
+          emptyDir: {}
 
       # -----------------------------------------------------------------------
       # initContainer: wait for Postgres -rw service to accept connections
@@ -132,9 +142,16 @@ spec:
               sys.exit(1)
               "
               echo "Postgres is ready — proceeding to alembic upgrade head"
+          # Container-level securityContext — SEC-03 hardened (Phase 119).
+          # Rendered via clubcore.hardenedSecurityContext helper (_helpers.tpl).
+          # Effective fields: allowPrivilegeEscalation: false, readOnlyRootFilesystem: true,
+          # capabilities: { drop: ["ALL"] }, runAsNonRoot: true, runAsUser: 1000
           securityContext:
-            runAsNonRoot: true
-            runAsUser: 1000
+            {{- include "clubcore.hardenedSecurityContext" (dict "runAsUser" 1000) | nindent 12 }}
+          volumeMounts:
+            # /tmp — Python subprocess + socket operations may write temp files
+            - name: tmp
+              mountPath: /tmp
           resources:
             requests:
               cpu: "50m"
@@ -169,9 +186,18 @@ spec:
             - secretRef:
                 name: {{ include "clubcore.fullname" . }}-app-secret
 
+          # Container-level securityContext — SEC-03 hardened (Phase 119).
+          # Rendered via clubcore.hardenedSecurityContext helper (_helpers.tpl).
+          # Effective fields: allowPrivilegeEscalation: false, readOnlyRootFilesystem: true,
+          # capabilities: { drop: ["ALL"] }, runAsNonRoot: true, runAsUser: 1000
           securityContext:
-            runAsNonRoot: true
-            runAsUser: 1000
+            {{- include "clubcore.hardenedSecurityContext" (dict "runAsUser" 1000) | nindent 12 }}
+
+          volumeMounts:
+            # /tmp — alembic upgrade head + asyncpg write temp files here;
+            # required because readOnlyRootFilesystem: true blocks all other writes.
+            - name: tmp
+              mountPath: /tmp
 
           resources:
             requests:

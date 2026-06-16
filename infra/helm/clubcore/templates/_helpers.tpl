@@ -62,6 +62,28 @@ Create the name of the service account to use.
 {{- end }}
 
 {{/*
+SEC-03 hardened container securityContext.
+Applied to every app container and initContainer (backend, arq-worker, telegram-bot, migrate).
+Implements ASVS-grade least privilege:
+  - runAsNonRoot: true       — container must not run as UID 0
+  - runAsUser: 1000          — matches the "app" user created in backend.Dockerfile (override per-workload if needed)
+  - allowPrivilegeEscalation: false — child processes cannot gain more privileges than parent
+  - readOnlyRootFilesystem: true    — no writes to the root filesystem (writable paths via emptyDir)
+  - capabilities.drop: ["ALL"]     — drops ALL Linux capabilities (no NET_RAW, SYS_PTRACE, etc.)
+Usage: {{ include "clubcore.hardenedSecurityContext" (dict "runAsUser" 1000) }}
+Pass different runAsUser per workload if the image uses a non-1000 UID.
+*/}}
+{{- define "clubcore.hardenedSecurityContext" -}}
+runAsNonRoot: true
+runAsUser: {{ .runAsUser | default 1000 }}
+allowPrivilegeEscalation: false
+readOnlyRootFilesystem: true
+capabilities:
+  drop:
+    - ALL
+{{- end }}
+
+{{/*
 StorageClass name — used by Postgres PVC, Redis PVC, SeaweedFS PVCs.
 Encodes the DATA-04 / P1 invariant: always use the Retain StorageClass.
 */}}

@@ -354,6 +354,27 @@ telegramBot:
       memory: "256Mi"
 
 # ---------------------------------------------------------------------------
+# securityContext defaults — SEC-03 hardening (Phase 119)
+# These values document the hardened defaults used by the clubcore.hardenedSecurityContext
+# helper in _helpers.tpl.  They are NOT used as template values directly — the helper
+# hard-codes the values to prevent accidental loosening via values override.
+# This block exists for documentation + operator awareness only.
+# ---------------------------------------------------------------------------
+securityContext:
+  # Hard-coded in clubcore.hardenedSecurityContext helper:
+  #   allowPrivilegeEscalation: false
+  #   readOnlyRootFilesystem: true
+  #   capabilities: { drop: [ALL] }
+  # Pod-level addition (in each Deployment/Job spec.template.spec.securityContext):
+  #   seccompProfile: { type: RuntimeDefault }
+  # runAsUser per workload:
+  #   backend / arq-worker / telegram-bot / migrate: 1000 (backend.Dockerfile USER app)
+  #   admin-app / client-pwa: 101 (nginx:1.27-alpine nginx user — see D-119-02-UID)
+  # emptyDir scratch mounts (all app workloads):
+  #   /tmp — required because readOnlyRootFilesystem: true blocks container fs writes
+  _docs: "SEC-03 hardening applied to all app workloads in Phase 119 plan 02"
+
+# ---------------------------------------------------------------------------
 # admin-app Deployment — NET-04 (IMG-03 gap close)
 # Static nginx frontend workload; port 8080 (non-root nginx user, UID 101).
 # replicas: 1 — D-V40-REPLICAS constraint; increase only after adding a proper

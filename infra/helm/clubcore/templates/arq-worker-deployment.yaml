@@ -36,8 +36,10 @@ Environment:
            + secretRef clubcore-app-secret (DATABASE_URL, etc.)
   TZ=UTC arrives via the ConfigMap — P9 invariant.
 
-Security:
-  securityContext stub (non-root) present.  Full SEC-03 hardening is Phase 119 scope.
+Security (SEC-03 Phase 119 hardening):
+  Pod-level:  runAsNonRoot + runAsUser:1000 + seccompProfile:RuntimeDefault
+  Container:  allowPrivilegeEscalation:false + readOnlyRootFilesystem:true + drop ALL caps
+  emptyDir:   /tmp — ARQ worker + asyncpg + Python stdlib writes to /tmp
 
 Liveness:
   No HTTP /healthz probe (arq-worker is not an HTTP server).
@@ -78,10 +80,18 @@ spec:
         {{- include "clubcore.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: arq-worker
     spec:
-      # Security context stub — full SEC-03 hardening is Phase 119 scope.
+      # Pod-level securityContext — SEC-03 hardened (Phase 119).
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+
+      # emptyDir volumes for writable scratch paths (readOnlyRootFilesystem: true).
+      volumes:
+        # /tmp — ARQ worker + asyncpg + Python stdlib write temp files here
+        - name: tmp
+          emptyDir: {}
 
       containers:
         - name: arq-worker
@@ -102,9 +112,17 @@ spec:
             - secretRef:
                 name: {{ include "clubcore.fullname" . }}-app-secret
 
+          # Container-level securityContext — SEC-03 hardened (Phase 119).
+          # Rendered via clubcore.hardenedSecurityContext helper (_helpers.tpl).
+          # Effective fields: allowPrivilegeEscalation: false, readOnlyRootFilesystem: true,
+          # capabilities: { drop: ["ALL"] }, runAsNonRoot: true, runAsUser: 1000
           securityContext:
-            runAsNonRoot: true
-            runAsUser: 1000
+            {{- include "clubcore.hardenedSecurityContext" (dict "runAsUser" 1000) | nindent 12 }}
+
+          volumeMounts:
+            # /tmp — ARQ worker process + asyncpg + Python stdlib (tempfile) write here
+            - name: tmp
+              mountPath: /tmp
 
           resources:
             requests:
