@@ -76,8 +76,10 @@ metadata:
     app.kubernetes.io/component: backup-seaweedfs
   annotations:
     clubcore.io/requirement: "BAK-02"
-    # OBS-05 linkage: Job failure surfaces as kube_job_status_failed metric.
-    clubcore.io/alert-linkage: "RestoreVerifyJobFailed (alertmanager-rules.yaml)"
+    # WR-05: Job failure surfaces as kube_job_failed and is matched by the
+    # KubeBackupJobFailed rule (the RestoreVerifyJobFailed regex does NOT match
+    # backup-seaweedfs, so the linkage must point at KubeBackupJobFailed).
+    clubcore.io/alert-linkage: "KubeBackupJobFailed (alertmanager-rules.yaml)"
 spec:
   # Daily schedule: 04:00 UTC (after Redis backup at 03:00)
   schedule: {{ .Values.backup.seaweedfs.schedule | default "0 4 * * *" | quote }}

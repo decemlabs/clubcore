@@ -30,8 +30,9 @@ Image: clubcore/backup (CR-02) — a purpose-built image that PRE-BAKES redis-cl
   tagged with the git-short-SHA by infra/scripts/build-images.sh; pinned via the
   shared global image.tag and backup.image.repository in values.yaml.
 
-OBS-05 alert linkage: a Job failure (exit non-zero) surfaces as kube_job_status_failed
-  which the RestoreVerifyJobFailed alert in alertmanager-rules.yaml watches.
+OBS-05 alert linkage (WR-05): a Job failure (exit non-zero) surfaces as kube_job_failed
+  which the KubeBackupJobFailed rule in alertmanager-rules.yaml watches (its regex
+  matches backup-redis|backup-seaweedfs|restore-verify, namespace-agnostic).
   A stale backup also fires PostgresNoBackupIn25h (CNPG metric path).
 */}}
 {{- if .Values.backup.enabled }}
@@ -44,8 +45,10 @@ metadata:
     app.kubernetes.io/component: backup-redis
   annotations:
     clubcore.io/requirement: "BAK-02"
-    # OBS-05 linkage: Job failure surfaces as kube_job_status_failed metric.
-    clubcore.io/alert-linkage: "RestoreVerifyJobFailed (alertmanager-rules.yaml)"
+    # WR-05: Job failure surfaces as kube_job_failed and is matched by the
+    # KubeBackupJobFailed rule (the RestoreVerifyJobFailed regex does NOT match
+    # backup-redis, so the linkage must point at KubeBackupJobFailed).
+    clubcore.io/alert-linkage: "KubeBackupJobFailed (alertmanager-rules.yaml)"
 spec:
   # Weekly schedule: Sunday 03:00 UTC (after CNPG daily backup at 02:00)
   schedule: {{ .Values.backup.redis.schedule | default "0 3 * * 0" | quote }}

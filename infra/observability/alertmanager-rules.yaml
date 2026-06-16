@@ -126,28 +126,40 @@ spec:
         # timestamp. BAK-01 (Phase 120 Plan 03) adds CNPG WAL archiving to SeaweedFS;
         # the cnpg-collector sidecar in every CNPG Cluster pod exposes this metric.
         # Metric: cnpg_collector_last_available_backup_timestamp (Unix timestamp)
+        # WR-06: include an absent() companion so a MISSING metric (no backup yet,
+        # collector down, or a metric-name mismatch) also fires — a missing-backup
+        # condition that produces no samples must NOT silently fire nothing.
+        # NOTE: confirm the exact metric name + unit against the installed CNPG
+        # collector version (1.27) before relying on this; CNPG has renamed backup
+        # metrics across releases. Verify with:
+        #   kubectl exec -n <ns> <cnpg-pod> -- curl -s localhost:9187/metrics | grep backup
         - alert: PostgresNoBackupIn25h
           expr: |
             (time() - cnpg_collector_last_available_backup_timestamp) > (25 * 3600)
+            or absent(cnpg_collector_last_available_backup_timestamp)
           for: 30m
           labels:
             severity: critical
           annotations:
-            summary: "No PostgreSQL backup in the last 25 hours"
+            summary: "No PostgreSQL backup in the last 25 hours (or backup metric missing)"
             description: |
               CNPG cluster {{ $labels.cluster }} has not completed a successful
-              backup in more than 25 hours. Last backup was
-              {{ $value | humanizeDuration }} ago.
+              backup in more than 25 hours, OR the backup-timestamp metric is absent
+              (collector down / no backup yet / metric renamed in this CNPG version).
               Check CNPG ScheduledBackup status and SeaweedFS S3 connectivity
-              (BAK-01 barmanObjectStore — Phase 120 Plan 03).
+              (BAK-01 barmanObjectStore — Phase 120 Plan 03), and confirm the
+              cnpg_collector_last_available_backup_timestamp metric exists.
 
         # ── Alert 6: Restore Verification Job Failed ──────────────────────────
         # BAK-04: the restore-verify CronJob (infra/helm/clubcore/templates/restore-verify-cronjob.yaml)
         # runs weekly and exits non-zero on failure. kube_job_failed surfaces that.
+        # WR-05: do NOT hard-code namespace="default" — the chart deploys into the
+        # Helm release namespace, which is variable. Matching on job_name alone keeps
+        # the alert firing regardless of install namespace ($labels.namespace is still
+        # surfaced in the annotation for triage).
         - alert: RestoreVerifyJobFailed
           expr: |
             kube_job_failed{
-              namespace="default",
               job_name=~".*restore-verify.*"
             } > 0
           for: 10m
@@ -156,9 +168,32 @@ spec:
           annotations:
             summary: "Weekly PostgreSQL restore verification job failed"
             description: |
-              The BAK-04 restore-verify CronJob {{ $labels.job_name }} has failed.
-              This means the CNPG backup may NOT be restorable.
-              Investigate immediately: kubectl logs -n default -l job-name={{ $labels.job_name }}
+              The BAK-04 restore-verify CronJob {{ $labels.job_name }} (namespace
+              {{ $labels.namespace }}) has failed. This means the CNPG backup may NOT
+              be restorable.
+              Investigate immediately: kubectl logs -n {{ $labels.namespace }} -l job-name={{ $labels.job_name }}
+              See runbook: infra/runbooks/restore.md
+
+        # ── Alert 7: Backup Job Failed (Redis RDB / SeaweedFS mirror) ─────────
+        # WR-05: the RestoreVerifyJobFailed regex (.*restore-verify.*) does NOT match
+        # the *-backup-redis / *-backup-seaweedfs Jobs, so BAK-02 backup failures were
+        # silently unmonitored despite the documented OBS-05 linkage. This rule covers
+        # all three backup jobs (and is namespace-agnostic, like Alert 6).
+        - alert: KubeBackupJobFailed
+          expr: |
+            kube_job_failed{
+              job_name=~".*(backup-redis|backup-seaweedfs|restore-verify).*"
+            } > 0
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "clubcore backup job failed"
+            description: |
+              Backup Job {{ $labels.job_name }} (namespace {{ $labels.namespace }})
+              has failed. A failed Redis RDB / SeaweedFS mirror / restore-verify Job
+              means a backup or its verification did not complete.
+              Investigate: kubectl logs -n {{ $labels.namespace }} -l job-name={{ $labels.job_name }}
               See runbook: infra/runbooks/restore.md
 
 ---
