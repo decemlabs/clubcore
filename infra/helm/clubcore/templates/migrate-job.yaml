@@ -67,11 +67,16 @@ spec:
   # ---------------------------------------------------------------------------
   # P4 architectural invariants — DO NOT CHANGE:
   # ---------------------------------------------------------------------------
-  # backoffLimit: 0 — no silent retry of a failed/partial migration.
-  # A failed migration must surface immediately (Job status Failed) so the
-  # operator knows to inspect logs before the next deploy attempt. A retry
-  # could apply migration steps twice on a partially-completed state.
-  backoffLimit: 0
+  # backoffLimit: 3 — bounded retry (v4.0 live-deploy fix).
+  # Rationale: on a FRESH install the migrate Job races CNPG bootstrap — the -rw service
+  # endpoint can flap while the primary is being promoted, so alembic's connect intermittently
+  # hits ConnectionRefused BEFORE any migration runs. With backoffLimit:0 that one transient
+  # network race permanently fails the Job (verified live). A small retry rides out the race.
+  # SAFE w.r.t. the original P4 "no double-apply" concern: alembic runs on Postgres with
+  # transactional DDL — a failed `upgrade` rolls back, the version is NOT stamped, and a retry
+  # resumes from the last COMMITTED revision (no step is applied twice). Migrations that use
+  # genuinely non-transactional ops (e.g. CREATE INDEX CONCURRENTLY) must be written idempotent.
+  backoffLimit: 3
 
   # activeDeadlineSeconds — hard timeout for the entire Job (initContainer + main container).
   # A hung migration (e.g., waiting for a lock that never clears) must not block
