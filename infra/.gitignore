@@ -1,0 +1,9 @@
+# Helm vendored dependencies — re-fetched via `helm dependency build`
+helm/clubcore/charts/*.tgz
+helm/clubcore/Chart.lock
+
+# Terraform local provider cache + lock + state (backend "local")
+terraform/**/.terraform/
+terraform/**/.terraform.lock.hcl
+terraform/**/*.tfstate
+terraform/**/*.tfstate.*

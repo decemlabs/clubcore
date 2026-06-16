@@ -43,7 +43,9 @@ provider "kubernetes" {
 }
 
 provider "helm" {
-  kubernetes {
+  # hashicorp/helm v3.x: `kubernetes` is an ATTRIBUTE (object), not a nested block
+  # (v2.x used `kubernetes { ... }`). v3 requires the `=` assignment form.
+  kubernetes = {
     config_path    = var.kubeconfig_path
     config_context = var.kube_context
   }
