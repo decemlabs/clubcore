@@ -168,6 +168,17 @@ spec:
                   # transient empty LASTSAVE (network blip) would otherwise run
                   # `[ "" -gt N ]` and, under `set -e`, abort the whole job.
                   BEFORE_SAVE=$(redis-cli -h "${REDIS_HOST}" -p "${REDIS_PORT}" LASTSAVE)
+                  # WR-01: BEFORE_SAVE feeds the same `-gt` comparison as CURRENT_SAVE,
+                  # so it must be numeric-guarded too. A redis instance that has never
+                  # saved (or a transient empty LASTSAVE) yields "" and `[ N -gt "" ]`
+                  # aborts under `set -e`. Default to 0 (BGSAVE always advances LASTSAVE
+                  # past 0) so the wait loop stays robust on a never-saved instance.
+                  case "${BEFORE_SAVE}" in
+                    ''|*[!0-9]*)
+                      echo "[backup-redis] WARN: initial LASTSAVE non-numeric ('${BEFORE_SAVE}') — defaulting BEFORE_SAVE=0" >&2
+                      BEFORE_SAVE=0
+                      ;;
+                  esac
                   echo "[1/4] Waiting for BGSAVE to complete (LASTSAVE was ${BEFORE_SAVE})..."
                   BGSAVE_DEADLINE=$(( $(date -u +%s) + 60 ))
                   BGSAVE_DONE=0
