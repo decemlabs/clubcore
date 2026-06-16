@@ -108,7 +108,14 @@ spec:
             - |
               set -e
               echo "Waiting for Postgres at {{ include "clubcore.fullname" . }}-postgres-rw:5432 ..."
-              until python3 -c "
+              # WR-05: run the Python wait ONCE. Its own 240s deadline governs the
+              # retry loop; on timeout it exits non-zero and `set -e` fails the
+              # initContainer (and thus the Job). The Job's activeDeadlineSeconds
+              # (300s) is the outer backstop — comfortably above the 240s inner
+              # deadline so the timeout message reaches the logs before the force-kill.
+              # No outer shell `until` loop: that would retry the whole 240s wait
+              # forever on failure and was dead code on the success path.
+              python3 -c "
               import socket, sys, time
               host, port = '{{ include "clubcore.fullname" . }}-postgres-rw', 5432
               deadline = time.time() + 240
@@ -123,7 +130,7 @@ spec:
                       time.sleep(2)
               print(f'Timed out waiting for Postgres at {host}:{port}', file=sys.stderr)
               sys.exit(1)
-              "; do sleep 1; done
+              "
               echo "Postgres is ready — proceeding to alembic upgrade head"
           securityContext:
             runAsNonRoot: true
