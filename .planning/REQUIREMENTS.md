@@ -79,7 +79,7 @@
 - [ ] **OPS-01**: Root-level `Makefile` — `build`, `scan`, `push`, `tf-validate`, `tf-plan`, `helm-lint`, `helm-validate`, `deploy`, `smoke`, `rollback`, `logs`, `psql`, `backup`, `up`, `down` (без внешнего runner'а/registry — local k3d registry)
 - [ ] **OPS-02**: `make up` pipeline green против k3d (build → scan → tf-validate → helm-lint → deploy → smoke)
 - [ ] **OPS-03**: `make smoke` проверяет «Looks-Done-But-Isn't» checklist: `/healthz` 200, migrate Job completed, Redis AOF on, `TZ=UTC` на всех подах, DNS-резолв из каждого пода, WebSocket upgrade через ingress, SPA fallback 200, PWA SW Cache clean
-- [ ] **OPS-04**: Production runbook (`infra/runbooks/production.md`) — топология, prerequisites, deploy-шаги, операции (backup/restore/rollback/scale), troubleshooting + явный **operator-pending boundary** список
+- [x] **OPS-04**: Production runbook (`infra/runbooks/production.md`) — топология, prerequisites, deploy-шаги, операции (backup/restore/rollback/scale), troubleshooting + явный **operator-pending boundary** список
 
 ---
 
@@ -178,7 +178,7 @@
 | OPS-01 | Phase 121 | Pending |
 | OPS-02 | Phase 121 | Pending |
 | OPS-03 | Phase 121 | Pending |
-| OPS-04 | Phase 121 | Pending |
+| OPS-04 | Phase 121 | Complete |
 
 **Coverage:**
 - v4.0 requirements: 39 total (IMG 4 · DATA 4 · APP 5 · NET 4 · SEC 6 · IAC 3 · OBS 5 · BAK 4 · OPS 4)

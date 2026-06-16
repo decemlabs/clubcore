@@ -569,7 +569,7 @@ Plans:
 Plans:
 
 - [x] 121-01-PLAN.md — Root Makefile all OPS-01 targets (wrap infra/scripts) + composed `make up` (OPS-02) + infra/scripts/smoke.sh 8-check Looks-Done-But-Isn't smoke (OPS-03); live make up/smoke operator-pending [OPS-01, OPS-02, OPS-03] · wave 1
-- [ ] 121-02-PLAN.md — infra/runbooks/production.md: topology + prerequisites + deploy + operations + troubleshooting + explicit operator-pending boundary list (23 UAT items aggregated, SEC-02 + BAK-03 HARD gates flagged) [OPS-04] · wave 2
+- [x] 121-02-PLAN.md — infra/runbooks/production.md: topology + prerequisites + deploy + operations + troubleshooting + explicit operator-pending boundary list (23 UAT items aggregated, SEC-02 + BAK-03 HARD gates flagged) [OPS-04] · wave 2
 
 ## Backlog
 
@@ -596,7 +596,7 @@ Plans:
 | 118. Container Images + Helm Chart (Core Stack) | v4.0 | 4/4 | Complete   | 2026-06-16 |
 | 119. Networking, Security + CSRF Rename | v4.0 | 3/3 | Complete   | 2026-06-16 |
 | 120. IaC, Observability + Backup | v4.0 | 3/3 | Complete   | 2026-06-16 |
-| 121. Makefile CI/CD + Full Smoke + Runbooks | v4.0 | 1/2 | In Progress|  |
+| 121. Makefile CI/CD + Full Smoke + Runbooks | v4.0 | 2/2 | Complete   | 2026-06-16 |
 
 <details>
 <summary>✅ v3.2 Admin — Wire the Rest (Phases 112-117) — Progress (SHIPPED 2026-06-16)</summary>
