@@ -1,0 +1,86 @@
+{{/*
+CNPG Cluster CR — DATA-01 / DATA-04 / P1 invariant
+
+Constraints:
+  - apiVersion: postgresql.cnpg.io/v1 (CNPG operator required — NOT Bitnami)
+  - instances: 1 (D-V40-BITNAMI-PAYWALLED / DATA-01 — single node, architectural constant)
+  - imageName: ghcr.io/cloudnative-pg/postgresql (NO Bitnami — D-V40-BITNAMI-PAYWALLED)
+  - storage.storageClass: clubcore-retain (reclaimPolicy:Retain — DATA-04 / P1)
+  - spec.affinity.nodeSelector: pins pod to avoid PVC node-affinity stranding (P1)
+  - NO spec.backup block — Phase 120 scope (BAK-01: CNPG WAL archiving to SeaweedFS S3)
+  - enableSuperuserAccess: false (least privilege — T-118-07)
+
+CNPG operator install (prerequisite — NOT part of this chart):
+  kubectl apply -f https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.27/releases/cnpg-1.27.0.yaml
+
+Service DNS after deploy:
+  Read-write: {{ include "clubcore.fullname" . }}-postgres-rw:5432
+  Read-only:  {{ include "clubcore.fullname" . }}-postgres-ro:5432
+  (CNPG creates these services automatically from the Cluster name)
+
+The backend DATABASE_URL (plan 03 ConfigMap):
+  postgresql+asyncpg://app:<password>@{{ include "clubcore.fullname" . }}-postgres-rw:5432/clubcore
+*/}}
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ include "clubcore.fullname" . }}-postgres
+  labels:
+    {{- include "clubcore.labels" . | nindent 4 }}
+spec:
+  # DATA-01 / D-V40-BITNAMI-PAYWALLED: instances=1 is an architectural constant for v4.0.
+  # Single bare-metal node; resource contention precludes HA replicas.
+  instances: {{ .Values.postgres.instances | default 1 }}
+
+  # ghcr.io/cloudnative-pg/postgresql ONLY — NO Bitnami (D-V40-BITNAMI-PAYWALLED).
+  # T-118-06: CNPG images from ghcr.io/cloudnative-pg — supply-chain decision.
+  imageName: {{ .Values.postgres.imageName | quote }}
+
+  # Least privilege — no direct superuser access (T-118-07)
+  enableSuperuserAccess: {{ .Values.postgres.enableSuperuserAccess | default false }}
+
+  # Bootstrap: create the clubcore database with owner=app on first install.
+  # Credentials come from the clubcore-postgres-app Secret (kubernetes.io/basic-auth).
+  # Connection used by migrate Job + backend Deployment (plan 03 manifests).
+  bootstrap:
+    initdb:
+      database: {{ .Values.postgres.database | default "clubcore" }}
+      owner: {{ .Values.postgres.owner | default "app" }}
+      secret:
+        name: {{ .Values.postgres.appSecretName | default "clubcore-postgres-app" }}
+
+  # Storage on the Retain StorageClass (DATA-04 / P1 — anti data-loss invariant)
+  storage:
+    size: {{ .Values.postgres.storage.size | default "10Gi" | quote }}
+    storageClass: {{ include "clubcore.storageClassName" . }}
+
+  # DATA-04 / P1: nodeSelector pins the Postgres pod to a specific node so the
+  # PVC's node-affinity (set by local-path provisioner) never strands the volume.
+  # Default: k3d single-node label kubernetes.io/hostname=k3d-clubcore-server-0.
+  # Override for production: --set postgres.nodeSelector."kubernetes\.io/hostname"=<node>
+  affinity:
+    nodeSelector:
+      {{- toYaml .Values.postgres.nodeSelector | nindent 6 }}
+
+  # Resource requests and limits — single-node tuned (modest for k3d dev)
+  resources:
+    requests:
+      cpu: {{ .Values.postgres.resources.requests.cpu | default "250m" | quote }}
+      memory: {{ .Values.postgres.resources.requests.memory | default "256Mi" | quote }}
+    limits:
+      cpu: {{ .Values.postgres.resources.limits.cpu | default "1000m" | quote }}
+      memory: {{ .Values.postgres.resources.limits.memory | default "1Gi" | quote }}
+
+  # PostgreSQL config tuning — minimal for single-node v4.0
+  postgresql:
+    parameters:
+      # Timezone consistency (P9 invariant)
+      timezone: "UTC"
+      # Modest connection settings for single-node
+      max_connections: "100"
+      shared_buffers: "128MB"
+
+  # NOTE: spec.backup (barmanObjectStore) is intentionally absent.
+  # BAK-01 (Phase 120) adds CNPG WAL archiving to SeaweedFS S3.
+  # Research flag: verify CNPG v1.27 barmanObjectStore field names for SeaweedFS
+  # S3 endpoint before implementing Phase 120 (see STATE.md Research Flags).
