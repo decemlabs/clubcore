@@ -20,10 +20,11 @@ Security: SEC-03 pod hardening copied verbatim from migrate-job.yaml:
   emptyDir:  /tmp — aws CLI + Redis tools may write temp files
   TZ=UTC:    P9 invariant — CronJob schedule evaluated in UTC
 
-Image: redis:7-alpine (already in the stack — DATA-02). Includes redis-cli + sh.
-  Additional tool: awscli (aws s3 / aws s3api) installed in the container command via
-  `apk add --no-cache aws-cli` (alpine package). Alternative: use mc (MinIO Client)
-  but aws-cli is more standard for S3 API compatibility with SeaweedFS.
+Image: clubcore/backup (CR-02) — a purpose-built image that PRE-BAKES redis-cli +
+  aws-cli + coreutils. Runtime `apk add` is impossible under the SEC-03
+  readOnlyRootFilesystem: true, so the tooling must ship in the image. Built and
+  tagged with the git-short-SHA by infra/scripts/build-images.sh; pinned via the
+  shared global image.tag and backup.image.repository in values.yaml.
 
 OBS-05 alert linkage: a Job failure (exit non-zero) surfaces as kube_job_status_failed
   which the RestoreVerifyJobFailed alert in alertmanager-rules.yaml watches.
@@ -83,9 +84,11 @@ spec:
 
           containers:
             - name: redis-rdb-backup
-              # redis:7-alpine — already in the stack (DATA-02 image)
-              # apk adds aws-cli for S3 upload; all runs from the apk cache at startup.
-              image: {{ .Values.redis.image | default "redis:7-alpine" | quote }}
+              # CR-02: purpose-built backup image with redis-cli + aws-cli PRE-BAKED.
+              # The previous redis:7-alpine + runtime `apk add aws-cli` cannot work under
+              # the SEC-03 readOnlyRootFilesystem: true (apk writes outside /tmp), so every
+              # run failed at startup. This image ships both CLIs — no runtime install.
+              image: {{ include "clubcore.backupImage" . | quote }}
               imagePullPolicy: IfNotPresent
 
               # SEC-03 container-level hardening (copied verbatim from migrate-job.yaml)
@@ -140,12 +143,10 @@ spec:
                   set -euo pipefail
 
                   # ── Prerequisites ────────────────────────────────────────────
-                  echo "[backup-redis] Installing aws-cli..."
-                  apk add --no-cache aws-cli >/tmp/apk.log 2>&1 || {
-                    echo "[backup-redis] ERROR: aws-cli install failed" >&2
-                    cat /tmp/apk.log >&2
-                    exit 1
-                  }
+                  # CR-02: redis-cli + aws-cli are PRE-BAKED in clubcore/backup — no
+                  # runtime `apk add` (which is impossible under readOnlyRootFilesystem).
+                  command -v aws >/dev/null 2>&1     || { echo "[backup-redis] ERROR: aws-cli missing from image" >&2; exit 1; }
+                  command -v redis-cli >/dev/null 2>&1 || { echo "[backup-redis] ERROR: redis-cli missing from image" >&2; exit 1; }
 
                   TIMESTAMP=$(date -u +"%Y%m%d-%H%M%S")
                   BACKUP_KEY="${S3_PREFIX}/redis-rdb-${TIMESTAMP}.rdb"

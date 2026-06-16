@@ -103,3 +103,16 @@ pulling/failing on a non-existent image.
 {{- $tag := .Values.image.tag | required "image.tag is required — pass --set image.tag=<git-short-sha> (see infra/scripts/build-images.sh / deploy-local.sh)" -}}
 {{- printf "%s:%s" .Values.image.repository $tag -}}
 {{- end }}
+
+{{/*
+Fully-qualified image reference for the purpose-built backup tooling image (CR-02).
+Pre-bakes redis-cli + aws-cli so the BAK-02 CronJobs run under
+readOnlyRootFilesystem: true with no runtime `apk add`. Shares the global image.tag
+(same git-short-SHA as all other images, built by infra/scripts/build-images.sh).
+Repository defaults to clubcore/backup; override via backup.image.repository.
+*/}}
+{{- define "clubcore.backupImage" -}}
+{{- $tag := .Values.image.tag | required "image.tag is required — pass --set image.tag=<git-short-sha> (see infra/scripts/build-images.sh / deploy-local.sh)" -}}
+{{- $repo := (.Values.backup.image).repository | default "clubcore/backup" -}}
+{{- printf "%s:%s" $repo $tag -}}
+{{- end }}

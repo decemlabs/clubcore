@@ -13,6 +13,9 @@
 #      No separate Dockerfile is needed for the other 3 Python workloads.
 #   2. clubcore/admin-app:<sha> — staff admin panel (React 19 + TanStack, nginx static)
 #   3. clubcore/client-pwa:<sha>— client PWA (React 19 + vite-plugin-pwa, nginx static)
+#   4. clubcore/backup:<sha>    — backup tooling image (redis-cli + aws-cli, CR-02):
+#      Pre-bakes the CLIs the Redis RDB + SeaweedFS mirror CronJobs need so they run
+#      under readOnlyRootFilesystem: true without a runtime `apk add`.
 #
 # Usage:
 #   cd /path/to/clubcore && bash infra/scripts/build-images.sh
@@ -43,7 +46,7 @@ echo ""
 
 # ── 1. Backend base image ─────────────────────────────────────────────────────
 # Build context is apps/backend/ (pyproject.toml, uv.lock, app/, alembic/, alembic.ini).
-echo "[1/3] Building clubcore/backend:${TAG} …"
+echo "[1/4] Building clubcore/backend:${TAG} …"
 docker build \
     -f "${REPO_ROOT}/infra/docker/backend.Dockerfile" \
     -t "clubcore/backend:${TAG}" \
@@ -53,7 +56,7 @@ echo ""
 
 # ── 2. admin-app frontend image ───────────────────────────────────────────────
 # Build context is repo root (pnpm workspace lockfile + packages/api-client).
-echo "[2/3] Building clubcore/admin-app:${TAG} …"
+echo "[2/4] Building clubcore/admin-app:${TAG} …"
 docker build \
     -f "${REPO_ROOT}/infra/docker/admin-app.Dockerfile" \
     -t "clubcore/admin-app:${TAG}" \
@@ -63,12 +66,24 @@ echo ""
 
 # ── 3. client-pwa frontend image ──────────────────────────────────────────────
 # Build context is repo root (pnpm workspace lockfile + packages/api-client).
-echo "[3/3] Building clubcore/client-pwa:${TAG} …"
+echo "[3/4] Building clubcore/client-pwa:${TAG} …"
 docker build \
     -f "${REPO_ROOT}/infra/docker/client-pwa.Dockerfile" \
     -t "clubcore/client-pwa:${TAG}" \
     "${REPO_ROOT}"
 echo "      → clubcore/client-pwa:${TAG} OK"
+echo ""
+
+# ── 4. backup tooling image (CR-02) ─────────────────────────────────────────────
+# Pre-bakes redis-cli + aws-cli so the BAK-02 CronJobs run under
+# readOnlyRootFilesystem: true with no runtime `apk add`. Build context is the
+# repo root (the Dockerfile installs only alpine packages — no app files needed).
+echo "[4/4] Building clubcore/backup:${TAG} …"
+docker build \
+    -f "${REPO_ROOT}/infra/docker/backup.Dockerfile" \
+    -t "clubcore/backup:${TAG}" \
+    "${REPO_ROOT}"
+echo "      → clubcore/backup:${TAG} OK"
 echo ""
 
 # ── Summary ───────────────────────────────────────────────────────────────────

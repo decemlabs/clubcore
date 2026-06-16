@@ -557,6 +557,13 @@ backup:
   # NEVER enable before running: bash infra/scripts/seal-secrets.sh
   enabled: false
 
+  # CR-02: purpose-built backup tooling image (redis-cli + aws-cli pre-baked).
+  # Used by the Redis RDB + SeaweedFS mirror CronJobs so they run under the SEC-03
+  # readOnlyRootFilesystem: true with NO runtime `apk add`. Tag is inherited from
+  # the global image.tag (same git-short-SHA, built by infra/scripts/build-images.sh).
+  image:
+    repository: clubcore/backup
+
   # Postgres CNPG backup settings (BAK-01)
   postgres:
     # s3EndpointUrl: SeaweedFS in-cluster S3 endpoint.

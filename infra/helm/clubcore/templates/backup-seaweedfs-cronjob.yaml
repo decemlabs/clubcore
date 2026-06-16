@@ -117,9 +117,10 @@ spec:
 
           containers:
             - name: seaweedfs-mirror
-              # Use the same redis:7-alpine image to keep dependencies minimal;
-              # aws-cli is installed via apk. This avoids pulling a separate aws-cli image.
-              image: {{ .Values.redis.image | default "redis:7-alpine" | quote }}
+              # CR-02: purpose-built backup image with aws-cli + coreutils PRE-BAKED.
+              # Runtime `apk add aws-cli` cannot work under the SEC-03
+              # readOnlyRootFilesystem: true, so the CLI ships in the image instead.
+              image: {{ include "clubcore.backupImage" . | quote }}
               imagePullPolicy: IfNotPresent
 
               # SEC-03 container-level hardening (copied verbatim from migrate-job.yaml)
@@ -168,12 +169,9 @@ spec:
                   set -euo pipefail
 
                   # ── Prerequisites ────────────────────────────────────────────
-                  echo "[backup-seaweedfs] Installing aws-cli..."
-                  apk add --no-cache aws-cli >/tmp/apk.log 2>&1 || {
-                    echo "[backup-seaweedfs] ERROR: aws-cli install failed" >&2
-                    cat /tmp/apk.log >&2
-                    exit 1
-                  }
+                  # CR-02: aws-cli is PRE-BAKED in clubcore/backup — no runtime
+                  # `apk add` (impossible under readOnlyRootFilesystem: true).
+                  command -v aws >/dev/null 2>&1 || { echo "[backup-seaweedfs] ERROR: aws-cli missing from image" >&2; exit 1; }
 
                   DATESTAMP=$(date -u +"%Y-%m-%d")
                   MIRROR_DIR="/mnt/backup/${DATESTAMP}"
