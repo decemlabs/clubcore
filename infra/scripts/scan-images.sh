@@ -4,13 +4,18 @@
 # IMG-04: Runs `trivy image --severity HIGH,CRITICAL --exit-code 1 --ignore-unfixed`
 #          over every built image tag. Exits non-zero if ANY image has HIGH/CRITICAL CVEs.
 #
-# If trivy is not on PATH, the scan is marked operator-pending and the script exits 0
-# with a clear WARN (per D-V40-LOCAL-VALIDATE — no fabricated evidence).
+# If trivy is not on PATH, behavior depends on REQUIRE_TRIVY:
+#   - REQUIRE_TRIVY=1 (CI / automated gate): FAIL CLOSED — exit non-zero. A missing
+#     scanner must never turn the CVE gate into a silent no-op (WR-03).
+#   - REQUIRE_TRIVY unset/0 (local operator): mark operator-pending and exit 0 with a
+#     clear WARN on stderr (per D-V40-LOCAL-VALIDATE — no fabricated evidence).
+# Any automated pipeline invoking this script MUST set REQUIRE_TRIVY=1.
 #
 # Usage:
 #   TAG=$(git rev-parse --short HEAD)
 #   bash infra/scripts/build-images.sh     # build first
-#   bash infra/scripts/scan-images.sh      # scan
+#   bash infra/scripts/scan-images.sh      # scan (local: operator-pending if no trivy)
+#   REQUIRE_TRIVY=1 bash infra/scripts/scan-images.sh   # CI: fail closed if no trivy
 #
 # Or supply TAG explicitly:
 #   TAG=abc1234 bash infra/scripts/scan-images.sh
@@ -33,22 +38,32 @@ echo ""
 
 # ── Trivy availability check ──────────────────────────────────────────────────
 if ! command -v trivy &>/dev/null; then
-    echo "WARN: trivy is not installed / not on PATH."
-    echo ""
-    echo "  IMG-04 scan gate: OPERATOR-PENDING"
-    echo ""
-    echo "  To complete the gate manually, install trivy and run:"
+    # All diagnostics go to stderr so they remain visible in fail-fast pipelines.
+    echo "WARN: trivy is not installed / not on PATH." >&2
+    echo "" >&2
+    echo "  To complete the gate manually, install trivy and run:" >&2
     for img in "${IMAGES[@]}"; do
-        echo "    trivy image --severity HIGH,CRITICAL --exit-code 1 --ignore-unfixed ${img}"
+        echo "    trivy image --severity HIGH,CRITICAL --exit-code 1 --ignore-unfixed ${img}" >&2
     done
-    echo ""
-    echo "  Install options:"
-    echo "    brew install aquasecurity/trivy/trivy   (macOS)"
-    echo "    curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin"
-    echo ""
-    echo "  Record scan results in .planning/phases/118-container-images-helm-chart-core-stack/118-01-SUMMARY.md"
-    echo ""
-    # Exit 0: operator-pending is a known state, not a failure (D-V40-LOCAL-VALIDATE).
+    echo "" >&2
+    echo "  Install options:" >&2
+    echo "    brew install aquasecurity/trivy/trivy   (macOS)" >&2
+    echo "    curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin" >&2
+    echo "" >&2
+
+    # WR-03: in an automated gate the CVE check must FAIL CLOSED. A CI runner
+    # without trivy must not pass the gate by default. CI sets REQUIRE_TRIVY=1.
+    if [[ "${REQUIRE_TRIVY:-0}" == "1" ]]; then
+        echo "ERROR: REQUIRE_TRIVY=1 but trivy is not installed — failing the gate." >&2
+        echo "       Install trivy in the CI image or remove REQUIRE_TRIVY for a local run." >&2
+        exit 1
+    fi
+
+    echo "  IMG-04 scan gate: OPERATOR-PENDING" >&2
+    echo "  Record scan results in .planning/phases/118-container-images-helm-chart-core-stack/118-01-SUMMARY.md" >&2
+    echo "" >&2
+    # Local operator path: operator-pending is a known state, not a failure
+    # (D-V40-LOCAL-VALIDATE — no fabricated evidence). CI must set REQUIRE_TRIVY=1.
     exit 0
 fi
 
