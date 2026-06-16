@@ -1,0 +1,110 @@
+{{/*
+Redis StatefulSet — DATA-02
+
+Constraints:
+  - image: redis:7-alpine (NO Bitnami — D-V40-BITNAMI-PAYWALLED)
+  - replicas: 1 (single-node v4.0; not a tuning knob)
+  - AOF enabled via redis.conf ConfigMap (appendonly yes, appendfsync everysec)
+  - maxmemory + allkeys-lru configured in redis.conf ConfigMap
+  - volumeClaimTemplates: /data PVC on clubcore-retain StorageClass (AOF survives restarts)
+  - TZ=UTC (P9 invariant)
+  - Non-root securityContext stub (full SEC-03 hardening is Phase 119)
+
+Service DNS: clubcore-redis:6379 (headless, via redis-service.yaml)
+REDIS_URL (plan 03 ConfigMap): redis://clubcore-redis:6379/0
+*/}}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "clubcore.fullname" . }}-redis
+  labels:
+    {{- include "clubcore.labels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+spec:
+  serviceName: {{ include "clubcore.fullname" . }}-redis
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "clubcore.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: redis
+  template:
+    metadata:
+      labels:
+        {{- include "clubcore.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: redis
+    spec:
+      # Non-root securityContext stub — full SEC-03 hardening is Phase 119.
+      # redis:7-alpine default user is root; running non-root requires
+      # explicit UID override and /data ownership setup.
+      securityContext:
+        runAsNonRoot: false  # TODO Phase 119 SEC-03: set true + runAsUser: 999 (redis uid)
+        fsGroup: 999         # redis group — ensures /data is writable by redis user
+
+      containers:
+        - name: redis
+          # Plain redis:7-alpine — NO Bitnami (D-V40-BITNAMI-PAYWALLED)
+          image: {{ .Values.redis.image | default "redis:7-alpine" | quote }}
+          imagePullPolicy: IfNotPresent
+          # Mount redis.conf from ConfigMap
+          command: ["redis-server", "/etc/redis/redis.conf"]
+          ports:
+            - name: redis
+              containerPort: 6379
+              protocol: TCP
+          env:
+            # P9 invariant: TZ=UTC on all pods
+            - name: TZ
+              value: "UTC"
+          # Liveness probe: redis-cli ping
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          # Readiness probe: redis-cli ping
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            # redis.conf from ConfigMap
+            - name: redis-config
+              mountPath: /etc/redis
+              readOnly: true
+            # AOF persistence: /data must be on the Retain PVC
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              cpu: {{ .Values.redis.resources.requests.cpu | default "100m" | quote }}
+              memory: {{ .Values.redis.resources.requests.memory | default "128Mi" | quote }}
+            limits:
+              cpu: {{ .Values.redis.resources.limits.cpu | default "500m" | quote }}
+              memory: {{ .Values.redis.resources.limits.memory | default "512Mi" | quote }}
+      volumes:
+        - name: redis-config
+          configMap:
+            name: {{ include "clubcore.fullname" . }}-redis-config
+            items:
+              - key: redis.conf
+                path: redis.conf
+
+  # DATA-02: AOF persistence PVC — bound to clubcore-retain StorageClass.
+  # reclaimPolicy: Retain ensures AOF files survive PVC deletion (DATA-04 / P1).
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "clubcore.selectorLabels" . | nindent 10 }}
+          app.kubernetes.io/component: redis
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: {{ include "clubcore.storageClassName" . }}
+        resources:
+          requests:
+            storage: {{ .Values.redis.storage.size | default "2Gi" | quote }}

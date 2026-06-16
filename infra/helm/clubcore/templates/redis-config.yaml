@@ -1,0 +1,54 @@
+{{/*
+Redis ConfigMap — redis.conf
+
+DATA-02 acceptance criteria (hard values — NOT tuning knobs):
+  - appendonly yes        — AOF persistence enabled
+  - appendfsync everysec  — fsync every second (balance performance/durability)
+  - maxmemory <value>     — eviction ceiling (from .Values.redis.maxmemory)
+  - maxmemory-policy allkeys-lru — LRU eviction across all keys
+
+AOF file is written to /data (the PVC mount) so it survives pod restarts.
+Redis CLI connects via: redis-cli -h clubcore-redis -p 6379
+
+REDIS_URL (plan 03 ConfigMap): redis://clubcore-redis:6379/0
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "clubcore.fullname" . }}-redis-config
+  labels:
+    {{- include "clubcore.labels" . | nindent 4 }}
+data:
+  redis.conf: |
+    # DATA-02: AOF persistence — must be enabled (acceptance criterion)
+    appendonly yes
+    appendfsync everysec
+
+    # DATA-02: Memory eviction — must be configured (acceptance criterion)
+    maxmemory {{ .Values.redis.maxmemory | default "256mb" }}
+    maxmemory-policy allkeys-lru
+
+    # AOF and RDB data directory — bound to the PVC volumeClaimTemplate
+    dir /data
+
+    # Log to stdout (k8s log collection)
+    logfile ""
+    loglevel notice
+
+    # Bind to all interfaces (headless service handles routing)
+    bind 0.0.0.0
+
+    # Default port
+    port 6379
+
+    # No authentication (internal cluster service; SEC-03 Phase 119 adds auth)
+    # Plan 119 will add: requirepass <password-from-secret>
+
+    # Disable dangerous commands in prod (Phase 119 SEC-03 hardening)
+    # rename-command FLUSHALL ""
+    # rename-command CONFIG ""
+
+    # Healthy shutdown grace
+    save ""
+    # NOTE: save "" disables RDB snapshots (we rely on AOF only for persistence)
+    # This is intentional: AOF is the primary persistence mechanism.
