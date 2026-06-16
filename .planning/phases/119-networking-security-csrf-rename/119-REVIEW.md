@@ -1,172 +1,136 @@
 ---
 phase: 119-networking-security-csrf-rename
-reviewed: 2026-06-16T00:00:00Z
+reviewed: 2026-06-16T11:51:48Z
 depth: standard
-files_reviewed: 9
+files_reviewed: 7
 files_reviewed_list:
   - infra/helm/clubcore/templates/networkpolicy-allow.yaml
   - infra/helm/clubcore/templates/networkpolicy-default-deny.yaml
+  - infra/helm/clubcore/templates/ingress.yaml
   - infra/helm/clubcore/templates/sealed-secret.yaml
   - infra/helm/clubcore/templates/app-secret.yaml
-  - infra/helm/clubcore/templates/ingress.yaml
-  - infra/helm/clubcore/templates/_helpers.tpl
-  - infra/helm/clubcore/templates/backend-deployment.yaml
   - infra/scripts/seal-secrets.sh
   - apps/backend/scripts/verify/_lib.sh
 findings:
-  critical: 1
-  warning: 4
-  info: 3
-  total: 8
+  critical: 0
+  warning: 1
+  info: 0
+  total: 1
 status: issues_found
 ---
 
-# Phase 119: Code Review Report
+# Phase 119: Code Review Report (Re-Review — Iteration 2)
 
-**Reviewed:** 2026-06-16
+**Reviewed:** 2026-06-16T11:51:48Z
 **Depth:** standard
-**Files Reviewed:** 9 (plus cross-referenced: values.yaml, Chart.yaml, redis-statefulset.yaml, the other 6 deployment/service/middleware templates, app/core/security.py)
-**Status:** issues_found
+**Files Reviewed:** 7
+**Status:** issues_found (1 minor WARNING; all prior-iteration findings confirmed fixed)
 
 ## Summary
 
-Phase 119 wires SEC-01..04 and NET-01..03 into the Helm chart plus a CSRF cookie rename in the verify harness. The overall structure is sound: default-deny uses a correct empty `podSelector: {}`, every explicit-allow policy includes CoreDNS egress on both UDP and TCP :53 (P8 satisfied), the SealedSecret uses the correct `bitnami.com/v1alpha1` API with no committed plaintext ciphertext, the hardened securityContext helper drops ALL caps with `readOnlyRootFilesystem:true` and matching emptyDir scratch for every workload (Python UID 1000, nginx UID 101), and the seal-secrets script refuses to write the RSA key inside the repo.
+This is a re-review focused on confirming the FINAL state at HEAD after a worktree
+last-write-wins hazard had clobbered the CR-01 fix (since re-applied). All four
+re-review checklist axes were verified by static reasoning (helm/k3d/kubeseal not
+installed — render verification remains operator-pending, but the YAML/templating
+is unambiguous).
 
-However, there is one **BLOCKER**: the backend→SeaweedFS S3 egress NetworkPolicy rule cannot match the SeaweedFS pods, because SeaweedFS is a Helm subchart whose pods do not carry clubcore's selector labels. With `networkPolicy.enabled=true`, default-deny will silently sever all backend→S3 traffic (avatar/document upload, bucket-ensure on boot). Several warnings concern over-broad selectors and stale verify-harness documentation.
+**Verdict: CR-01 and all four prior warnings (WR-01..04) survived intact at HEAD.
+No regressions detected. One minor, low-severity robustness gap noted in the seal
+helper (WR-01 below), which is NOT a prior finding and does not block.**
 
-Note on scope: helm/k3d/kubeseal are not installed, so render verification is operator-pending; findings below are reasoned statically from template + subchart label semantics.
+### Re-review checklist — confirmed at HEAD
 
-## Critical Issues
+1. **CR-01 (backend→SeaweedFS-S3 egress) — CONFIRMED PRESENT, NOT REVERTED.**
+   `networkpolicy-allow.yaml:146-154` (backend `allow-backend` policy) targets the
+   subchart labels `app.kubernetes.io/name: seaweedfs` + `app.kubernetes.io/instance: {{ .Release.Name }}`
+   + `app.kubernetes.io/component: s3` on TCP `8333`. It does NOT use
+   `clubcore.selectorLabels` (which would match zero SeaweedFS pods → S3 outage).
+   The load-bearing fix is present and the explanatory header (lines 55-59, 135-145)
+   documents the rationale.
 
-### CR-01: backend→SeaweedFS S3 egress NetworkPolicy selects the wrong pods — S3 traffic silently blocked
+2. **arq-worker S3 follow-up — CONFIRMED PRESENT.**
+   `networkpolicy-allow.yaml:213-221` (`allow-arq-worker`) now carries the identical
+   SeaweedFS subchart S3 egress rule (same three labels, TCP `8333`). Rationale
+   documented at lines 207-212 (`build_storage` at worker startup + `forward_to_staff`
+   media handling).
 
-**File:** `infra/helm/clubcore/templates/networkpolicy-allow.yaml:136-142`
-**Issue:** The backend allow policy's SeaweedFS egress rule uses a podSelector built only from `clubcore.selectorLabels`:
+3. **No regression on confirmed-correct items:**
+   - default-deny `podSelector: {}` — CONFIRMED (`networkpolicy-default-deny.yaml:35`),
+     policyTypes Ingress+Egress with no rules.
+   - CoreDNS egress on BOTH UDP+TCP :53 in EVERY allow policy (P8) — CONFIRMED:
+     backend (103-114), arq-worker (176-187), telegram-bot (243-254), migrate
+     (317-328), admin-app (372-383), client-pwa (415-426). All six present.
+   - SealedSecret carries no committed plaintext — CONFIRMED
+     (`sealed-secret.yaml:62-70` only emits `encryptedData` sourced from values; the
+     plaintext path in `app-secret.yaml` is gated on `secrets.plaintextForLocalK3d`
+     and clearly fenced as local-k3d-only).
+   - `seal-secrets.sh` does not leak the RSA key — CONFIRMED:
+     `check_no_key_in_repo` (72-88) hard-fails on any path under `REPO_ROOT`; default
+     export goes to `/tmp`; cert/plaintext/sealed temp files use `mktemp` in `/tmp`
+     with EXIT-trap cleanup.
 
-```yaml
-    - to:
-        - podSelector:
-            matchLabels:
-              {{- include "clubcore.selectorLabels" . | nindent 14 }}
-      ports:
-        - protocol: TCP
-          port: 8333
-```
-
-`clubcore.selectorLabels` (`_helpers.tpl:48-51`) expands to `app.kubernetes.io/name: clubcore` + `app.kubernetes.io/instance: <release>`. But SeaweedFS is a **subchart** (`Chart.yaml` dependency `seaweedfs` v4.33.0). Subchart pods carry the SeaweedFS chart's own labels (`app.kubernetes.io/name: seaweedfs`, and an instance label scoped to the subchart) — they do **not** carry `app.kubernetes.io/name: clubcore`. Therefore this podSelector matches **zero SeaweedFS pods**.
-
-With `networkPolicy.enabled=true`, the default-deny policy (`networkpolicy-default-deny.yaml`) severs all egress, and this rule fails to re-permit backend→S3:8333. Result: the backend cannot reach SeaweedFS — bucket-ensure on startup, avatar/document upload, and presigned-URL backends all fail with connection timeouts the moment NetworkPolicies are enabled. This is a data-path outage, not a degradation. The Redis rule directly above it works (Redis is a clubcore template carrying `component: redis`), which masks the problem in casual review — only the subchart edge is broken.
-
-Contrast: the rule as written is also self-contradictory — it claims to select SeaweedFS but actually selects clubcore-labeled pods on port 8333 (of which none listen on 8333), so it is simultaneously over-broad in intent and matches nothing in practice.
-
-**Fix:** Select the SeaweedFS S3 pods by their actual subchart labels. Determine them via `helm template` / `kubectl get pods --show-labels | grep seaweedfs`, then target them explicitly. For the SeaweedFS chart the S3 component is typically labelled `app.kubernetes.io/name: seaweedfs` + `app.kubernetes.io/component: s3` (verify against v4.33.0):
-
-```yaml
-    # ── SeaweedFS S3 API :8333 ──
-    - to:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: seaweedfs
-              app.kubernetes.io/component: s3
-      ports:
-        - protocol: TCP
-          port: 8333
-```
-
-If SeaweedFS runs in the same namespace this is sufficient; if it can land in a different namespace add a `namespaceSelector`. The arq-worker policy does NOT include an S3 rule — confirm arq tasks never touch S3 (e.g. document-generation jobs); if they do, the same corrected rule must be added to `allow-arq-worker`.
+4. **WR-01..04 (prior iteration) survived:**
+   - prior WR (cookie docs) — CONFIRMED: `_lib.sh:20-22` documents `cc_access`,
+     `cc_refresh`, `clubcore_csrf`; extraction at line 83 reads `clubcore_csrf`.
+   - prior WR (psql DSN = clubcore DB) — CONFIRMED: `_lib.sh:28-31, 120` use
+     `postgresql://app:app@localhost:5432/clubcore`.
+   - prior WR (telegram :443 ipBlock-with-except) — CONFIRMED:
+     `networkpolicy-allow.yaml:287-295` uses an explicit `ipBlock` `0.0.0.0/0` with
+     `except` for the k3d/k3s pod (`10.42.0.0/16`) and service (`10.43.0.0/16`) CIDRs,
+     not an open `ports`-only rule. In-cluster :443 lateral movement is blocked.
+   - prior WR (redundant /ws ingress path removed) — CONFIRMED: `ingress.yaml:75-86`
+     has only the `/` Prefix rule for the API host; the dedicated `/api/v1/client/ws`
+     rule is gone (removal documented at 69-73).
 
 ## Warnings
 
-### WR-01: `_lib.sh` documents stale `sz_access` / `sz_refresh` cookie names
+### WR-01: Brief plaintext-secret exposure window between mktemp and trap update in seal-secrets.sh
 
-**File:** `apps/backend/scripts/verify/_lib.sh:20-26, 90-93`
-**Issue:** The CSRF rename to `clubcore_csrf` is correct and complete — `login_as()` extracts `awk '$6=="clubcore_csrf"'` (line 82) and `mut()` sends `X-CSRF-Token` (line 101), matching `app/core/security.py` which sets `clubcore_csrf`. However the docstrings still describe the session cookies as `sz_access` / `sz_refresh`:
-
-```
-#       sz_access       HTTP-only access JWT, Path=/
-#       sz_refresh      HTTP-only refresh token, Path=/api/v1/auth
-```
-
-and line 92: `(auth via sz_access HTTP-only cookie)`. The real cookies (`security.py:224,235`) are `cc_access` / `cc_refresh`. This is **functionally harmless** today because curl reuses the entire cookie jar (`-b "$COOKIE_JAR"`) regardless of cookie name, but it is misleading documentation in a security-sensitive auth harness and undermines confidence that the rename was done thoroughly. Since the phase is explicitly named "csrf-rename," leaving sibling cookie names stale is a defect in the rename's completeness.
-
-**Fix:** Update the `_lib.sh` header block and the inline `mut()` comment to `cc_access` / `cc_refresh`:
-```
-#       cc_access       HTTP-only access JWT, Path=/
-#       cc_refresh      HTTP-only refresh token, Path=/api/v1/auth
-#       clubcore_csrf   non-HttpOnly CSRF token, Path=/, used as X-CSRF-Token
-```
-
-### WR-02: `_lib.sh` psql DSN still points at database `sportzal`
-
-**File:** `apps/backend/scripts/verify/_lib.sh:119`
-**Issue:** `psql_exec` connects to `postgresql://app:app@localhost:5432/sportzal`. The Helm chart, `app-secret.yaml`, and `values.yaml` all use database name **`clubcore`** (`values.yaml:44 database: clubcore`; `app-secret.yaml:74` constructs `.../clubcore`). If the local compose DB has been renamed to `clubcore` in line with the project rename, every `psql_exec` call in the verify suite will fail with `FATAL: database "sportzal" does not exist`. This is in the same rename blast radius as the CSRF cookie and should be checked together.
-
-**Fix:** Confirm the compose Postgres database name. If it is now `clubcore`, update the DSN; if compose still seeds `sportzal` (legacy), add a comment pinning that fact so the divergence is intentional and visible:
+**File:** `infra/scripts/seal-secrets.sh:153-154` (also 176-177)
+**Issue:** The script uses a sequence of single-handler `trap '...' EXIT` statements
+that each overwrite the previous one (lines 113, 154, 177) rather than accumulating
+cleanup targets. `PLAINTEXT_SECRET_FILE` — written with the operator's REAL plaintext
+secrets (SECRET_KEY, DATABASE_URL with DB password, S3 keys, Telegram token) at line
+153 — is created BEFORE the trap that covers it is installed at line 154. If the
+process receives a signal (e.g. SIGINT/Ctrl-C) in that one-line window, the EXIT trap
+in effect is still the line-113 trap, which only removes `CERT_FILE`, leaving the
+plaintext secret file orphaned in `/tmp`. The same one-line gap exists at 176-177 for
+`SEALED_OUTPUT_FILE` (lower sensitivity — ciphertext only). Additionally none of the
+traps handle INT/TERM, so an interrupt mid-run never triggers cleanup at all. This is
+a robustness/hygiene gap, NOT a confirmed prior finding; severity is low because the
+window is a single non-blocking assignment and `/tmp` is operator-local, but it does
+briefly defeat the "plaintext never persists" intent on an ill-timed interrupt.
+**Fix:** Pre-declare all temp-file variables and install a single cumulative trap once,
+before any sensitive file is created, and cover INT/TERM:
 ```bash
-psql "postgresql://app:app@localhost:5432/clubcore" -c "$sql"
+CERT_FILE="" PLAINTEXT_SECRET_FILE="" SEALED_OUTPUT_FILE=""
+cleanup() { rm -f "$CERT_FILE" "$PLAINTEXT_SECRET_FILE" "$SEALED_OUTPUT_FILE"; }
+trap cleanup EXIT INT TERM
+# ...then assign each var via mktemp as you reach it; the single trap already covers them.
 ```
 
-### WR-03: Telegram-bot internet egress rule is namespace-open (can reach in-cluster pods on :443)
+## Notes (non-blocking observations, no finding raised)
 
-**File:** `infra/helm/clubcore/templates/networkpolicy-allow.yaml:253-255`
-**Issue:** The "internet egress :443" rule has no `to:` selector at all:
-
-```yaml
-    - ports:
-        - protocol: TCP
-          port: 443
-```
-
-An egress rule with `ports` but no `to` permits egress to **any destination** on :443 — including in-cluster pods and the cluster API server, not just external Telegram IPs. The header comment (lines 247-252) claims it uses an `ipBlock` to restrict to external IPs ("instead use ipBlock to restrict to any external IP (not cluster CIDR)"), but the actual rule contains **no ipBlock** — the comment and code disagree. This is broader than least-privilege intends and contradicts its own documentation.
-
-**Fix:** Either add the promised `ipBlock` excluding the cluster/pod CIDR, or update the comment to admit the rule is "all destinations on :443." Least-privilege form:
-```yaml
-    - to:
-        - ipBlock:
-            cidr: 0.0.0.0/0
-            except:
-              - 10.42.0.0/16   # pod CIDR (k3d default)
-              - 10.43.0.0/16   # service CIDR (k3d default)
-      ports:
-        - protocol: TCP
-          port: 443
-```
-Verify actual k3d CIDRs with `kubectl cluster-info dump | grep -i cidr` before committing.
-
-### WR-04: Ingress API host has no path priority guarantee between `/api/v1/client/ws` and `/`
-
-**File:** `infra/helm/clubcore/templates/ingress.yaml:73-90`
-**Issue:** The API host declares two `pathType: Prefix` rules — `/api/v1/client/ws` and `/` — both pointing at the same `clubcore-backend:8000`. Because both backends are identical, this is currently harmless, but the comment (lines 73-75) implies the explicit WS path is doing routing work ("ensures future reviewers know WS is handled here"). If a future edit points the WS path at a different service or port while relying on prefix-longest-match precedence, Traefik v3's Ingress path ordering is **not guaranteed to prefer the longer prefix** the way the comment assumes — IngressRoute priority or explicit `pathType`/ordering would be needed. The redundant rule is a latent trap.
-
-**Fix:** Since both paths resolve to the identical backend, drop the `/api/v1/client/ws` entry (the `/` prefix already covers it and WS upgrade is native in Traefik v3 per the file's own NET-02 note). If kept for documentation, add a comment that it is intentionally redundant and carries no routing precedence, so a future edit does not assume longest-prefix wins.
-
-## Info
-
-### IN-01: SeaweedFS S3 rule comment understates the same-namespace assumption
-
-**File:** `infra/helm/clubcore/templates/networkpolicy-allow.yaml:131-135`
-**Issue:** The comment says "Using a namespace-scoped port match (port 8333) is sufficient for same-namespace." A bare `podSelector` is namespace-scoped by definition, but the phrasing suggests the port alone restricts the target, which is not how NetworkPolicy podSelectors work. Tie this comment to the CR-01 fix.
-**Fix:** After fixing CR-01, rewrite the comment to state the exact subchart labels matched.
-
-### IN-02: seal-secrets.sh `grep -A100` could capture stray uppercase keys outside encryptedData
-
-**File:** `infra/scripts/seal-secrets.sh:204`
-**Issue:** `grep -A100 'encryptedData:' ... | grep -E '^\s+[A-Z_]+:'` extracts encryptedData keys by matching uppercase-with-underscore lines in the 100 lines following `encryptedData:`. For the current kubeseal output this is correct (the only uppercase keys are the secret names; `template:`/`metadata:`/`name:` are lowercase and excluded). It is mildly fragile: any future uppercase field added by kubeseal within 100 lines below `encryptedData:` would be mis-extracted into the values override. Verified harmless for sealed-secrets v0.37.0 output shape.
-**Fix:** Optional hardening — parse with a YAML-aware tool (`yq '.spec.encryptedData'`) instead of grep/awk to remove the positional assumption.
-
-### IN-03: `secrets.plaintextForLocalK3d` and `secrets.sealed.enabled` can both be true with no guard
-
-**File:** `infra/helm/clubcore/templates/app-secret.yaml:42` and `sealed-secret.yaml:34`
-**Issue:** The two Secret templates are gated independently (`if .Values.secrets.plaintextForLocalK3d` and `if .Values.secrets.sealed.enabled`). values.yaml comment (line 215) states "Only ONE path should be active at a time," but nothing enforces it. If an operator sets both true, two resources named `<fullname>-app-secret` render — the plaintext Secret and the SealedSecret's unsealed output collide on the same name, producing nondeterministic Secret contents (last-applied wins / unseal overwrite races). Not a leak, but a foot-gun for the production cutover.
-**Fix:** Add a `fail` guard in one template, e.g. at the top of `sealed-secret.yaml`:
-```
-{{- if and .Values.secrets.sealed.enabled .Values.secrets.plaintextForLocalK3d }}
-{{- fail "secrets.sealed.enabled and secrets.plaintextForLocalK3d are mutually exclusive — set plaintextForLocalK3d=false for production" }}
-{{- end }}
-```
+- `seal-secrets.sh:204` extracts `encryptedData` via
+  `grep -A100 'encryptedData:' | grep -E '^\s+[A-Z_]+:'`. The `-A100` could bleed past
+  `encryptedData` into the `spec.template` block, but that block's keys are lowercase
+  (`name:`, `namespace:`, `labels:`) and do not match the `[A-Z_]+:` filter, so only the
+  intended ALL-CAPS encrypted keys are emitted. Brittle but correct for the current
+  SealedSecret shape — not flagged.
+- `RELEASE_NAME` default in `seal-secrets.sh:45` is `clubcore`, and `SECRET_NAME` is
+  built as `${RELEASE_NAME}-app-secret`. This matches the template's
+  `{{ include "clubcore.fullname" . }}-app-secret` only when fullname == release name
+  (the standard case). For a divergent fullname the sealed Secret name would not match —
+  but this is documented operator territory (line 46 references the fullname logic) and
+  is tunable via `SEALED_RELEASE`. Consistent with the CR-01 fullname reasoning in
+  `app-secret.yaml`. Not flagged.
+- The seaweedfs `instance` label uses `{{ .Release.Name }}` (allow.yaml:150, 217) while
+  the header comment (line 56) describes it as `app.kubernetes.io/instance=<release>` —
+  consistent, since the subchart inherits the parent release name. Render verification
+  of the exact subchart label values remains operator-pending (no helm installed).
 
 ---
 
-_Reviewed: 2026-06-16_
+_Reviewed: 2026-06-16T11:51:48Z_
 _Reviewer: Claude (gsd-code-reviewer)_
-_Depth: standard_
+_Depth: standard (render verification operator-pending — helm/k3d/kubeseal not installed)_
