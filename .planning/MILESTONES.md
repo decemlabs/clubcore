@@ -1,5 +1,24 @@
 # Milestones
 
+## v4.0 Production Infrastructure — Self-Hosted k3s (Shipped: 2026-06-16)
+
+**Phases completed:** 4 phases, 12 plans, 31 tasks
+
+**Key accomplishments:**
+
+- 1. [Rule 1 - Bug] nginx add_header not sent on 404 responses
+- Status: TEMPLATE-VALIDATED — k3d deploy OPERATOR-PENDING
+- Traefik v3 Ingress for 3 hosts with HTTPS-redirect Middleware + cert-manager selfSigned/staging issuer chain + admin-app/client-pwa nginx Deployments on port 8080 closing the Phase-118 IMG-03 gap.
+- SealedSecret production path + kubeseal helper with RSA-key export guard + SEC-03 ASVS hardening across 6 workloads (drop ALL + readOnlyRootFilesystem + emptyDir scratch) + default-deny NetworkPolicies with mandatory CoreDNS egress (P8) on every allow policy.
+- sportzal_csrf stray-string fix (login_as awk-key bug) + byte-stable openapi regen confirmed + Phase 70 security retro with honest per-item dispositions (CR-02 operator-pending, IN-01/IN-02 accepted-risk)
+- Terraform host module (k3s null_resource+remote-exec) and cluster module (monitoring ns + 3 observability helm_releases with hashicorp/helm v3.2 list-set syntax) authored with backend local; root Makefile exposes tf-validate + tf-plan (IAC-03 only).
+- `uv add 'prometheus-fastapi-instrumentator>=7.1,<8'` SUCCEEDED (network up). `prometheus-fastapi-instrumentator==7.1.0` + `prometheus-client==0.25.0` installed via uv; `uv.lock` updated.
+- `postgres-cluster.yaml`
+- Root CD layer via GNU Make 3.81 (13 new OPS-01 targets wrapping existing infra/scripts/*.sh) + standalone `infra/scripts/smoke.sh` covering the 8 Looks-Done-But-Isn't checks extracted from deploy-local.sh and extended with healthz/DNS/WebSocket/SPA/SW-cache probes.
+- Umbrella production runbook (OPS-04) for the v4.0 k3s stack covering topology, toolchain prerequisites, `make up` deploy pipeline, backup/restore/rollback/scale operations, troubleshooting, and an explicit 23-item + 6-probe operator-pending boundary list with 2 HARD gates.
+
+---
+
 ## v3.2 Admin — Wire the Rest (Shipped: 2026-06-15)
 
 **Phases completed:** 6 phases, 18 plans, 17 tasks

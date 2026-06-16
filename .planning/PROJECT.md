@@ -18,9 +18,11 @@ clubcore — CRM для тренажёрного зала (переименов�
 
 Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
 
-## Current Milestone: v4.0 Production Infrastructure — Self-Hosted k3s
+## Last Shipped Milestone: v4.0 Production Infrastructure — Self-Hosted k3s
 
-**Goal:** Сделать clubcore по-настоящему запускаемым — контейнеризировать весь стек, описать инфраструктуру как код (Terraform под on-prem/bare-metal k3s), развернуть в кластере с наблюдаемостью, бэкапами и сетевой безопасностью. Bar = **локальная валидация** (kind/k3s deploy + `terraform validate/plan` + helm lint + smoke); боевой apply на реальный сервер/VM + живой ЮKassa-leg + RU email/SMS deliverability остаются operator-pending (нужны креды, прецедент D-72-06).
+**✅ SHIPPED 2026-06-16** (Phases 118–121; tag `v4.0`; audit `passed` — 39/39 requirements at the local-validation bar, cross-phase wiring sound). Containerized the full stack + Terraform IaC (on-prem k3s) + observability (kube-prometheus-stack/Loki/Alloy) + backups (CNPG barman / Redis / SeaweedFS + restore-verify CronJob) + network security (Traefik v3 ingress, cert-manager, sealed-secrets, NetworkPolicies, ASVS-hardened securityContext) + a Makefile CD layer with an 8-check smoke and a production runbook. **Done-bar = local validation** (k3d / `helm lint` / `terraform validate` / `make -n` / `bash -n`); the live legs (k3d/terraform apply, `make up`/`make smoke`, TLS, alert delivery) are **operator-pending by design** (D-V40-LOCAL-VALIDATE — no fabricated evidence). **Two HARD GATES block production cutover:** SEC-02 (sealed-secrets controller RSA-key off-node backup) and BAK-03 (verified restore round-trip). Full operator-pending boundary (23 items) in `infra/runbooks/production.md` + per-phase `*-UAT.md`. Original milestone scope below for reference.
+
+**Goal:** Сделать clubcore по-настоящему запускаемым — контейнеризировать весь стек, описать инфраструктуру как код (Terraform под on-prem/bare-metal k3s), развернуть в кластере с наблюдаемостью, бэкапами и сетевой безопасностью. Bar = **локальная валидация** (k3d deploy + `terraform validate/plan` + helm lint + smoke); боевой apply на реальный сервер/VM + живой ЮKassa-leg + RU email/SMS deliverability остаются operator-pending (нужны креды, прецедент D-72-06).
 
 **Target features (по измерениям):**
 - **Containerization** — production multi-stage образы для всех runtime-компонентов (backend API/uvicorn, telegram-bot worker, ARQ worker, migrate-job) + статические сборки admin-app + client-pwa за nginx; hardening (non-root, slim, pinned digests, `.dockerignore`).

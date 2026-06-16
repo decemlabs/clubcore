@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Production Infrastructure — Self-Hosted k3s
-status: verifying
+status: Awaiting next milestone
 stopped_at: Completed 118-01-PLAN.md — container images
-last_updated: "2026-06-16T14:15:59.214Z"
-last_activity: 2026-06-16
+last_updated: "2026-06-16T14:38:36.093Z"
+last_activity: 2026-06-16 — Milestone v4.0 completed and archived
 progress:
   total_phases: 4
   completed_phases: 4
@@ -25,12 +25,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 118 (Container Images + Helm Chart (Core Stack)) — EXECUTING
-Plan: 4 of 4
-Status: Phase complete — ready for verification
-Last activity: 2026-06-16
-
-Progress: [██████████] 100%
+Phase: Milestone v4.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-16 — Milestone v4.0 completed and archived
 
 ## v4.0 Roadmap Summary
 
@@ -107,6 +105,18 @@ None at milestone open.
 | production | RUN-01 ЮKassa sandbox sale+refund walkthrough | N/A-until-production |
 | production | RUN-02 RU email deliverability probe | N/A-until-production |
 
+**Acknowledged and deferred at v4.0 close (2026-06-16):**
+
+These are the D-V40-LOCAL-VALIDATE operator-pending boundary — static validation passed; live legs require a real k3d/helm/terraform toolchain. Full list + 2 HARD GATES in `infra/runbooks/production.md` (§ Operator-Pending Boundary) and the per-phase `*-UAT.md` files.
+
+| Category | Item | Status |
+|----------|------|--------|
+| human-verify | Phase 118 verification (118-UAT: 4 items — live k3d deploy, trivy scan, helm lint, alembic-check) | human_needed — operator-pending |
+| human-verify | Phase 119 verification (119-UAT: 10 items — 3-host HTTPS/TLS, WS, kubeseal round-trip, NetworkPolicy enforcement; **HARD GATE SEC-02** RSA-key off-node backup) | human_needed — operator-pending |
+| human-verify | Phase 120 verification (120-UAT: 9 items — terraform validate/plan, live scrape, alert delivery; **HARD GATE BAK-03** verified restore round-trip) | human_needed — operator-pending |
+| human-verify | Phase 121 verification (121-UAT: 4 items — live `make up`/`make smoke` against k3d) | human_needed — operator-pending |
+| planning (backlog) | `2026-06-02-future-milestones-sequence-post-v2-1.md` todo (future-milestone sequencing idea) | deferred → backlog |
+
 ## Session Continuity
 
 Last session: 2026-06-16T14:15:59.209Z
@@ -115,4 +125,4 @@ Resume: `/gsd-plan-phase 118` (Container Images + Helm Chart — Core Stack)
 
 ## Operator Next Steps
 
-- `/gsd-plan-phase 118` to begin Phase 118 planning
+- Start the next milestone with /gsd-new-milestone
