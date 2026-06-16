@@ -117,6 +117,19 @@ These are the D-V40-LOCAL-VALIDATE operator-pending boundary — static validati
 | human-verify | Phase 121 verification (121-UAT: 4 items — live `make up`/`make smoke` against k3d) | human_needed — operator-pending |
 | planning (backlog) | `2026-06-02-future-milestones-sequence-post-v2-1.md` todo (future-milestone sequencing idea) | deferred → backlog |
 
+**Live-deploy findings (2026-06-16 — real k3s-in-Docker run; partial smoke).** Stood up k3s in Docker, imported the 4 images, installed CNPG 1.27, `helm install`ed the core stack. Verified live: CNPG Postgres 16.6 serving SQL, Redis (AOF + allkeys-lru), SeaweedFS master/filer/volume, both nginx frontends, CoreDNS, TZ=UTC, Retain SC binding PVCs. Surfaced (fixed where safe, else logged):
+
+| Severity | Finding | Status |
+|----------|---------|--------|
+| 🟢 fixed | Terraform cluster module: `provider "helm"` used v2.x `kubernetes { }` block; v3.x needs `kubernetes = { }` attr → `terraform validate` failed | FIXED `6f91e93e` (both modules validate green) |
+| 🟢 fixed | Frontend images: HIGH CVEs (nghttp2-libs, zlib) in nginx:1.27-alpine base | FIXED `deeda373` (apk upgrade → 0 HIGH/CRITICAL) |
+| 🟢 fixed | Runbook helm prereq `>=3.14`; SeaweedFS subchart needs `fromToml` (Helm ≥3.17) | FIXED `deeda373` |
+| 🔴 **BUG (chart)** | migrate Job is a `pre-install` hook but CNPG `Cluster` is a normal resource → on **first** `helm install` the hook waits for a Postgres that doesn't exist yet → deadlock/timeout. Works on upgrades only. | **OPEN** — needs redesign (pre-upgrade-only + first-install path, or gate migrate on Cluster readiness). Worked around in test via `--no-hooks` + manual migrate. |
+| 🔴 **BUG (backend)** | `alembic upgrade head` on a FRESH DB fails at rev `0033_clients_email_partial_unique`: `alembic_version.version_num` is VARCHAR(32) but 7 revision ids exceed 32 chars. env.py Phase-108 `version_num_col_type=String(255)` is **not an honored `context.configure()` kwarg** → silently ignored → column stays VARCHAR(32). Blocks the migrate Job + backend Ready on any clean deploy. | **OPEN** — backend bug (out of v4.0 infra scope); blocks v4.0 live done-bar. Needs a working alembic version-column widening + a fresh-DB migration test. |
+| 🟡 trivy | backend image: `starlette` 0.52.1 → 2 HIGH (≥1.3.1); likely needs a FastAPI major bump (breaking) | OPEN — careful dep-upgrade cycle + tests |
+| 🟡 minor | `seaweedfs-s3` gateway pod CrashLoops in-cluster (not diagnosed — backend was the critical path; possibly S3 `existingConfigSecret`/auth) | OPEN — investigate at live bring-up |
+| ℹ️ note | `postgres.nodeSelector` defaults to k3d node name `k3d-clubcore-server-0` (correct for the documented k3d setup; override for other clusters). Helm map-merge gotcha: an empty `{}` override does NOT clear it — set the concrete hostname. | not a bug — documented behavior |
+
 ## Session Continuity
 
 Last session: 2026-06-16T14:15:59.209Z
