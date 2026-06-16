@@ -536,8 +536,12 @@ Plans:
   3. Loki receives log lines from all pods via Grafana Alloy log shipper; a log query `{namespace="default"}` returns live entries in Grafana (Loki community chart v17.3.1, monolithic mode, 30d retention); Alertmanager has 5–7 critical rules (pod down, error-rate spike, disk pressure, cert-expiry, no-backup-in-25h); Alertmanager Telegram delivery is operator-pending (real bot token required in sealed secret)
   4. CNPG `Cluster.spec.backup.barmanObjectStore` stanza is configured for SeaweedFS S3 with WAL archiving and daily base backup; Redis RDB CronJob (weekly → SeaweedFS) and SeaweedFS mirror CronJob (daily → second PVC) are deployed with 7-daily/4-weekly retention policy; BAK-04 weekly automated restore-verification CronJob is deployed and its failure path fires an Alertmanager alert
   5. A full Postgres restore round-trip has been executed in k3d: backup snapshot taken, CNPG cluster restored to a scratch namespace, row counts verified against pre-backup snapshot, result documented in `infra/runbooks/restore.md`; the runbook covers Redis and SeaweedFS restore procedures as well
-**Plans**: TBD
-**Research flag (planning-time)**: Loki community chart v17.x has a new Alloy sub-chart values schema vs v6.x — review the migration guide before writing Loki values files.
+**Plans**: 3 plans
+Plans:
+- [ ] 120-01-PLAN.md — Terraform host + cluster modules (k3s remote-exec, monitoring ns + helm_release v3.2 list-syntax) + Makefile tf-validate/tf-plan (IAC-01..03) [wave 1]
+- [ ] 120-02-PLAN.md — FastAPI /metrics + ServiceMonitor, kube-prometheus-stack + Loki/Alloy values, Grafana dashboards, Alertmanager rules + Telegram receiver (OBS-01..05) [wave 1]
+- [ ] 120-03-PLAN.md — CNPG barmanObjectStore + ScheduledBackup, Redis/SeaweedFS backup CronJobs, restore-verify CronJob + restore.md runbook (BAK-01..04) [wave 2]
+**Research flag (planning-time, RESOLVED)**: CNPG v1.27 barmanObjectStore field shape + Loki v6.x single-binary / Alloy values schema resolved at plan time via Context7/WebFetch; encoded verbatim in plan `<research_resolved>` blocks.
 
 ### Phase 121: Makefile CI/CD + Full Smoke + Runbooks
 
