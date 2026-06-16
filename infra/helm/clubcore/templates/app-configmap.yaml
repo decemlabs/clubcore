@@ -1,0 +1,101 @@
+{{/*
+app-configmap.yaml — ConfigMap clubcore-config
+
+NON-SENSITIVE environment variables only (APP-05).
+
+CRITICAL INVARIANT (T-118-10): No sensitive key may appear in this ConfigMap.
+Sensitive keys (SECRET_KEY, DATABASE_URL, TELEGRAM_BOT_TOKEN, S3_ACCESS_KEY_ID,
+S3_SECRET_ACCESS_KEY, EMAIL__AWS_ACCESS_KEY_ID, EMAIL__AWS_SECRET_ACCESS_KEY,
+EMAIL__WEBHOOK_SECRET, YooKassa keys) are in app-secret.yaml ONLY.
+
+Key naming convention: raw UPPER_SNAKE — config.py uses no env_prefix.
+Nested EmailProviderSettings fields use the pydantic `__` delimiter: EMAIL__<FIELD>.
+
+P9 INVARIANT: TZ=UTC must be present — all pods read this ConfigMap via envFrom.
+
+Phase-119 scope: This ConfigMap may add ENVIRONMENT=staging or remain at prod.
+COOKIE_SECURE must be "true" for prod/staging (config.py startup assertion).
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-config
+  labels:
+    {{- include "clubcore.labels" . | nindent 4 }}
+data:
+  # ---------------------------------------------------------------------------
+  # Runtime environment classification
+  # CRITICAL: must NOT be "dev" — dev_otp_pin_guard validator (config.py line 179)
+  # fails fast if environment=="dev" is misset in a deployed cluster.
+  # ---------------------------------------------------------------------------
+  ENVIRONMENT: {{ .Values.config.environment | default "prod" | quote }}
+  DEBUG: {{ .Values.config.debug | default "false" | quote }}
+
+  # ---------------------------------------------------------------------------
+  # TZ — P9 invariant: all pods run at UTC to prevent scheduling drift / cron
+  # double-fire / timestamp comparison bugs across containers.
+  # ---------------------------------------------------------------------------
+  TZ: "UTC"
+
+  # ---------------------------------------------------------------------------
+  # Cookie security — must be "true" for prod/staging (config.py startup assertion)
+  # ---------------------------------------------------------------------------
+  COOKIE_SECURE: "true"
+
+  # ---------------------------------------------------------------------------
+  # Data services — in-cluster service DNS (plan 02 SUMMARY)
+  # Redis: headless ClusterIP service from redis-service.yaml
+  # ---------------------------------------------------------------------------
+  REDIS_URL: {{ .Values.config.redisUrl | default (printf "redis://%s-redis:6379/0" .Release.Name) | quote }}
+
+  # ---------------------------------------------------------------------------
+  # S3 / SeaweedFS (DATA-03 zero-app-code-change — same boto3/aioboto3 env vars)
+  # S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY are in app-secret.yaml (sensitive).
+  # S3_ENDPOINT_URL/S3_BUCKET/S3_REGION are non-sensitive routing knobs.
+  # SeaweedFS S3 service DNS: <release>-seaweedfs-s3:8333 (plan 02 SUMMARY)
+  # ---------------------------------------------------------------------------
+  S3_ENDPOINT_URL: {{ .Values.config.s3EndpointUrl | default (printf "http://%s-seaweedfs-s3:8333" .Release.Name) | quote }}
+  S3_BUCKET: {{ .Values.config.s3Bucket | default "clubcore" | quote }}
+  S3_REGION: {{ .Values.config.s3Region | default "ru-central1" | quote }}
+
+  # ---------------------------------------------------------------------------
+  # Frontend / PWA base URLs (used for invitation links and referral deep-links)
+  # ---------------------------------------------------------------------------
+  FRONTEND_BASE_URL: {{ .Values.config.frontendBaseUrl | default "https://admin.clubcore.ru" | quote }}
+  PWA_BASE_URL: {{ .Values.config.pwaBaseUrl | default "https://app.clubcore.ru" | quote }}
+
+  # ---------------------------------------------------------------------------
+  # WebSocket CSWSH allowlist (WS_ALLOWED_ORIGINS)
+  # JSON list of allowed Origin headers for the WebSocket upgrade endpoint.
+  # ---------------------------------------------------------------------------
+  WS_ALLOWED_ORIGINS: {{ .Values.config.wsAllowedOrigins | default "[]" | quote }}
+
+  # ---------------------------------------------------------------------------
+  # Telegram (non-sensitive: username only; token goes to Secret)
+  # ---------------------------------------------------------------------------
+  TELEGRAM_BOT_USERNAME: {{ .Values.config.telegramBotUsername | default "clubcore_bot" | quote }}
+
+  # ---------------------------------------------------------------------------
+  # JWT / session TTL knobs (non-sensitive timing parameters)
+  # ---------------------------------------------------------------------------
+  ACCESS_TOKEN_TTL_SECONDS: {{ .Values.config.accessTokenTtlSeconds | default "900" | quote }}
+  REFRESH_TOKEN_TTL_SECONDS: {{ .Values.config.refreshTokenTtlSeconds | default "2592000" | quote }}
+  QR_TOKEN_TTL_SECONDS: {{ .Values.config.qrTokenTtlSeconds | default "60" | quote }}
+
+  # ---------------------------------------------------------------------------
+  # Email provider — non-sensitive routing/mode knobs
+  # Sensitive AWS credentials go to app-secret.yaml (EMAIL__AWS_ACCESS_KEY_ID etc.)
+  # Pydantic nesting delimiter: EMAIL__<FIELD> (SettingsConfigDict default separator)
+  # ---------------------------------------------------------------------------
+  EMAIL__PROVIDER: {{ .Values.config.emailProvider | default "sandbox" | quote }}
+  EMAIL__FROM_ADDRESS: {{ .Values.config.emailFromAddress | default "noreply@mail.clubcore.ru" | quote }}
+  EMAIL__FROM_DOMAIN: {{ .Values.config.emailFromDomain | default "" | quote }}
+  EMAIL__SANDBOX_MODE: {{ .Values.config.emailSandboxMode | default "false" | quote }}
+
+  # ---------------------------------------------------------------------------
+  # Email FROM override (canonical: CLUBCORE_EMAIL_FROM)
+  # Optional — when set, overrides EmailProviderSettings.from_address at runtime.
+  # ---------------------------------------------------------------------------
+  {{- if .Values.config.clubcoreEmailFrom }}
+  CLUBCORE_EMAIL_FROM: {{ .Values.config.clubcoreEmailFrom | quote }}
+  {{- end }}

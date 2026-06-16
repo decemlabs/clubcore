@@ -146,6 +146,105 @@ seaweedfs:
       size: "1Gi"
 
 # ---------------------------------------------------------------------------
+# Application ConfigMap — non-sensitive env vars (APP-05)
+# All keys here become entries in the ConfigMap clubcore-config.
+# Sensitive keys must NEVER appear here — use secrets.* below.
+# ---------------------------------------------------------------------------
+config:
+  # Runtime environment — must NOT be "dev" (config.py dev_otp_pin_guard validator).
+  environment: "prod"
+  debug: "false"
+
+  # Redis in-cluster service DNS (plan 02: redis-service.yaml, clusterIP: None)
+  # Default is derived from Release.Name in app-configmap.yaml; override here if needed.
+  redisUrl: ""  # empty = auto-derive as redis://<release>-redis:6379/0
+
+  # S3 / SeaweedFS (DATA-03 zero-app-code-change)
+  # S3_ENDPOINT_URL auto-derived from release name; override if using external S3.
+  s3EndpointUrl: ""    # empty = auto-derive as http://<release>-seaweedfs-s3:8333
+  s3Bucket: "clubcore"
+  s3Region: "ru-central1"
+
+  # Frontend / PWA URLs — override for production domain
+  frontendBaseUrl: "https://admin.clubcore.ru"
+  pwaBaseUrl: "https://app.clubcore.ru"
+
+  # WebSocket CSWSH allowlist — JSON array of allowed Origins.
+  # For local k3d: '["http://localhost:5173","http://localhost:5174"]'
+  # For production: '["https://admin.clubcore.ru","https://app.clubcore.ru"]'
+  wsAllowedOrigins: "[]"
+
+  # Telegram (non-sensitive: username only)
+  telegramBotUsername: "clubcore_bot"
+
+  # JWT / session TTL knobs (seconds)
+  accessTokenTtlSeconds: "900"
+  refreshTokenTtlSeconds: "2592000"
+  qrTokenTtlSeconds: "60"
+
+  # Email provider routing — non-sensitive mode/routing knobs only
+  # Credentials go to secrets.emailAwsAccessKeyId / emailAwsSecretAccessKey
+  emailProvider: "sandbox"
+  emailFromAddress: "noreply@mail.clubcore.ru"
+  emailFromDomain: ""
+  emailSandboxMode: "false"
+
+  # Optional email FROM override (CLUBCORE_EMAIL_FROM).
+  # Set to a valid email address to override EmailProviderSettings.from_address.
+  clubcoreEmailFrom: ""
+
+# ---------------------------------------------------------------------------
+# Application Secret — sensitive env vars (APP-05 / T-118-10)
+# WARNING: These are PLAINTEXT for LOCAL K3D DEVELOPMENT ONLY.
+#          Phase 119 SEC-01 replaces all values below with a SealedSecret.
+#          NEVER commit production credentials here.
+#          NEVER deploy these values to a live server.
+# ---------------------------------------------------------------------------
+secrets:
+  # JWT signing key — required, strong random value for prod (generate with openssl rand -hex 32)
+  # LOCAL K3D DEFAULT ONLY — CHANGE FOR PRODUCTION.
+  secretKey: "clubcore-dev-secret-key-change-in-phase119-not-for-prod"
+
+  # Telegram bot token — SecretStr; placeholder sentinel safe for dev.
+  # Set to the real @BotFather token for production.
+  telegramBotToken: "placeholder-telegram-bot-token-not-real"
+
+  # S3 / SeaweedFS credentials — MUST match identities in seaweedfs-s3-secret.yaml
+  # (T-118-13: enableAuth: true authenticates the real client only).
+  # LOCAL K3D DEFAULTS — CHANGE FOR PRODUCTION.
+  s3AccessKeyId: "clubcore-s3-access-key"
+  s3SecretAccessKey: "clubcore-s3-secret-key-change-in-phase119"
+
+  # Email provider AWS credentials (Yandex Postbox / SES-compatible).
+  # Leave empty when EMAIL__PROVIDER=sandbox (default for dev/local k3d).
+  emailAwsAccessKeyId: ""
+  emailAwsSecretAccessKey: ""
+
+  # Email webhook HMAC secret (Yandex Postbox bounce/delivery callbacks).
+  # Required when EMAIL__PROVIDER != "sandbox". Empty = sandbox mode (dev default).
+  emailWebhookSecret: ""
+
+# ---------------------------------------------------------------------------
+# Alembic migrate Job — hook resource knobs (APP-01)
+# Architectural values (P4 invariant) are HARD-CODED in migrate-job.yaml:
+#   backoffLimit: 0, activeDeadlineSeconds: 300, hook annotations.
+# Only resource requests/limits and optional timeout override are tunable here.
+# ---------------------------------------------------------------------------
+migrate:
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  # Optional per-deploy timeout override (seconds).
+  # If set, overrides the hard-coded activeDeadlineSeconds: 300.
+  # WARNING: the P4 architectural invariant requires a finite timeout — do not
+  # set this to 0 (infinite). The default 300s is the architectural minimum.
+  activeDeadlineSeconds: 300
+
+# ---------------------------------------------------------------------------
 # Optional overrides
 # ---------------------------------------------------------------------------
 nameOverride: ""
