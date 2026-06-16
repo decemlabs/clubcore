@@ -33,6 +33,17 @@
 
 set -euo pipefail
 
+# ── Temp-file cleanup (security) ────────────────────────────────────────────────
+# One cumulative trap covering EXIT *and* INT/TERM so an ill-timed Ctrl-C never
+# orphans the plaintext-secret manifest in /tmp. Vars are pre-declared empty and
+# the trap is installed BEFORE any temp file is created; `rm -f ""` is a no-op,
+# so the handler is safe to fire at any point.
+CERT_FILE=""
+PLAINTEXT_SECRET_FILE=""
+SEALED_OUTPUT_FILE=""
+cleanup() { rm -f "${CERT_FILE}" "${PLAINTEXT_SECRET_FILE}" "${SEALED_OUTPUT_FILE}"; }
+trap cleanup EXIT INT TERM
+
 # ── Configuration ─────────────────────────────────────────────────────────────
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 CHART_DIR="${REPO_ROOT}/infra/helm/clubcore"
@@ -110,7 +121,6 @@ echo ""
 # ── Step 1: Fetch controller public cert ──────────────────────────────────────
 log "[1/4] Fetching sealed-secrets controller public certificate ..."
 CERT_FILE="$(mktemp /tmp/sealed-secrets-cert-XXXXXX.pem)"
-trap 'rm -f "${CERT_FILE}"' EXIT
 
 # kubeseal --fetch-cert retrieves the RSA public certificate from the controller.
 # This is the cert used for encryption — it is safe to commit (not the private key).
@@ -151,7 +161,6 @@ EMAIL_WEBHOOK_SECRET="${SEAL_EMAIL_WEBHOOK_SECRET:-}"
 
 # Write a temporary plaintext Secret manifest
 PLAINTEXT_SECRET_FILE="$(mktemp /tmp/app-secret-plaintext-XXXXXX.yaml)"
-trap 'rm -f "${CERT_FILE}" "${PLAINTEXT_SECRET_FILE}"' EXIT
 
 cat > "${PLAINTEXT_SECRET_FILE}" <<EOF
 apiVersion: v1
@@ -174,7 +183,6 @@ EOF
 # Seal the plaintext Secret against the controller cert.
 # Output the SealedSecret YAML to stdout and as a values snippet.
 SEALED_OUTPUT_FILE="$(mktemp /tmp/sealed-secret-output-XXXXXX.yaml)"
-trap 'rm -f "${CERT_FILE}" "${PLAINTEXT_SECRET_FILE}" "${SEALED_OUTPUT_FILE}"' EXIT
 
 kubeseal \
     --cert "${CERT_FILE}" \
