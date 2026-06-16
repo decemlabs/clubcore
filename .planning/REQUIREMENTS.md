@@ -61,11 +61,11 @@
 
 ### Observability (OBS)
 
-- [ ] **OBS-01**: kube-prometheus-stack (single-node resource-tuned, 7d retention) в `monitoring` namespace
-- [ ] **OBS-02**: Loki community chart (monolithic + Grafana Alloy log shipper, 30d retention) + log shipping со всех подов
-- [ ] **OBS-03**: FastAPI `/metrics` через `prometheus-fastapi-instrumentator>=7.1,<8` + ServiceMonitor CRD
-- [ ] **OBS-04**: Grafana dashboards (FastAPI, node-exporter, CNPG Postgres, Redis)
-- [ ] **OBS-05**: 5–7 critical Alertmanager rules + Telegram receiver (доставка алертов operator-pending — реальный токен в sealed secret)
+- [x] **OBS-01**: kube-prometheus-stack (single-node resource-tuned, 7d retention) в `monitoring` namespace
+- [x] **OBS-02**: Loki community chart (monolithic + Grafana Alloy log shipper, 30d retention) + log shipping со всех подов
+- [x] **OBS-03**: FastAPI `/metrics` через `prometheus-fastapi-instrumentator>=7.1,<8` + ServiceMonitor CRD
+- [x] **OBS-04**: Grafana dashboards (FastAPI, node-exporter, CNPG Postgres, Redis)
+- [x] **OBS-05**: 5–7 critical Alertmanager rules + Telegram receiver (доставка алертов operator-pending — реальный токен в sealed secret)
 
 ### Backup & Recovery (BAK)
 
@@ -166,11 +166,11 @@
 | IAC-01 | Phase 120 | Complete |
 | IAC-02 | Phase 120 | Complete |
 | IAC-03 | Phase 120 | Complete |
-| OBS-01 | Phase 120 | Pending |
-| OBS-02 | Phase 120 | Pending |
-| OBS-03 | Phase 120 | Pending |
-| OBS-04 | Phase 120 | Pending |
-| OBS-05 | Phase 120 | Pending |
+| OBS-01 | Phase 120 | Complete |
+| OBS-02 | Phase 120 | Complete |
+| OBS-03 | Phase 120 | Complete |
+| OBS-04 | Phase 120 | Complete |
+| OBS-05 | Phase 120 | Complete |
 | BAK-01 | Phase 120 | Pending |
 | BAK-02 | Phase 120 | Pending |
 | BAK-03 | Phase 120 | Pending |
