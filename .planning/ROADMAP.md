@@ -476,7 +476,7 @@ Plans:
 **Execution order: 118 → 119 → 120 → 121**
 
 - [ ] **Phase 118: Container Images + Helm Chart (Core Stack)** - Production-hardened Docker images for all 6 components + full Helm umbrella chart (stateful services + app workloads + migration job)
-- [ ] **Phase 119: Networking, Security + CSRF Rename** - Ingress/TLS via Traefik v3 + cert-manager; sealed-secrets; pod security contexts; NetworkPolicies; NAME-01 CSRF rename; secure-phase 70 retro
+- [ ] **Phase 119: Networking, Security + CSRF Rename** (3 plans) - Ingress/TLS via Traefik v3 + cert-manager; sealed-secrets; pod security contexts; NetworkPolicies; NAME-01 CSRF rename; secure-phase 70 retro
 - [ ] **Phase 120: IaC, Observability + Backup** - Terraform IaC modules; kube-prometheus-stack + Loki + Grafana dashboards; Alertmanager; CNPG WAL backup; automated restore round-trip
 - [ ] **Phase 121: Makefile CI/CD + Full Smoke + Runbooks** - Root-level Makefile with all targets; `make up` pipeline green against k3d; `make smoke` full checklist; production runbook
 
@@ -513,8 +513,17 @@ Plans:
   4. All `SealedSecret` YAML files are committed to git; plaintext secrets are absent from git history; the controller RSA key is exported to a YAML file and confirmed backed up off-node alongside the repo — this is a hard acceptance gate for SEC-02, not a post-hoc action; `make scan` trivy gate is green (0 HIGH/CRITICAL)
   5. Every pod has `securityContext: {runAsNonRoot: true, readOnlyRootFilesystem: true, allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}`; `NetworkPolicy` default-deny is active in the app namespace; every pod has explicit CoreDNS egress (UDP/TCP 53 to kube-system); DNS resolution from each pod is verified (e.g., `kubectl exec <pod> -- nslookup postgres-svc` succeeds)
   6. Staff `clubcore_csrf` cookie name is live in backend (replacing `sportzal_csrf`); `openapi.json`/`schema.d.ts` are regenerated additively (staff drift-gate passes with additive diff, not byte-stable); SEC-06 `/gsd:secure-phase 70` retro items (proxy rate-limit bucket, QR post-decode existence check, cancel idempotency) are verified closed or carried as documented known-acceptable
-**Plans**: TBD
-**Research flag (planning-time)**: Verify exact Traefik v3 WebSocket sticky-session annotation key before writing the Ingress template — the annotation name changed between v2 and v3.
+**Plans**: 3 plans, 2 waves
+Plans:
+**Wave 1** *(119-01 and 119-03 run in parallel — disjoint files)*
+
+- [ ] 119-01-PLAN.md — Networking: admin-app/client-pwa Deployments+Services (port 8080), Traefik v3 Ingress (3 hosts + WS + HTTPS-redirect middleware), cert-manager selfSigned/staging ClusterIssuers + Certificate [NET-01, NET-02, NET-03, NET-04] · wave 1
+- [ ] 119-03-PLAN.md — SEC-app: CSRF clubcore_csrf verify + _lib.sh/README stray-string fix + additive openapi.json/schema.d.ts regen + secure-phase 70 retro [SEC-05, SEC-06] · wave 1
+
+**Wave 2** *(119-02 edits values.yaml after 119-01 — file-ownership sequencing)*
+
+- [ ] 119-02-PLAN.md — SEC-infra: SealedSecret + kubeseal helper + RSA-key backup runbook (P6 hard gate) + securityContext hardening (4 workloads) + default-deny/allow NetworkPolicies + CoreDNS egress (P8) [SEC-01, SEC-02, SEC-03, SEC-04] · wave 2
+**Research flag (RESOLVED at plan time)**: Traefik v3 upgrades WebSocket connections automatically over a standard HTTP router — there is NO special per-route WS annotation in v3 (confirmed via context7 /traefik/traefik) and no sticky-session annotation is needed at replicas:1; the relevant annotations are router.entrypoints/router.tls/router.middlewares. Documented inline in ingress.yaml.
 
 ### Phase 120: IaC, Observability + Backup
 
