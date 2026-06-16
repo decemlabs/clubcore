@@ -5,19 +5,24 @@ BAK-02: daily mirror of the SeaweedFS S3 bucket to a second PVC (local DR copy).
 
 Schedule: "0 4 * * *" = daily 04:00 UTC (after Redis backup at 03:00, after CNPG at 02:00)
 
-Strategy: use `aws s3 sync` with the SeaweedFS in-cluster S3 endpoint to mirror all objects
-from s3://clubcore/ to a mounted second PVC at /mnt/backup/. This creates a local PVC-backed
-copy of all S3 data as a defense-in-depth layer (in addition to CNPG barmanObjectStore).
+Strategy (WR-04): use `aws s3 sync --delete` into a SINGLE stable mirror dir
+(/mnt/backup/current/) so the sync is genuinely INCREMENTAL — only changed/new
+objects transfer and deletions propagate. After the sync, snapshot the current
+state into a dated dir via hardlinks (`cp -al /mnt/backup/current /mnt/backup/YYYY-MM-DD`),
+which costs ~0 extra space for unchanged files (shared inodes). This is a local
+PVC-backed defense-in-depth copy (in addition to CNPG barmanObjectStore).
 
-Retention math (directory-based):
-  Daily retention: keep last 7 days of mirror snapshots.
-    Each daily run writes to a dated subdirectory: /mnt/backup/YYYY-MM-DD/
-    After sync, prune subdirectories older than RETENTION_DAILY_DAYS (7).
-  Weekly retention: 4 weeks = prune dirs older than RETENTION_WEEKLY_DAYS (28).
-    Weekly subdirs kept based on modification time of the dated dir.
+  The PREVIOUS approach synced into a fresh empty dated dir every day, so `--delete`
+  was a no-op and EVERY run re-downloaded the entire bucket — up to retentionDays full
+  copies on a PVC sized for ONE copy, guaranteeing PVC overflow once the bucket grew.
+
+Retention (WR-04): prune dated snapshot dirs older than RETENTION_DAYS (default 28 = 4
+  weeks). Because dated dirs are hardlink snapshots of current/, pruning old dirs frees
+  only the inodes unique to them; the live mirror in current/ is never pruned.
 
 Second PVC: mirrorPvc — a separate PersistentVolumeClaim on the clubcore-retain StorageClass.
-  Size: 20Gi (matches SeaweedFS volume.data.size — must be >= total S3 data size).
+  Size: 20Gi — holds ONE live copy (current/) + hardlink snapshots (≈churn, not N full
+  copies). Must be >= total S3 data size + headroom for inter-snapshot churn.
   The PVC is declared as a VolumeClaimTemplate would be, but since this is a CronJob
   (not a StatefulSet), the PVC is pre-declared and referenced by name. The PVC name
   is {{ include "clubcore.fullname" . }}-seaweedfs-mirror-backup.
@@ -143,11 +148,9 @@ spec:
                   value: {{ .Values.backup.postgres.s3EndpointUrl | default (printf "http://%s-seaweedfs-s3:8333" .Release.Name) | quote }}
                 - name: S3_BUCKET
                   value: {{ .Values.config.s3Bucket | default "clubcore" | quote }}
-                # Retention windows (days)
-                - name: RETENTION_DAILY_DAYS
-                  value: {{ .Values.backup.redis.retentionDailyCount | default 7 | quote }}
-                - name: RETENTION_WEEKLY_DAYS
-                  value: {{ mul (.Values.backup.redis.retentionWeeklyCount | default 4) 7 | quote }}
+                # WR-04: single age-based retention window for dated hardlink snapshots.
+                - name: RETENTION_DAYS
+                  value: {{ .Values.backup.seaweedfs.retentionDays | default 28 | quote }}
                 # S3 credentials — reuse EXISTING app-secret (T-120-BAK1: NEVER mint new creds)
                 - name: AWS_ACCESS_KEY_ID
                   valueFrom:
@@ -174,46 +177,52 @@ spec:
                   command -v aws >/dev/null 2>&1 || { echo "[backup-seaweedfs] ERROR: aws-cli missing from image" >&2; exit 1; }
 
                   DATESTAMP=$(date -u +"%Y-%m-%d")
-                  MIRROR_DIR="/mnt/backup/${DATESTAMP}"
+                  CURRENT_DIR="/mnt/backup/current"
+                  SNAPSHOT_DIR="/mnt/backup/${DATESTAMP}"
                   echo "[backup-seaweedfs] Starting SeaweedFS mirror at ${DATESTAMP} UTC"
 
-                  # ── Step 1: Create dated backup directory ─────────────────────
-                  echo "[1/3] Creating mirror directory: ${MIRROR_DIR}"
-                  mkdir -p "${MIRROR_DIR}"
-
-                  # ── Step 2: Sync SeaweedFS S3 bucket to second PVC ────────────
-                  echo "[2/3] Syncing s3://${S3_BUCKET}/ to ${MIRROR_DIR}/..."
+                  # ── Step 1: Incremental sync into the stable current/ dir ─────
+                  # WR-04: sync into a SINGLE persistent dir so `--delete` is a real
+                  # incremental mirror (only changed objects transfer; deletions
+                  # propagate). NEVER sync into a fresh dated dir (that forces a full
+                  # re-download every run and overflows the PVC).
+                  echo "[1/3] Incremental sync s3://${S3_BUCKET}/ -> ${CURRENT_DIR}/ ..."
+                  mkdir -p "${CURRENT_DIR}"
                   aws s3 sync \
                     "s3://${S3_BUCKET}/" \
-                    "${MIRROR_DIR}/" \
+                    "${CURRENT_DIR}/" \
                     --endpoint-url "${S3_ENDPOINT_URL}" \
                     --no-progress \
                     --delete
-                  OBJECT_COUNT=$(find "${MIRROR_DIR}" -type f | wc -l)
-                  echo "[2/3] Sync complete: ${OBJECT_COUNT} objects in ${MIRROR_DIR}"
+                  OBJECT_COUNT=$(find "${CURRENT_DIR}" -type f | wc -l)
+                  echo "[1/3] Sync complete: ${OBJECT_COUNT} objects in ${CURRENT_DIR}"
+
+                  # ── Step 2: Hardlink snapshot of current/ into a dated dir ────
+                  # WR-04: `cp -al` creates a point-in-time snapshot that SHARES inodes
+                  # with current/ for unchanged files — ~0 extra space per snapshot.
+                  echo "[2/3] Snapshotting ${CURRENT_DIR} -> ${SNAPSHOT_DIR} (hardlinks)..."
+                  rm -rf "${SNAPSHOT_DIR}"
+                  cp -al "${CURRENT_DIR}" "${SNAPSHOT_DIR}"
 
                   # ── Step 3: Retention pruning ─────────────────────────────────
-                  # Retention math:
-                  #   DAILY:  keep last RETENTION_DAILY_DAYS (7) dated subdirs in /mnt/backup/
-                  #   WEEKLY: keep last RETENTION_WEEKLY_DAYS (28) dated subdirs
-                  #   Effective retention = max(daily, weekly) window = 28 days.
-                  #   Prune any YYYY-MM-DD subdirectory older than RETENTION_WEEKLY_DAYS days.
-                  echo "[3/3] Pruning mirror dirs older than ${RETENTION_WEEKLY_DAYS} days..."
+                  # WR-04: prune dated snapshot dirs older than RETENTION_DAYS. current/
+                  # is never pruned (it is the live incremental mirror).
+                  echo "[3/3] Pruning dated snapshots older than ${RETENTION_DAYS} days..."
+                  CUTOFF_EPOCH=$(date -u -d "-${RETENTION_DAYS} days" +%s 2>/dev/null \
+                    || date -u -v "-${RETENTION_DAYS}d" +%s 2>/dev/null || echo 0)
                   find /mnt/backup -maxdepth 1 -mindepth 1 -type d -name "20??-??-??" | while read -r OLD_DIR; do
                     DIR_NAME=$(basename "${OLD_DIR}")
                     # Convert YYYY-MM-DD to epoch for comparison
                     DIR_EPOCH=$(date -u -d "${DIR_NAME}" +%s 2>/dev/null \
                       || date -u -j -f "%Y-%m-%d" "${DIR_NAME}" +%s 2>/dev/null || echo 0)
-                    CUTOFF_EPOCH=$(date -u -d "-${RETENTION_WEEKLY_DAYS} days" +%s 2>/dev/null \
-                      || date -u -v "-${RETENTION_WEEKLY_DAYS}d" +%s 2>/dev/null || echo 0)
-                    if [ "${DIR_EPOCH}" -lt "${CUTOFF_EPOCH}" ] && [ "${DIR_EPOCH}" -gt 0 ]; then
-                      echo "[3/3] Removing stale mirror dir: ${OLD_DIR}"
+                    if [ "${CUTOFF_EPOCH}" -gt 0 ] && [ "${DIR_EPOCH}" -gt 0 ] && [ "${DIR_EPOCH}" -lt "${CUTOFF_EPOCH}" ]; then
+                      echo "[3/3] Removing stale snapshot dir: ${OLD_DIR}"
                       rm -rf "${OLD_DIR}"
                     fi
                   done
                   echo "[3/3] Retention pruning complete"
 
-                  echo "[backup-seaweedfs] SUCCESS — mirror complete: ${MIRROR_DIR} (${OBJECT_COUNT} objects)"
+                  echo "[backup-seaweedfs] SUCCESS — mirror complete: ${SNAPSHOT_DIR} (${OBJECT_COUNT} objects)"
 
               resources:
                 requests:

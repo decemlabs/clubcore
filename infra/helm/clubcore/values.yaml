@@ -581,18 +581,23 @@ backup:
   redis:
     # schedule: weekly backup, Sun 03:00 UTC (after midnight, after Postgres backup window).
     schedule: "0 3 * * 0"
-    # retentionDailyCount: keep last N daily RDB snapshots in SeaweedFS.
-    retentionDailyCount: 7
-    # retentionWeeklyCount: keep last N weekly RDB snapshots in SeaweedFS.
+    # WR-03: weekly job → single age-based retention. retentionDailyCount removed
+    # (a weekly job cannot enforce a daily tier; the knob was dead config).
+    # retentionWeeklyCount: prune RDB objects older than N weeks (default 4 → 28 days).
     retentionWeeklyCount: 4
 
   # SeaweedFS mirror CronJob settings (BAK-02)
   seaweedfs:
     # schedule: daily mirror, 04:00 UTC (after Redis backup at 03:00).
     schedule: "0 4 * * *"
+    # WR-04: retention for the dated mirror snapshots (this job DOES run daily).
+    # retentionDays: prune dated mirror dirs older than N days (default 28 = 4 weeks).
+    retentionDays: 28
     # mirrorPvc: second PVC to mirror SeaweedFS bucket data into (local DR copy).
     mirrorPvc:
-      # size: must be >= SeaweedFS volume.data.size (currently 20Gi).
+      # WR-04: a stable "current/" dir holds ONE incremental copy (aws s3 sync --delete);
+      # dated snapshots are hardlink-rotated from it, so PVC growth is ~1 copy + churn,
+      # NOT retentionDays × bucket_size. Size must be >= total S3 data size + headroom.
       size: "20Gi"
       # storageClass: use the Retain StorageClass so PVC survives Pod/CronJob deletion (DATA-04).
       storageClass: clubcore-retain
