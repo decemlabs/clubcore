@@ -1,0 +1,115 @@
+{{/*
+arq-worker-deployment.yaml — Deployment clubcore-arq-worker (APP-03)
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  ARCHITECTURAL INVARIANT — D-V40-REPLICAS / P2                             ║
+║                                                                              ║
+║  strategy: Recreate  (NOT RollingUpdate)                                     ║
+║  replicas: 1         (FIXED — NOT user-overridable)                          ║
+║                                                                              ║
+║  WHY:                                                                        ║
+║  ARQ (async redis queue) workers schedule cron jobs via a built-in           ║
+║  CronJobScheduler.  If two arq-worker processes run simultaneously there     ║
+║  will be TWO independent schedulers, each firing every cron task at the      ║
+║  same time — double charges, double emails, double bookings, data            ║
+║  corruption.  This is NOT a load-scaling concern; it is a correctness        ║
+║  invariant.  The single arq worker consumes the Redis queue without          ║
+║  duplication.                                                                ║
+║                                                                              ║
+║  Recreate (not RollingUpdate) is required because RollingUpdate creates an   ║
+║  overlap window where both the old and new worker run simultaneously —       ║
+║  exactly the double-scheduler hazard.  Recreate terminates the old pod       ║
+║  fully before starting the new one.                                          ║
+║                                                                              ║
+║  DO NOT add a `.Values.arqWorker.replicas` knob here.  If you scale this     ║
+║  above 1, you WILL get cron double-fire.  Future HA multi-worker support     ║
+║  requires disabling the CronJobScheduler on secondary replicas first.        ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Image:
+  Shared backend image from plan 01: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+  Command override: arq app.workers.WorkerSettings
+  (mirrors docker-compose.yml arq-worker service command)
+
+Environment:
+  envFrom: configMapRef clubcore-config (TZ=UTC, REDIS_URL, etc.)
+           + secretRef clubcore-app-secret (DATABASE_URL, etc.)
+  TZ=UTC arrives via the ConfigMap — P9 invariant.
+
+Security:
+  securityContext stub (non-root) present.  Full SEC-03 hardening is Phase 119 scope.
+
+Liveness:
+  No HTTP /healthz probe (arq-worker is not an HTTP server).
+  Process presence is monitored by Kubernetes restart policy + Recreate strategy.
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "clubcore.fullname" . }}-arq-worker
+  labels:
+    {{- include "clubcore.labels" . | nindent 4 }}
+    app.kubernetes.io/component: arq-worker
+  annotations:
+    # D-V40-REPLICAS / P2: Recreate + replicas:1 are ARCHITECTURAL INVARIANTS.
+    # Two arq-workers = two CronJobSchedulers = cron double-fire.
+    # See header comment for full rationale.
+    clubcore.io/scaling-invariant: "replicas:1-fixed-cron-double-fire-hazard"
+spec:
+  # ─── ARCHITECTURAL INVARIANT ─────────────────────────────────────────────────
+  # replicas: 1 — FIXED. DO NOT expose .Values.arqWorker.replicas here.
+  # See header comment for the cron double-fire rationale (P2 / D-V40-REPLICAS).
+  # ─────────────────────────────────────────────────────────────────────────────
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "clubcore.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: arq-worker
+  # ─── ARCHITECTURAL INVARIANT ─────────────────────────────────────────────────
+  # strategy: Recreate — FIXED. DO NOT change to RollingUpdate.
+  # RollingUpdate creates an overlap window where both old and new workers run —
+  # exactly the double-scheduler hazard that Recreate prevents.
+  # ─────────────────────────────────────────────────────────────────────────────
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        {{- include "clubcore.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: arq-worker
+    spec:
+      # Security context stub — full SEC-03 hardening is Phase 119 scope.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+
+      containers:
+        - name: arq-worker
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
+
+          # Command override: run the ARQ worker with its WorkerSettings class.
+          # Mirrors docker-compose.yml arq-worker service:
+          #   command: arq app.workers.WorkerSettings
+          command: ["arq", "app.workers.WorkerSettings"]
+
+          # Consume full environment from ConfigMap (TZ=UTC, REDIS_URL, etc.)
+          # and Secret (DATABASE_URL, SECRET_KEY, etc.).
+          # TZ=UTC arrives via ConfigMap — P9 invariant.
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-config
+            - secretRef:
+                name: {{ .Release.Name }}-app-secret
+
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+
+          resources:
+            requests:
+              cpu: {{ .Values.arqWorker.resources.requests.cpu | default "100m" | quote }}
+              memory: {{ .Values.arqWorker.resources.requests.memory | default "128Mi" | quote }}
+            limits:
+              cpu: {{ .Values.arqWorker.resources.limits.cpu | default "500m" | quote }}
+              memory: {{ .Values.arqWorker.resources.limits.memory | default "512Mi" | quote }}

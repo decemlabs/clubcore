@@ -1,0 +1,114 @@
+{{/*
+telegram-bot-deployment.yaml — Deployment clubcore-telegram-bot (APP-04)
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  ARCHITECTURAL INVARIANT — D-V40-REPLICAS / P3                             ║
+║                                                                              ║
+║  strategy: Recreate  (NOT RollingUpdate)                                     ║
+║  replicas: 1         (FIXED — NOT user-overridable)                          ║
+║                                                                              ║
+║  WHY:                                                                        ║
+║  The Telegram Bot API long-poll (getUpdates) can only be consumed by ONE     ║
+║  client at a time.  If two telegram-bot processes run simultaneously, both   ║
+║  poll the same update queue — every incoming message is processed TWICE.     ║
+║  This means:                                                                 ║
+║    • Every user message triggers duplicate responses                         ║
+║    • Every scheduled notification fires twice                                ║
+║    • Payment confirmations and booking actions are duplicated                ║
+║  This is NOT a load-scaling concern; it is a Telegram API protocol          ║
+║  constraint.  Long-polling does not support multiple concurrent consumers.   ║
+║  (Webhook mode would need a separate dedup layer — out of v4.0 scope.)       ║
+║                                                                              ║
+║  Recreate (not RollingUpdate) is required because RollingUpdate creates an   ║
+║  overlap window where both the old and new bot run simultaneously —          ║
+║  exactly the duplicate-consume hazard.  Recreate terminates the old pod      ║
+║  fully before starting the new one.                                          ║
+║                                                                              ║
+║  DO NOT add a `.Values.telegramBot.replicas` knob here.  If you scale this   ║
+║  above 1, you WILL get duplicate Telegram message processing.  Future        ║
+║  webhook-mode support requires a dedup/idempotency layer first.              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Image:
+  Shared backend image from plan 01: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+  Command override: python -m app.workers.telegram_bot
+  (mirrors docker-compose.yml telegram-bot service command)
+
+Environment:
+  envFrom: configMapRef clubcore-config (TZ=UTC, REDIS_URL, etc.)
+           + secretRef clubcore-app-secret (DATABASE_URL, TELEGRAM_BOT_TOKEN, etc.)
+  TZ=UTC arrives via the ConfigMap — P9 invariant.
+
+Security:
+  securityContext stub (non-root) present.  Full SEC-03 hardening is Phase 119 scope.
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "clubcore.fullname" . }}-telegram-bot
+  labels:
+    {{- include "clubcore.labels" . | nindent 4 }}
+    app.kubernetes.io/component: telegram-bot
+  annotations:
+    # D-V40-REPLICAS / P3: Recreate + replicas:1 are ARCHITECTURAL INVARIANTS.
+    # Two telegram-bots = duplicate long-poll message consumption.
+    # See header comment for full rationale.
+    clubcore.io/scaling-invariant: "replicas:1-fixed-telegram-longpoll-duplicate-hazard"
+spec:
+  # ─── ARCHITECTURAL INVARIANT ─────────────────────────────────────────────────
+  # replicas: 1 — FIXED. DO NOT expose .Values.telegramBot.replicas here.
+  # See header comment for the long-poll duplicate-consume rationale (P3 / D-V40-REPLICAS).
+  # ─────────────────────────────────────────────────────────────────────────────
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "clubcore.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: telegram-bot
+  # ─── ARCHITECTURAL INVARIANT ─────────────────────────────────────────────────
+  # strategy: Recreate — FIXED. DO NOT change to RollingUpdate.
+  # RollingUpdate creates an overlap window where both old and new bots run —
+  # exactly the duplicate long-poll hazard that Recreate prevents.
+  # ─────────────────────────────────────────────────────────────────────────────
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        {{- include "clubcore.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: telegram-bot
+    spec:
+      # Security context stub — full SEC-03 hardening is Phase 119 scope.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+
+      containers:
+        - name: telegram-bot
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
+
+          # Command override: run the Telegram bot long-poll worker.
+          # Mirrors docker-compose.yml telegram-bot service:
+          #   command: python -m app.workers.telegram_bot
+          command: ["python", "-m", "app.workers.telegram_bot"]
+
+          # Consume full environment from ConfigMap (TZ=UTC, REDIS_URL, etc.)
+          # and Secret (DATABASE_URL, TELEGRAM_BOT_TOKEN, etc.).
+          # TZ=UTC arrives via ConfigMap — P9 invariant.
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-config
+            - secretRef:
+                name: {{ .Release.Name }}-app-secret
+
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+
+          resources:
+            requests:
+              cpu: {{ .Values.telegramBot.resources.requests.cpu | default "50m" | quote }}
+              memory: {{ .Values.telegramBot.resources.requests.memory | default "64Mi" | quote }}
+            limits:
+              cpu: {{ .Values.telegramBot.resources.limits.cpu | default "200m" | quote }}
+              memory: {{ .Values.telegramBot.resources.limits.memory | default "256Mi" | quote }}
