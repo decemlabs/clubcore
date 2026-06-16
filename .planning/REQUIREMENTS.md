@@ -3,7 +3,7 @@
 **Defined:** 2026-06-16
 **Core Value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
 
-**Milestone goal:** Сделать clubcore по-настоящему запускаемым — контейнеризировать весь стек, описать инфраструктуру как код (Terraform под on-prem/bare-metal k3s), развернуть в кластере с наблюдаемостью, бэкапами и сетевой безопасностью. **Bar = локальная валидация** (k3d deploy + `terraform validate/plan` + `helm lint` + smoke); боевой apply / живой ЮKassa-leg / RU email-SMS deliverability — operator-pending.
+**Milestone goal:** Сделать clubcore по-настоящему запускаемым — контейнеризировать весь стек, описать инфраструктуру как код (Terraform под on-prem/bare-metal k3s), развернуть в кластере с наблюдаемостью, бэкапами и сетевой безопасностью. **Bar = локальная валидация** (k3d deploy + `terraform validate/plan` + `helm lint` + `make smoke`); боевой apply / живой ЮKassa-leg / RU email-SMS deliverability — operator-pending.
 
 **Research:** `.planning/research/SUMMARY.md` (HIGH confidence, версии проверены 2026-06-16). Чисто инфра/DevOps — бизнес-фичи не трогаем, OpenAPI не меняется (кроме additive NAME-01).
 
@@ -136,25 +136,55 @@
 
 ## Traceability
 
-Какие фазы покрывают какие требования. Заполняется при создании роадмапа.
+Какие фазы покрывают какие требования.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| IMG-01..04 | TBD | Pending |
-| DATA-01..04 | TBD | Pending |
-| APP-01..05 | TBD | Pending |
-| NET-01..04 | TBD | Pending |
-| SEC-01..06 | TBD | Pending |
-| IAC-01..03 | TBD | Pending |
-| OBS-01..05 | TBD | Pending |
-| BAK-01..04 | TBD | Pending |
-| OPS-01..04 | TBD | Pending |
+| IMG-01 | Phase 118 | Pending |
+| IMG-02 | Phase 118 | Pending |
+| IMG-03 | Phase 118 | Pending |
+| IMG-04 | Phase 118 | Pending |
+| DATA-01 | Phase 118 | Pending |
+| DATA-02 | Phase 118 | Pending |
+| DATA-03 | Phase 118 | Pending |
+| DATA-04 | Phase 118 | Pending |
+| APP-01 | Phase 118 | Pending |
+| APP-02 | Phase 118 | Pending |
+| APP-03 | Phase 118 | Pending |
+| APP-04 | Phase 118 | Pending |
+| APP-05 | Phase 118 | Pending |
+| NET-01 | Phase 119 | Pending |
+| NET-02 | Phase 119 | Pending |
+| NET-03 | Phase 119 | Pending |
+| NET-04 | Phase 119 | Pending |
+| SEC-01 | Phase 119 | Pending |
+| SEC-02 | Phase 119 | Pending |
+| SEC-03 | Phase 119 | Pending |
+| SEC-04 | Phase 119 | Pending |
+| SEC-05 | Phase 119 | Pending |
+| SEC-06 | Phase 119 | Pending |
+| IAC-01 | Phase 120 | Pending |
+| IAC-02 | Phase 120 | Pending |
+| IAC-03 | Phase 120 | Pending |
+| OBS-01 | Phase 120 | Pending |
+| OBS-02 | Phase 120 | Pending |
+| OBS-03 | Phase 120 | Pending |
+| OBS-04 | Phase 120 | Pending |
+| OBS-05 | Phase 120 | Pending |
+| BAK-01 | Phase 120 | Pending |
+| BAK-02 | Phase 120 | Pending |
+| BAK-03 | Phase 120 | Pending |
+| BAK-04 | Phase 120 | Pending |
+| OPS-01 | Phase 121 | Pending |
+| OPS-02 | Phase 121 | Pending |
+| OPS-03 | Phase 121 | Pending |
+| OPS-04 | Phase 121 | Pending |
 
 **Coverage:**
 - v4.0 requirements: 39 total (IMG 4 · DATA 4 · APP 5 · NET 4 · SEC 6 · IAC 3 · OBS 5 · BAK 4 · OPS 4)
-- Mapped to phases: 0 (заполнит roadmapper)
-- Unmapped: 39 ⚠️ (до создания роадмапа)
+- Mapped to phases: 39/39 ✓
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-06-16*
-*Last updated: 2026-06-16 after initial definition (v4.0)*
+*Last updated: 2026-06-16 — traceability filled after roadmap creation*

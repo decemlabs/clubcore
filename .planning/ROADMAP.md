@@ -24,6 +24,7 @@
 - ✅ **v3.0 Production Admin — Backend Wiring** — Phases 100-106 (shipped 2026-06-14) — see [milestones/v3.0-ROADMAP.md](milestones/v3.0-ROADMAP.md)
 - ✅ **v3.1 Admin — Fill the Gaps** — Phases 107-111 (shipped 2026-06-15) — see [milestones/v3.1-ROADMAP.md](milestones/v3.1-ROADMAP.md)
 - ✅ **v3.2 Admin — Wire the Rest** — Phases 112-117 (shipped 2026-06-16) — see [milestones/v3.2-ROADMAP.md](milestones/v3.2-ROADMAP.md)
+- 🚧 **v4.0 Production Infrastructure — Self-Hosted k3s** — Phases 118-121 (in progress)
 
 ## Phases
 
@@ -451,148 +452,91 @@ Plans:
 
 **Scope principle (D-V32-SCOPE):** Additive-контракт (не byte-stable). Урок v3.0/v3.1: **≥1 contract-тест на домен**, парсящий РЕАЛЬНЫЙ ответ backend (mock↔real schema-дрейф дважды прошёл формальный гейт, пойман только browser-UAT). `_v32Checks` forward-guard закрывает milestone.
 
-**Backend discipline (carried):** FastAPI modular monолит — raw-SQL cross-module reads / Protocol-slot writes (D-20-MODULE), RBAC byte-parity (CISO-01; extend `Resource`/`OWNER_ONLY` + `can.ts`/`registry.ts` для новых gated ресурсов: `REFUND`/`PAYMENTS`, `USERS_ROLE`), LOCKED audit events pre-registered (INFRA-15), Alembic round-trip clean, деньги в integer kopecks, даты Europe/Moscow. Frontend: per-domain Zod seam + TanStack Query + `staffRequest` (`cc_*` cookies + `X-CSRF-Token`) + `can()`-gating; `Idempotency-Key` на денежных мутациях.
+**Backend discipline (carried):** FastAPI modular монолит — raw-SQL cross-module reads / Protocol-slot writes (D-20-MODULE), RBAC byte-parity (CISO-01; extend `Resource`/`OWNER_ONLY` + `can.ts`/`registry.ts` для новых gated ресурсов: `REFUND`/`PAYMENTS`, `USERS_ROLE`), LOCKED audit events pre-registered (INFRA-15), Alembic round-trip clean, деньги в integer kopecks, даты Europe/Moscow. Frontend: per-domain Zod seam + TanStack Query + `staffRequest` (`cc_*` cookies + `X-CSRF-Token`) + `can()`-gating; `Idempotency-Key` на денежных мутациях.
 
 **Execution order: 112 → 113 → 114 → 115 → 116 → 117**
 
-- [ ] **Phase 112: Critical Money & Access (P0)** — arbitrary payment refund (`POST /payments/{id}/refund` + `Action.REFUND` RBAC + un-stub Cashbox/Finance) + staff role-change (`PATCH /users/{id}/role` + modal + audit)
-- [ ] **Phase 113: Promo Codes CRUD (P1)** — staff CRUD over existing `promo_codes` backend; wire PlansPage «Скидки и акции» mock→real
-- [ ] **Phase 114: Attendance Analytics on Existing Reports (P1)** — heatmap/hour-curve/day-of-week/peak/frequency/duration FE widgets wired to existing `reports/visits` aggregate
-- [ ] **Phase 115: Live & Advanced Analytics (P1)** — cohort/anomaly/risk (new window-function queries) + LiveNow (`/reports/load/now`) + dashboard activity-feed/trainer-KPI/plans sales-chart on existing read endpoints
-- [ ] **Phase 116: Chat Inbox & Exports (P2)** — staff REST over existing messaging module (list threads, send/reply) + CSV exports over existing `csv_export.py`
-- [x] **Phase 117: OpenAPI Handoff + Milestone Gate** — additive `openapi.json` + `schema.d.ts` regen for new v3.2 routes + `_v32Checks` forward-guard + ≥1 real-backend contract test per new domain + full gate green (completed 2026-06-15)
+- [x] **Phase 112: Critical Money & Access (P0)** — arbitrary payment refund + staff role-change — completed 2026-06-15
+- [x] **Phase 113: Promo Codes CRUD (P1)** — staff CRUD over existing `promo_codes` backend — completed 2026-06-15
+- [x] **Phase 114: Attendance Analytics on Existing Reports (P1)** — analytics FE widgets wired to existing `reports/visits` aggregate — completed 2026-06-15
+- [x] **Phase 115: Live & Advanced Analytics (P1)** — cohort/anomaly/risk + LiveNow + dashboard KPIs — completed 2026-06-15
+- [x] **Phase 116: Chat Inbox & Exports (P2)** — staff REST over messaging module + CSV exports — completed 2026-06-15
+- [x] **Phase 117: OpenAPI Handoff + Milestone Gate** — additive regen + `_v32Checks` + ≥1 real-backend contract test per domain + full gate — completed 2026-06-15
+
+</details>
+
+---
+
+### 🚧 v4.0 Production Infrastructure — Self-Hosted k3s (In Progress)
+
+**Milestone Goal:** Контейнеризировать весь стек, описать инфраструктуру как код (Terraform под on-prem/bare-metal k3s), развернуть в кластере с наблюдаемостью, бэкапами и сетевой безопасностью. Bar = **локальная валидация**: k3d deploy + `terraform validate/plan` + `helm lint` + `make smoke`. Боевой apply на реальный сервер, живой ЮKassa-leg, RU email/SMS deliverability — operator-pending.
+
+**Scope (D-V40-ONPREM-K3S):** чисто инфра/DevOps — бизнес-фичи не трогаем, OpenAPI не меняется (кроме additive NAME-01 CSRF rename). Нумерация фаз продолжается с 118. Ingress = Traefik v3 (bundled с k3s; ingress-nginx retired March 2026). Object storage = SeaweedFS (MinIO archived April 2026). Postgres = CNPG operator (Bitnami paywalled). Secrets = sealed-secrets (no git remote). CD = root-level Makefile, no external runner.
+
+**Execution order: 118 → 119 → 120 → 121**
+
+- [ ] **Phase 118: Container Images + Helm Chart (Core Stack)** - Production-hardened Docker images for all 6 components + full Helm umbrella chart (stateful services + app workloads + migration job)
+- [ ] **Phase 119: Networking, Security + CSRF Rename** - Ingress/TLS via Traefik v3 + cert-manager; sealed-secrets; pod security contexts; NetworkPolicies; NAME-01 CSRF rename; secure-phase 70 retro
+- [ ] **Phase 120: IaC, Observability + Backup** - Terraform IaC modules; kube-prometheus-stack + Loki + Grafana dashboards; Alertmanager; CNPG WAL backup; automated restore round-trip
+- [ ] **Phase 121: Makefile CI/CD + Full Smoke + Runbooks** - Root-level Makefile with all targets; `make up` pipeline green against k3d; `make smoke` full checklist; production runbook
 
 ## Phase Details
 
-### Phase 112: Critical Money & Access
+### Phase 118: Container Images + Helm Chart (Core Stack)
 
-**Goal**: Owner can refund any recorded payment (not just membership/PT) and can change a staff user's role — the two P0 operational gaps that block daily gym management.
-**Depends on**: Nothing (first phase of v3.2)
-**Requirements**: REF-01, TEAM-01
+**Goal**: Production-hardened images exist for all 6 runtime components and the Helm umbrella chart successfully deploys the complete application stack (stateful services + app workloads + migration job) into k3d
+**Depends on**: Nothing (first v4.0 phase)
+**Requirements**: IMG-01, IMG-02, IMG-03, IMG-04, DATA-01, DATA-02, DATA-03, DATA-04, APP-01, APP-02, APP-03, APP-04, APP-05
 **Success Criteria** (what must be TRUE):
+  1. `docker build` produces non-root, slim, pinned-digest images for all 6 components (backend uvicorn, telegram-bot, arq-worker, migrate, admin-app nginx, client-pwa nginx); `trivy` scan returns 0 HIGH/CRITICAL for each; images are tagged with git-SHA and no `:latest` tag exists
+  2. `helm install clubcore ./helm/clubcore` against k3d completes without error: CNPG Cluster CR is Ready (`instances: 1`, `ghcr.io/cloudnative-pg` images — no Bitnami), Redis StatefulSet pod is Running with AOF enabled (`appendonly yes`, `appendfsync everysec`, `maxmemory` set, PVC bound), SeaweedFS pod is Running; all PVCs use `reclaimPolicy: Retain` StorageClass; Postgres pod has `nodeSelector` pinning; PVC-bind smoke passes in k3d (DATA-04 anti data-loss)
+  3. Alembic migrate Job completes (`status: Succeeded`) before any backend pod reaches Ready: Job has `helm.sh/hook: pre-install,pre-upgrade` + `helm.sh/hook-weight: "-5"` + `backoffLimit: 0` + `activeDeadlineSeconds: 300`; backend has `alembic check` initContainer that exits 0 (belt-and-suspenders); the migrate-races-API pitfall is structurally eliminated
+  4. arq-worker and telegram-bot Deployments have `strategy: Recreate` + `replicas: 1` enforced in chart YAML (anti cron double-fire / anti Telegram duplicate-consume — architectural invariant, not tuning); backend Deployment has startup/liveness/readiness probes + resource requests/limits + `replicas: 1`; `TZ=UTC` is set on all pods (verify: `kubectl exec <pod> -- env | grep TZ`)
+  5. `helm lint ./helm/clubcore` and `kubeconform` pass with 0 errors; `ConfigMap`/`Secret` separation is in place (`APP-05`): all variables from `.env.example` are mapped to ConfigMap or Secret refs; no plaintext secrets in ConfigMap
+**Plans**: TBD
+**Research flag (planning-time)**: Verify exact `Cluster.spec.backup.barmanObjectStore` field names for SeaweedFS S3 endpoint against CNPG v1 API docs before writing the CNPG Cluster CR.
 
-  1. Owner can select any payment row in Cashbox or Finance and issue a refund with a required reason; the refund is recorded in the ledger and the cashbox balance reflects it — the `T-103-03-FAKEREFUND` read-only stub is gone.
-  2. The refund endpoint enforces RBAC — reception gets a 403; owner sees the refund action; a duplicate refund attempt is rejected gracefully.
-  3. Owner can open a staff user's profile in Team settings and change their role (owner ↔ reception) via a modal; the change persists and the new role is reflected on next login.
-  4. Role-change is audited; reception cannot access the role-change UI or endpoint (403).
+### Phase 119: Networking, Security + CSRF Rename
 
-**Plans**: 3 plans, 2 waves
-Plans:
-**Wave 1** *(parallel — disjoint backend modules)*
-
-- [x] 112-01-PLAN.md — Backend refund: POST /payments/{id}/refund (by-id, partial allowed, approach-b keeps frozen unique constraint) + new exceptions + ASGITransport tests [REF-01] · wave 1
-- [x] 112-02-PLAN.md — Backend role-change: PATCH /users/{id}/role + user_role_changed LOCKED audit event + self/last-owner guards + ASGITransport tests [TEAM-01] · wave 1
-
-**Wave 2** *(blocked on 112-01 + 112-02)*
-
-- [x] 112-03-PLAN.md — FE wiring: useRefundPayment + useChangeUserRole hooks + RefundModal (Cashbox + Finance, owner-gated) + ChangeRoleModal (Settings Team) + human-verify [REF-01, TEAM-01] · wave 2
-
-**UI hint**: yes
-
-### Phase 113: Promo Codes CRUD
-
-**Goal**: Owner can manage promo codes directly in the admin app — create, edit, deactivate — and the Plans page displays real promo data instead of mock cards.
-**Depends on**: Phase 112
-**Requirements**: PROMO-01, PROMO-02
+**Goal**: All three services (API, admin-app, client-pwa) are reachable via Traefik v3 ingress with TLS; secrets are managed via sealed-secrets with controller RSA key backed up off-node; pod security contexts and NetworkPolicies enforce least privilege; the CSRF cookie is renamed additively; the Phase 70 security retro is closed
+**Depends on**: Phase 118
+**Requirements**: NET-01, NET-02, NET-03, NET-04, SEC-01, SEC-02, SEC-03, SEC-04, SEC-05, SEC-06
 **Success Criteria** (what must be TRUE):
+  1. `curl -k https://api.clubcore.local/healthz` returns 200; `curl -k https://admin.clubcore.local/` returns 200 with SPA HTML; `curl -k https://app.clubcore.local/` returns 200; HTTP requests are redirected to HTTPS via Traefik HTTP→HTTPS middleware; selfSigned ClusterIssuer issues certs locally; letsencrypt-staging ClusterIssuer is configured; LE-prod apply is operator-pending (live server)
+  2. WebSocket handshake through Traefik succeeds for `/api/v1/client/ws/*`; the Traefik v3 WS annotation key is confirmed, documented, and encoded in the chart values
+  3. SPA `try_files` fallback returns 200 for deep routes (e.g., `https://admin.clubcore.local/clients/abc`); PWA Service Worker does not cache `/api/*` responses (verified in `make smoke` Cache-Storage check); correct SW cache headers are set on nginx for the PWA (NET-04)
+  4. All `SealedSecret` YAML files are committed to git; plaintext secrets are absent from git history; the controller RSA key is exported to a YAML file and confirmed backed up off-node alongside the repo — this is a hard acceptance gate for SEC-02, not a post-hoc action; `make scan` trivy gate is green (0 HIGH/CRITICAL)
+  5. Every pod has `securityContext: {runAsNonRoot: true, readOnlyRootFilesystem: true, allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}`; `NetworkPolicy` default-deny is active in the app namespace; every pod has explicit CoreDNS egress (UDP/TCP 53 to kube-system); DNS resolution from each pod is verified (e.g., `kubectl exec <pod> -- nslookup postgres-svc` succeeds)
+  6. Staff `clubcore_csrf` cookie name is live in backend (replacing `sportzal_csrf`); `openapi.json`/`schema.d.ts` are regenerated additively (staff drift-gate passes with additive diff, not byte-stable); SEC-06 `/gsd:secure-phase 70` retro items (proxy rate-limit bucket, QR post-decode existence check, cancel idempotency) are verified closed or carried as documented known-acceptable
+**Plans**: TBD
+**Research flag (planning-time)**: Verify exact Traefik v3 WebSocket sticky-session annotation key before writing the Ingress template — the annotation name changed between v2 and v3.
 
-  1. Owner can create a new promo code (percentage or fixed discount, with usage limits and validity window) from the Plans page; the code is persisted to the `promo_codes` backend and immediately visible.
-  2. Owner can edit an existing promo code (adjust limits, dates, description) and deactivate/archive it; reception is gated from write actions.
-  3. The Plans page «Скидки и акции» section lists real promo codes from `GET /api/v1/promo-codes` — mock cards are replaced; empty state renders correctly.
+### Phase 120: IaC, Observability + Backup
 
-**Plans**: 3 plans
-
-- [x] 113-01-PLAN.md — Backend admin CRUD + migration 0072 + RBAC parity (permissions.py/can.ts/registry/parity test)
-- [x] 113-02-PLAN.md — Backend integration tests (RBAC 403, CRUD happy path, normalization/conflict, used_count, CSRF)
-- [x] 113-03-PLAN.md — Frontend wiring (features/promoCodes seam, PromoCodeModal, PromoCard + PlansPage section mock→real)
-
-**UI hint**: yes
-
-### Phase 114: Attendance Analytics on Existing Reports
-
-**Goal**: Owner sees real attendance analytics derived from the already-shipped `reports/visits` aggregate — the built-but-unwired analytics widgets render live data.
-**Depends on**: Nothing (independent of 112/113 — no new backend)
-**Requirements**: ANL-01
+**Goal**: Infrastructure is declared as Terraform code that passes `validate` and `plan`; metrics/logs/dashboards are live for all pods; CNPG WAL backup is active; a verified restore round-trip has been completed in k3d and documented in a runbook
+**Depends on**: Phase 119
+**Requirements**: IAC-01, IAC-02, IAC-03, OBS-01, OBS-02, OBS-03, OBS-04, OBS-05, BAK-01, BAK-02, BAK-03, BAK-04
 **Success Criteria** (what must be TRUE):
+  1. `make tf-validate` and `make tf-plan` exit 0; `infra/terraform/host/` provisions k3s via `null_resource` + `remote-exec` with `backend "local"` state and a `terraform.tfvars.example`; `infra/terraform/cluster/` manages namespaces and `helm_release` resources using `hashicorp/helm` v3.2 list-object `set` syntax (not legacy map syntax) with `backend "local"` state; `terraform apply` on a real node is operator-pending (SSH credentials required)
+  2. Grafana is reachable in the k3d cluster (`monitoring` namespace); FastAPI, node-exporter, CNPG Postgres, and Redis dashboards load with real data points; the backend pod's `/metrics` endpoint returns Prometheus metrics from `prometheus-fastapi-instrumentator>=7.1,<8`; a `ServiceMonitor` CR causes Prometheus to scrape the backend successfully (OBS-01 kube-prometheus-stack v86.2.3, single-node resource-tuned, 7d retention)
+  3. Loki receives log lines from all pods via Grafana Alloy log shipper; a log query `{namespace="default"}` returns live entries in Grafana (Loki community chart v17.3.1, monolithic mode, 30d retention); Alertmanager has 5–7 critical rules (pod down, error-rate spike, disk pressure, cert-expiry, no-backup-in-25h); Alertmanager Telegram delivery is operator-pending (real bot token required in sealed secret)
+  4. CNPG `Cluster.spec.backup.barmanObjectStore` stanza is configured for SeaweedFS S3 with WAL archiving and daily base backup; Redis RDB CronJob (weekly → SeaweedFS) and SeaweedFS mirror CronJob (daily → second PVC) are deployed with 7-daily/4-weekly retention policy; BAK-04 weekly automated restore-verification CronJob is deployed and its failure path fires an Alertmanager alert
+  5. A full Postgres restore round-trip has been executed in k3d: backup snapshot taken, CNPG cluster restored to a scratch namespace, row counts verified against pre-backup snapshot, result documented in `infra/runbooks/restore.md`; the runbook covers Redis and SeaweedFS restore procedures as well
+**Plans**: TBD
+**Research flag (planning-time)**: Loki community chart v17.x has a new Alloy sub-chart values schema vs v6.x — review the migration guide before writing Loki values files.
 
-  1. Owner sees an hourly heatmap and hour-curve chart on the Load or Analytics screen, driven by real `GET /api/v1/reports/visits` data; buckets with zero visits render as zero, not NaN.
-  2. Owner sees day-of-week breakdown, peak-hour, and visit-frequency distribution widgets — all derived from the same aggregate endpoint without new backend queries.
-  3. Owner sees a visit-duration widget (if the backend aggregate carries duration data) or a clearly labeled "coming soon" state if not — no silent mock data.
+### Phase 121: Makefile CI/CD + Full Smoke + Runbooks
 
-**Plans**: 2 plans
-
-- [x] 114-01-PLAN.md — derive.ts pure derivation (day-of-week / peak-hour / daily-volume frequency) + Vitest edge-case coverage
-- [x] 114-02-PLAN.md — DayOfWeekCard / PeakHourCard / FrequencyCard / DurationPlaceholderCard widgets composed into LoadPage below LoadHeatmapCard
-
-**UI hint**: yes
-
-### Phase 115: Live & Advanced Analytics
-
-**Goal**: Owner sees cohort, anomaly, and at-risk member widgets backed by new aggregate queries, a live gym-load counter, and real-data dashboard feed/KPI/sales widgets.
-**Depends on**: Phase 114
-**Requirements**: ANL-02, ANL-03, ANL-04
+**Goal**: A single `make up` command builds, scans, validates, and deploys the full stack to k3d; `make smoke` verifies the complete observable checklist; the production runbook documents the operator-pending boundary explicitly
+**Depends on**: Phase 120
+**Requirements**: OPS-01, OPS-02, OPS-03, OPS-04
 **Success Criteria** (what must be TRUE):
-
-  1. Owner sees cohort retention and visit-anomaly widgets, backed by new window-function report queries on the existing `visits` + `memberships` tables; reception is not exposed to owner-only aggregate endpoints.
-  2. Owner sees a "сейчас в зале" live-load count on the Load page, backed by a new `GET /api/v1/reports/load/now` endpoint returning the current in-gym headcount.
-  3. Dashboard activity feed shows real recent events (from audit log or visits/payments read endpoints); top-trainer KPIs and plans sales chart render real data — mock widgets are removed.
-
-**Plans**: 4 plans
-
-- [x] 115-01-PLAN.md — Backend: cohort / anomaly / at-risk / load-now aggregate routes (raw-SQL window functions on existing reports module; owner-only)
-- [x] 115-02-PLAN.md — Backend: ASGITransport integration tests (owner-200 + reception-403 + empty/small-sample) for the four new endpoints
-- [x] 115-03-PLAN.md — Frontend: reports Zod/hooks + CohortRetentionCard / VisitAnomalyCard / AtRiskWidget + LiveNowCard wiring on Load page
-- [x] 115-04-PLAN.md — Frontend: dashboard ActivityFeed→audit-log mapper/hook + real TopTrainers/RevenueChart verification (mock removal, ANL-04)
-
-**UI hint**: yes
-
-### Phase 116: Chat Inbox & Exports
-
-**Goal**: Staff can read and reply to client messages from the admin app, and owner can download payments and attendance data as CSV files.
-**Depends on**: Phase 112
-**Requirements**: MSG-01, MSG-02, EXP-01, EXP-02
-**Success Criteria** (what must be TRUE):
-
-  1. Staff sees a chat inbox listing all client↔gym threads with unread counts, backed by new staff-side REST endpoints over the existing `messaging` module; reception sees the inbox (read-permitted), owner can send.
-  2. Staff can open a thread and send or reply to a client message; the message is persisted and the client PWA receives it via the existing WS/Telegram channel.
-  3. Owner can export payments to a UTF-8 BOM CSV file over a date range from Cashbox or Finance; the download starts immediately and Cyrillic content round-trips cleanly in Excel.
-  4. Owner can export visits/attendance to a UTF-8 BOM CSV file over a date range from the Attendance screen; the file matches the same format discipline.
-
-**Plans**: 3 plans, 2 waves
-Plans:
-**Wave 1** *(parallel — disjoint backend modules)*
-
-- [x] 116-01-PLAN.md — Backend staff messaging: staff_router (list/history/reply/mark-read) + repo/service/schemas reusing existing dispatch + atomic Resource.MESSAGES RBAC parity + migration 0073 staff_last_read_at + ASGITransport tests [MSG-01, MSG-02] · wave 1
-- [x] 116-02-PLAN.md — Backend payments CSV: CSV_PAYMENTS_HEADERS + fetch_payments_for_csv (raw-SQL) + payments_csv_rows (sanitized) + GET /reports/payments.csv StreamingResponse (owner-only) + ASGITransport tests (BOM/403/Cyrillic) [EXP-01] · wave 1
-
-**Wave 2** *(blocked on 116-01 + 116-02)*
-
-- [x] 116-03-PLAN.md — FE wiring: features/messages real hooks (mock removed) + MessagesPage/ThreadPane wire + owner-only composer gate + owner-gated CSV export buttons (payments Cashbox/Finance, visits Attendance) + human-verify [MSG-01, MSG-02, EXP-01, EXP-02] · wave 2
-
-**UI hint**: yes
-
-### Phase 117: OpenAPI Handoff + Milestone Gate
-
-**Goal**: The v3.2 OpenAPI contract is regenerated additively, forward-guarded, and each new domain has at least one contract test that parses a real backend response — closing the mock↔real schema-drift lesson from v3.0/v3.1.
-**Depends on**: Phases 112, 113, 114, 115, 116
-**Requirements**: HND-01
-**Success Criteria** (what must be TRUE):
-
-  1. `openapi.json` + `schema.d.ts` are regenerated to include all new v3.2 paths (refund, role-change, promo CRUD, analytics endpoints, staff-messages, exports) — additively, NOT byte-stable — and a `_v32Checks` `AssertNonNever` forward-guard tuple covers each new path×method.
-  2. For each new domain introduced in v3.2 (refund, role-change, promo, analytics/LiveNow, staff-messages), at least one contract test parses a REAL backend response (not a mock fixture) and asserts the Zod schema passes — the v3.0/v3.1 drift lesson is structurally closed.
-  3. The full milestone gate is green: mypy `--strict` + lint-imports + pytest + admin-app `check`/`test`/`build` + Redocly lint; CISO-01 RBAC byte-parity guard is green; all 13 v3.2 requirements are verified satisfied.
-
-**Plans**: 3 plans
-
-Plans:
-
-- [x] 117-01-PLAN.md — Regenerate openapi.json + schema.d.ts additively, add _v32Checks forward-guard, drop temporary path casts
-- [x] 117-02-PLAN.md — Real-backend contract tests: ASGITransport capture per domain + FE Zod parse of captured JSON (+ payments.csv backend assertion)
-- [x] 117-03-PLAN.md — Full milestone gate fix-to-green (backend + FE + api-client + CISO-01 parity 46) + 13-requirement trace
+  1. All Makefile targets exist and execute without error: `build`, `scan`, `push`, `tf-validate`, `tf-plan`, `helm-lint`, `helm-validate`, `deploy`, `smoke`, `rollback`, `logs`, `psql`, `backup`, `up`, `down`; `make up` pipeline completes green end-to-end against k3d: build → trivy scan (0 HIGH/CRITICAL) → push to local k3d registry → `tf-validate` → `helm-lint` → deploy → smoke
+  2. `make smoke` exits 0 and verifies the full "Looks-Done-But-Isn't" checklist: `/healthz` 200, migrate Job status Succeeded, Redis AOF on (`CONFIG GET appendonly` = `yes`), `TZ=UTC` on every pod, DNS resolution succeeds (`nslookup postgres-svc` from each pod), WebSocket upgrade succeeds through Traefik ingress, SPA deep-route returns 200, PWA Service Worker does not cache `/api/*` responses
+  3. `infra/runbooks/production.md` documents: cluster topology, prerequisites (tools + versions), step-by-step deploy procedure, backup/restore/rollback/scale operations, troubleshooting, and an explicit **operator-pending boundary list**: LE-prod TLS (switch ClusterIssuer), `terraform apply` on real VM (SSH creds), ЮKassa webhook reachability + sandbox payment, RU email deliverability (Yandex Postbox SPF/DKIM/DMARC), real Telegram bot token in sealed secret, Alertmanager Telegram delivery, Postgres disk durability on real hardware
+**Plans**: TBD
 
 ## Backlog
-
-</details>
 
 ### Backlog 999.1 — WR-06 restore PT session credit on owner force-cancel (✅ DONE 2026-05-29 — quick task 260529-ny2)
 
@@ -608,7 +552,19 @@ Plans:
 
 ## Progress
 
-**Current milestone:** v3.2 Admin — Wire the Rest — ✅ SHIPPED 2026-06-16 (Phases 112-117). Next milestone TBD via `/gsd:new-milestone`.
+**Current milestone:** v4.0 Production Infrastructure — Self-Hosted k3s — 🚧 In progress (Phases 118-121)
+
+**Execution Order:** 118 → 119 → 120 → 121
+
+| Phase | Milestone | Plans Complete | Status | Completed |
+|-------|-----------|----------------|--------|-----------|
+| 118. Container Images + Helm Chart (Core Stack) | v4.0 | 0/TBD | Not started | - |
+| 119. Networking, Security + CSRF Rename | v4.0 | 0/TBD | Not started | - |
+| 120. IaC, Observability + Backup | v4.0 | 0/TBD | Not started | - |
+| 121. Makefile CI/CD + Full Smoke + Runbooks | v4.0 | 0/TBD | Not started | - |
+
+<details>
+<summary>✅ v3.2 Admin — Wire the Rest (Phases 112-117) — Progress (SHIPPED 2026-06-16)</summary>
 
 **Execution Order:** 112 → 113 → 114 → 115 → 116 → 117
 
@@ -620,6 +576,8 @@ Plans:
 | 115. Live & Advanced Analytics | 4/4 | Complete   | 2026-06-15 |
 | 116. Chat Inbox & Exports | 3/3 | Complete   | 2026-06-15 |
 | 117. OpenAPI Handoff + Milestone Gate | 3/3 | Complete    | 2026-06-15 |
+
+</details>
 
 <details>
 <summary>✅ v3.1 Admin — Fill the Gaps (Phases 107-111) — Progress (SHIPPED 2026-06-15)</summary>
