@@ -1,13 +1,13 @@
 # syntax=docker/dockerfile:1.7
 #
-# client-pwa production image: pnpm workspace build → nginx static serving.
+# client production image: pnpm workspace build → nginx static serving.
 # Build context: repo root (needed for pnpm-lock.yaml + workspace packages).
 #
 # IMG-03: non-root nginx user, listen :8080, SPA try_files + PWA cache rules.
 # T-118-04: runs as nginx user (non-root).
 # T-118-05: sw.js/manifest.json served no-cache; /api/* served no-store.
 #
-# Build: docker build -f infra/docker/client-pwa.Dockerfile -t clubcore/client-pwa:<tag> .
+# Build: docker build -f infra/docker/client.Dockerfile -t clubcore/client:<tag> .
 
 # ---- Stage 1: node build ----------------------------------------------------
 # Pinned digest: node:20-alpine (resolved 2026-06-16)
@@ -22,27 +22,27 @@ WORKDIR /workspace
 # changes don't (pnpm lockfile is shared at root).
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
-# Copy only the packages that @clubcore/client-pwa depends on.
+# Copy only the packages that @clubcore/client depends on.
 # packages/api-client: workspace:* dependency.
 COPY packages/api-client/package.json ./packages/api-client/
 COPY packages/ui/package.json ./packages/ui/
 
 # Copy the target app manifest.
-COPY apps/client-pwa/package.json ./apps/client-pwa/
+COPY apps/client/package.json ./apps/client/
 
 # Install dependencies with frozen lockfile (T-118-02 supply-chain integrity).
-# --filter client-pwa... includes transitive workspace deps.
-RUN pnpm install --frozen-lockfile --filter @clubcore/client-pwa...
+# --filter client... includes transitive workspace deps.
+RUN pnpm install --frozen-lockfile --filter @clubcore/client...
 
 # Copy source for build (after deps to preserve cache).
 COPY packages/api-client/ ./packages/api-client/
 COPY packages/ui/ ./packages/ui/
-COPY apps/client-pwa/ ./apps/client-pwa/
+COPY apps/client/ ./apps/client/
 
-# Build the client-pwa (tsc -b && vite build → dist/).
+# Build the client (tsc -b && vite build → dist/).
 # public/ assets (sw.js, manifest.json, offline.html, icons) are copied by Vite
-# automatically from apps/client-pwa/public/ into dist/.
-RUN pnpm --filter @clubcore/client-pwa build
+# automatically from apps/client/public/ into dist/.
+RUN pnpm --filter @clubcore/client build
 
 # ---- Stage 2: nginx runtime -------------------------------------------------
 # Pinned digest: nginx:1.27-alpine (resolved 2026-06-16)
@@ -60,11 +60,11 @@ RUN mkdir -p /var/cache/nginx /tmp/client_body /tmp/proxy /tmp/fastcgi /tmp/uwsg
     && chmod -R 755 /var/cache/nginx
 
 # Copy nginx config (listen :8080, SPA try_files, PWA cache rules: sw.js no-cache, /api/* no-store).
-COPY infra/nginx/client-pwa.conf /etc/nginx/nginx.conf
+COPY infra/nginx/client.conf /etc/nginx/nginx.conf
 
 # Copy built static assets from build stage.
 # Includes public/ assets: sw.js, manifest.json, offline.html, icons (Vite copies them to dist/).
-COPY --from=builder --chown=nginx:nginx /workspace/apps/client-pwa/dist /usr/share/nginx/html
+COPY --from=builder --chown=nginx:nginx /workspace/apps/client/dist /usr/share/nginx/html
 
 USER nginx
 EXPOSE 8080

@@ -7,7 +7,7 @@ Create Date: 2026-06-06
 Data-only migration: backfills bio and specialization for the six PWA trainers
 so fresh environments render real trainer profiles with zero manual intervention.
 
-Content source: apps/client-pwa/src/data/trainers.js (TRAINERS array).
+Content source: apps/client/src/data/trainers.js (TRAINERS array).
 
 Idempotency:
 - UPDATE ... WHERE full_name = :name AND deleted_at IS NULL

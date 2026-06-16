@@ -73,7 +73,7 @@ class Settings(BaseSettings):
     refresh_reuse_window_seconds: int = 5
 
     # Phase 7 additions (D-10, D-03): Telegram OTP channel.
-    # Placeholder defaults so fresh-clone dev boot of `web` + admin-app does NOT
+    # Placeholder defaults so fresh-clone dev boot of `web` + admin does NOT
     # require setting bot credentials first. The bot worker process must check
     # for this sentinel and refuse to start (see app/workers/telegram_bot.py).
     # Real deployments override via .env / docker-compose env.
@@ -127,13 +127,13 @@ class Settings(BaseSettings):
 
     # Phase 43 addition (D-43-14): frontend base URL for owner-managed
     # invitation links (?include_invite_link=true escape hatch + email body).
-    # Default points at the admin-app dev server (staff frontend, port 5173);
+    # Default points at the admin dev server (staff frontend, port 5173);
     # production overrides via .env.
     # The URL is NEVER stored in audit payloads — only the link_copied bool
     # flag is captured (D-43-14 / Pitfall 4 anti-oracle).
     frontend_base_url: str = "http://localhost:5173"
 
-    # Phase 96 addition (REFER-01): client-pwa base URL for server-authoritative
+    # Phase 96 addition (REFER-01): client base URL for server-authoritative
     # deep-link shareUrl construction. The referral deep-link path /i/<code> is
     # consumed by the PWA (port 5174), not the admin-web (port 5173). Override
     # via PWA_BASE_URL env var in production. Never stored in audit payloads.
@@ -141,9 +141,9 @@ class Settings(BaseSettings):
 
     # Phase 90 RT-02 — CSWSH guard allowlist for the WebSocket endpoint.
     # verify_ws_origin (app/core/dependencies.py) compares the WS upgrade
-    # Origin header against this list. Defaults cover the admin-app dev server
+    # Origin header against this list. Defaults cover the admin dev server
     # (5173, staff frontend) and the client PWA dev port (5174 — vite.config
-    # pins 5174 to avoid the admin-app 5173 clash) + testserver. Production
+    # pins 5174 to avoid the admin 5173 clash) + testserver. Production
     # overrides via WS_ALLOWED_ORIGINS env var (comma-separated or JSON list).
     # Empty list means same-origin only (no cross-origin WS accepted).
     ws_allowed_origins: list[str] = [

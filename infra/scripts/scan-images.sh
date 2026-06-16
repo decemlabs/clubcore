@@ -27,8 +27,8 @@ TAG="${TAG:-$(git rev-parse --short HEAD)}"
 
 IMAGES=(
     "clubcore/backend:${TAG}"
-    "clubcore/admin-app:${TAG}"
-    "clubcore/client-pwa:${TAG}"
+    "clubcore/admin:${TAG}"
+    "clubcore/client:${TAG}"
 )
 
 echo "=== clubcore trivy scan gate ==="

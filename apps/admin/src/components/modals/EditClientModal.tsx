@@ -1,7 +1,7 @@
 /**
  * Edit Client modal — wired to real PATCH/DELETE /api/v1/clients/{id} (Phase 101 CLI-03).
  *
- * Validation via ClientUpdateSchema.safeParse() (no react-hook-form in admin-app).
+ * Validation via ClientUpdateSchema.safeParse() (no react-hook-form in admin).
  * On PATCH success: toast.success('Изменения сохранены') + close.
  * On DELETE success: toast.success('Клиент удалён') + close.
  * On 422: map err.fields → inline field errors.

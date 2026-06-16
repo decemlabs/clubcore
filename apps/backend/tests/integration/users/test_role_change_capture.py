@@ -2,7 +2,7 @@
 
 Hits PATCH /api/v1/users/{user_id}/role with a real seeded reception user via
 ASGITransport, serializes the actual JSON response to the shared FE fixtures dir:
-  apps/admin-app/src/features/users/capture/role-change-response.json
+  apps/admin/src/features/users/capture/role-change-response.json
 
 The captured JSON is then parsed by the FE vitest contract test
 (features/users/role-change.contract.test.ts) using the REAL FE Zod UserSchema.
@@ -32,7 +32,7 @@ pytestmark = pytest.mark.asyncio(loop_scope="function")
 # ---------------------------------------------------------------------------
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[5]
-FIXTURES_DIR = _REPO_ROOT / "apps/admin-app/src/features/users/capture"
+FIXTURES_DIR = _REPO_ROOT / "apps/admin/src/features/users/capture"
 
 _PLACEHOLDER_PWD_HASH = "$argon2id$" + "placeholder"
 

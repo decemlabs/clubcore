@@ -3,8 +3,8 @@ ingress.yaml — Traefik v3 Ingress: 3 hosts + WS path + HTTPS redirect (NET-01/
 
 Routes all three clubcore hosts through a single Traefik v3 Ingress:
   - API host      → clubcore-backend:8000       (REST API + WebSocket chat)
-  - admin-app host → clubcore-admin-app:8080    (Staff SPA)
-  - client-pwa host → clubcore-client-pwa:8080  (Client PWA)
+  - admin host → clubcore-admin:8080    (Staff SPA)
+  - client host → clubcore-client:8080  (Client PWA)
 
 Traefik v3 annotations used here (verified against Traefik v3 docs / context7):
   router.entrypoints: websecure — route only on the TLS entrypoint (port 443).
@@ -86,8 +86,8 @@ spec:
                   number: 8000
 
     # ------------------------------------------------------------------
-    # admin-app host — clubcore-admin-app:8080 (Staff SPA)
-    # Static nginx serving the Vite-built admin-app bundle.
+    # admin host — clubcore-admin:8080 (Staff SPA)
+    # Static nginx serving the Vite-built admin bundle.
     # nginx.conf applies SPA try_files fallback — all paths → index.html.
     # ------------------------------------------------------------------
     - host: {{ .Values.ingress.hosts.adminApp | quote }}
@@ -97,14 +97,14 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: {{ include "clubcore.fullname" . }}-admin-app
+                name: {{ include "clubcore.fullname" . }}-admin
                 port:
                   number: 8080
 
     # ------------------------------------------------------------------
-    # client-pwa host — clubcore-client-pwa:8080 (Client PWA)
-    # Static nginx serving the Vite-built client-pwa bundle.
-    # nginx (client-pwa.conf) applies SPA try_files, sw.js no-cache,
+    # client host — clubcore-client:8080 (Client PWA)
+    # Static nginx serving the Vite-built client bundle.
+    # nginx (client.conf) applies SPA try_files, sw.js no-cache,
     # /api/* no-store, hashed assets immutable (NET-04, T-118-05).
     # /api/* on the PWA host returns 404 from nginx (defence-in-depth);
     # real /api calls come from the client browser hitting the API host.
@@ -116,7 +116,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: {{ include "clubcore.fullname" . }}-client-pwa
+                name: {{ include "clubcore.fullname" . }}-client
                 port:
                   number: 8080
 

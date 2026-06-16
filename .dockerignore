@@ -1,6 +1,6 @@
 # Root build-context .dockerignore (WR-01 belt-and-suspenders, Phase 118).
 #
-# The frontend image builds (admin-app, client-pwa) use the repo root as their
+# The frontend image builds (admin, client) use the repo root as their
 # build context. The per-Dockerfile ignore files at
 # infra/docker/<name>.Dockerfile.dockerignore are honored by BuildKit, but the
 # legacy builder only ever reads THIS root .dockerignore. Keeping the same
@@ -17,8 +17,8 @@ node_modules/
 **/node_modules/
 
 # Existing build output (produced inside the container, not copied from host)
-apps/admin-app/dist/
-apps/client-pwa/dist/
+apps/admin/dist/
+apps/client/dist/
 **/dist/
 
 # Backend source (not needed for frontend builds)
@@ -50,8 +50,8 @@ apps/backend/
 **/*.tsbuildinfo
 
 # Design assets (not needed for production builds)
-apps/admin-app/design/
-apps/client-pwa/plans/
+apps/admin/design/
+apps/client/plans/
 
 # Local worktrees / agent scratch (must never enter a build context)
 .claude/

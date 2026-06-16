@@ -2,7 +2,7 @@
 
 Hits GET /api/v1/promo-codes via ASGITransport after seeding a promo code, serializes
 the actual JSON response to the shared FE fixtures dir:
-  apps/admin-app/src/features/promoCodes/capture/promo-codes-list-response.json
+  apps/admin/src/features/promoCodes/capture/promo-codes-list-response.json
 
 The captured JSON is then parsed by the FE vitest contract test
 (features/promoCodes/promo.contract.test.ts) using the REAL FE Zod PromoCodesListResponseSchema.
@@ -27,7 +27,7 @@ pytestmark = pytest.mark.asyncio(loop_scope="function")
 # ---------------------------------------------------------------------------
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[5]
-FIXTURES_DIR = _REPO_ROOT / "apps/admin-app/src/features/promoCodes/capture"
+FIXTURES_DIR = _REPO_ROOT / "apps/admin/src/features/promoCodes/capture"
 
 
 # ---------------------------------------------------------------------------

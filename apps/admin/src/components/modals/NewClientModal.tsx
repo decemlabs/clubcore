@@ -1,7 +1,7 @@
 /**
  * New Client modal — wired to real POST /api/v1/clients (Phase 101 CLI-03).
  *
- * Validation via ClientCreateSchema.safeParse() (no react-hook-form in admin-app).
+ * Validation via ClientCreateSchema.safeParse() (no react-hook-form in admin).
  * On success: toast.success('Клиент добавлен') + close.
  * On 422: map err.fields → inline field errors.
  * On 403: non-blocking toast.error.

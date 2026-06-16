@@ -1,7 +1,7 @@
 /**
  * Admin-app QueryClient (Phase 100 FND-02).
  *
- * Mirrors client-pwa queryClient.ts conventions:
+ * Mirrors client queryClient.ts conventions:
  *  - staleTime: 30_000 (30 s)
  *  - refetchOnWindowFocus: false
  *  - retry: 1 for queries, 0 for mutations

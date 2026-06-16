@@ -1,22 +1,22 @@
-# admin-app build-context dockerignore.
+# admin build-context dockerignore.
 #
-# BuildKit (enabled via `# syntax=docker/dockerfile:1.7` in admin-app.Dockerfile)
+# BuildKit (enabled via `# syntax=docker/dockerfile:1.7` in admin.Dockerfile)
 # resolves a per-Dockerfile ignore file at <context>/<dockerfile-path>.dockerignore.
 # The build context is the repo root and the Dockerfile is
-# infra/docker/admin-app.Dockerfile, so this file MUST live at
-# infra/docker/admin-app.Dockerfile.dockerignore for Docker to honor it (T-118-03).
+# infra/docker/admin.Dockerfile, so this file MUST live at
+# infra/docker/admin.Dockerfile.dockerignore for Docker to honor it (T-118-03).
 # (The former infra/docker/.dockerignore.web matched none of Docker's lookup rules
 # and was silently ignored — WR-01.)
 
 # Local dependency installs (node_modules will be reinstalled inside the build container)
 node_modules/
-apps/admin-app/node_modules/
-apps/client-pwa/node_modules/
+apps/admin/node_modules/
+apps/client/node_modules/
 packages/*/node_modules/
 
 # Existing dist output (built inside the container, not from the host)
-apps/admin-app/dist/
-apps/client-pwa/dist/
+apps/admin/dist/
+apps/client/dist/
 
 # Backend source (not needed for frontend builds)
 apps/backend/
@@ -48,5 +48,5 @@ CLAUDE.md
 **/*.tsbuildinfo
 
 # Design assets (not needed for production builds)
-apps/admin-app/design/
-apps/client-pwa/plans/
+apps/admin/design/
+apps/client/plans/

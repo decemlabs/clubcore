@@ -16,8 +16,8 @@ Static-file analysis only — no FastAPI app, no DB, no Redis. Locked at
 `tests/integration/` top-level (D-16) to signal "doesn't need infra".
 
 RBAC re-home (Phase 100 D-V30 / plan 100-04): source of truth moved from
-apps/admin-web/src/shared/session/ to apps/admin-app/src/shared/session/.
-admin-web is deleted in Phase 105; by then this test already points at admin-app.
+apps/admin-web/src/shared/session/ to apps/admin/src/shared/session/.
+admin-web is deleted in Phase 105; by then this test already points at admin.
 """
 
 from __future__ import annotations
@@ -30,8 +30,8 @@ from app.core.permissions import OWNER_ONLY, Action, Resource
 # D-14: parents[4] from apps/backend/tests/integration/test_rbac_parity.py is
 # the repo root (parents[0]=integration, [1]=tests, [2]=backend, [3]=apps, [4]=repo root).
 _REPO_ROOT = Path(__file__).resolve().parents[4]
-_CAN_TS = _REPO_ROOT / "apps" / "admin-app" / "src" / "shared" / "session" / "can.ts"
-_REGISTRY_TS = _REPO_ROOT / "apps" / "admin-app" / "src" / "shared" / "session" / "registry.ts"
+_CAN_TS = _REPO_ROOT / "apps" / "admin" / "src" / "shared" / "session" / "can.ts"
+_REGISTRY_TS = _REPO_ROOT / "apps" / "admin" / "src" / "shared" / "session" / "registry.ts"
 
 # D-15: regex anchors the file shape; intentional that any reformat that breaks
 # the regex is a parity failure (forces a deliberate update on both sides).

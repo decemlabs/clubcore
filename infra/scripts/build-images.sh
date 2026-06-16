@@ -11,8 +11,8 @@
 #      - arq-worker   → command: arq app.workers.WorkerSettings       (Helm/compose override)
 #      - migrate      → command: alembic upgrade head                 (Helm/compose override)
 #      No separate Dockerfile is needed for the other 3 Python workloads.
-#   2. clubcore/admin-app:<sha> — staff admin panel (React 19 + TanStack, nginx static)
-#   3. clubcore/client-pwa:<sha>— client PWA (React 19 + vite-plugin-pwa, nginx static)
+#   2. clubcore/admin:<sha> — staff admin panel (React 19 + TanStack, nginx static)
+#   3. clubcore/client:<sha>— client PWA (React 19 + vite-plugin-pwa, nginx static)
 #   4. clubcore/backup:<sha>    — backup tooling image (redis-cli + aws-cli, CR-02):
 #      Pre-bakes the CLIs the Redis RDB + SeaweedFS mirror CronJobs need so they run
 #      under readOnlyRootFilesystem: true without a runtime `apk add`.
@@ -54,24 +54,24 @@ docker build \
 echo "      → clubcore/backend:${TAG} OK"
 echo ""
 
-# ── 2. admin-app frontend image ───────────────────────────────────────────────
+# ── 2. admin frontend image ───────────────────────────────────────────────
 # Build context is repo root (pnpm workspace lockfile + packages/api-client).
-echo "[2/4] Building clubcore/admin-app:${TAG} …"
+echo "[2/4] Building clubcore/admin:${TAG} …"
 docker build \
-    -f "${REPO_ROOT}/infra/docker/admin-app.Dockerfile" \
-    -t "clubcore/admin-app:${TAG}" \
+    -f "${REPO_ROOT}/infra/docker/admin.Dockerfile" \
+    -t "clubcore/admin:${TAG}" \
     "${REPO_ROOT}"
-echo "      → clubcore/admin-app:${TAG} OK"
+echo "      → clubcore/admin:${TAG} OK"
 echo ""
 
-# ── 3. client-pwa frontend image ──────────────────────────────────────────────
+# ── 3. client frontend image ──────────────────────────────────────────────
 # Build context is repo root (pnpm workspace lockfile + packages/api-client).
-echo "[3/4] Building clubcore/client-pwa:${TAG} …"
+echo "[3/4] Building clubcore/client:${TAG} …"
 docker build \
-    -f "${REPO_ROOT}/infra/docker/client-pwa.Dockerfile" \
-    -t "clubcore/client-pwa:${TAG}" \
+    -f "${REPO_ROOT}/infra/docker/client.Dockerfile" \
+    -t "clubcore/client:${TAG}" \
     "${REPO_ROOT}"
-echo "      → clubcore/client-pwa:${TAG} OK"
+echo "      → clubcore/client:${TAG} OK"
 echo ""
 
 # ── 4. backup tooling image (CR-02) ─────────────────────────────────────────────

@@ -1,27 +1,27 @@
 {{/*
-admin-app-service.yaml — ClusterIP Service clubcore-admin-app
+admin-service.yaml — ClusterIP Service clubcore-admin
 
-Exposes the admin-app nginx Deployment on port 8080 within the cluster.
-This is the Ingress backend target for the admin-app host (NET-01).
+Exposes the admin nginx Deployment on port 8080 within the cluster.
+This is the Ingress backend target for the admin host (NET-01).
 
-Service name: {{ include "clubcore.fullname" . }}-admin-app
-In-cluster DNS: <release>-admin-app.<namespace>.svc.cluster.local:8080
-Short DNS:      <release>-admin-app:8080  (within same namespace)
+Service name: {{ include "clubcore.fullname" . }}-admin
+In-cluster DNS: <release>-admin.<namespace>.svc.cluster.local:8080
+Short DNS:      <release>-admin:8080  (within same namespace)
 
-With release name "clubcore": clubcore-admin-app:8080
+With release name "clubcore": clubcore-admin:8080
 */}}
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "clubcore.fullname" . }}-admin-app
+  name: {{ include "clubcore.fullname" . }}-admin
   labels:
     {{- include "clubcore.labels" . | nindent 4 }}
-    app.kubernetes.io/component: admin-app
+    app.kubernetes.io/component: admin
 spec:
   type: ClusterIP
   selector:
     {{- include "clubcore.selectorLabels" . | nindent 4 }}
-    app.kubernetes.io/component: admin-app
+    app.kubernetes.io/component: admin
   ports:
     - name: http
       protocol: TCP

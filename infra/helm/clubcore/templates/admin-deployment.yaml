@@ -1,39 +1,39 @@
 {{/*
-admin-app-deployment.yaml — Deployment clubcore-admin-app (NET-04 / IMG-03 gap close)
+admin-deployment.yaml — Deployment clubcore-admin (NET-04 / IMG-03 gap close)
 
-Closes the Phase-118 gap: IMG-03 built the admin-app nginx image but never created
+Closes the Phase-118 gap: IMG-03 built the admin nginx image but never created
 the k8s Deployment or Service.  NET-04 requires the static frontend to be served
 in-cluster on port 8080 so the Traefik Ingress has a valid backend target.
 
 Architecture:
   - Static nginx workload — no database, no initContainer, no Secret envFrom.
-  - Port 8080: nginx:1.27-alpine listens on 8080 per infra/nginx/admin-app.conf
-    and infra/docker/admin-app.Dockerfile (EXPOSE 8080, USER nginx/UID 101).
+  - Port 8080: nginx:1.27-alpine listens on 8080 per infra/nginx/admin.conf
+    and infra/docker/admin.Dockerfile (EXPOSE 8080, USER nginx/UID 101).
   - replicas: 1 (D-V40-REPLICAS: single bare-metal node, v4.0 constraint).
   - runAsUser: 101 — the numeric UID of the `nginx` user in nginx:1.27-alpine
     (Alpine nginx image; NOT 1000 which is the backend's app-user UID).
   - SEC-03 hardened (Phase 119 plan 02): readOnlyRootFilesystem:true + drop ALL + allowPrivilegeEscalation:false
-    emptyDir mounts: /tmp (nginx.pid + client_body/proxy/fastcgi/uwsgi/scgi temp dirs per admin-app.conf)
+    emptyDir mounts: /tmp (nginx.pid + client_body/proxy/fastcgi/uwsgi/scgi temp dirs per admin.conf)
                      /var/cache/nginx (nginx worker process cache)
 
-Image: adminApp.image.repository (default clubcore/admin-app) + .Values.image.tag
+Image: adminApp.image.repository (default clubcore/admin) + .Values.image.tag
        The frontend images share the same git-SHA tag as the backend image
        (see infra/scripts/build-images.sh — all images built from same commit).
 */}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "clubcore.fullname" . }}-admin-app
+  name: {{ include "clubcore.fullname" . }}-admin
   labels:
     {{- include "clubcore.labels" . | nindent 4 }}
-    app.kubernetes.io/component: admin-app
+    app.kubernetes.io/component: admin
 spec:
   # D-V40-REPLICAS: single bare-metal node, v4.0 constraint.
   replicas: {{ .Values.adminApp.replicas | default 1 }}
   selector:
     matchLabels:
       {{- include "clubcore.selectorLabels" . | nindent 6 }}
-      app.kubernetes.io/component: admin-app
+      app.kubernetes.io/component: admin
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -43,7 +43,7 @@ spec:
     metadata:
       labels:
         {{- include "clubcore.selectorLabels" . | nindent 8 }}
-        app.kubernetes.io/component: admin-app
+        app.kubernetes.io/component: admin
     spec:
       # Pod-level securityContext — SEC-03 hardened (Phase 119 plan 02).
       # runAsUser: 101 — numeric UID of the `nginx` user in nginx:1.27-alpine.
@@ -56,9 +56,9 @@ spec:
 
       # emptyDir volumes for nginx writable paths (readOnlyRootFilesystem: true).
       volumes:
-        # /tmp — nginx.pid (admin-app.conf: pid /tmp/nginx.pid) + all nginx temp body dirs
+        # /tmp — nginx.pid (admin.conf: pid /tmp/nginx.pid) + all nginx temp body dirs
         # (client_body_temp_path, proxy_temp_path, fastcgi_temp_path, uwsgi_temp_path, scgi_temp_path
-        #  all configured as /tmp/... in admin-app.conf)
+        #  all configured as /tmp/... in admin.conf)
         - name: tmp
           emptyDir: {}
         # /var/cache/nginx — nginx worker process writes cache data here
@@ -66,7 +66,7 @@ spec:
           emptyDir: {}
 
       containers:
-        - name: admin-app
+        - name: admin
           image: {{ printf "%s:%s" .Values.adminApp.image.repository (.Values.image.tag | required "image.tag is required — pass --set image.tag=<git-short-sha>") | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
 
@@ -83,8 +83,8 @@ spec:
 
           # readinessProbe: nginx serves index.html at / with 200 (SPA root).
           # No /healthz endpoint on static frontends — use path "/".
-          # client-pwa.conf also defines location = /healthz returning 200;
-          # admin-app.conf mirrors the same pattern.
+          # client.conf also defines location = /healthz returning 200;
+          # admin.conf mirrors the same pattern.
           readinessProbe:
             httpGet:
               path: /
@@ -114,7 +114,7 @@ spec:
 
           volumeMounts:
             # /tmp — nginx pid file + client_body/proxy/fastcgi/uwsgi/scgi temp dirs
-            # (configured in admin-app.conf — all temp paths point to /tmp/...)
+            # (configured in admin.conf — all temp paths point to /tmp/...)
             - name: tmp
               mountPath: /tmp
             # /var/cache/nginx — nginx worker cache (required by nginx process)

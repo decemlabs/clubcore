@@ -7,8 +7,8 @@ Create Date: 2026-06-06
 Data-only migration: seeds the single gym_info row with the Тверская baseline
 content so fresh environments render real content with zero manual intervention.
 
-Content source: apps/client-pwa/src/data/gym.js (GYM_INFO). Fields NOT seeded:
-- photos: frontend-only static (décor photos stored in client-pwa, not DB)
+Content source: apps/client/src/data/gym.js (GYM_INFO). Fields NOT seeded:
+- photos: frontend-only static (décor photos stored in client, not DB)
 - staffToday, todayIdx, status, walkMin: computed/derived at render time
 
 Idempotency:
@@ -36,7 +36,7 @@ depends_on: str | Sequence[str] | None = None
 # Deterministic singleton PK — consistent across all environments.
 _SINGLETON_ID = "00000000-0000-0000-0000-000000000001"
 
-# Baseline content from apps/client-pwa/src/data/gym.js (GYM_INFO).
+# Baseline content from apps/client/src/data/gym.js (GYM_INFO).
 _HOURS = json.dumps([
     {"d": "Пн", "open": "07:00", "close": "23:00"},
     {"d": "Вт", "open": "07:00", "close": "23:00"},

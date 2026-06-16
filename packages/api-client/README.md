@@ -38,7 +38,7 @@ Convenience-обёртки (`get` / `post` / ...) **не** добавлены у
 pnpm --filter @clubcore/api-client codegen
 ```
 
-Локально перед `pnpm dev` в `apps/admin-app` это можно выполнить вручную или через `predev` hook. Не редактируй `src/schema.d.ts` руками — CI откатит изменения через `git diff --exit-code` (Phase 9 API-07).
+Локально перед `pnpm dev` в `apps/admin` это можно выполнить вручную или через `predev` hook. Не редактируй `src/schema.d.ts` руками — CI откатит изменения через `git diff --exit-code` (Phase 9 API-07).
 
 `src/schema.d.ts` **закоммичен в git** (Phase 9 D-07) — отступление от REQUIREMENTS API-05 wording 'gitignored locally'. Без коммита drift-gate бессмыслен.
 
@@ -71,7 +71,7 @@ Sample curl examples и полный Postman collection будут опубли�
 
 Fetcher держит module-scoped `inFlightRefresh: Promise<Response> | null`. На 401 от non-`/auth/*` путей запускается ОДИН `/api/v1/auth/refresh`; параллельные запросы ждут тот же promise. Любой провал (4xx, 5xx, network, timeout) → синтетический `ApiError('session_expired', ...)`. Если retry после успешного refresh снова даёт 401 — тоже `session_expired` (max 1 refresh per failed call, защита от лупов). Подробности в Phase 9 CONTEXT D-A1..D-A4.
 
-Fetcher НЕ редиректит и НЕ знает про `/login` — он pure transport (D-A2). Redirect-логика живёт в admin-app (Phase 10 FE-05).
+Fetcher НЕ редиректит и НЕ знает про `/login` — он pure transport (D-A2). Redirect-логика живёт в admin (Phase 10 FE-05).
 
 ## CSRF
 

@@ -37,8 +37,8 @@ Traefik fronts 3 hosts:
 | Host | Backend |
 |------|---------|
 | `api.<domain>` | backend Service `:8000` |
-| `admin.<domain>` | admin-app nginx Service `:8080` |
-| `app.<domain>` | client-pwa nginx Service `:8080` |
+| `admin.<domain>` | admin nginx Service `:8080` |
+| `app.<domain>` | client nginx Service `:8080` |
 
 WebSocket (`/api/v1/client/ws/*`) upgrades through Traefik v3 automatically — no annotation required (NET-02).
 
@@ -57,8 +57,8 @@ WebSocket (`/api/v1/client/ws/*`) upgrades through Traefik v3 automatically — 
 | backend | 1 | RollingUpdate | FastAPI 0.115+; readinessProbe waits for migrate Job (P4) |
 | arq-worker | **1 — INVARIANT** | **Recreate — INVARIANT** | ARQ async job worker; see D-V40-REPLICAS |
 | telegram-bot | **1 — INVARIANT** | **Recreate — INVARIANT** | Telegram polling bot; see D-V40-REPLICAS |
-| admin-app | 1 | RollingUpdate | nginx serving admin SPA; `try_files` SPA fallback; SW headers |
-| client-pwa | 1 | RollingUpdate | nginx serving client PWA; same SPA/SW config |
+| admin | 1 | RollingUpdate | nginx serving admin SPA; `try_files` SPA fallback; SW headers |
+| client | 1 | RollingUpdate | nginx serving client PWA; same SPA/SW config |
 
 ### Cluster Infrastructure
 
@@ -103,11 +103,11 @@ What was actually run (not just authored) — Docker was available so build + th
 
 | Check | Tool | Result |
 |-------|------|--------|
-| `make build` (4 images) | docker | ✅ all 4 built (backend/admin-app/client-pwa/backup) |
+| `make build` (4 images) | docker | ✅ all 4 built (backend/admin/client/backup) |
 | `helm lint` + `helm template` (full chart, all gates on) | helm 4.x (container) | ✅ renders 49 objects; lint clean |
 | Manifest schema validation | kubeconform (container) | ✅ 43/43 standard objects valid (6 CRDs skipped) |
 | `terraform validate` (host + cluster) | terraform 1.9 (container) | ✅ both green (after fixing the helm-provider `kubernetes` attribute syntax) |
-| trivy CVE gate (HIGH/CRITICAL) | trivy (container) | admin-app ✅ 0 · client-pwa ✅ 0 · backup ✅ 0 · **backend ✗ 2** |
+| trivy CVE gate (HIGH/CRITICAL) | trivy (container) | admin ✅ 0 · client ✅ 0 · backup ✅ 0 · **backend ✗ 2** |
 
 **Still OPERATOR-PENDING** (could not run in the sandbox — no k3d binary, host has no network to install it):
 - Live `make up` / `make smoke` against a real k3s/k3d cluster (deploy + 8-check smoke).
@@ -179,8 +179,8 @@ bash infra/scripts/k3d-up.sh
 bash infra/scripts/build-images.sh
 # Expected: 4 images built and tagged with git short-SHA
 #   clubcore/backend:<sha>
-#   clubcore/admin-app:<sha>
-#   clubcore/client-pwa:<sha>
+#   clubcore/admin:<sha>
+#   clubcore/client:<sha>
 
 # Step 3: Scan for CVEs (gate)
 bash infra/scripts/scan-images.sh
@@ -306,8 +306,8 @@ Current scale posture for v4.0 (single bare-metal node):
 | backend | 1 | RollingUpdate | Yes — SCALE-01 (future milestone) |
 | arq-worker | **1** | **Recreate** | **NO — INVARIANT** |
 | telegram-bot | **1** | **Recreate** | **NO — INVARIANT** |
-| admin-app | 1 | RollingUpdate | Yes — SCALE-03 (future milestone) |
-| client-pwa | 1 | RollingUpdate | Yes — SCALE-03 (future milestone) |
+| admin | 1 | RollingUpdate | Yes — SCALE-03 (future milestone) |
+| client | 1 | RollingUpdate | Yes — SCALE-03 (future milestone) |
 
 Backend horizontal scaling (SCALE-01), Redis replication (SCALE-02), and frontend scaling (SCALE-03) are deferred to future milestones when multi-node hardware is available.
 

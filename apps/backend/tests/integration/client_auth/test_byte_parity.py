@@ -13,7 +13,7 @@ Tests:
      its annotations — clients carry no RBAC role (D-07).
 
   3. test_admin_app_can_ts_unchanged (CISO-01):
-     Assert apps/admin-app/src/shared/session/can.ts exists and contains no
+     Assert apps/admin/src/shared/session/can.ts exists and contains no
      "client" role token (no `role: 'client'`, no `Role.CLIENT`, no `"client"`
      as a role value in the can() body or OWNER_ONLY equivalent).
 """
@@ -29,7 +29,7 @@ from pathlib import Path
 _CAN_TS_PATH = (
     Path(__file__).resolve().parent.parent.parent.parent.parent.parent
     / "apps"
-    / "admin-app"
+    / "admin"
     / "src"
     / "shared"
     / "session"
@@ -46,7 +46,7 @@ def test_no_role_client_in_permissions() -> None:
          (content check — catches commented-out or partial additions too).
 
     These checks together ensure the staff RBAC model is byte-unchanged from the
-    contract-freeze baseline: adding Role.CLIENT would break admin-app byte-parity
+    contract-freeze baseline: adding Role.CLIENT would break admin byte-parity
     (CISO-01) and the test_rbac_parity.py contract-parity test.
     """
     from app.core.permissions import Role
@@ -55,7 +55,7 @@ def test_no_role_client_in_permissions() -> None:
     assert "CLIENT" not in Role.__members__, (
         "CISO-01 VIOLATION: Role.CLIENT found in app.core.permissions.Role — "
         "this breaks the staff byte-parity contract with "
-        "apps/admin-app/src/shared/session/can.ts. "
+        "apps/admin/src/shared/session/can.ts. "
         "Clients MUST NOT have an RBAC role (D-07 decision). Remove Role.CLIENT immediately."
     )
 
@@ -102,25 +102,25 @@ def test_client_principal_has_no_role() -> None:
 
 
 def test_admin_app_can_ts_unchanged() -> None:
-    """CISO-01: apps/admin-app/src/shared/session/can.ts has no client-role token.
+    """CISO-01: apps/admin/src/shared/session/can.ts has no client-role token.
 
     Assertions:
       1. The file exists (ensures it was not accidentally deleted or moved).
       2. The file does not contain 'client' as a Role value in the can() logic or
          OWNER_ONLY equivalent — the client principal must be invisible to the
-         admin-app RBAC stack.
+         admin RBAC stack.
       3. No references to 'Role.CLIENT' (TypeScript equivalent pattern).
 
     This test runs without the frontend build toolchain — it is a pure text
     search over the TypeScript source file.
 
-    RBAC re-home (Phase 105 ADMW-02): repointed to admin-app (Phase 105 deletion).
-    admin-app is the authoritative frontend byte-mirror of the backend OWNER_ONLY
+    RBAC re-home (Phase 105 ADMW-02): repointed to admin (Phase 105 deletion).
+    admin is the authoritative frontend byte-mirror of the backend OWNER_ONLY
     matrix.
     """
     assert _CAN_TS_PATH.exists(), (
         f"CISO-01 GUARD FAILURE: {_CAN_TS_PATH} does not exist. "
-        "The admin-app can.ts was moved or deleted — this breaks the byte-parity contract."
+        "The admin can.ts was moved or deleted — this breaks the byte-parity contract."
     )
 
     can_ts_text = _CAN_TS_PATH.read_text(encoding="utf-8")
@@ -134,7 +134,7 @@ def test_admin_app_can_ts_unchanged() -> None:
     # Check that no 'Role.CLIENT' TypeScript equivalent exists
     assert "Role.CLIENT" not in can_ts_text, (
         f"CISO-01 VIOLATION: 'Role.CLIENT' found in {_CAN_TS_PATH}. "
-        "The admin-app RBAC stack must not reference a client role."
+        "The admin RBAC stack must not reference a client role."
     )
 
     # The TypeScript Role type in can.ts / types.ts uses string literals.
@@ -143,9 +143,9 @@ def test_admin_app_can_ts_unchanged() -> None:
     # role value is prohibited. We check for the role type definition pattern.
     assert "| 'client'" not in can_ts_text, (
         f"CISO-01 VIOLATION: \"| 'client'\" found in {_CAN_TS_PATH} — "
-        "client role must not be added to the admin-app Role type union."
+        "client role must not be added to the admin Role type union."
     )
     assert '| "client"' not in can_ts_text, (
         f"CISO-01 VIOLATION: '| \"client\"' found in {_CAN_TS_PATH} — "
-        "client role must not be added to the admin-app Role type union."
+        "client role must not be added to the admin Role type union."
     )

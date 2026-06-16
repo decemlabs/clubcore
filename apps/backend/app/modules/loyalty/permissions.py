@@ -3,7 +3,7 @@
 require_owner_for_loyalty_grant() admits ONLY Role.OWNER on POST /loyalty/grant.
 Does NOT extend OWNER_ONLY frozenset or add a new Resource — the parity test
 (Phase 6 TEST-06) and CISO-01 byte-parity guard stay green without touching
-apps/admin-app/src/shared/session/can.ts.
+apps/admin/src/shared/session/can.ts.
 
 Reception → 403 ForbiddenError + co-transactional rbac_forbidden audit row.
 The ("rbac_forbidden", "rbac") pair is already in LOCKED_AUDIT_EVENTS — no new
@@ -33,7 +33,7 @@ def require_owner_for_loyalty_grant() -> Callable[..., Awaitable[CurrentUser]]:
     audit row (target_resource="loyalty", action="grant").
 
     Does NOT extend OWNER_ONLY frozenset or add a new Resource — Phase-6 parity
-    test (TEST-06) and CISO-01 byte-parity guard stay green (no admin-app changes).
+    test (TEST-06) and CISO-01 byte-parity guard stay green (no admin changes).
     """
 
     async def _checker(

@@ -14,7 +14,7 @@ def test_owner_only_is_frozenset_instance() -> None:
 
 
 def test_owner_only_has_exactly_forty_six_entries() -> None:
-    # Mirrors apps/admin-app/src/shared/session/can.ts.
+    # Mirrors apps/admin/src/shared/session/can.ts.
     # Composition: 9 v1.1 + 6 v1.2 INFRA-08 + 11 v1.4 INFRA-19
     #              - 1 v1.4 Phase 34 D-34-09a removal of `(CANCEL, PT_SESSIONS)`
     #              + 4 v1.5 Phase 37 INFRA-27 SCHEDULE_SLOTS write pairs
@@ -58,7 +58,7 @@ def test_action_value_set() -> None:
 
 
 def test_resource_value_set() -> None:
-    # Verbatim from apps/admin-app/src/shared/session/registry.ts
+    # Verbatim from apps/admin/src/shared/session/registry.ts
     # (24 values: 11 v1.1 + 3 v1.2 + 1 v1.2 FE-09 + 5 v1.4 INFRA-18 + 2 v1.5 Phase 37 INFRA-26
     # + 1 v2.4 Phase 86 GYM-02 (gym) + 1 Phase 116 (messages)).
     # Note: OWNER_AREA / MEMBERSHIP_PLANS / PT_PACKAGE_PLANS / PT_PACKAGES / PT_SESSIONS /

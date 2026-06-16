@@ -1,6 +1,6 @@
 # ClubCore Admin Frontend
 
-Админ-панель для сети фитнес-клубов. React + pnpm SPA. Пакет: `@clubcore/admin-app`.
+Админ-панель для сети фитнес-клубов. React + pnpm SPA. Пакет: `@clubcore/admin`.
 
 ## Стек
 
@@ -21,13 +21,13 @@
 ```bash
 pnpm install                                # установка зависимостей (из корня)
 
-pnpm -F @clubcore/admin-app dev             # dev-server на http://localhost:5173
-pnpm -F @clubcore/admin-app build           # production-бандл в ./dist
-pnpm -F @clubcore/admin-app preview         # предпросмотр продакшен-сборки
-pnpm -F @clubcore/admin-app typecheck       # tsc -b --noEmit
-pnpm -F @clubcore/admin-app lint            # eslint .
-pnpm -F @clubcore/admin-app test            # vitest run (юнит + smoke-тесты роутов)
-pnpm -F @clubcore/admin-app test:watch      # vitest в watch-режиме
+pnpm -F @clubcore/admin dev             # dev-server на http://localhost:5173
+pnpm -F @clubcore/admin build           # production-бандл в ./dist
+pnpm -F @clubcore/admin preview         # предпросмотр продакшен-сборки
+pnpm -F @clubcore/admin typecheck       # tsc -b --noEmit
+pnpm -F @clubcore/admin lint            # eslint .
+pnpm -F @clubcore/admin test            # vitest run (юнит + smoke-тесты роутов)
+pnpm -F @clubcore/admin test:watch      # vitest в watch-режиме
 ```
 
 ## Структура

@@ -10,37 +10,37 @@ Admin panel for a chain of fitness clubs (ClubCore). The UI is in Russian. The p
 
 ## Commands
 
-This package is now part of the clubcore pnpm workspace (`@clubcore/admin-app`). Run all commands from the **repo root** using pnpm workspace filters.
+This package is now part of the clubcore pnpm workspace (`@clubcore/admin`). Run all commands from the **repo root** using pnpm workspace filters.
 
 ```bash
 # Install deps (run from repo root — generates root pnpm-lock.yaml)
 pnpm install
 
 # Dev server on http://localhost:5173
-pnpm -F @clubcore/admin-app dev
+pnpm -F @clubcore/admin dev
 
-# Production build → ./apps/admin-app/dist
-pnpm -F @clubcore/admin-app build
+# Production build → ./apps/admin/dist
+pnpm -F @clubcore/admin build
 
 # Preview production build
-pnpm -F @clubcore/admin-app preview
+pnpm -F @clubcore/admin preview
 
 # TypeScript check
-pnpm -F @clubcore/admin-app typecheck
+pnpm -F @clubcore/admin typecheck
 
 # ESLint
-pnpm -F @clubcore/admin-app lint
+pnpm -F @clubcore/admin lint
 
 # Vitest unit + smoke tests
-pnpm -F @clubcore/admin-app test
+pnpm -F @clubcore/admin test
 
 # Vitest in watch mode
-pnpm -F @clubcore/admin-app test:watch
+pnpm -F @clubcore/admin test:watch
 ```
 
-Tests run on **vitest** (`pnpm -F @clubcore/admin-app test`): unit tests for pure logic (`src/lib/format.test.ts`, `src/features/clients/sort.test.ts`) plus a route smoke suite (`src/app/router-smoke.test.tsx`) that renders every registered route.
+Tests run on **vitest** (`pnpm -F @clubcore/admin test`): unit tests for pure logic (`src/lib/format.test.ts`, `src/features/clients/sort.test.ts`) plus a route smoke suite (`src/app/router-smoke.test.tsx`) that renders every registered route.
 
-To add shadcn/ui components: `pnpm dlx shadcn@latest add button card dialog select …` (run from the `apps/admin-app/` directory or pass `--cwd apps/admin-app` from the root).
+To add shadcn/ui components: `pnpm dlx shadcn@latest add button card dialog select …` (run from the `apps/admin/` directory or pass `--cwd apps/admin` from the root).
 
 ## Architecture
 

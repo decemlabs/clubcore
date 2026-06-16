@@ -44,8 +44,8 @@ Allow edges defined (per workload):
   telegram-bot → CoreDNS:53    (P8 mandatory — UDP+TCP)
   migrate → postgres-rw:5432   (alembic upgrade head)
   migrate → CoreDNS:53         (P8 mandatory — UDP+TCP)
-  ingress → admin-app:8080     (frontend SPA)
-  ingress → client-pwa:8080    (frontend PWA)
+  ingress → admin:8080     (frontend SPA)
+  ingress → client:8080    (frontend PWA)
 
 Selector notes:
   - Component labels (app.kubernetes.io/component: <name>) are set on every workload.
@@ -349,21 +349,21 @@ spec:
           port: 5432
 ---
 # ─────────────────────────────────────────────────────────────────────────────
-# Policy 5: admin-app — ingress from Traefik :8080 (nginx static frontend)
+# Policy 5: admin — ingress from Traefik :8080 (nginx static frontend)
 # ─────────────────────────────────────────────────────────────────────────────
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "clubcore.fullname" . }}-allow-admin-app
+  name: {{ include "clubcore.fullname" . }}-allow-admin
   labels:
     {{- include "clubcore.labels" . | nindent 4 }}
   annotations:
-    clubcore.io/sec04-allow-policy: "admin-app"
+    clubcore.io/sec04-allow-policy: "admin"
 spec:
   podSelector:
     matchLabels:
       {{- include "clubcore.selectorLabels" . | nindent 6 }}
-      app.kubernetes.io/component: admin-app
+      app.kubernetes.io/component: admin
   policyTypes:
     - Ingress
     - Egress
@@ -394,21 +394,21 @@ spec:
           port: 53
 ---
 # ─────────────────────────────────────────────────────────────────────────────
-# Policy 6: client-pwa — ingress from Traefik :8080 (nginx static PWA)
+# Policy 6: client — ingress from Traefik :8080 (nginx static PWA)
 # ─────────────────────────────────────────────────────────────────────────────
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ include "clubcore.fullname" . }}-allow-client-pwa
+  name: {{ include "clubcore.fullname" . }}-allow-client
   labels:
     {{- include "clubcore.labels" . | nindent 4 }}
   annotations:
-    clubcore.io/sec04-allow-policy: "client-pwa"
+    clubcore.io/sec04-allow-policy: "client"
 spec:
   podSelector:
     matchLabels:
       {{- include "clubcore.selectorLabels" . | nindent 6 }}
-      app.kubernetes.io/component: client-pwa
+      app.kubernetes.io/component: client
   policyTypes:
     - Ingress
     - Egress

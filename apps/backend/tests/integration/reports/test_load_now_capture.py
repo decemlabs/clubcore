@@ -2,7 +2,7 @@
 
 Hits GET /api/v1/reports/load/now via ASGITransport, serializes the actual JSON
 response to the shared FE fixtures dir:
-  apps/admin-app/src/features/reports/capture/load-now-response.json
+  apps/admin/src/features/reports/capture/load-now-response.json
 
 Representative analytics endpoint for the cohort/anomaly/at-risk/load-now group
 (per 117-CONTEXT.md "CONTEXT permits one analytics capture").
@@ -27,7 +27,7 @@ pytestmark = pytest.mark.asyncio(loop_scope="function")
 # ---------------------------------------------------------------------------
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[5]
-FIXTURES_DIR = _REPO_ROOT / "apps/admin-app/src/features/reports/capture"
+FIXTURES_DIR = _REPO_ROOT / "apps/admin/src/features/reports/capture"
 
 
 # ---------------------------------------------------------------------------

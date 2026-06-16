@@ -2,7 +2,7 @@
 
 Hits POST /api/v1/payments/{payment_id}/refund with a real seeded payment via
 ASGITransport, serializes the actual JSON response to the shared FE fixtures dir:
-  apps/admin-app/src/features/payments/capture/refund-response.json
+  apps/admin/src/features/payments/capture/refund-response.json
 
 The captured JSON is then parsed by the FE vitest contract test
 (features/payments/refund.contract.test.ts) using the REAL FE Zod PaymentSchema.
@@ -28,7 +28,7 @@ pytestmark = pytest.mark.asyncio(loop_scope="function")
 # ---------------------------------------------------------------------------
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[5]
-FIXTURES_DIR = _REPO_ROOT / "apps/admin-app/src/features/payments/capture"
+FIXTURES_DIR = _REPO_ROOT / "apps/admin/src/features/payments/capture"
 
 
 # ---------------------------------------------------------------------------

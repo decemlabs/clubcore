@@ -156,7 +156,7 @@ check_redis_aof() {
 
 # ── Check 4: TZ=UTC on ALL timezone-sensitive pods (EXTRACT + EXTEND from deploy-local.sh 184-221) ─
 # P9: All timezone-sensitive workloads must run TZ=UTC.
-# Stateless static-serving nginx pods (admin-app, client-pwa) do NOT read wall-clock
+# Stateless static-serving nginx pods (admin, client) do NOT read wall-clock
 # time in application logic — they intentionally have no TZ env; this is an
 # in-spec skip, not a failure (documented below).
 check_tz() {
@@ -205,10 +205,10 @@ check_all_tz() {
         log "  (4) WARNING: Redis pod not found — skipping Redis TZ check"
     fi
 
-    # Intentional skip — static nginx pods (admin-app, client-pwa) serve pre-built
+    # Intentional skip — static nginx pods (admin, client) serve pre-built
     # assets and never call date/time APIs in their nginx.conf. No TZ env is
     # expected or required for those pods (they are stateless, tz-agnostic nginx).
-    log "  (4) NOTE: admin-app and client-pwa nginx pods are intentionally excluded from TZ check (stateless static serving, no wall-clock reads in nginx logic)"
+    log "  (4) NOTE: admin and client nginx pods are intentionally excluded from TZ check (stateless static serving, no wall-clock reads in nginx logic)"
 }
 
 # ── Check 5: DNS resolve from each workload pod (NEW — P8/SEC-04 evidence) ────

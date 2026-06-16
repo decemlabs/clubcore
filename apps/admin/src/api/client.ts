@@ -18,7 +18,7 @@
 import { ApiError } from '@clubcore/api-client'
 import type { paths } from '@clubcore/api-client'
 
-// Re-export ApiError so all admin-app consumers (and query-client.ts) share ONE class identity.
+// Re-export ApiError so all admin consumers (and query-client.ts) share ONE class identity.
 export { ApiError } from '@clubcore/api-client'
 
 // Staff-scoped CSRF cookie name (T-100-06 / T-100-03).
@@ -163,7 +163,7 @@ async function finishResponse(res: Response): Promise<unknown> {
 /**
  * Staff-scoped typed transport (FND-02).
  *
- * Mirrors clientRequest() from client-pwa but uses:
+ * Mirrors clientRequest() from client but uses:
  *  - clubcore_csrf CSRF cookie (not clubcore_client_csrf)
  *  - /api/v1/auth/refresh for token rotation (not /api/v1/client/session/refresh)
  *  - STAFF_AUTH_EXEMPT_PATHS for refresh bypass

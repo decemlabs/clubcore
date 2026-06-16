@@ -53,8 +53,8 @@ scan: ## Scan images for HIGH/CRITICAL CVEs (OPERATOR-PENDING — needs trivy; C
 push: ## Import SHA-tagged images into local k3d registry (OPERATOR-PENDING — needs k3d)
 	k3d image import \
 		clubcore/backend:$(TAG) \
-		clubcore/admin-app:$(TAG) \
-		clubcore/client-pwa:$(TAG) \
+		clubcore/admin:$(TAG) \
+		clubcore/client:$(TAG) \
 		-c $(K3D_CLUSTER)
 
 helm-lint: ## Lint the Helm chart with image.tag set (OPERATOR-PENDING — needs helm)

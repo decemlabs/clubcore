@@ -2,7 +2,7 @@
 
 Hits GET /api/v1/messages/threads via ASGITransport after seeding a thread, serializes
 the actual JSON response to the shared FE fixtures dir:
-  apps/admin-app/src/features/messages/capture/threads-list-response.json
+  apps/admin/src/features/messages/capture/threads-list-response.json
 
 The captured JSON is parsed by the FE vitest contract test
 (features/messages/messages.contract.test.ts) using the REAL FE Zod StaffInboxSchema.
@@ -44,7 +44,7 @@ pytestmark = pytest.mark.asyncio(loop_scope="function")
 # ---------------------------------------------------------------------------
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[4]
-FIXTURES_DIR = _REPO_ROOT / "apps/admin-app/src/features/messages/capture"
+FIXTURES_DIR = _REPO_ROOT / "apps/admin/src/features/messages/capture"
 
 
 # ---------------------------------------------------------------------------
