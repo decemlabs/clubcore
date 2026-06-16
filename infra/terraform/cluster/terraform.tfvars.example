@@ -1,0 +1,33 @@
+# terraform.tfvars.example — IAC-02: cluster module example variables (PLACEHOLDER VALUES ONLY)
+#
+# Copy this file to terraform.tfvars and replace placeholders with real values.
+# NEVER commit terraform.tfvars — it contains the Grafana admin password and
+# potentially a custom kubeconfig path (threat T-120-TF).
+# Add terraform.tfvars to .gitignore to prevent accidental commits.
+#
+# OPERATOR-PENDING: `terraform plan` / `apply` require a reachable k3d cluster.
+# Done-bar = `terraform validate` (static, no cluster needed).
+
+# ── Kubernetes access ─────────────────────────────────────────────────────────
+# Path to the kubeconfig on your machine.
+kubeconfig_path = "~/.kube/config"
+
+# Context name in your kubeconfig.
+# For local k3d:      "k3d-clubcore"  (created by infra/scripts/k3d-up.sh)
+# For bare-metal:     "clubcore-prod" (set by the k3s installer or manually)
+kube_context = "k3d-clubcore"
+
+# ── Chart versions (pin for reproducibility) ──────────────────────────────────
+# kube-prometheus-stack (Prometheus + Alertmanager + Grafana)
+kube_prometheus_stack_version = "86.2.3"
+
+# Loki single-binary chart
+loki_version = "6.29.0"
+
+# Grafana Alloy (log collector, replaces Promtail)
+alloy_version = "0.12.5"
+
+# ── Grafana credentials ───────────────────────────────────────────────────────
+# Replace with a strong password — this is the Grafana admin login.
+# NEVER commit real credentials here.
+grafana_admin_password = "REPLACE_WITH_STRONG_PASSWORD"
