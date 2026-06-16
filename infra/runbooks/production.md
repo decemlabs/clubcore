@@ -316,7 +316,7 @@ kubectl get pods -n monitoring
 | Symptom | Likely Cause | Diagnostic Command |
 |---------|-------------|-------------------|
 | `migrate Job` status.failed > 0 | Alembic migration error; DB not reachable | `kubectl logs job/clubcore-migrate -n default` |
-| `backend` pod CrashLoop | App startup error; missing env var; readOnlyRootFilesystem write outside emptyDir | `kubectl logs deploy/clubcore-backend -n default` + check `kubectl describe pod` Events |
+| `backend` pod CrashLoop | App startup error; missing env var; readOnlyRootFilesystem write outside emptyDir; `alembic-check` init guard failed (P4) | `kubectl logs deploy/clubcore-backend -c alembic-check -n default` (init guard) then `kubectl logs deploy/clubcore-backend -c backend -n default` (app) + check `kubectl describe pod` Events. `kubectl logs deploy/...` without `-c` selects a single pod's default container only — pass `-c <container>`, or `--all-containers` when the failing container is unknown. |
 | Pod CrashLoop under `readOnlyRootFilesystem` | Write attempted outside the `/tmp` or `/var/cache/nginx` emptyDir volumes (SEC-03) | `kubectl describe pod <pod>` — look for "Read-only file system" in last state |
 | NetworkPolicy blocks DNS (P8) | CoreDNS egress rule missing for a workload | `kubectl exec <pod> -- nslookup clubcore-postgres-rw` — if NXDOMAIN, check NetworkPolicy has UDP+TCP 53 egress to `kube-dns` |
 | TZ drift — timestamps off by hours (P9) | `TZ=UTC` missing on a pod | `kubectl exec <pod> -- env \| grep TZ` — must be `UTC` |
@@ -327,7 +327,7 @@ kubectl get pods -n monitoring
 | Loki shows no logs | Alloy not shipping logs | `kubectl logs -n monitoring -l app.kubernetes.io/name=alloy` |
 | `helm upgrade` fails with timeout | CNPG operator not ready; migrate Job still running | `kubectl get pod -n cnpg-system` — CNPG controller must be Running before Cluster CR applies |
 | SeaweedFS S3 connection refused | SeaweedFS pod not Running | `kubectl get pod -l app.kubernetes.io/name=seaweedfs` + `kubectl describe pvc clubcore-seaweedfs` |
-| Telegram bot not polling | Invalid token; sealed secret not decrypted | `kubectl logs deploy/clubcore-telegram-bot` — check for `Unauthorized`; verify `kubectl get secret clubcore-app-secret` exists |
+| Telegram bot not polling | Invalid token; sealed secret not decrypted | `kubectl logs deploy/clubcore-telegram-bot -n default` — check for `Unauthorized`; verify `kubectl get secret clubcore-app-secret` exists. `kubectl logs deploy/...` returns one arbitrary pod's logs — for the `replicas:1`/`Recreate` bot this is fine, but use `--previous` to see logs from a crashed prior instance. |
 | `make rollback` fails | No previous revision | `helm history clubcore` — rollback requires at least 2 revisions |
 
 ---
