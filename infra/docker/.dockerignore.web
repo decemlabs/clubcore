@@ -1,0 +1,45 @@
+# Frontend build-context dockerignore (used by admin-app.Dockerfile and client-pwa.Dockerfile)
+# Build context is the repo root (workspace builds need the lockfile + sibling packages).
+
+# Local dependency installs (node_modules will be reinstalled inside the build container)
+node_modules/
+apps/admin-app/node_modules/
+apps/client-pwa/node_modules/
+packages/*/node_modules/
+
+# Existing dist output (built inside the container, not from the host)
+apps/admin-app/dist/
+apps/client-pwa/dist/
+
+# Backend source (not needed for frontend builds)
+apps/backend/
+
+# Test and tooling artifacts
+**/__pycache__/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/coverage/
+**/htmlcov/
+**/.coverage
+
+# Git and editor metadata
+.git/
+.gitignore
+**/.gitkeep
+
+# Planning and docs
+.planning/
+*.md
+CLAUDE.md
+**/CLAUDE.md
+
+# Environment files (never in build context — T-118-03)
+**/.env*
+
+# TypeScript build info (stale artifacts)
+**/*.tsbuildinfo
+
+# Design assets (not needed for production builds)
+apps/admin-app/design/
+apps/client-pwa/plans/
