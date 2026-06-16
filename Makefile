@@ -17,9 +17,12 @@
 # ── Variable conventions ───────────────────────────────────────────────────────
 # TAG is derived from git-short-SHA by build-images.sh / deploy-local.sh internally
 # (including the -dirty suffix). The Makefile exposes it for helm-lint / helm-validate
-# and scan, but MUST NOT override the scripts' internal derivation to keep build↔deploy
-# tag in sync (image import tag == build tag per IMG-04).
-TAG        ?= $(shell git rev-parse --short HEAD)
+# and push, but MUST NOT override the scripts' internal derivation to keep build↔deploy
+# tag in sync (image import tag == build tag per IMG-04). To guarantee the tag a manual
+# `make push`/`make helm-lint` references actually exists, this derivation MUST match
+# build-images.sh / deploy-local.sh exactly: short-SHA plus a "-dirty" suffix when the
+# working tree (unstaged OR staged) is dirty.
+TAG        ?= $(shell t=$$(git rev-parse --short HEAD); if ! git diff --quiet || ! git diff --cached --quiet; then t="$$t-dirty"; fi; echo "$$t")
 NAMESPACE  ?= default
 RELEASE    ?= clubcore
 K3D_CLUSTER ?= clubcore
