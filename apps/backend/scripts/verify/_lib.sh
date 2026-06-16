@@ -17,11 +17,11 @@
 # Auth contract notes:
 #   - /api/v1/auth/login is CSRF-exempt (apps/backend/app/modules/auth/router.py).
 #   - Cookies set by issue_session_cookies (app/core/security.py):
-#       sz_access       HTTP-only access JWT, Path=/
-#       sz_refresh      HTTP-only refresh token, Path=/api/v1/auth
+#       cc_access       HTTP-only access JWT, Path=/
+#       cc_refresh      HTTP-only refresh token, Path=/api/v1/auth
 #       clubcore_csrf   non-HttpOnly CSRF token, Path=/, used as X-CSRF-Token
 #                       header value on every mutating verb.
-#   - Auth flows via the sz_access cookie automatically when curl reuses the
+#   - Auth flows via the cc_access cookie automatically when curl reuses the
 #     cookie jar with -b "$COOKIE_JAR" — there is NO access JWT in the login
 #     response body, so no Authorization: Bearer header is added.
 #
@@ -89,7 +89,7 @@ login_as() {
 
 # mut <METHOD> <PATH> <JSON_BODY>
 # Auto-attaches Idempotency-Key (D-36-04 — every mutating verb), X-CSRF-Token,
-# and reuses $COOKIE_JAR (auth via sz_access HTTP-only cookie). Outputs the
+# and reuses $COOKIE_JAR (auth via cc_access HTTP-only cookie). Outputs the
 # verbatim curl -i transcript (status line + headers + body) for evidence-tee.
 mut() {
   local method="$1" path="$2" body="$3"
