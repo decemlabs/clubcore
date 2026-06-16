@@ -40,6 +40,15 @@ ADMIN_APP_HOST="${ADMIN_APP_HOST:-admin.clubcore.local}"
 CLIENT_PWA_HOST="${CLIENT_PWA_HOST:-app.clubcore.local}"
 API_HOST="${API_HOST:-api.clubcore.local}"
 
+# Ingress endpoint — the IP/port where the Traefik ingress is actually reachable.
+# k3d maps the loadbalancer to localhost by default (e.g. `k3d cluster create
+# --port "80:80@loadbalancer"`), so HTTP checks below DNS-resolve the *.clubcore.local
+# vhosts to this endpoint via `curl --resolve` and spoof the vhost with `-H Host:`.
+# This lets checks 6/7/8 PASS on a correctly-deployed k3d WITHOUT manual /etc/hosts
+# entries. Override INGRESS_IP/INGRESS_PORT if Traefik is exposed elsewhere.
+INGRESS_IP="${INGRESS_IP:-127.0.0.1}"
+INGRESS_PORT="${INGRESS_PORT:-80}"
+
 # Smoke check timeouts
 MIGRATE_WAIT_TIMEOUT="300s"
 POD_READY_TIMEOUT="300s"
@@ -53,6 +62,14 @@ ok()   { echo "[smoke] PASS: $*"; }
 fail() { echo "[smoke] FAIL: $*" >&2; SMOKE_FAILURES=$((SMOKE_FAILURES + 1)); }
 
 SMOKE_FAILURES=0
+
+# run_check — dispatch a check function so that an unguarded non-zero command
+# inside it can never abort the whole script under `set -euo pipefail`.
+# Failures are already recorded via fail() (which increments SMOKE_FAILURES),
+# so swallowing the function's exit status here is safe: it guarantees all 8
+# checks run and the PASS/FAIL summary banner is always reached. The final
+# exit status reflects SMOKE_FAILURES, not an incidental `set -e` trip.
+run_check() { "$@" || true; }
 
 # ── Check 1: /healthz 200 (NEW) ───────────────────────────────────────────────
 # Exec into a backend pod and curl localhost:8000/healthz.
@@ -245,11 +262,12 @@ check_websocket() {
     local ws_status
     ws_status="$(curl -s -o /dev/null -w '%{http_code}' \
         --max-time 10 \
+        --resolve "${API_HOST}:${INGRESS_PORT}:${INGRESS_IP}" \
         -H 'Connection: Upgrade' \
         -H 'Upgrade: websocket' \
         -H 'Sec-WebSocket-Version: 13' \
         -H "Sec-WebSocket-Key: $(echo -n 'clubcore-smoke' | base64 2>/dev/null || echo 'Y2x1YmNvcmUtc21va2U=')" \
-        "http://${API_HOST}/api/v1/client/ws/smoke-probe" 2>/dev/null || echo "")"
+        "http://${API_HOST}:${INGRESS_PORT}/api/v1/client/ws/smoke-probe" 2>/dev/null || echo "")"
     # Traefik returns 101 on a successful WebSocket upgrade.
     # 400 or 426 means the endpoint exists but rejected the handshake (acceptable
     # if the backend requires auth — a 4xx still proves the path reaches the service).
@@ -277,10 +295,13 @@ check_spa_fallback() {
 
     for host in "${hosts[@]}"; do
         local status
+        # --resolve maps the vhost to the ingress endpoint so curl reaches Traefik
+        # without an /etc/hosts entry; the URL authority still carries the vhost so
+        # Traefik routes by Host. No redundant -H Host: needed.
         status="$(curl -s -o /dev/null -w '%{http_code}' \
             --max-time 10 \
-            -H "Host: ${host}" \
-            "http://${host}${deep_path}" 2>/dev/null || echo "")"
+            --resolve "${host}:${INGRESS_PORT}:${INGRESS_IP}" \
+            "http://${host}:${INGRESS_PORT}${deep_path}" 2>/dev/null || echo "")"
         if [ "${status}" = "200" ]; then
             ok "(7) SPA fallback: ${host}${deep_path} → 200 (nginx try_files working; NET-04)"
         else
@@ -300,7 +321,8 @@ check_sw_cache() {
     local sw_cache
     sw_cache="$(curl -s -D - -o /dev/null \
         --max-time 10 \
-        "http://${CLIENT_PWA_HOST}/sw.js" 2>/dev/null \
+        --resolve "${CLIENT_PWA_HOST}:${INGRESS_PORT}:${INGRESS_IP}" \
+        "http://${CLIENT_PWA_HOST}:${INGRESS_PORT}/sw.js" 2>/dev/null \
         | grep -i 'cache-control' | tr '[:upper:]' '[:lower:]' || echo "")"
     if echo "${sw_cache}" | grep -q 'no-cache'; then
         ok "(8a) sw.js Cache-Control contains no-cache (${CLIENT_PWA_HOST}/sw.js)"
@@ -312,7 +334,8 @@ check_sw_cache() {
     local api_cache
     api_cache="$(curl -s -D - -o /dev/null \
         --max-time 10 \
-        "http://${API_HOST}/api/v1/ping" 2>/dev/null \
+        --resolve "${API_HOST}:${INGRESS_PORT}:${INGRESS_IP}" \
+        "http://${API_HOST}:${INGRESS_PORT}/api/v1/ping" 2>/dev/null \
         | grep -i 'cache-control' | tr '[:upper:]' '[:lower:]' || echo "")"
     if echo "${api_cache}" | grep -q 'no-store'; then
         ok "(8b) /api/v1/ping Cache-Control contains no-store (SW will not cache API responses)"
@@ -326,21 +349,21 @@ log "=== clubcore smoke (8-check Looks-Done-But-Isn't) ==="
 log "Cluster: ${CLUSTER_NAME}  |  Release: ${RELEASE_NAME}  |  Namespace: ${NAMESPACE}"
 echo ""
 
-check_healthz
+run_check check_healthz
 echo ""
-check_migrate
+run_check check_migrate
 echo ""
-check_redis_aof
+run_check check_redis_aof
 echo ""
-check_all_tz
+run_check check_all_tz
 echo ""
-check_dns
+run_check check_dns
 echo ""
-check_websocket
+run_check check_websocket
 echo ""
-check_spa_fallback
+run_check check_spa_fallback
 echo ""
-check_sw_cache
+run_check check_sw_cache
 echo ""
 
 # ── Pod list summary ──────────────────────────────────────────────────────────
