@@ -155,6 +155,13 @@ def do_run_migrations(connection: Connection) -> None:
     connection.exec_driver_sql(
         "ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(255)"
     )
+    # Commit the widen on its own so Alembic still OWNS the outermost transaction below.
+    # Without this, the exec_driver_sql calls above autobegin a transaction that Alembic's
+    # context.begin_transaction() merely joins (not opens) → it does NOT commit on exit, so
+    # engine.connect() (commit-as-you-go) closes and the WHOLE migration silently rolls back
+    # (verified: migrate exited 0 but the DB had zero tables). Committing here restores
+    # Alembic's own begin/commit ownership.
+    connection.commit()
 
     context.configure(
         connection=connection,
