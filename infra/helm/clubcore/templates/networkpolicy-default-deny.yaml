@@ -1,0 +1,43 @@
+{{/*
+networkpolicy-default-deny.yaml — Default-deny-all NetworkPolicy (SEC-04)
+
+SEC-04 / P8 ARCHITECTURAL NOTE:
+  This NetworkPolicy selects ALL pods in the namespace via an empty podSelector {}
+  and denies ALL ingress and egress traffic by default (no ingress/egress rules).
+
+  After applying this policy, no pod can communicate until an explicit-allow
+  NetworkPolicy (networkpolicy-allow.yaml) permits specific traffic.
+
+  CRITICAL (pitfall P8): This policy SEVERS DNS resolution for all pods.
+  Every explicit-allow policy in networkpolicy-allow.yaml MUST include a CoreDNS
+  egress rule on BOTH UDP and TCP port 53, or pod DNS breaks cluster-wide.
+  See: networkpolicy-allow.yaml CoreDNS egress section.
+
+Gate: networkPolicy.enabled (default false — must be set at deploy time alongside the
+allow policies to avoid briefly severing DNS between default-deny and allow application.
+Always apply both templates together in a single helm upgrade).
+*/}}
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "clubcore.fullname" . }}-default-deny
+  labels:
+    {{- include "clubcore.labels" . | nindent 4 }}
+  annotations:
+    # SEC-04: default-deny is the foundation of network segmentation.
+    # All traffic is blocked until explicit-allow policies permit it.
+    # Deploy together with networkpolicy-allow.yaml in a single helm upgrade.
+    # P8: DNS is severed by this policy — CoreDNS egress MUST be in every allow policy.
+    clubcore.io/sec04-network-policy: "default-deny-all"
+spec:
+  # Empty podSelector selects ALL pods in the namespace.
+  podSelector: {}
+  # Deny all ingress and egress by specifying policyTypes without any rules.
+  policyTypes:
+    - Ingress
+    - Egress
+  # No ingress rules = deny all ingress
+  # No egress rules = deny all egress
+{{- end }}
+{{/* End SEC-04 default-deny gate */}}

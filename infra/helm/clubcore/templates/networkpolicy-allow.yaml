@@ -1,0 +1,388 @@
+{{/*
+networkpolicy-allow.yaml — Explicit-allow NetworkPolicies per workload (SEC-04)
+
+SEC-04 / P8: Explicit-allow policies for every app workload.
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  PITFALL P8 — COREDNS EGRESS IS MANDATORY ON EVERY POLICY                  ║
+║                                                                              ║
+║  The default-deny policy (networkpolicy-default-deny.yaml) severs ALL       ║
+║  egress including DNS (UDP/TCP port 53 to kube-system/kube-dns).            ║
+║  EVERY allow policy below includes an egress rule for CoreDNS on BOTH       ║
+║  UDP and TCP port 53. Removing this rule from ANY policy breaks DNS for     ║
+║  that workload (nslookup, service discovery, DATABASE_URL resolution fail). ║
+║                                                                              ║
+║  The CoreDNS rule is:                                                        ║
+║    egress:                                                                   ║
+║      - to:                                                                   ║
+║          - namespaceSelector:                                                ║
+║              matchLabels:                                                    ║
+║                kubernetes.io/metadata.name: kube-system                     ║
+║            podSelector:                                                      ║
+║              matchLabels:                                                    ║
+║                k8s-app: kube-dns                                             ║
+║        ports:                                                                ║
+║          - protocol: UDP    # DNS over UDP (default)                         ║
+║            port: 53                                                          ║
+║          - protocol: TCP    # DNS over TCP (large responses / fallback)      ║
+║            port: 53                                                          ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Allow edges defined (per workload):
+  ingress → backend:8000       (from Traefik, kube-system namespace)
+  backend → postgres-rw:5432   (CNPG -rw service)
+  backend → redis:6379         (Redis StatefulSet)
+  backend → seaweedfs-s3:8333  (SeaweedFS S3 API)
+  backend → CoreDNS:53         (P8 mandatory — UDP+TCP)
+  arq-worker → redis:6379      (ARQ job queue)
+  arq-worker → postgres-rw:5432 (background task DB access)
+  arq-worker → CoreDNS:53      (P8 mandatory — UDP+TCP)
+  telegram-bot → redis:6379    (Telegram bot uses Redis for state)
+  telegram-bot → postgres-rw:5432 (Telegram bot reads DB)
+  telegram-bot → internet:443  (Telegram API long-poll on api.telegram.org:443)
+  telegram-bot → CoreDNS:53    (P8 mandatory — UDP+TCP)
+  migrate → postgres-rw:5432   (alembic upgrade head)
+  migrate → CoreDNS:53         (P8 mandatory — UDP+TCP)
+  ingress → admin-app:8080     (frontend SPA)
+  ingress → client-pwa:8080    (frontend PWA)
+
+Selector notes:
+  - Component labels (app.kubernetes.io/component: <name>) are set on every workload.
+  - Traefik ingress controller runs in kube-system; selector uses namespaceSelector
+    with a port match. If the operator has a more specific Traefik pod label, tighten
+    the selector after: kubectl get pods -n kube-system --show-labels
+  - SeaweedFS S3 pod labels may vary — the port match (8333) is sufficient as-is;
+    tighten the namespaceSelector if SeaweedFS runs in a dedicated namespace.
+  - CNPG pods carry label cnpg.io/cluster=<fullname>-postgres — already matched below.
+
+Gate: networkPolicy.enabled (same gate as default-deny — always apply together).
+*/}}
+{{- if .Values.networkPolicy.enabled }}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Policy 1: backend — ingress from Traefik + egress to postgres/redis/seaweedfs/CoreDNS
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "clubcore.fullname" . }}-allow-backend
+  labels:
+    {{- include "clubcore.labels" . | nindent 4 }}
+  annotations:
+    clubcore.io/sec04-allow-policy: "backend"
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "clubcore.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backend
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow HTTP traffic from the Traefik ingress controller (kube-system).
+    # k3s bundles Traefik v3 in kube-system namespace.
+    # OPERATOR NOTE: verify Traefik pod labels on your cluster:
+    #   kubectl get pods -n kube-system --show-labels | grep traefik
+    # The namespaceSelector alone is sufficient for k3s default setup.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              # kube-system namespace (where Traefik runs on k3s/k3d)
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: TCP
+          port: 8000
+  egress:
+    # ── P8 MANDATORY: CoreDNS egress (UDP+TCP :53) ──────────────────────────
+    # This rule MUST be present in every policy. Removing it breaks DNS resolution.
+    # Pitfall P8: default-deny severs DNS; this rule restores it.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP    # DNS over UDP (standard)
+          port: 53
+        - protocol: TCP    # DNS over TCP (large responses / EDNS fallback)
+          port: 53
+    # ── Postgres (CNPG -rw service) :5432 ────────────────────────────────────
+    # CNPG pods carry cnpg.io/cluster=<fullname>-postgres and cnpg.io/instanceRole=primary.
+    # The podSelector selects pods with the CNPG cluster label in this namespace.
+    # OPERATOR NOTE: verify with: kubectl get pods --show-labels | grep cnpg
+    - to:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: {{ include "clubcore.fullname" . }}-postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    # ── Redis StatefulSet :6379 ───────────────────────────────────────────────
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "clubcore.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    # ── SeaweedFS S3 API :8333 ────────────────────────────────────────────────
+    # SeaweedFS runs as a subchart; pod labels depend on the subchart version.
+    # Using a namespace-scoped port match (port 8333) is sufficient for same-namespace.
+    # OPERATOR NOTE: if SeaweedFS is in a different namespace, add a namespaceSelector.
+    # Tighten selector after: kubectl get pods --show-labels | grep seaweedfs
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "clubcore.selectorLabels" . | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 8333
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# Policy 2: arq-worker — egress to redis + postgres + CoreDNS (no ingress needed)
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "clubcore.fullname" . }}-allow-arq-worker
+  labels:
+    {{- include "clubcore.labels" . | nindent 4 }}
+  annotations:
+    clubcore.io/sec04-allow-policy: "arq-worker"
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "clubcore.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: arq-worker
+  policyTypes:
+    - Egress
+  egress:
+    # ── P8 MANDATORY: CoreDNS egress (UDP+TCP :53) ──────────────────────────
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # ── Redis StatefulSet :6379 ───────────────────────────────────────────────
+    # ARQ uses Redis as its job queue.
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "clubcore.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    # ── Postgres (CNPG -rw) :5432 ────────────────────────────────────────────
+    # ARQ background tasks access the database directly.
+    - to:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: {{ include "clubcore.fullname" . }}-postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# Policy 3: telegram-bot — egress to redis + postgres + internet:443 + CoreDNS
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "clubcore.fullname" . }}-allow-telegram-bot
+  labels:
+    {{- include "clubcore.labels" . | nindent 4 }}
+  annotations:
+    clubcore.io/sec04-allow-policy: "telegram-bot"
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "clubcore.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: telegram-bot
+  policyTypes:
+    - Egress
+  egress:
+    # ── P8 MANDATORY: CoreDNS egress (UDP+TCP :53) ──────────────────────────
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # ── Redis StatefulSet :6379 ───────────────────────────────────────────────
+    # Telegram bot uses Redis for dedup state and session storage.
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "clubcore.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    # ── Postgres (CNPG -rw) :5432 ────────────────────────────────────────────
+    # Telegram bot reads/writes DB for client lookups and booking confirmations.
+    - to:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: {{ include "clubcore.fullname" . }}-postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    # ── Internet egress :443 (Telegram API long-poll) ─────────────────────────
+    # The Telegram bot long-polls api.telegram.org:443 — no cluster pod, only internet egress.
+    # An empty `to: []` block would allow all egress; instead use ipBlock to restrict
+    # to any external IP (not cluster CIDR) — a broad but necessary allowance for HTTPS.
+    # OPERATOR NOTE: if your cluster has a fixed egress IP/SNAT, you can tighten this
+    # to api.telegram.org's IP ranges. For most k3d/k3s setups, this broad rule is correct.
+    - ports:
+        - protocol: TCP
+          port: 443
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# Policy 4: migrate Job — egress to postgres + CoreDNS (no ingress needed)
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "clubcore.fullname" . }}-allow-migrate
+  labels:
+    {{- include "clubcore.labels" . | nindent 4 }}
+  annotations:
+    clubcore.io/sec04-allow-policy: "migrate"
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "clubcore.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: migrate
+  policyTypes:
+    - Egress
+  egress:
+    # ── P8 MANDATORY: CoreDNS egress (UDP+TCP :53) ──────────────────────────
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # ── Postgres (CNPG -rw) :5432 ────────────────────────────────────────────
+    # alembic upgrade head runs against the -rw service.
+    # The wait-for-postgres initContainer also needs this to poll :5432.
+    - to:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: {{ include "clubcore.fullname" . }}-postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# Policy 5: admin-app — ingress from Traefik :8080 (nginx static frontend)
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "clubcore.fullname" . }}-allow-admin-app
+  labels:
+    {{- include "clubcore.labels" . | nindent 4 }}
+  annotations:
+    clubcore.io/sec04-allow-policy: "admin-app"
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "clubcore.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: admin-app
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow traffic from the Traefik ingress controller (kube-system).
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    # ── P8 MANDATORY: CoreDNS egress (UDP+TCP :53) ──────────────────────────
+    # nginx static frontend rarely resolves DNS, but CoreDNS egress is required
+    # on every policy — removing it would break any runtime hostname resolution.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# Policy 6: client-pwa — ingress from Traefik :8080 (nginx static PWA)
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "clubcore.fullname" . }}-allow-client-pwa
+  labels:
+    {{- include "clubcore.labels" . | nindent 4 }}
+  annotations:
+    clubcore.io/sec04-allow-policy: "client-pwa"
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "clubcore.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: client-pwa
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow traffic from the Traefik ingress controller (kube-system).
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    # ── P8 MANDATORY: CoreDNS egress (UDP+TCP :53) ──────────────────────────
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+{{- end }}
+{{/* End SEC-04 explicit-allow NetworkPolicy gate */}}

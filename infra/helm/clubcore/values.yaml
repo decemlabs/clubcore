@@ -492,6 +492,35 @@ certManager:
     enabled: false
 
 # ---------------------------------------------------------------------------
+# NetworkPolicy — SEC-04 (default-deny + explicit-allow + CoreDNS egress)
+#
+# IMPORTANT: Always enable alongside the sealed-secrets and cert-manager gates.
+# Apply default-deny and allow policies TOGETHER in a single helm upgrade to avoid
+# a window where default-deny is active but allow policies are not yet applied.
+#
+# P8 INVARIANT: Every allow policy includes CoreDNS egress on UDP+TCP port 53.
+# Do NOT remove CoreDNS rules — DNS resolution breaks cluster-wide without them.
+#
+# enabled: false by default — set to true at deploy time or via --set networkPolicy.enabled=true.
+#   helm upgrade clubcore infra/helm/clubcore \
+#     --set networkPolicy.enabled=true \
+#     --set image.tag=$(git rev-parse --short HEAD)
+# ---------------------------------------------------------------------------
+networkPolicy:
+  # enabled: false → no NetworkPolicy rendered (open-by-default cluster behavior)
+  # enabled: true  → default-deny-all + explicit-allow per workload (SEC-04)
+  # WARNING: enable only AFTER verifying the allow policies are complete and correct.
+  # A default-deny without allow policies silences ALL pod-to-pod traffic.
+  enabled: false
+
+  # CoreDNS selector labels — used in every allow policy's CoreDNS egress rule.
+  # Default values are correct for k3s/k3d (kube-system namespace, k8s-app=kube-dns pod).
+  # OPERATOR NOTE: verify with: kubectl get pods -n kube-system --show-labels | grep dns
+  coredns:
+    namespaceLabel: "kube-system"
+    podLabel: "k8s-app=kube-dns"
+
+# ---------------------------------------------------------------------------
 # Optional overrides
 # ---------------------------------------------------------------------------
 nameOverride: ""
