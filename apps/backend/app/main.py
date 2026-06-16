@@ -53,6 +53,7 @@ from arq.connections import RedisSettings, create_pool
 from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
 from fastapi.routing import APIRoute
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.api.router import api
 from app.core.config import get_settings
@@ -737,6 +738,14 @@ def create_app() -> FastAPI:
     register_fiscal_receipt_dispatcher(_real_fiscal_receipt_dispatcher)
 
     app.include_router(api)
+
+    # OBS-03 — expose Prometheus /metrics (scraped by the backend ServiceMonitor).
+    # include_in_schema=False keeps /metrics out of schema["paths"] so the global
+    # security=[{cookieAuth, csrfHeader}] default applied by _customize_openapi()
+    # is never force-applied to the scrape endpoint (intra-cluster only; see
+    # NetworkPolicy monitoring-ns ingress in networkpolicy-allow.yaml).
+    # Pin <8: prometheus-fastapi-instrumentator v8 requires FastAPI >=0.133 + Starlette v1.
+    Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
     # Phase 64 FRZ-05 / D-64-SEC-APPLY — OpenAPI post-processor (security half).
     # Injects SECURITY_SCHEMES into components.securitySchemes, sets the global

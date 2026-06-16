@@ -96,6 +96,17 @@ spec:
       ports:
         - protocol: TCP
           port: 8000
+    # OBS-03: Prometheus scrape from the monitoring namespace (kube-prometheus-stack).
+    # Allows Prometheus (running in the "monitoring" namespace) to reach /metrics on :8000.
+    # The NetworkPolicy keeps /metrics intra-cluster only — it is never reachable from
+    # outside the cluster (default-deny policy blocks all other ingress).
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8000
   egress:
     # ── P8 MANDATORY: CoreDNS egress (UDP+TCP :53) ──────────────────────────
     # This rule MUST be present in every policy. Removing it breaks DNS resolution.

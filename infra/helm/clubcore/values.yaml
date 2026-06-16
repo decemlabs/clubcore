@@ -521,6 +521,24 @@ networkPolicy:
     podLabel: "k8s-app=kube-dns"
 
 # ---------------------------------------------------------------------------
+# Observability — OBS-03 (ServiceMonitor for Prometheus scrape)
+#
+# serviceMonitor.enabled: false by default — the monitoring.coreos.com/v1 CRD
+# only exists once kube-prometheus-stack (OBS-01) is installed.
+# Enable after installing kube-prometheus-stack:
+#   helm upgrade clubcore infra/helm/clubcore \
+#     --set observability.serviceMonitor.enabled=true \
+#     --set image.tag=$(git rev-parse --short HEAD)
+# ---------------------------------------------------------------------------
+observability:
+  serviceMonitor:
+    # enabled: false — CRD absent until kube-prometheus-stack (OBS-01) is installed.
+    # Set to true AFTER kube-prometheus-stack is installed in the monitoring namespace.
+    enabled: false
+    # Prometheus scrape interval for the backend /metrics endpoint.
+    interval: "30s"
+
+# ---------------------------------------------------------------------------
 # Optional overrides
 # ---------------------------------------------------------------------------
 nameOverride: ""

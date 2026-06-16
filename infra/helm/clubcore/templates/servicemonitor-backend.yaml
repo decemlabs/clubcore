@@ -1,0 +1,40 @@
+{{/*
+servicemonitor-backend.yaml — ServiceMonitor CR for the backend /metrics endpoint (OBS-03)
+
+Registers the clubcore backend Service as a Prometheus scrape target.
+Prometheus (kube-prometheus-stack, monitoring namespace) discovers this CR
+via serviceMonitorSelectorNilUsesHelmValues=false so it picks up monitors
+across all namespaces.
+
+Prerequisites:
+  - kube-prometheus-stack (OBS-01) must be installed — it provides the
+    monitoring.coreos.com/v1 CRD. Gate: .Values.observability.serviceMonitor.enabled
+  - Backend Service (backend-service.yaml) exposes port name "http" on :8000.
+
+ServiceMonitor name: {{ include "clubcore.fullname" . }}-backend
+Target Service:      {{ include "clubcore.fullname" . }}-backend:8000
+Scrape path:         /metrics  (include_in_schema=False — not in OpenAPI security)
+*/}}
+{{- if .Values.observability.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "clubcore.fullname" . }}-backend
+  labels:
+    {{- include "clubcore.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  selector:
+    matchLabels:
+      {{- include "clubcore.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backend
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: {{ .Values.observability.serviceMonitor.interval | default "30s" }}
+      scheme: http
+  # Namespace where the backend Service lives (same namespace as this chart release)
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+{{- end }}
