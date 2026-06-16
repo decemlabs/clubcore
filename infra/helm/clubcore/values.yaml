@@ -598,6 +598,9 @@ backup:
     enabled: false
     # schedule: weekly, Mon 05:00 UTC (after all backups complete Sun/Mon 02:00–04:00).
     schedule: "0 5 * * 1"
+    # serviceAccountName: ServiceAccount with RBAC to create/delete namespaces + CNPG Clusters.
+    # MUST be set before enabling restoreVerify. See infra/runbooks/restore.md (BAK-04 RBAC Setup).
+    serviceAccountName: ""
 
 # ---------------------------------------------------------------------------
 # Optional overrides

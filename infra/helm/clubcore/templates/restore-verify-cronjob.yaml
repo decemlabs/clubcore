@@ -1,0 +1,324 @@
+{{/*
+restore-verify-cronjob.yaml — Weekly restore-to-scratch + row-count CronJob (BAK-04)
+
+BAK-04 (D-V40-BAK04-INCLUDED) — the differentiator: a weekly CronJob that actually restores
+the latest CNPG backup into a SCRATCH namespace/cluster, runs a row-count check, and exits
+non-zero on mismatch so the OBS-05 alert fires (RestoreVerifyJobFailed rule).
+
+CRITICAL INVARIANT — T-120-BAK2:
+  This CronJob restores ONLY to a SCRATCH namespace/cluster.
+  It NEVER runs spec.bootstrap.recovery on the live cluster.
+  The invariant is enforced at two levels:
+    1. restore-verify.sh creates a new namespace (clubcore-restore-verify-scratch)
+       and a NEW Cluster (not the live one) with spec.bootstrap.recovery.
+    2. This template comment + grep in the acceptance_criteria assert the word "scratch".
+
+Schedule: "0 5 * * 1" = weekly Monday 05:00 UTC (after CNPG at 02:00, Redis at 03:00, S3 at 04:00)
+
+RBAC dependency (operator-install):
+  The CronJob pod's ServiceAccount must be granted the following ClusterRole permissions:
+    - create/delete namespaces (to create/destroy the scratch namespace)
+    - create/delete postgresql.cnpg.io/clusters (to apply the scratch CNPG Cluster)
+    - create secrets (to copy S3 creds into the scratch namespace)
+    - exec into pods (to run psql row-count queries)
+  This RBAC is NOT part of this chart (CNPG RBAC is an operator-install dependency).
+  The operator MUST create a ServiceAccount + ClusterRoleBinding before enabling this CronJob.
+  See infra/runbooks/restore.md — "BAK-04 RBAC Setup" section.
+
+OBS-05 alert linkage:
+  When this Job exits non-zero, kube_job_status_failed > 0 fires the RestoreVerifyJobFailed
+  rule in infra/observability/alertmanager-rules.yaml (Plan 02 OBS-05).
+  A silent backup (no Job run) fires PostgresNoBackupIn25h (CNPG backup-timestamp metric).
+
+Security: SEC-03 pod hardening + TZ=UTC (copied verbatim from migrate-job.yaml).
+  The pod also needs S3 creds (from the existing app-secret) + Postgres DB password.
+  A SERVICE ACCOUNT with RBAC is required (see above).
+*/}}
+{{- if .Values.backup.restoreVerify.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "clubcore.fullname" . }}-restore-verify
+  labels:
+    {{- include "clubcore.labels" . | nindent 4 }}
+    app.kubernetes.io/component: restore-verify
+  annotations:
+    clubcore.io/requirement: "BAK-04"
+    # OBS-05 linkage: Job failure fires RestoreVerifyJobFailed alert (alertmanager-rules.yaml).
+    clubcore.io/alert-linkage: "RestoreVerifyJobFailed (alertmanager-rules.yaml:rules.RestoreVerifyJobFailed)"
+    # T-120-BAK2: RESTORES ONLY TO SCRATCH — NEVER the live cluster.
+    clubcore.io/safety: "scratch-restore-verify-only"
+spec:
+  # Weekly schedule: Monday 05:00 UTC (after all backup windows complete)
+  schedule: {{ .Values.backup.restoreVerify.schedule | default "0 5 * * 1" | quote }}
+
+  # Prevent concurrent restore-verify runs (scratch namespace naming collision)
+  concurrencyPolicy: Forbid
+
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+
+  jobTemplate:
+    spec:
+      # P4 invariant: no silent retry — failure must surface immediately
+      backoffLimit: 0
+      # Hard timeout: 30 min for restore + row-count check + scratch teardown
+      # CNPG restore can take several minutes depending on backup size.
+      activeDeadlineSeconds: 1800
+
+      template:
+        metadata:
+          labels:
+            {{- include "clubcore.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: restore-verify
+        spec:
+          # SEC-03 / P4: never restart — failure must surface as Job failed
+          restartPolicy: Never
+
+          # RBAC: ServiceAccount with ClusterRole permission to create/delete namespaces,
+          # CNPG Clusters, Secrets, and exec into pods (see BAK-04 RBAC operator-install note).
+          # Default "default" ServiceAccount lacks these permissions — operator must configure.
+          # serviceAccountName: {{ include "clubcore.fullname" . }}-restore-verify-sa
+          # (Commented out — operator must create the ServiceAccount + binding first;
+          #  uncomment and set .Values.backup.restoreVerify.serviceAccountName to activate)
+          {{- if .Values.backup.restoreVerify.serviceAccountName }}
+          serviceAccountName: {{ .Values.backup.restoreVerify.serviceAccountName | quote }}
+          {{- end }}
+
+          # SEC-03 pod-level securityContext (migrate-job.yaml verbatim copy)
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            seccompProfile:
+              type: RuntimeDefault
+
+          volumes:
+            # /tmp emptyDir — kubectl + bash may write temp files
+            # Required because readOnlyRootFilesystem: true blocks all other writes
+            - name: tmp
+              emptyDir: {}
+            # restore-verify.sh script — mounted from ConfigMap
+            # (The script is embedded in the ConfigMap restore-verify-script created below,
+            #  or inlined in the container command for self-contained operation)
+            # - name: restore-verify-script
+            #   configMap:
+            #     name: {{ include "clubcore.fullname" . }}-restore-verify-script
+            #     defaultMode: 0755
+
+          initContainers:
+            # Wait for the CNPG Cluster to be Ready before attempting restore
+            # (mirrors the migrate-job.yaml wait-for-postgres initContainer pattern)
+            - name: wait-for-cnpg
+              image: "bitnami/kubectl:latest"
+              imagePullPolicy: IfNotPresent
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -e
+                  echo "Checking CNPG operator health before restore-verify run..."
+                  kubectl get crd clusters.postgresql.cnpg.io >/dev/null 2>&1 \
+                    || { echo "ERROR: CNPG CRD not found — operator not installed"; exit 1; }
+                  READY=$(kubectl get cluster "{{ include "clubcore.fullname" . }}-postgres" \
+                    -n "{{ .Release.Namespace }}" \
+                    -o jsonpath='{.status.readyInstances}' 2>/dev/null || echo "0")
+                  if [ "${READY}" != "1" ]; then
+                    echo "ERROR: live cluster not ready (readyInstances=${READY}) — aborting restore-verify"
+                    exit 1
+                  fi
+                  echo "Live cluster ready (readyInstances=${READY}) — proceeding with restore-verify"
+              securityContext:
+                {{- include "clubcore.hardenedSecurityContext" (dict "runAsUser" 1000) | nindent 16 }}
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+              env:
+                - name: TZ
+                  value: "UTC"
+
+          containers:
+            - name: restore-verify
+              # bitnami/kubectl includes kubectl + bash; adequate for CNPG restore-verify orchestration.
+              # The restore-verify.sh logic is inlined below for self-contained CronJob operation.
+              image: "bitnami/kubectl:latest"
+              imagePullPolicy: IfNotPresent
+
+              # SEC-03 container-level hardening (copied verbatim from migrate-job.yaml)
+              securityContext:
+                {{- include "clubcore.hardenedSecurityContext" (dict "runAsUser" 1000) | nindent 16 }}
+
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+
+              env:
+                # P9 TZ invariant — all timestamps evaluated in UTC
+                - name: TZ
+                  value: "UTC"
+                # Live cluster coordinates
+                - name: LIVE_CLUSTER_NAME
+                  value: {{ printf "%s-postgres" (include "clubcore.fullname" .) | quote }}
+                - name: LIVE_NAMESPACE
+                  value: {{ .Release.Namespace | quote }}
+                # S3 configuration (for scratch Cluster's externalCluster barmanObjectStore)
+                - name: S3_ENDPOINT_URL
+                  value: {{ .Values.backup.postgres.s3EndpointUrl | default (printf "http://%s-seaweedfs-s3:8333" .Release.Name) | quote }}
+                - name: S3_BUCKET
+                  value: {{ .Values.config.s3Bucket | default "clubcore" | quote }}
+                - name: DB_NAME
+                  value: {{ .Values.postgres.database | default "clubcore" | quote }}
+                - name: DB_OWNER
+                  value: {{ .Values.postgres.owner | default "app" | quote }}
+                # S3 credentials — reuse EXISTING app-secret (T-120-BAK1: NEVER mint new creds)
+                - name: S3_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "clubcore.fullname" . }}-app-secret
+                      key: S3_ACCESS_KEY_ID
+                - name: S3_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "clubcore.fullname" . }}-app-secret
+                      key: S3_SECRET_ACCESS_KEY
+                # DB_PASSWORD for the scratch cluster app user (reuse live cluster password)
+                - name: DB_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.postgres.appSecretName | default "clubcore-postgres-app" }}
+                      key: password
+
+              # Inline restore-verify logic (mirrors infra/scripts/restore-verify.sh).
+              # T-120-BAK2: NEVER restores over the live cluster.
+              # SCRATCH RESTORE ONLY — the SCRATCH_CLUSTER_NAME is in a separate namespace.
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -euo pipefail
+
+                  # ── Constants ────────────────────────────────────────────────
+                  SCRATCH_NAMESPACE="clubcore-restore-verify-scratch"
+                  SCRATCH_CLUSTER_NAME="clubcore-restore-scratch"
+
+                  log()  { echo "[restore-verify] $*"; }
+                  err()  { echo "[restore-verify] ERROR: $*" >&2; exit 1; }
+
+                  # ── Cleanup trap — ALWAYS tear down scratch ───────────────────
+                  # T-120-BAK2: the scratch namespace is ephemeral; live cluster is NEVER touched.
+                  cleanup() {
+                    local ec=$?
+                    log "Cleanup: deleting scratch namespace ${SCRATCH_NAMESPACE}..."
+                    kubectl delete namespace "${SCRATCH_NAMESPACE}" --ignore-not-found=true --timeout=120s || true
+                    [ "${ec}" -ne 0 ] && log "FAILURE (exit ${ec}) — OBS-05 RestoreVerifyJobFailed will fire"
+                    exit "${ec}"
+                  }
+                  trap cleanup EXIT
+
+                  log "=== restore-verify ==="
+                  log "Live:    ${LIVE_CLUSTER_NAME} / ns=${LIVE_NAMESPACE}"
+                  log "Scratch: ${SCRATCH_CLUSTER_NAME} / ns=${SCRATCH_NAMESPACE}"
+
+                  # [1/6] Live row-count snapshot
+                  log "[1/6] Capturing live row-count snapshot..."
+                  LIVE_POD=$(kubectl get pod -n "${LIVE_NAMESPACE}" \
+                    -l "cnpg.io/cluster=${LIVE_CLUSTER_NAME},cnpg.io/instanceRole=primary" \
+                    -o jsonpath='{.items[0].metadata.name}')
+                  LIVE_COUNT=$(kubectl exec -n "${LIVE_NAMESPACE}" "${LIVE_POD}" \
+                    -- psql -U "${DB_OWNER}" -d "${DB_NAME}" -At \
+                    -c "SELECT SUM(reltuples::bigint) FROM pg_class WHERE relkind='r' AND relnamespace NOT IN (SELECT oid FROM pg_namespace WHERE nspname LIKE 'pg_%' OR nspname='information_schema');" \
+                    2>/dev/null || echo "0")
+                  log "[1/6] Live row count: ${LIVE_COUNT}"
+
+                  # [2/6] Create SCRATCH namespace + copy credentials
+                  # T-120-BAK2: SCRATCH ONLY — NEVER runs in ${LIVE_NAMESPACE}
+                  log "[2/6] Creating SCRATCH namespace ${SCRATCH_NAMESPACE}..."
+                  kubectl delete namespace "${SCRATCH_NAMESPACE}" --ignore-not-found=true --timeout=60s || true
+                  kubectl create namespace "${SCRATCH_NAMESPACE}"
+                  kubectl create secret generic "${SCRATCH_CLUSTER_NAME}-s3-creds" \
+                      -n "${SCRATCH_NAMESPACE}" \
+                      --from-literal=S3_ACCESS_KEY_ID="${S3_ACCESS_KEY_ID}" \
+                      --from-literal=S3_SECRET_ACCESS_KEY="${S3_SECRET_ACCESS_KEY}"
+                  kubectl create secret generic "${SCRATCH_CLUSTER_NAME}-app" \
+                      -n "${SCRATCH_NAMESPACE}" \
+                      --type=kubernetes.io/basic-auth \
+                      --from-literal=username="${DB_OWNER}" \
+                      --from-literal=password="${DB_PASSWORD}"
+
+                  # [3/6] Apply SCRATCH Cluster with spec.bootstrap.recovery
+                  # CRITICAL: this is a NEW cluster in SCRATCH_NAMESPACE — NOT the live cluster.
+                  log "[3/6] Applying SCRATCH Cluster with spec.bootstrap.recovery..."
+                  kubectl apply -f - <<SCRATCH_EOF
+                  apiVersion: postgresql.cnpg.io/v1
+                  kind: Cluster
+                  metadata:
+                    name: ${SCRATCH_CLUSTER_NAME}
+                    namespace: ${SCRATCH_NAMESPACE}
+                    annotations:
+                      clubcore.io/safety: "scratch-restore-verify-only"
+                  spec:
+                    instances: 1
+                    imageName: "ghcr.io/cloudnative-pg/postgresql:16.6"
+                    enableSuperuserAccess: false
+                    bootstrap:
+                      recovery:
+                        source: live-backup-source
+                    externalClusters:
+                      - name: live-backup-source
+                        barmanObjectStore:
+                          destinationPath: "s3://${S3_BUCKET}/postgres"
+                          endpointURL: "${S3_ENDPOINT_URL}"
+                          s3Credentials:
+                            accessKeyId:
+                              name: ${SCRATCH_CLUSTER_NAME}-s3-creds
+                              key: S3_ACCESS_KEY_ID
+                            secretAccessKey:
+                              name: ${SCRATCH_CLUSTER_NAME}-s3-creds
+                              key: S3_SECRET_ACCESS_KEY
+                          wal:
+                            compression: gzip
+                          data:
+                            compression: gzip
+                    storage:
+                      size: "10Gi"
+                      storageClass: clubcore-retain
+                  SCRATCH_EOF
+
+                  # [4/6] Wait for scratch cluster Ready
+                  log "[4/6] Waiting for scratch cluster to become Ready (timeout: 15 min)..."
+                  WAIT=0
+                  until [ "$(kubectl get cluster "${SCRATCH_CLUSTER_NAME}" -n "${SCRATCH_NAMESPACE}" \
+                    -o jsonpath='{.status.readyInstances}' 2>/dev/null)" = "1" ]; do
+                    sleep 15; WAIT=$((WAIT + 15))
+                    [ "${WAIT}" -ge 900 ] && err "Scratch cluster not Ready after 900s"
+                    log "  ${WAIT}s waiting..."
+                  done
+                  log "[4/6] Scratch cluster Ready"
+
+                  # [5/6] Row-count on scratch cluster
+                  log "[5/6] Running row-count query on scratch cluster..."
+                  SCRATCH_POD=$(kubectl get pod -n "${SCRATCH_NAMESPACE}" \
+                    -l "cnpg.io/cluster=${SCRATCH_CLUSTER_NAME},cnpg.io/instanceRole=primary" \
+                    -o jsonpath='{.items[0].metadata.name}')
+                  SCRATCH_COUNT=$(kubectl exec -n "${SCRATCH_NAMESPACE}" "${SCRATCH_POD}" \
+                    -- psql -U "${DB_OWNER}" -d "${DB_NAME}" -At \
+                    -c "SELECT SUM(reltuples::bigint) FROM pg_class WHERE relkind='r' AND relnamespace NOT IN (SELECT oid FROM pg_namespace WHERE nspname LIKE 'pg_%' OR nspname='information_schema');" \
+                    2>/dev/null || echo "-1")
+                  log "[5/6] Live: ${LIVE_COUNT}  Scratch: ${SCRATCH_COUNT}"
+
+                  # [6/6] Compare and fail on mismatch
+                  # Exit non-zero to fire OBS-05 RestoreVerifyJobFailed alert
+                  log "[6/6] Comparing row counts..."
+                  [ "${SCRATCH_COUNT}" = "-1" ] && err "Scratch row-count query failed — backup may be corrupted"
+                  [ "${LIVE_COUNT}" != "${SCRATCH_COUNT}" ] && \
+                    err "ROW COUNT MISMATCH: live=${LIVE_COUNT} scratch=${SCRATCH_COUNT} — RestoreVerifyJobFailed alert will fire"
+                  log "[6/6] Row count MATCH: ${LIVE_COUNT} rows"
+                  log "=== restore-verify PASSED ==="
+
+              resources:
+                requests:
+                  cpu: "100m"
+                  memory: "128Mi"
+                limits:
+                  cpu: "500m"
+                  memory: "512Mi"
+{{- end }}
