@@ -206,7 +206,11 @@ spec:
                   # ── Cleanup trap — ALWAYS tear down scratch ───────────────────
                   # T-120-BAK2: the scratch namespace is ephemeral; live cluster is NEVER touched.
                   cleanup() {
-                    local ec=$?
+                    # WR-01: capture $? on the FIRST line with no preceding builtin, and
+                    # avoid non-POSIX `local` — under /bin/sh `local ec=$?` can capture the
+                    # exit status of `local` (0) instead of the failing command, silently
+                    # turning a failed verify into a success-coded exit.
+                    ec=$?
                     log "Cleanup: deleting scratch namespace ${SCRATCH_NAMESPACE}..."
                     kubectl delete namespace "${SCRATCH_NAMESPACE}" --ignore-not-found=true --timeout=120s || true
                     [ "${ec}" -ne 0 ] && log "FAILURE (exit ${ec}) — OBS-05 RestoreVerifyJobFailed will fire"
