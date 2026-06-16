@@ -539,6 +539,67 @@ observability:
     interval: "30s"
 
 # ---------------------------------------------------------------------------
+# Backup — BAK-01 / BAK-02 / BAK-04 (Phase 120)
+#
+# backup.enabled: false by default — only set to true AFTER SeaweedFS S3 bucket
+# "clubcore" exists and is reachable in the cluster.  Enabling this gate activates:
+#   1. CNPG barmanObjectStore block in postgres-cluster.yaml (BAK-01)
+#   2. ScheduledBackup CR in scheduledbackup-postgres.yaml (BAK-01)
+#   3. Redis RDB → SeaweedFS CronJob (BAK-02)
+#   4. SeaweedFS mirror → second PVC CronJob (BAK-02)
+#
+# backup.restoreVerify.enabled: false by default — gated separately so the weekly
+# restore-verify CronJob (BAK-04) can be enabled independently once the CNPG RBAC
+# ServiceAccount for scratch-cluster creation is configured.
+# ---------------------------------------------------------------------------
+backup:
+  # Master gate — set to true once SeaweedFS bucket exists and S3 creds are sealed.
+  # NEVER enable before running: bash infra/scripts/seal-secrets.sh
+  enabled: false
+
+  # Postgres CNPG backup settings (BAK-01)
+  postgres:
+    # s3EndpointUrl: SeaweedFS in-cluster S3 endpoint.
+    # Empty = auto-derive as http://<release>-seaweedfs-s3:8333 (mirrors config.s3EndpointUrl logic).
+    # Override for production if using an external S3 endpoint.
+    s3EndpointUrl: ""
+    # retentionPolicy: CNPG WAL / base backup retention window.
+    # "30d" = keep 30 days of WAL + base backups in SeaweedFS.
+    retentionPolicy: "30d"
+    # schedule: 6-field cron (seconds minutes hours dom month dow) — UTC.
+    # Default "0 0 2 * * *" = daily at 02:00 UTC.
+    schedule: "0 0 2 * * *"
+
+  # Redis RDB backup CronJob settings (BAK-02)
+  redis:
+    # schedule: weekly backup, Sun 03:00 UTC (after midnight, after Postgres backup window).
+    schedule: "0 3 * * 0"
+    # retentionDailyCount: keep last N daily RDB snapshots in SeaweedFS.
+    retentionDailyCount: 7
+    # retentionWeeklyCount: keep last N weekly RDB snapshots in SeaweedFS.
+    retentionWeeklyCount: 4
+
+  # SeaweedFS mirror CronJob settings (BAK-02)
+  seaweedfs:
+    # schedule: daily mirror, 04:00 UTC (after Redis backup at 03:00).
+    schedule: "0 4 * * *"
+    # mirrorPvc: second PVC to mirror SeaweedFS bucket data into (local DR copy).
+    mirrorPvc:
+      # size: must be >= SeaweedFS volume.data.size (currently 20Gi).
+      size: "20Gi"
+      # storageClass: use the Retain StorageClass so PVC survives Pod/CronJob deletion (DATA-04).
+      storageClass: clubcore-retain
+
+  # Restore-verify CronJob settings (BAK-04 — the differentiator)
+  # Gated independently because it requires a CNPG RBAC ServiceAccount (operator-install dependency).
+  # See: infra/helm/clubcore/templates/restore-verify-cronjob.yaml
+  restoreVerify:
+    # enabled: false — set to true AFTER the CNPG scratch-cluster RBAC is configured.
+    enabled: false
+    # schedule: weekly, Mon 05:00 UTC (after all backups complete Sun/Mon 02:00–04:00).
+    schedule: "0 5 * * 1"
+
+# ---------------------------------------------------------------------------
 # Optional overrides
 # ---------------------------------------------------------------------------
 nameOverride: ""

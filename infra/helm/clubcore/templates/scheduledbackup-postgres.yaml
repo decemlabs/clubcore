@@ -1,0 +1,47 @@
+{{/*
+scheduledbackup-postgres.yaml — CNPG ScheduledBackup CR (BAK-01)
+
+BAK-01: daily base backup of the Postgres cluster to SeaweedFS S3 via barmanObjectStore.
+This CR is a SIBLING to the barmanObjectStore block in postgres-cluster.yaml; WAL archiving
+begins automatically once barmanObjectStore is configured.
+
+Prerequisite:
+  - CNPG operator pre-installed (postgresql.cnpg.io/v1 CRD must exist)
+  - backup.enabled: true (gates both this CR and the barmanObjectStore block)
+  - SeaweedFS S3 bucket "clubcore" must exist and be reachable
+
+Schedule: 6-field cron (seconds minutes hours day-of-month month day-of-week)
+  Default "0 0 2 * * *" = daily at 02:00 UTC (after midnight, before morning load)
+
+Backup method: barmanObjectStore (WAL + base backup to SeaweedFS S3)
+backupOwnerReference: self — the ScheduledBackup owns its Backup objects (garbage-collected on deletion)
+*/}}
+{{- if .Values.backup.enabled }}
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: {{ include "clubcore.fullname" . }}-postgres-daily
+  labels:
+    {{- include "clubcore.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+  annotations:
+    # BAK-01: daily base backup to SeaweedFS S3 via barmanObjectStore.
+    # Companion barmanObjectStore block is in postgres-cluster.yaml (gated on backup.enabled).
+    clubcore.io/requirement: "BAK-01"
+spec:
+  # 6-field cron: seconds minutes hours day-of-month month day-of-week
+  # Default: "0 0 2 * * *" = daily at 02:00 UTC
+  schedule: {{ .Values.backup.postgres.schedule | default "0 0 2 * * *" | quote }}
+
+  # self: the ScheduledBackup CR owns its Backup objects; they are garbage-collected
+  # when this ScheduledBackup is deleted (no orphaned Backup objects).
+  backupOwnerReference: self
+
+  # Target cluster: the CNPG Cluster CR named <fullname>-postgres
+  cluster:
+    name: {{ include "clubcore.fullname" . }}-postgres
+
+  # method: barmanObjectStore — base backup goes to the barmanObjectStore configured
+  # in the Cluster CR (postgres-cluster.yaml spec.backup.barmanObjectStore).
+  method: barmanObjectStore
+{{- end }}

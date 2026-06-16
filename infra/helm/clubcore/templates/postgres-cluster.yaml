@@ -80,7 +80,29 @@ spec:
       max_connections: "100"
       shared_buffers: "128MB"
 
-  # NOTE: spec.backup (barmanObjectStore) is intentionally absent.
-  # BAK-01 (Phase 120) adds CNPG WAL archiving to SeaweedFS S3.
-  # Research flag: verify CNPG v1.27 barmanObjectStore field names for SeaweedFS
-  # S3 endpoint before implementing Phase 120 (see STATE.md Research Flags).
+  # BAK-01 (Phase 120): CNPG WAL archiving + daily base backup to SeaweedFS S3.
+  # Gated behind backup.enabled (default: false — only true once SeaweedFS + bucket exist).
+  # Companion ScheduledBackup CR is in scheduledbackup-postgres.yaml.
+  # Reuses the EXISTING app-secret S3 creds — NO new credentials minted (T-120-BAK1).
+  {{- if .Values.backup.enabled }}
+  backup:
+    barmanObjectStore:
+      # destinationPath: s3://<bucket>/postgres — SeaweedFS in-cluster S3 bucket
+      destinationPath: {{ printf "s3://%s/postgres" (.Values.config.s3Bucket | default "clubcore") | quote }}
+      # endpointURL: SeaweedFS in-cluster S3 endpoint; auto-derive from release name if not overridden
+      endpointURL: {{ .Values.backup.postgres.s3EndpointUrl | default (printf "http://%s-seaweedfs-s3:8333" .Release.Name) | quote }}
+      # s3Credentials: reuse the EXISTING clubcore-app-secret S3 keys — T-120-BAK1 invariant.
+      # Keys S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY match seaweedfs-s3-secret.yaml identities.
+      s3Credentials:
+        accessKeyId:
+          name: {{ include "clubcore.fullname" . }}-app-secret
+          key: S3_ACCESS_KEY_ID
+        secretAccessKey:
+          name: {{ include "clubcore.fullname" . }}-app-secret
+          key: S3_SECRET_ACCESS_KEY
+      wal:
+        compression: gzip
+      data:
+        compression: gzip
+    retentionPolicy: {{ .Values.backup.postgres.retentionPolicy | default "30d" | quote }}
+  {{- end }}
