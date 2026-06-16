@@ -3,8 +3,11 @@
 .ruff_cache/
 .pytest_cache/
 __pycache__/
+alembic/versions/__pycache__/
 tests/
 docs/
 *.md
 .env*
 .git/
+.coverage
+htmlcov/
