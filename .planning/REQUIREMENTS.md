@@ -39,10 +39,10 @@
 
 ### Networking + Frontends + TLS (NET)
 
-- [ ] **NET-01**: Ingress (Traefik v3, bundled с k3s — НЕ ingress-nginx) для 3 хостов (API / admin-app / client-pwa) + HTTP→HTTPS redirect middleware
-- [ ] **NET-02**: WebSocket-роутинг через ingress для chat (`/api/v1/client/ws/*`, annotation подтверждена для Traefik v3)
-- [ ] **NET-03**: cert-manager — `selfSigned` ClusterIssuer для local k3d; `letsencrypt-staging` для iterative; LE-prod operator-pending
-- [ ] **NET-04**: nginx-frontends отдаются + SPA `try_files` fallback + SW cache-headers подтверждены (PWA SW не ломает `/api/*`)
+- [x] **NET-01**: Ingress (Traefik v3, bundled с k3s — НЕ ingress-nginx) для 3 хостов (API / admin-app / client-pwa) + HTTP→HTTPS redirect middleware
+- [x] **NET-02**: WebSocket-роутинг через ingress для chat (`/api/v1/client/ws/*`, annotation подтверждена для Traefik v3)
+- [x] **NET-03**: cert-manager — `selfSigned` ClusterIssuer для local k3d; `letsencrypt-staging` для iterative; LE-prod operator-pending
+- [x] **NET-04**: nginx-frontends отдаются + SPA `try_files` fallback + SW cache-headers подтверждены (PWA SW не ломает `/api/*`)
 
 ### Security (SEC)
 
@@ -153,10 +153,10 @@
 | APP-03 | Phase 118 | Complete |
 | APP-04 | Phase 118 | Complete |
 | APP-05 | Phase 118 | Complete |
-| NET-01 | Phase 119 | Pending |
-| NET-02 | Phase 119 | Pending |
-| NET-03 | Phase 119 | Pending |
-| NET-04 | Phase 119 | Pending |
+| NET-01 | Phase 119 | Complete |
+| NET-02 | Phase 119 | Complete |
+| NET-03 | Phase 119 | Complete |
+| NET-04 | Phase 119 | Complete |
 | SEC-01 | Phase 119 | Pending |
 | SEC-02 | Phase 119 | Pending |
 | SEC-03 | Phase 119 | Pending |
