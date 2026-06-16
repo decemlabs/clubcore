@@ -109,7 +109,10 @@ spec:
             # Wait for the CNPG Cluster to be Ready before attempting restore
             # (mirrors the migrate-job.yaml wait-for-postgres initContainer pattern)
             - name: wait-for-cnpg
-              image: "bitnami/kubectl:latest"
+              # IMG-04: pin an immutable tag (no :latest) per the repo-wide invariant.
+              # 1.31.x matches the cluster's kubectl minor; kubectl skew policy allows
+              # ±1 minor against the API server.
+              image: "bitnami/kubectl:1.31.5"
               imagePullPolicy: IfNotPresent
               command:
                 - /bin/sh
@@ -140,7 +143,8 @@ spec:
             - name: restore-verify
               # bitnami/kubectl includes kubectl + bash; adequate for CNPG restore-verify orchestration.
               # The restore-verify.sh logic is inlined below for self-contained CronJob operation.
-              image: "bitnami/kubectl:latest"
+              # IMG-04: pin an immutable tag (no :latest) per the repo-wide invariant.
+              image: "bitnami/kubectl:1.31.5"
               imagePullPolicy: IfNotPresent
 
               # SEC-03 container-level hardening (copied verbatim from migrate-job.yaml)
