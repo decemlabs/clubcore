@@ -69,10 +69,10 @@
 
 ### Backup & Recovery (BAK)
 
-- [ ] **BAK-01**: CNPG WAL archiving + daily base backup → SeaweedFS S3 (`Cluster.spec.backup.barmanObjectStore`)
-- [ ] **BAK-02**: Redis RDB CronJob (weekly → SeaweedFS) + SeaweedFS mirror CronJob (daily → second PVC); retention 7-daily / 4-weekly
-- [ ] **BAK-03**: Restore runbook (`infra/runbooks/restore.md`) + **проверенный round-trip restore** (восстановление + row-count check в k3d)
-- [ ] **BAK-04**: Weekly automated restore-verification CronJob (реально восстанавливает в scratch + проверяет row-counts; алерт при провале)
+- [x] **BAK-01**: CNPG WAL archiving + daily base backup → SeaweedFS S3 (`Cluster.spec.backup.barmanObjectStore`)
+- [x] **BAK-02**: Redis RDB CronJob (weekly → SeaweedFS) + SeaweedFS mirror CronJob (daily → second PVC); retention 7-daily / 4-weekly
+- [x] **BAK-03**: Restore runbook (`infra/runbooks/restore.md`) + **проверенный round-trip restore** (восстановление + row-count check в k3d)
+- [x] **BAK-04**: Weekly automated restore-verification CronJob (реально восстанавливает в scratch + проверяет row-counts; алерт при провале)
 
 ### CI/CD Automation + Docs (OPS)
 
@@ -171,10 +171,10 @@
 | OBS-03 | Phase 120 | Complete |
 | OBS-04 | Phase 120 | Complete |
 | OBS-05 | Phase 120 | Complete |
-| BAK-01 | Phase 120 | Pending |
-| BAK-02 | Phase 120 | Pending |
-| BAK-03 | Phase 120 | Pending |
-| BAK-04 | Phase 120 | Pending |
+| BAK-01 | Phase 120 | Complete |
+| BAK-02 | Phase 120 | Complete |
+| BAK-03 | Phase 120 | Complete |
+| BAK-04 | Phase 120 | Complete |
 | OPS-01 | Phase 121 | Pending |
 | OPS-02 | Phase 121 | Pending |
 | OPS-03 | Phase 121 | Pending |
