@@ -1,0 +1,18 @@
+apiVersion: v2
+name: clubcore
+description: CRM for gym management — umbrella chart for all clubcore services
+type: application
+version: 0.1.0
+appVersion: "v4.0"
+
+# Chart maintainers
+maintainers:
+  - name: clubcore-team
+
+# Subchart dependencies
+# Run `helm dependency build infra/helm/clubcore` to vendor into charts/
+dependencies:
+  - name: seaweedfs
+    version: "4.33.0"
+    repository: "https://seaweedfs.github.io/seaweedfs/helm"
+    condition: seaweedfs.enabled

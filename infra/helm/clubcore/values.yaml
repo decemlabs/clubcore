@@ -1,0 +1,156 @@
+# clubcore Helm umbrella chart — values.yaml
+# Single source of truth for all image tags, storage knobs, and service configuration.
+#
+# Image tags reference the git-SHA produced by infra/scripts/build-images.sh (plan 118-01).
+# Override at deploy time: --set image.tag=$(git rev-parse --short HEAD)
+
+# ---------------------------------------------------------------------------
+# Global image settings
+# ---------------------------------------------------------------------------
+image:
+  # Git-SHA tag from infra/scripts/build-images.sh (plan 118-01)
+  # Override at deploy time: helm upgrade clubcore . --set image.tag=<sha>
+  repository: clubcore/backend
+  tag: "6e42d106"  # plan-01 final commit SHA; update per build
+  pullPolicy: IfNotPresent
+
+# ---------------------------------------------------------------------------
+# StorageClass (DATA-04 / P1 invariant)
+# reclaimPolicy: Retain is HARD-CODED in storageclass.yaml — not configurable here.
+# This value only controls the name used by all PVC references.
+# ---------------------------------------------------------------------------
+storageClass:
+  name: clubcore-retain
+
+# ---------------------------------------------------------------------------
+# Postgres (CloudNativePG Cluster) — DATA-01 / P1 invariant
+# D-V40-BITNAMI-PAYWALLED: CNPG ghcr.io images ONLY — NO Bitnami.
+# instances: 1 — single bare-metal node; not a tuning knob (DATA-01).
+# nodeSelector pins the Postgres pod so its PVC node-affinity never strands data (P1).
+# ---------------------------------------------------------------------------
+postgres:
+  # CNPG operator must be pre-installed before this chart.
+  # Install: kubectl apply -f https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.27/releases/cnpg-1.27.0.yaml
+  instances: 1
+  # ghcr.io/cloudnative-pg/postgresql:<version> — NO Bitnami.
+  # 16.6 is the latest patch of PG 16 at time of authoring (2026-06-16).
+  imageName: "ghcr.io/cloudnative-pg/postgresql:16.6"
+
+  # Database bootstrap config
+  database: clubcore
+  owner: app
+  # Secret name holding the app-user credentials (kubernetes.io/basic-auth)
+  # Authored in postgres-app-secret.yaml (plan 02) and replaced with SealedSecret in Phase 119.
+  appSecretName: clubcore-postgres-app
+
+  # Storage on the Retain StorageClass
+  storage:
+    size: "10Gi"
+    # References storageClass.name above
+    storageClass: ""  # empty = use storageClass.name
+
+  # DATA-04 / P1: nodeSelector pins Postgres pod to a specific node label.
+  # Default: kubernetes.io/hostname=k3d-clubcore-server-0 (k3d single-node default).
+  # Override for production: --set postgres.nodeSelector."kubernetes\.io/hostname"=<node>
+  nodeSelector:
+    kubernetes.io/hostname: k3d-clubcore-server-0
+
+  # Resource limits — single-node tuned (modest for k3d dev)
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "256Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+
+  # Superuser access disabled (least privilege — T-118-07)
+  enableSuperuserAccess: false
+
+  # PHASE 120 SCOPE: backup.barmanObjectStore is NOT configured here.
+  # See Phase 120 plan (BAK-01) for CNPG WAL archiving to SeaweedFS S3.
+
+  # Local dev password — PLAINTEXT FOR LOCAL K3D ONLY.
+  # WARNING: Phase 119 SEC-01 replaces this with a SealedSecret.
+  #          NEVER use this plaintext value on a live/production server.
+  #          This value is intentionally weak for local k3d development only.
+  password: "clubcore-dev-pg-password-change-in-phase119"
+
+# ---------------------------------------------------------------------------
+# Redis StatefulSet — DATA-02
+# Plain redis:7-alpine (NO Bitnami — D-V40-BITNAMI-PAYWALLED).
+# AOF + maxmemory + allkeys-lru are DATA-02 acceptance criteria — hard config.
+# ---------------------------------------------------------------------------
+redis:
+  image: "redis:7-alpine"
+
+  # DATA-02 AOF settings (rendered into redis.conf ConfigMap)
+  # appendonly: yes — must be set to "yes" in ConfigMap (string, not bool)
+  # appendfsync: everysec — balance between performance and durability
+  maxmemory: "256mb"
+  # maxmemory-policy: allkeys-lru — evict LRU keys when maxmemory is reached
+
+  storage:
+    size: "2Gi"
+    # References storageClass.name above
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+# ---------------------------------------------------------------------------
+# SeaweedFS — DATA-03 (S3-compatible object storage)
+# D-V40-MINIO-RETIRED: MinIO community repo archived April 2026; SeaweedFS replaces it.
+# Helm subchart v4.33.0 from https://seaweedfs.github.io/seaweedfs/helm
+# Zero app-code change: same boto3/aioboto3 env vars as docker-compose (DATA-03).
+# T-118-09: s3.enableAuth: true — anonymous access blocked.
+# ---------------------------------------------------------------------------
+seaweedfs:
+  # Set to false to skip SeaweedFS during local testing without S3
+  enabled: true
+
+  # S3 API configuration
+  s3:
+    enabled: true
+    port: 8333
+    # T-118-09: anonymous S3 access blocked
+    enableAuth: true
+    # Secret holding s3.json identities (authored in plan 03 alongside other Secrets).
+    # Structure mirrors docker/seaweedfs-s3.json (see templates/seaweedfs-values.yaml).
+    existingConfigSecret: clubcore-seaweedfs-s3
+
+  # Standalone single-replica topology (v4.0 single-node)
+  master:
+    replicas: 1
+    data:
+      type: persistentVolumeClaim
+      storageClass: clubcore-retain
+      size: "5Gi"
+
+  volume:
+    replicas: 1
+    data:
+      type: persistentVolumeClaim
+      storageClass: clubcore-retain
+      size: "20Gi"
+
+  filer:
+    replicas: 1
+    data:
+      type: persistentVolumeClaim
+      storageClass: clubcore-retain
+      size: "1Gi"
+
+# ---------------------------------------------------------------------------
+# Optional overrides
+# ---------------------------------------------------------------------------
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: false
+  name: ""

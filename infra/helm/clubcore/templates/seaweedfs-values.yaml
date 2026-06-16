@@ -1,0 +1,50 @@
+{{/*
+SeaweedFS subchart values reference file.
+
+This file documents the S3 env surface mapping from docker-compose to k8s.
+The actual values are in values.yaml under the `seaweedfs:` key.
+
+DATA-03 INVARIANT: zero app-code change — the backend's boto3/aioboto3 env vars
+are identical in both docker-compose and k8s. Only the endpoint URL changes
+(compose: http://s3:8333 → k8s: http://clubcore-seaweedfs-s3:8333).
+
+S3 ENV SURFACE MAPPING
+======================
+| Env Var               | docker-compose value      | k8s value (ConfigMap)            |
+|-----------------------|---------------------------|----------------------------------|
+| S3_ENDPOINT_URL       | http://s3:8333            | http://clubcore-seaweedfs-s3:8333|
+| S3_BUCKET             | clubcore-local            | clubcore                         |
+| S3_ACCESS_KEY_ID      | dev-access-key            | from Secret clubcore-seaweedfs-s3|
+| S3_SECRET_ACCESS_KEY  | dev-secret-key            | from Secret clubcore-seaweedfs-s3|
+| S3_REGION             | ru-central1               | ru-central1 (ConfigMap)          |
+
+SECRET STRUCTURE
+================
+The `clubcore-seaweedfs-s3` Secret (authored in plan 03) holds the s3.json
+identities file that SeaweedFS reads at startup. Structure mirrors dev:
+  {
+    "identities": [{
+      "name": "app",
+      "credentials": [{"accessKey": "<S3_ACCESS_KEY_ID>", "secretKey": "<S3_SECRET_ACCESS_KEY>"}],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    }]
+  }
+
+SeaweedFS references this Secret via seaweedfs.s3.existingConfigSecret (see values.yaml).
+
+BUCKET AUTO-CREATE
+==================
+The bucket `clubcore` is auto-created by the backend's ensure_bucket() lifespan
+hook at startup — no pre-create init job needed (same pattern as docker-compose).
+
+SUBCHART DNS
+============
+SeaweedFS S3 service DNS: clubcore-seaweedfs-s3:8333 (within the cluster namespace).
+The helm chart names the service <release>-seaweedfs-s3 by default.
+If release name is `clubcore`, the S3 service is clubcore-seaweedfs-s3.
+
+T-118-09 THREAT MITIGATION
+===========================
+s3.enableAuth: true — anonymous writes/reads are blocked.
+Credentials are stored in a Kubernetes Secret, not a ConfigMap.
+*/}}

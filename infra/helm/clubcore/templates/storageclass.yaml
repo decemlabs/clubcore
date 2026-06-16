@@ -1,0 +1,26 @@
+{{/*
+StorageClass: clubcore-retain
+DATA-04 / P1 invariant: reclaimPolicy MUST be Retain to prevent PV auto-deletion
+on PVC removal. This is a hard value — NOT a tuning knob. The provisioner is
+rancher.io/local-path (bundled with k3s/k3d); WaitForFirstConsumer ensures the
+PV is created on the node where the pod lands, preventing stranded volumes.
+
+IMPORTANT: Once a StorageClass is created, changing reclaimPolicy requires
+deleting and recreating both StorageClass and existing PVs. Never change Retain.
+*/}}
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: {{ .Values.storageClass.name | default "clubcore-retain" }}
+  labels:
+    {{- include "clubcore.labels" . | nindent 4 }}
+  annotations:
+    # DATA-04 / P1: Retain policy prevents data loss on PVC removal.
+    # Phase 119/120 adds backup (CNPG WAL + Redis/SeaweedFS CronJobs) as
+    # an additional safety layer — but this StorageClass is the primary guard.
+    helm.sh/chart: {{ include "clubcore.chart" . }}
+provisioner: rancher.io/local-path
+# DATA-04 anti data-loss invariant — hard-coded, not configurable.
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
