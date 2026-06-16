@@ -25,9 +25,10 @@
 #     cookie jar with -b "$COOKIE_JAR" — there is NO access JWT in the login
 #     response body, so no Authorization: Bearer header is added.
 #
-# psql credentials are app/app/sportzal per apps/backend/docker-compose.yml:62-66
-# (NOT sportzal/sportzal as CONTEXT.md text mistakenly states; PATTERNS.md
-# line 240 is authoritative).
+# psql credentials are app/app/clubcore per apps/backend/docker-compose.yml
+# (POSTGRES_DB: clubcore, DATABASE_URL .../clubcore). The database was renamed
+# from `sportzal` to `clubcore`; the DSN in psql_exec must use `clubcore` or
+# every psql_exec call fails with FATAL: database "sportzal" does not exist.
 #
 # Keg-only libpq path: macOS Homebrew installs psql under
 # /usr/local/opt/libpq/bin; prepended to PATH below so psql_exec works without
@@ -116,7 +117,7 @@ get() {
 # in a script comment AND in VERIFICATION-LOG.md `notes:` for the scenario.
 psql_exec() {
   local sql="$1"
-  psql "postgresql://app:app@localhost:5432/sportzal" -c "$sql"
+  psql "postgresql://app:app@localhost:5432/clubcore" -c "$sql"
 }
 
 # assert_status <expected_code>
