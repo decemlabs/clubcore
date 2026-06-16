@@ -28,7 +28,7 @@ See: .planning/PROJECT.md
 Phase: Milestone v4.0 complete
 Plan: —
 Status: Awaiting next milestone
-Last activity: 2026-06-16 — Milestone v4.0 completed and archived
+Last activity: 2026-06-16 — Completed quick task 260616-xa9: rename apps admin-app→admin, client-pwa→client
 
 ## v4.0 Roadmap Summary
 
@@ -92,6 +92,12 @@ Last activity: 2026-06-16 — Milestone v4.0 completed and archived
 ### Blockers/Concerns
 
 None at milestone open.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260616-xa9 | Rename apps: admin-app→admin, client-pwa→client (dirs + package names + all infra/backend/CI/docs refs) | 2026-06-16 | f2a3570c | [260616-xa9-rename-apps-admin-app-to-admin-client-pw](./quick/260616-xa9-rename-apps-admin-app-to-admin-client-pw/) |
 
 ## Deferred Items
 
