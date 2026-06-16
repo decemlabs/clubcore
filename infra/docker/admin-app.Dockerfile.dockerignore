@@ -1,5 +1,12 @@
-# Frontend build-context dockerignore (used by admin-app.Dockerfile and client-pwa.Dockerfile)
-# Build context is the repo root (workspace builds need the lockfile + sibling packages).
+# admin-app build-context dockerignore.
+#
+# BuildKit (enabled via `# syntax=docker/dockerfile:1.7` in admin-app.Dockerfile)
+# resolves a per-Dockerfile ignore file at <context>/<dockerfile-path>.dockerignore.
+# The build context is the repo root and the Dockerfile is
+# infra/docker/admin-app.Dockerfile, so this file MUST live at
+# infra/docker/admin-app.Dockerfile.dockerignore for Docker to honor it (T-118-03).
+# (The former infra/docker/.dockerignore.web matched none of Docker's lookup rules
+# and was silently ignored — WR-01.)
 
 # Local dependency installs (node_modules will be reinstalled inside the build container)
 node_modules/
