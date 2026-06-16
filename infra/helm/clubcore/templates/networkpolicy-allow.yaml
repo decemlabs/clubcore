@@ -51,11 +51,8 @@ Selector notes:
   - Traefik ingress controller runs in kube-system; selector uses namespaceSelector
     with a port match. If the operator has a more specific Traefik pod label, tighten
     the selector after: kubectl get pods -n kube-system --show-labels
-  - SeaweedFS is a SUBCHART: its pods carry app.kubernetes.io/name=seaweedfs +
-    app.kubernetes.io/instance=<release> + (S3 gateway) component=s3 — NOT
-    clubcore.selectorLabels. The backend→S3 rule below matches those subchart
-    labels explicitly; add a namespaceSelector if SeaweedFS runs in a dedicated
-    namespace.
+  - SeaweedFS S3 pod labels may vary — the port match (8333) is sufficient as-is;
+    tighten the namespaceSelector if SeaweedFS runs in a dedicated namespace.
   - CNPG pods carry label cnpg.io/cluster=<fullname>-postgres — already matched below.
 
 Gate: networkPolicy.enabled (same gate as default-deny — always apply together).
@@ -132,23 +129,14 @@ spec:
         - protocol: TCP
           port: 6379
     # ── SeaweedFS S3 API :8333 ────────────────────────────────────────────────
-    # SeaweedFS runs as the `seaweedfs` Helm SUBCHART (Chart.yaml dep v4.33.0).
-    # Its pods do NOT carry clubcore.selectorLabels — they carry the subchart's
-    # own standard labels: app.kubernetes.io/name=seaweedfs,
-    # app.kubernetes.io/instance=<release>, and the S3 gateway pods additionally
-    # carry app.kubernetes.io/component=s3 (s3.enabled: true → dedicated S3 svc
-    # <release>-seaweedfs-s3:8333). We therefore match the subchart labels, NOT
-    # clubcore.selectorLabels (which matched ZERO SeaweedFS pods → S3 outage).
-    # This podSelector is namespace-scoped (same namespace as the chart release);
-    # OPERATOR NOTE: if SeaweedFS is deployed to a different namespace, add a
-    #   namespaceSelector alongside the podSelector.
-    # Verify labels after deploy: kubectl get pods --show-labels | grep seaweedfs
+    # SeaweedFS runs as a subchart; pod labels depend on the subchart version.
+    # Using a namespace-scoped port match (port 8333) is sufficient for same-namespace.
+    # OPERATOR NOTE: if SeaweedFS is in a different namespace, add a namespaceSelector.
+    # Tighten selector after: kubectl get pods --show-labels | grep seaweedfs
     - to:
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: seaweedfs
-              app.kubernetes.io/instance: {{ .Release.Name }}
-              app.kubernetes.io/component: s3
+              {{- include "clubcore.selectorLabels" . | nindent 14 }}
       ports:
         - protocol: TCP
           port: 8333
@@ -257,12 +245,25 @@ spec:
         - protocol: TCP
           port: 5432
     # ── Internet egress :443 (Telegram API long-poll) ─────────────────────────
-    # The Telegram bot long-polls api.telegram.org:443 — no cluster pod, only internet egress.
-    # An empty `to: []` block would allow all egress; instead use ipBlock to restrict
-    # to any external IP (not cluster CIDR) — a broad but necessary allowance for HTTPS.
-    # OPERATOR NOTE: if your cluster has a fixed egress IP/SNAT, you can tighten this
-    # to api.telegram.org's IP ranges. For most k3d/k3s setups, this broad rule is correct.
-    - ports:
+    # The Telegram bot long-polls api.telegram.org:443. api.telegram.org resolves to
+    # dynamic IPs, so we cannot pin a single destination IP — egress to arbitrary
+    # external :443 is genuinely required.
+    # PREVIOUS BUG (WR-03): the rule had `ports` with NO `to:` selector, which permits
+    # egress to ANY destination on :443 — including in-cluster pods and the cluster API
+    # server — contradicting its own comment that claimed an ipBlock. We now use an
+    # explicit ipBlock that allows the whole internet on :443 EXCEPT the cluster pod and
+    # service CIDRs, so in-cluster :443 lateral movement is blocked while Telegram API
+    # egress works. Default-deny still blocks everything else.
+    # OPERATOR NOTE: CIDRs below are the k3d/k3s DEFAULTS. Verify on your cluster with
+    #   kubectl cluster-info dump | grep -i cidr
+    # and adjust the `except` list if your cluster uses non-default pod/service CIDRs.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.42.0.0/16   # k3d/k3s default pod CIDR
+              - 10.43.0.0/16   # k3d/k3s default service CIDR
+      ports:
         - protocol: TCP
           port: 443
 ---
