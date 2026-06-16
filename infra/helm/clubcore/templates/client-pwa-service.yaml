@@ -1,0 +1,29 @@
+{{/*
+client-pwa-service.yaml — ClusterIP Service clubcore-client-pwa
+
+Exposes the client-pwa nginx Deployment on port 8080 within the cluster.
+This is the Ingress backend target for the client-pwa host (NET-01 / NET-04).
+
+Service name: {{ include "clubcore.fullname" . }}-client-pwa
+In-cluster DNS: <release>-client-pwa.<namespace>.svc.cluster.local:8080
+Short DNS:      <release>-client-pwa:8080  (within same namespace)
+
+With release name "clubcore": clubcore-client-pwa:8080
+*/}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "clubcore.fullname" . }}-client-pwa
+  labels:
+    {{- include "clubcore.labels" . | nindent 4 }}
+    app.kubernetes.io/component: client-pwa
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "clubcore.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: client-pwa
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8080
+      targetPort: 8080

@@ -1,0 +1,106 @@
+{{/*
+admin-app-deployment.yaml — Deployment clubcore-admin-app (NET-04 / IMG-03 gap close)
+
+Closes the Phase-118 gap: IMG-03 built the admin-app nginx image but never created
+the k8s Deployment or Service.  NET-04 requires the static frontend to be served
+in-cluster on port 8080 so the Traefik Ingress has a valid backend target.
+
+Architecture:
+  - Static nginx workload — no database, no initContainer, no Secret envFrom.
+  - Port 8080: nginx:1.27-alpine listens on 8080 per infra/nginx/admin-app.conf
+    and infra/docker/admin-app.Dockerfile (EXPOSE 8080, USER nginx/UID 101).
+  - replicas: 1 (D-V40-REPLICAS: single bare-metal node, v4.0 constraint).
+  - runAsUser: 101 — the numeric UID of the `nginx` user in nginx:1.27-alpine
+    (Alpine nginx image; NOT 1000 which is the backend's app-user UID).
+  - SEC-03 readOnlyRootFilesystem hardening is Phase 119 plan 02 scope.
+    The Dockerfile already creates writable tmp dirs owned by nginx user.
+
+Image: adminApp.image.repository (default clubcore/admin-app) + .Values.image.tag
+       The frontend images share the same git-SHA tag as the backend image
+       (see infra/scripts/build-images.sh — all images built from same commit).
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "clubcore.fullname" . }}-admin-app
+  labels:
+    {{- include "clubcore.labels" . | nindent 4 }}
+    app.kubernetes.io/component: admin-app
+spec:
+  # D-V40-REPLICAS: single bare-metal node, v4.0 constraint.
+  replicas: {{ .Values.adminApp.replicas | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "clubcore.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: admin-app
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        {{- include "clubcore.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: admin-app
+    spec:
+      # runAsUser: 101 — numeric UID of the `nginx` user in nginx:1.27-alpine.
+      # The admin-app.Dockerfile sets USER nginx (non-root, T-118-04).
+      # runAsUser: 1000 is the backend app-user — nginx images use 101.
+      # SEC-03 full hardening (readOnlyRootFilesystem, drop ALL) is plan 02 scope.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+
+      containers:
+        - name: admin-app
+          image: {{ printf "%s:%s" .Values.adminApp.image.repository (.Values.image.tag | required "image.tag is required — pass --set image.tag=<git-short-sha>") | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
+
+          # nginx runs via image CMD ["nginx", "-g", "daemon off;"] — no override needed.
+
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+
+          # Static frontend: no envFrom (no app Secret, no ConfigMap env needed).
+          # If a runtime config endpoint is ever required, use a ConfigMap only —
+          # NEVER the app-secret.
+
+          # readinessProbe: nginx serves index.html at / with 200 (SPA root).
+          # No /healthz endpoint on static frontends — use path "/".
+          # client-pwa.conf also defines location = /healthz returning 200;
+          # admin-app.conf mirrors the same pattern.
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 10
+            failureThreshold: 3
+            successThreshold: 1
+            timeoutSeconds: 3
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 0
+            periodSeconds: 30
+            failureThreshold: 3
+            successThreshold: 1
+            timeoutSeconds: 5
+
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 101
+
+          # Resource requests + limits — small static nginx workload.
+          resources:
+            requests:
+              cpu: {{ .Values.adminApp.resources.requests.cpu | default "25m" | quote }}
+              memory: {{ .Values.adminApp.resources.requests.memory | default "32Mi" | quote }}
+            limits:
+              cpu: {{ .Values.adminApp.resources.limits.cpu | default "200m" | quote }}
+              memory: {{ .Values.adminApp.resources.limits.memory | default "128Mi" | quote }}

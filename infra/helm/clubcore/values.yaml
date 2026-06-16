@@ -313,6 +313,123 @@ telegramBot:
       memory: "256Mi"
 
 # ---------------------------------------------------------------------------
+# admin-app Deployment — NET-04 (IMG-03 gap close)
+# Static nginx frontend workload; port 8080 (non-root nginx user, UID 101).
+# replicas: 1 — D-V40-REPLICAS constraint; increase only after adding a proper
+# session-sharing strategy (no server-side state in static frontends, but Traefik
+# LB across replicas needs the same backend pod for long-lived WS connections).
+# image.tag is shared with the backend image (same git-SHA, see build-images.sh).
+# ---------------------------------------------------------------------------
+adminApp:
+  replicas: 1
+
+  image:
+    repository: clubcore/admin-app
+    # tag: inherited from global image.tag (same git-SHA for all images)
+
+  resources:
+    requests:
+      cpu: "25m"
+      memory: "32Mi"
+    limits:
+      cpu: "200m"
+      memory: "128Mi"
+
+# ---------------------------------------------------------------------------
+# client-pwa Deployment — NET-04 (IMG-03 gap close)
+# Static nginx PWA workload; port 8080 (non-root nginx user, UID 101).
+# NET-04 SPA/SW behavior is encoded in infra/nginx/client-pwa.conf (Phase 118):
+#   sw.js + manifest.json: Cache-Control: no-cache
+#   /api/*:                Cache-Control: no-store (defence-in-depth, T-118-05)
+#   hashed assets:         immutable (max-age=31536000)
+#   index.html:            no-cache, no-store, must-revalidate
+# These headers are inherited end-to-end through the Traefik Ingress.
+# ---------------------------------------------------------------------------
+clientPwa:
+  replicas: 1
+
+  image:
+    repository: clubcore/client-pwa
+    # tag: inherited from global image.tag (same git-SHA for all images)
+
+  resources:
+    requests:
+      cpu: "25m"
+      memory: "32Mi"
+    limits:
+      cpu: "200m"
+      memory: "128Mi"
+
+# ---------------------------------------------------------------------------
+# Ingress — NET-01/NET-02 (Traefik v3 + HTTP→HTTPS redirect + WS routing)
+# Requires Traefik v3 (bundled with k3s) as the ingress controller.
+# enabled: false by default — set to true at deploy time or via --set ingress.enabled=true.
+#
+# TLS: references the cert-manager Certificate secret (certManager.tlsSecretName).
+# HTTP→HTTPS: Traefik Middleware attached via router.middlewares annotation.
+# WebSocket (NET-02): Traefik v3 upgrades WS connections automatically over a
+#   standard HTTP router — no sticky-session or special WS annotation required.
+#   The chat endpoint /api/v1/client/ws/messages is reached via the API host rule.
+# ---------------------------------------------------------------------------
+ingress:
+  enabled: false
+
+  # Ingress class name (Traefik v3 bundled with k3s).
+  className: traefik
+
+  hosts:
+    # API backend — routed to clubcore-backend:8000.
+    # Also covers the WebSocket chat path /api/v1/client/ws/messages.
+    api: "api.clubcore.ru"
+    # Admin staff SPA — routed to clubcore-admin-app:8080.
+    adminApp: "admin.clubcore.ru"
+    # Client PWA — routed to clubcore-client-pwa:8080.
+    clientPwa: "app.clubcore.ru"
+
+  # TLS secret name — must match Certificate.spec.secretName (certManager.tlsSecretName).
+  tlsSecretName: "clubcore-tls"
+
+  # Issuer name for the router.middlewares annotation namespace resolution.
+  # Used in the Middleware reference: <namespace>-<fullname>-https-redirect@kubernetescrd
+  issuerName: "clubcore-selfsigned"
+
+# ---------------------------------------------------------------------------
+# cert-manager — NET-03 (TLS certificates for the Ingress)
+# Requires cert-manager operator pre-installed in the cluster.
+# enabled: false by default — set to true at deploy time or via --set certManager.enabled=true.
+#
+# Issuer chain:
+#   selfSigned:         local k3d (done-bar for Phase 119 — enabled by default when enabled=true)
+#   letsencryptStaging: iterative ACME testing (disabled by default — enable when ACME is ready)
+#   letsencrypt-prod:   OPERATOR-PENDING — intentionally NOT authored here (D-V40-LOCAL-VALIDATE).
+#                       Do NOT set certManager.issuerName to letsencrypt-prod until
+#                       the operator has verified the staging ACME flow succeeds.
+# ---------------------------------------------------------------------------
+certManager:
+  enabled: false
+
+  # Name of the ClusterIssuer to use for the Certificate issuerRef.
+  # Default: selfSigned ClusterIssuer (local k3d).
+  # For iterative testing: set to "clubcore-letsencrypt-staging"
+  # For production: OPERATOR-PENDING (LE-prod issuer not authored — see cluster-issuer.yaml).
+  issuerName: "clubcore-selfsigned"
+
+  # TLS secret name — must match ingress.tlsSecretName.
+  tlsSecretName: "clubcore-tls"
+
+  # ACME email for letsencrypt-staging issuer (required when letsencryptStaging.enabled=true).
+  acmeEmail: "ops@clubcore.ru"
+
+  selfSigned:
+    # Enabled by default (local k3d done-bar).
+    enabled: true
+
+  letsencryptStaging:
+    # Disabled by default — enable for iterative ACME testing.
+    # Requires a publicly reachable ACME http01 endpoint.
+    enabled: false
+
+# ---------------------------------------------------------------------------
 # Optional overrides
 # ---------------------------------------------------------------------------
 nameOverride: ""
