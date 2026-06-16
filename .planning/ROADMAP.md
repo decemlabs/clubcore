@@ -552,7 +552,10 @@ Plans:
   1. All Makefile targets exist and execute without error: `build`, `scan`, `push`, `tf-validate`, `tf-plan`, `helm-lint`, `helm-validate`, `deploy`, `smoke`, `rollback`, `logs`, `psql`, `backup`, `up`, `down`; `make up` pipeline completes green end-to-end against k3d: build → trivy scan (0 HIGH/CRITICAL) → push to local k3d registry → `tf-validate` → `helm-lint` → deploy → smoke
   2. `make smoke` exits 0 and verifies the full "Looks-Done-But-Isn't" checklist: `/healthz` 200, migrate Job status Succeeded, Redis AOF on (`CONFIG GET appendonly` = `yes`), `TZ=UTC` on every pod, DNS resolution succeeds (`nslookup postgres-svc` from each pod), WebSocket upgrade succeeds through Traefik ingress, SPA deep-route returns 200, PWA Service Worker does not cache `/api/*` responses
   3. `infra/runbooks/production.md` documents: cluster topology, prerequisites (tools + versions), step-by-step deploy procedure, backup/restore/rollback/scale operations, troubleshooting, and an explicit **operator-pending boundary list**: LE-prod TLS (switch ClusterIssuer), `terraform apply` on real VM (SSH creds), ЮKassa webhook reachability + sandbox payment, RU email deliverability (Yandex Postbox SPF/DKIM/DMARC), real Telegram bot token in sealed secret, Alertmanager Telegram delivery, Postgres disk durability on real hardware
-**Plans**: TBD
+**Plans**: 2 plans, 2 waves
+Plans:
+- [ ] 121-01-PLAN.md — Root Makefile all OPS-01 targets (wrap infra/scripts) + composed `make up` (OPS-02) + infra/scripts/smoke.sh 8-check Looks-Done-But-Isn't smoke (OPS-03); live make up/smoke operator-pending [OPS-01, OPS-02, OPS-03] · wave 1
+- [ ] 121-02-PLAN.md — infra/runbooks/production.md: topology + prerequisites + deploy + operations + troubleshooting + explicit operator-pending boundary list (23 UAT items aggregated, SEC-02 + BAK-03 HARD gates flagged) [OPS-04] · wave 2
 
 ## Backlog
 
@@ -579,7 +582,7 @@ Plans:
 | 118. Container Images + Helm Chart (Core Stack) | v4.0 | 4/4 | Complete   | 2026-06-16 |
 | 119. Networking, Security + CSRF Rename | v4.0 | 3/3 | Complete   | 2026-06-16 |
 | 120. IaC, Observability + Backup | v4.0 | 3/3 | Complete   | 2026-06-16 |
-| 121. Makefile CI/CD + Full Smoke + Runbooks | v4.0 | 0/TBD | Not started | - |
+| 121. Makefile CI/CD + Full Smoke + Runbooks | v4.0 | 0/2 | Planned | - |
 
 <details>
 <summary>✅ v3.2 Admin — Wire the Rest (Phases 112-117) — Progress (SHIPPED 2026-06-16)</summary>
