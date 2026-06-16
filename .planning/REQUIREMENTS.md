@@ -17,10 +17,10 @@
 
 ### Containerization (IMG)
 
-- [ ] **IMG-01**: Production multi-stage Dockerfile для backend — non-root, slim base, no dev-deps, pinned base digest, healthcheck, `.dockerignore`, `tzdata` + `TZ=UTC` подтверждены
-- [ ] **IMG-02**: Образы для telegram-bot + arq-worker + migrate (общий backend-base, разные entrypoints)
-- [ ] **IMG-03**: nginx-образы для admin-app + client-pwa (static `dist/`, SPA `try_files` fallback, service worker НЕ кэширует `/api/*`)
-- [ ] **IMG-04**: git-SHA image tagging + локальный `trivy` scan green (нет HIGH/CRITICAL) как gate; нет `:latest`
+- [x] **IMG-01**: Production multi-stage Dockerfile для backend — non-root, slim base, no dev-deps, pinned base digest, healthcheck, `.dockerignore`, `tzdata` + `TZ=UTC` подтверждены
+- [x] **IMG-02**: Образы для telegram-bot + arq-worker + migrate (общий backend-base, разные entrypoints)
+- [x] **IMG-03**: nginx-образы для admin-app + client-pwa (static `dist/`, SPA `try_files` fallback, service worker НЕ кэширует `/api/*`)
+- [x] **IMG-04**: git-SHA image tagging + локальный `trivy` scan green (нет HIGH/CRITICAL) как gate; нет `:latest`
 
 ### Stateful Services — Helm (DATA)
 
@@ -140,10 +140,10 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| IMG-01 | Phase 118 | Pending |
-| IMG-02 | Phase 118 | Pending |
-| IMG-03 | Phase 118 | Pending |
-| IMG-04 | Phase 118 | Pending |
+| IMG-01 | Phase 118 | Complete |
+| IMG-02 | Phase 118 | Complete |
+| IMG-03 | Phase 118 | Complete |
+| IMG-04 | Phase 118 | Complete |
 | DATA-01 | Phase 118 | Pending |
 | DATA-02 | Phase 118 | Pending |
 | DATA-03 | Phase 118 | Pending |
