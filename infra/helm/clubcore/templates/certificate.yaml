@@ -1,0 +1,51 @@
+{{/*
+certificate.yaml — cert-manager Certificate for the Ingress TLS (NET-03)
+
+Issues a TLS certificate covering all three Ingress hostnames.
+The secretName must match ingress.tls[0].secretName (ingress.yaml) so that
+Traefik can load the certificate secret for TLS termination.
+
+The Certificate's issuerRef points at the selfSigned ClusterIssuer by default
+(certManager.issuerName, default "clubcore-selfsigned").  To switch to
+letsencrypt-staging for iterative ACME testing, set:
+  --set certManager.issuerName=clubcore-letsencrypt-staging
+
+cert-manager Certificate is namespace-scoped — metadata includes the Release namespace.
+Gated by certManager.enabled (default false).
+*/}}
+{{- if .Values.certManager.enabled }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "clubcore.fullname" . }}-tls
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "clubcore.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cert-manager
+spec:
+  # secretName must match ingress.tls[0].secretName in ingress.yaml.
+  secretName: {{ .Values.certManager.tlsSecretName | default "clubcore-tls" | quote }}
+
+  # dnsNames: all three Ingress host values.
+  # cert-manager verifies ownership for each name via the issuer's solver.
+  # selfSigned: no external verification — the cert is self-attested.
+  # letsencrypt-staging: http01 ACME challenge via the ingress class.
+  dnsNames:
+    - {{ .Values.ingress.hosts.api | default "api.clubcore.ru" | quote }}
+    - {{ .Values.ingress.hosts.adminApp | default "admin.clubcore.ru" | quote }}
+    - {{ .Values.ingress.hosts.clientPwa | default "app.clubcore.ru" | quote }}
+
+  # issuerRef: points at the ClusterIssuer defined in cluster-issuer.yaml.
+  # kind: ClusterIssuer (cluster-scoped; group: cert-manager.io).
+  # Change issuerName to "clubcore-letsencrypt-staging" for iterative ACME testing.
+  # LE-prod: OPERATOR-PENDING — do NOT set to a prod issuer until staging validates.
+  issuerRef:
+    name: {{ .Values.certManager.issuerName | default "clubcore-selfsigned" | quote }}
+    kind: ClusterIssuer
+    group: cert-manager.io
+
+  # Certificate duration and renewal window (cert-manager defaults).
+  # selfSigned certificates are valid for 90 days, renewed 30 days before expiry.
+  duration: 2160h    # 90 days
+  renewBefore: 720h  # 30 days before expiry
+{{- end }}

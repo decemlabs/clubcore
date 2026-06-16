@@ -1,0 +1,81 @@
+{{/*
+cluster-issuer.yaml — cert-manager ClusterIssuers (NET-03)
+
+Defines the TLS certificate issuer chain for the clubcore Ingress.
+cert-manager is an operator-installed component — these CRs require the cert-manager
+operator to be pre-installed in the cluster (not vendored in this chart).
+
+Issuer chain:
+  1. selfSigned (local k3d done-bar):
+       spec.selfSigned: {}
+       Used for Phase 119 local k3d validation (the done-bar issuer for NET-03).
+       certManager.selfSigned.enabled: true (default when certManager.enabled=true).
+
+  2. letsencrypt-staging (iterative ACME testing):
+       spec.acme with the official LE staging server URL.
+       Disabled by default — enable when a publicly reachable ACME http01 endpoint
+       is available on the cluster (requires a real domain and port 80 reachability).
+       certManager.letsencryptStaging.enabled: false (default).
+
+  ⚠️  OPERATOR-PENDING (D-V40-LOCAL-VALIDATE): letsencrypt-prod ClusterIssuer is
+       INTENTIONALLY NOT AUTHORED HERE.  Reasons:
+         - LE-prod issuance requires a live public domain and DNS ownership proof.
+         - Authoring a prod issuer implies the cutover is done — it is not.
+         - The operator must validate staging ACME succeeds before switching to prod.
+       To add LE-prod: author a separate ClusterIssuer YAML outside this chart and
+       apply it manually, OR add a prod block to values.yaml in a
+       future phase after the OPERATOR has confirmed staging works.
+
+ClusterIssuer is cluster-scoped — metadata has NO namespace field.
+Gated by certManager.enabled (default false).
+*/}}
+{{- if .Values.certManager.enabled }}
+
+{{- if .Values.certManager.selfSigned.enabled }}
+---
+# selfSigned ClusterIssuer — local k3d done-bar (NET-03).
+# Issues self-signed certificates signed by the chart-generated CA.
+# Use for local k3d validation only; NOT for production.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: {{ .Values.certManager.issuerName | default "clubcore-selfsigned" }}
+  labels:
+    {{- include "clubcore.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cert-manager
+spec:
+  selfSigned: {}
+{{- end }}
+
+{{- if .Values.certManager.letsencryptStaging.enabled }}
+---
+# letsencrypt-staging ClusterIssuer — iterative ACME testing.
+# Requires a publicly reachable ACME http01 challenge endpoint.
+# Certificates issued here are signed by LE staging CA (NOT trusted by browsers).
+# Enable ONLY when the cluster has a real public domain + port 80 reachability.
+#
+# ⚠️  NOT for production. Switch to LE-prod only after staging validates.
+# ⚠️  LE-prod issuer is OPERATOR-PENDING — see comment at top of this file.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: clubcore-letsencrypt-staging
+  labels:
+    {{- include "clubcore.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cert-manager
+spec:
+  acme:
+    # Let's Encrypt staging server — issues untrusted certificates for testing.
+    server: https://acme-staging-v02.api.letsencrypt.org/directory
+    email: {{ .Values.certManager.acmeEmail | required "certManager.acmeEmail is required when letsencryptStaging.enabled=true" | quote }}
+    # Private key for the ACME account (created by cert-manager on first use).
+    privateKeySecretRef:
+      name: clubcore-letsencrypt-staging-account-key
+    solvers:
+      - http01:
+          ingress:
+            # Traefik v3 ingress class (bundled with k3s / k3d).
+            ingressClassName: {{ .Values.ingress.className | default "traefik" | quote }}
+{{- end }}
+
+{{- end }}
