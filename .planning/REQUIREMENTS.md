@@ -24,10 +24,10 @@
 
 ### Stateful Services — Helm (DATA)
 
-- [ ] **DATA-01**: CloudNativePG operator + `Cluster` CR (`instances: 1`, образы `ghcr.io/cloudnative-pg`, Bitnami отсутствует)
-- [ ] **DATA-02**: Redis StatefulSet + PVC + AOF (`appendonly yes`, `appendfsync everysec`) + `maxmemory` + `allkeys-lru`
-- [ ] **DATA-03**: SeaweedFS Helm (standalone S3-режим) — drop-in object-storage, единый для docker-compose и k3s (zero app-code change)
-- [ ] **DATA-04**: StorageClass `reclaimPolicy: Retain` + Postgres `nodeSelector` pinning (anti data-loss на local-path-provisioner); PVC-bind smoke в k3d
+- [x] **DATA-01**: CloudNativePG operator + `Cluster` CR (`instances: 1`, образы `ghcr.io/cloudnative-pg`, Bitnami отсутствует)
+- [x] **DATA-02**: Redis StatefulSet + PVC + AOF (`appendonly yes`, `appendfsync everysec`) + `maxmemory` + `allkeys-lru`
+- [x] **DATA-03**: SeaweedFS Helm (standalone S3-режим) — drop-in object-storage, единый для docker-compose и k3s (zero app-code change)
+- [x] **DATA-04**: StorageClass `reclaimPolicy: Retain` + Postgres `nodeSelector` pinning (anti data-loss на local-path-provisioner); PVC-bind smoke в k3d
 
 ### App Workloads + Migration — Helm (APP)
 
@@ -144,10 +144,10 @@
 | IMG-02 | Phase 118 | Complete |
 | IMG-03 | Phase 118 | Complete |
 | IMG-04 | Phase 118 | Complete |
-| DATA-01 | Phase 118 | Pending |
-| DATA-02 | Phase 118 | Pending |
-| DATA-03 | Phase 118 | Pending |
-| DATA-04 | Phase 118 | Pending |
+| DATA-01 | Phase 118 | Complete |
+| DATA-02 | Phase 118 | Complete |
+| DATA-03 | Phase 118 | Complete |
+| DATA-04 | Phase 118 | Complete |
 | APP-01 | Phase 118 | Pending |
 | APP-02 | Phase 118 | Pending |
 | APP-03 | Phase 118 | Pending |
