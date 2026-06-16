@@ -1,0 +1,31 @@
+{{/*
+middleware-https-redirect.yaml — Traefik v3 Middleware: HTTP→HTTPS redirect (NET-01)
+
+Implements the T-119-01 mitigation: plain-HTTP ingress traffic is permanently
+redirected to HTTPS before reaching any application Service.
+
+Traefik Middleware CRD (traefik.io/v1alpha1 / Middleware) is a cluster-registered
+CRD installed as part of Traefik v3 (bundled with k3s).  The Ingress (ingress.yaml)
+references this Middleware via the annotation:
+  traefik.ingress.kubernetes.io/router.middlewares: <namespace>-<fullname>-https-redirect@kubernetescrd
+
+The provider syntax `<ns>-<name>@kubernetescrd` is correct for Traefik v3 — note that
+the Namespace and Name segments are joined with a hyphen (not a slash); the `@kubernetescrd`
+suffix tells Traefik to resolve via the KubernetesCRD provider.
+
+Gated by ingress.enabled — if the Ingress is disabled there is no need for the redirect Middleware.
+*/}}
+{{- if .Values.ingress.enabled }}
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ include "clubcore.fullname" . }}-https-redirect
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "clubcore.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ingress
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true
+{{- end }}

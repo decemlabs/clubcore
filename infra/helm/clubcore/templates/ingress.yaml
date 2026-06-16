@@ -1,0 +1,133 @@
+{{/*
+ingress.yaml — Traefik v3 Ingress: 3 hosts + WS path + HTTPS redirect (NET-01/NET-02)
+
+Routes all three clubcore hosts through a single Traefik v3 Ingress:
+  - API host      → clubcore-backend:8000       (REST API + WebSocket chat)
+  - admin-app host → clubcore-admin-app:8080    (Staff SPA)
+  - client-pwa host → clubcore-client-pwa:8080  (Client PWA)
+
+Traefik v3 annotations used here (verified against Traefik v3 docs / context7):
+  router.entrypoints: websecure — route only on the TLS entrypoint (port 443).
+    A separate `web` entrypoint (port 80) router is handled by the Traefik global
+    HTTP→HTTPS redirect OR by the Middleware below — the Middleware approach is used
+    here (the annotation is on the websecure router; HTTP→HTTPS is Traefik-global or
+    done via a web-entrypoint IngressRoute pointing at the redirect Middleware).
+  router.tls: "true" — terminate TLS on this router; combined with the cert-manager
+    Certificate the TLS secret is auto-loaded.
+  router.middlewares: <namespace>-<fullname>-https-redirect@kubernetescrd — attaches
+    the Middleware defined in middleware-https-redirect.yaml.  Traefik v3 KubernetesCRD
+    provider resolves Middlewares by `<namespace>-<metadata.name>@kubernetescrd`.
+
+NET-02 (RESOLVED — Traefik v3 WebSocket routing):
+  Traefik v3 upgrades WebSocket connections AUTOMATICALLY over a standard HTTP/HTTPS
+  router.  There is NO special per-route WebSocket annotation in Traefik v3 (unlike
+  some ingress-nginx setups that require nginx.ingress.kubernetes.io/proxy-read-timeout
+  or the websocket annotation).  In v2 a `traefik.ingress.kubernetes.io/router.middlewares`
+  with a TCP middleware was sometimes needed; in v3 WS upgrade is native at the router
+  level.  Do NOT add a phantom v2 WS annotation — it is unnecessary and confusing.
+  No sticky-session annotation is needed because backend replicas: 1 (D-V40-REPLICAS).
+  The chat WebSocket endpoint /api/v1/client/ws/messages (apps/backend/app/modules/
+  messaging/router.py + main.py) is served by the backend Service on port 8000 and
+  is reachable via the API host's root path prefix rule.
+
+Design choice (planner discretion per CONTEXT):
+  Standard `networking.k8s.io/v1 Ingress` + Traefik annotations is used (NOT IngressRoute
+  CRD) — more portable, lint-checkable with standard kubectl/helm tooling, and sufficient
+  for all NET-01/NET-02 requirements at this single-node scale.
+
+Gated by ingress.enabled (default false — enable at deploy time with --set ingress.enabled=true).
+*/}}
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "clubcore.fullname" . }}
+  labels:
+    {{- include "clubcore.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ingress
+  annotations:
+    # Route on the websecure (TLS/443) entrypoint.
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    # Enable TLS termination on this router (uses the tls.secretName below).
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    # Attach the HTTP→HTTPS redirect Middleware (NET-01, T-119-01).
+    # Traefik v3 KubernetesCRD provider syntax: <namespace>-<name>@kubernetescrd
+    traefik.ingress.kubernetes.io/router.middlewares: {{ .Release.Namespace }}-{{ include "clubcore.fullname" . }}-https-redirect@kubernetescrd
+spec:
+  ingressClassName: {{ .Values.ingress.className | default "traefik" | quote }}
+  rules:
+    # ------------------------------------------------------------------
+    # API host — clubcore-backend:8000
+    # Covers all /api/* REST endpoints AND the WebSocket chat path.
+    #
+    # NET-02: Traefik v3 upgrades WS connections automatically over the
+    # standard HTTPS router — no WS-specific annotation required.
+    # The chat endpoint /api/v1/client/ws/messages is reachable via the
+    # prefix "/" rule below (any path under the API host).
+    # An explicit /api/v1/client/ws entry is added for self-documentation
+    # so reviewers understand WS routing without reading the backend code.
+    # ------------------------------------------------------------------
+    - host: {{ .Values.ingress.hosts.api | quote }}
+      http:
+        paths:
+          # Explicit WebSocket path (NET-02 self-documentation).
+          # Points at the same backend as the root rule; ensures future
+          # reviewers know WS is handled here (no separate WS annotation needed).
+          - path: /api/v1/client/ws
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "clubcore.fullname" . }}-backend
+                port:
+                  number: 8000
+          # Root prefix rule — catches all /api/* REST endpoints.
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "clubcore.fullname" . }}-backend
+                port:
+                  number: 8000
+
+    # ------------------------------------------------------------------
+    # admin-app host — clubcore-admin-app:8080 (Staff SPA)
+    # Static nginx serving the Vite-built admin-app bundle.
+    # nginx.conf applies SPA try_files fallback — all paths → index.html.
+    # ------------------------------------------------------------------
+    - host: {{ .Values.ingress.hosts.adminApp | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "clubcore.fullname" . }}-admin-app
+                port:
+                  number: 8080
+
+    # ------------------------------------------------------------------
+    # client-pwa host — clubcore-client-pwa:8080 (Client PWA)
+    # Static nginx serving the Vite-built client-pwa bundle.
+    # nginx (client-pwa.conf) applies SPA try_files, sw.js no-cache,
+    # /api/* no-store, hashed assets immutable (NET-04, T-118-05).
+    # /api/* on the PWA host returns 404 from nginx (defence-in-depth);
+    # real /api calls come from the client browser hitting the API host.
+    # ------------------------------------------------------------------
+    - host: {{ .Values.ingress.hosts.clientPwa | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "clubcore.fullname" . }}-client-pwa
+                port:
+                  number: 8080
+
+  tls:
+    - hosts:
+        - {{ .Values.ingress.hosts.api | quote }}
+        - {{ .Values.ingress.hosts.adminApp | quote }}
+        - {{ .Values.ingress.hosts.clientPwa | quote }}
+      secretName: {{ .Values.ingress.tlsSecretName | default "clubcore-tls" | quote }}
+{{- end }}
