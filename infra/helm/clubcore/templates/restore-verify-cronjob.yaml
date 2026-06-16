@@ -247,7 +247,13 @@ spec:
                   # [3/6] Apply SCRATCH Cluster with spec.bootstrap.recovery
                   # CRITICAL: this is a NEW cluster in SCRATCH_NAMESPACE — NOT the live cluster.
                   log "[3/6] Applying SCRATCH Cluster with spec.bootstrap.recovery..."
-                  kubectl apply -f - <<SCRATCH_EOF
+                  # CR-01: the heredoc body below is indented 18 spaces to match the
+                  # YAML block-scalar nesting. A YAML document whose root mapping is
+                  # uniformly indented is invalid, so we strip the common 18-space
+                  # prefix with `sed` before piping to `kubectl apply`. This lands the
+                  # top-level keys (apiVersion/kind/metadata/spec) at column 0 while
+                  # preserving the relative 2-space nesting of child keys.
+                  sed -e 's/^                  //' <<SCRATCH_EOF | kubectl apply -f -
                   apiVersion: postgresql.cnpg.io/v1
                   kind: Cluster
                   metadata:
