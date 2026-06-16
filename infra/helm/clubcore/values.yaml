@@ -8,10 +8,14 @@
 # Global image settings
 # ---------------------------------------------------------------------------
 image:
-  # Git-SHA tag from infra/scripts/build-images.sh (plan 118-01)
-  # Override at deploy time: helm upgrade clubcore . --set image.tag=<sha>
   repository: clubcore/backend
-  tag: "6e42d106"  # plan-01 final commit SHA; update per build
+  # WR-02: tag is intentionally EMPTY — it MUST be supplied at deploy time so a
+  # stale hard-coded SHA can never be silently deployed. build-images.sh prints
+  # the tag; deploy-local.sh passes it via --set image.tag=<sha>. A manual
+  # `helm install`/`helm template` without --set image.tag fails loudly via the
+  # `required` guard in templates/_helpers.tpl (clubcore.image).
+  # Override at deploy time: helm upgrade clubcore . --set image.tag=$(git rev-parse --short HEAD)
+  tag: ""
   pullPolicy: IfNotPresent
 
 # ---------------------------------------------------------------------------

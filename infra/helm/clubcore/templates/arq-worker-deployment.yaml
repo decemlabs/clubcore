@@ -85,7 +85,7 @@ spec:
 
       containers:
         - name: arq-worker
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: {{ include "clubcore.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
 
           # Command override: run the ARQ worker with its WorkerSettings class.

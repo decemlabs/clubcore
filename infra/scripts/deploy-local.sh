@@ -74,7 +74,13 @@ if ! k3d cluster list 2>/dev/null | grep -q "^${CLUSTER_NAME}"; then
 fi
 
 # ── 1. Derive image tag ────────────────────────────────────────────────────────
+# Must match build-images.sh exactly (including the dirty-tree suffix) so the
+# tag we import + helm-pin is the one that was actually built.
 TAG="$(git rev-parse --short HEAD)"
+if ! git diff --quiet || ! git diff --cached --quiet; then
+    TAG="${TAG}-dirty"
+    log "WARNING: working tree is dirty — using image tag '${TAG}' (must match build-images.sh)."
+fi
 log "[1/7] Image tag: ${TAG}"
 echo ""
 
@@ -93,7 +99,8 @@ echo ""
 
 # ── 3. helm lint gate ─────────────────────────────────────────────────────────
 log "[3/7] Running helm lint (gate) ..."
-helm lint "${CHART_DIR}" --set seaweedfs.enabled=false
+# image.tag is required (WR-02) — supply it so lint renders the templates.
+helm lint "${CHART_DIR}" --set "image.tag=${TAG}" --set seaweedfs.enabled=false
 log "      → helm lint PASSED"
 echo ""
 

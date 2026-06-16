@@ -80,7 +80,7 @@ spec:
       # -------------------------------------------------------------------
       initContainers:
         - name: alembic-check
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: {{ include "clubcore.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
           command: ["alembic", "check"]
           # alembic needs DATABASE_URL (from Secret) and ENVIRONMENT/TZ (from ConfigMap).
@@ -102,7 +102,7 @@ spec:
 
       containers:
         - name: backend
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: {{ include "clubcore.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
 
           # Prod uvicorn factory — NO --reload (dev-only flag; would hot-reload in prod).

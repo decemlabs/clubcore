@@ -25,7 +25,16 @@ set -euo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 
 # Derive the immutable tag from the current git commit short-SHA.
+# IMG-04: the tag must be immutable — two builds with the same tag must have
+# identical contents. If the working tree is dirty, the parent commit SHA no
+# longer uniquely identifies the build, so append "-dirty" to avoid silently
+# sharing a tag between a clean build and an uncommitted one.
 TAG="$(git rev-parse --short HEAD)"
+if ! git diff --quiet || ! git diff --cached --quiet; then
+    TAG="${TAG}-dirty"
+    echo "WARNING: working tree is dirty — tagging images '${TAG}'." >&2
+    echo "         Commit your changes for a reproducible, immutable tag (IMG-04)." >&2
+fi
 
 echo "=== clubcore image build ==="
 echo "Repo root : $REPO_ROOT"

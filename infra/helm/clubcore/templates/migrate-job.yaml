@@ -100,7 +100,7 @@ spec:
         - name: wait-for-postgres
           # Use the same backend image — it includes tzdata + Python + psycopg deps.
           # A postgres-client image is not pulled separately (supply-chain simplicity).
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: {{ include "clubcore.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
           command:
             - /bin/sh
@@ -150,7 +150,7 @@ spec:
           # Shared backend image from plan 01 (git-SHA-pinned, same trivy-gated image).
           # Command override mirrors docker-compose.yml migrate service:
           #   command: alembic upgrade head
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: {{ include "clubcore.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
           command: ["alembic", "upgrade", "head"]
 

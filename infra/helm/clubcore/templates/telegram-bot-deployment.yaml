@@ -84,7 +84,7 @@ spec:
 
       containers:
         - name: telegram-bot
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: {{ include "clubcore.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
 
           # Command override: run the Telegram bot long-poll worker.
