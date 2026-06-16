@@ -488,17 +488,21 @@ Plans:
 **Depends on**: Nothing (first v4.0 phase)
 **Requirements**: IMG-01, IMG-02, IMG-03, IMG-04, DATA-01, DATA-02, DATA-03, DATA-04, APP-01, APP-02, APP-03, APP-04, APP-05
 **Success Criteria** (what must be TRUE):
+
   1. `docker build` produces non-root, slim, pinned-digest images for all 6 components (backend uvicorn, telegram-bot, arq-worker, migrate, admin-app nginx, client-pwa nginx); `trivy` scan returns 0 HIGH/CRITICAL for each; images are tagged with git-SHA and no `:latest` tag exists
   2. `helm install clubcore ./helm/clubcore` against k3d completes without error: CNPG Cluster CR is Ready (`instances: 1`, `ghcr.io/cloudnative-pg` images — no Bitnami), Redis StatefulSet pod is Running with AOF enabled (`appendonly yes`, `appendfsync everysec`, `maxmemory` set, PVC bound), SeaweedFS pod is Running; all PVCs use `reclaimPolicy: Retain` StorageClass; Postgres pod has `nodeSelector` pinning; PVC-bind smoke passes in k3d (DATA-04 anti data-loss)
   3. Alembic migrate Job completes (`status: Succeeded`) before any backend pod reaches Ready: Job has `helm.sh/hook: pre-install,pre-upgrade` + `helm.sh/hook-weight: "-5"` + `backoffLimit: 0` + `activeDeadlineSeconds: 300`; backend has `alembic check` initContainer that exits 0 (belt-and-suspenders); the migrate-races-API pitfall is structurally eliminated
   4. arq-worker and telegram-bot Deployments have `strategy: Recreate` + `replicas: 1` enforced in chart YAML (anti cron double-fire / anti Telegram duplicate-consume — architectural invariant, not tuning); backend Deployment has startup/liveness/readiness probes + resource requests/limits + `replicas: 1`; `TZ=UTC` is set on all pods (verify: `kubectl exec <pod> -- env | grep TZ`)
   5. `helm lint ./helm/clubcore` and `kubeconform` pass with 0 errors; `ConfigMap`/`Secret` separation is in place (`APP-05`): all variables from `.env.example` are mapped to ConfigMap or Secret refs; no plaintext secrets in ConfigMap
+
 **Plans**: 4 plans, 3 waves
 Plans:
+
 - [x] 118-01-PLAN.md — Container images: backend-base (pinned digest/HEALTHCHECK/tzdata) + 4 Python workloads via CMD-override + admin-app/client-pwa nginx + git-SHA tags + trivy gate [IMG-01..04] · wave 1
 - [x] 118-02-PLAN.md — Helm chart scaffold + stateful services: CNPG Cluster (instances:1, ghcr) + Redis StatefulSet (AOF+allkeys-lru) + SeaweedFS subchart (S3 standalone) + Retain StorageClass + Postgres nodeSelector [DATA-01..04] · wave 1
 - [x] 118-03-PLAN.md — ConfigMap/Secret split (no plaintext secret in ConfigMap, TZ=UTC) + SeaweedFS S3 Secret + Alembic migrate pre-install/pre-upgrade hook Job (weight -5, backoffLimit 0, deadline 300s) [APP-05, APP-01] · wave 2
 - [x] 118-04-PLAN.md — App workloads: backend Deployment (3 probes + alembic check init + replicas:1) + arq-worker/telegram-bot (Recreate + replicas:1 invariants) + k3d bring-up & deploy scripts + live done-bar [APP-02..04] · wave 3
+
 **Research flag (planning-time)**: Verify exact `Cluster.spec.backup.barmanObjectStore` field names for SeaweedFS S3 endpoint against CNPG v1 API docs before writing the CNPG Cluster CR.
 
 ### Phase 119: Networking, Security + CSRF Rename
@@ -507,12 +511,14 @@ Plans:
 **Depends on**: Phase 118
 **Requirements**: NET-01, NET-02, NET-03, NET-04, SEC-01, SEC-02, SEC-03, SEC-04, SEC-05, SEC-06
 **Success Criteria** (what must be TRUE):
+
   1. `curl -k https://api.clubcore.local/healthz` returns 200; `curl -k https://admin.clubcore.local/` returns 200 with SPA HTML; `curl -k https://app.clubcore.local/` returns 200; HTTP requests are redirected to HTTPS via Traefik HTTP→HTTPS middleware; selfSigned ClusterIssuer issues certs locally; letsencrypt-staging ClusterIssuer is configured; LE-prod apply is operator-pending (live server)
   2. WebSocket handshake through Traefik succeeds for `/api/v1/client/ws/*`; the Traefik v3 WS annotation key is confirmed, documented, and encoded in the chart values
   3. SPA `try_files` fallback returns 200 for deep routes (e.g., `https://admin.clubcore.local/clients/abc`); PWA Service Worker does not cache `/api/*` responses (verified in `make smoke` Cache-Storage check); correct SW cache headers are set on nginx for the PWA (NET-04)
   4. All `SealedSecret` YAML files are committed to git; plaintext secrets are absent from git history; the controller RSA key is exported to a YAML file and confirmed backed up off-node alongside the repo — this is a hard acceptance gate for SEC-02, not a post-hoc action; `make scan` trivy gate is green (0 HIGH/CRITICAL)
   5. Every pod has `securityContext: {runAsNonRoot: true, readOnlyRootFilesystem: true, allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}`; `NetworkPolicy` default-deny is active in the app namespace; every pod has explicit CoreDNS egress (UDP/TCP 53 to kube-system); DNS resolution from each pod is verified (e.g., `kubectl exec <pod> -- nslookup postgres-svc` succeeds)
   6. Staff `clubcore_csrf` cookie name is live in backend (replacing `sportzal_csrf`); `openapi.json`/`schema.d.ts` are regenerated additively (staff drift-gate passes with additive diff, not byte-stable); SEC-06 `/gsd:secure-phase 70` retro items (proxy rate-limit bucket, QR post-decode existence check, cancel idempotency) are verified closed or carried as documented known-acceptable
+
 **Plans**: 3 plans, 2 waves
 Plans:
 **Wave 1** *(119-01 and 119-03 run in parallel — disjoint files)*
@@ -523,6 +529,7 @@ Plans:
 **Wave 2** *(119-02 edits values.yaml after 119-01 — file-ownership sequencing)*
 
 - [x] 119-02-PLAN.md — SEC-infra: SealedSecret + kubeseal helper + RSA-key backup runbook (P6 hard gate) + securityContext hardening (4 workloads) + default-deny/allow NetworkPolicies + CoreDNS egress (P8) [SEC-01, SEC-02, SEC-03, SEC-04] · wave 2
+
 **Research flag (RESOLVED at plan time)**: Traefik v3 upgrades WebSocket connections automatically over a standard HTTP router — there is NO special per-route WS annotation in v3 (confirmed via context7 /traefik/traefik) and no sticky-session annotation is needed at replicas:1; the relevant annotations are router.entrypoints/router.tls/router.middlewares. Documented inline in ingress.yaml.
 
 ### Phase 120: IaC, Observability + Backup
@@ -531,16 +538,20 @@ Plans:
 **Depends on**: Phase 119
 **Requirements**: IAC-01, IAC-02, IAC-03, OBS-01, OBS-02, OBS-03, OBS-04, OBS-05, BAK-01, BAK-02, BAK-03, BAK-04
 **Success Criteria** (what must be TRUE):
+
   1. `make tf-validate` and `make tf-plan` exit 0; `infra/terraform/host/` provisions k3s via `null_resource` + `remote-exec` with `backend "local"` state and a `terraform.tfvars.example`; `infra/terraform/cluster/` manages namespaces and `helm_release` resources using `hashicorp/helm` v3.2 list-object `set` syntax (not legacy map syntax) with `backend "local"` state; `terraform apply` on a real node is operator-pending (SSH credentials required)
   2. Grafana is reachable in the k3d cluster (`monitoring` namespace); FastAPI, node-exporter, CNPG Postgres, and Redis dashboards load with real data points; the backend pod's `/metrics` endpoint returns Prometheus metrics from `prometheus-fastapi-instrumentator>=7.1,<8`; a `ServiceMonitor` CR causes Prometheus to scrape the backend successfully (OBS-01 kube-prometheus-stack v86.2.3, single-node resource-tuned, 7d retention)
   3. Loki receives log lines from all pods via Grafana Alloy log shipper; a log query `{namespace="default"}` returns live entries in Grafana (Loki community chart v17.3.1, monolithic mode, 30d retention); Alertmanager has 5–7 critical rules (pod down, error-rate spike, disk pressure, cert-expiry, no-backup-in-25h); Alertmanager Telegram delivery is operator-pending (real bot token required in sealed secret)
   4. CNPG `Cluster.spec.backup.barmanObjectStore` stanza is configured for SeaweedFS S3 with WAL archiving and daily base backup; Redis RDB CronJob (weekly → SeaweedFS) and SeaweedFS mirror CronJob (daily → second PVC) are deployed with 7-daily/4-weekly retention policy; BAK-04 weekly automated restore-verification CronJob is deployed and its failure path fires an Alertmanager alert
   5. A full Postgres restore round-trip has been executed in k3d: backup snapshot taken, CNPG cluster restored to a scratch namespace, row counts verified against pre-backup snapshot, result documented in `infra/runbooks/restore.md`; the runbook covers Redis and SeaweedFS restore procedures as well
+
 **Plans**: 3 plans
 Plans:
+
 - [x] 120-01-PLAN.md — Terraform host + cluster modules (k3s remote-exec, monitoring ns + helm_release v3.2 list-syntax) + Makefile tf-validate/tf-plan (IAC-01..03) [wave 1]
 - [x] 120-02-PLAN.md — FastAPI /metrics + ServiceMonitor, kube-prometheus-stack + Loki/Alloy values, Grafana dashboards, Alertmanager rules + Telegram receiver (OBS-01..05) [wave 1]
 - [x] 120-03-PLAN.md — CNPG barmanObjectStore + ScheduledBackup, Redis/SeaweedFS backup CronJobs, restore-verify CronJob + restore.md runbook (BAK-01..04) [wave 2]
+
 **Research flag (planning-time, RESOLVED)**: CNPG v1.27 barmanObjectStore field shape + Loki v6.x single-binary / Alloy values schema resolved at plan time via Context7/WebFetch; encoded verbatim in plan `<research_resolved>` blocks.
 
 ### Phase 121: Makefile CI/CD + Full Smoke + Runbooks
@@ -549,12 +560,15 @@ Plans:
 **Depends on**: Phase 120
 **Requirements**: OPS-01, OPS-02, OPS-03, OPS-04
 **Success Criteria** (what must be TRUE):
+
   1. All Makefile targets exist and execute without error: `build`, `scan`, `push`, `tf-validate`, `tf-plan`, `helm-lint`, `helm-validate`, `deploy`, `smoke`, `rollback`, `logs`, `psql`, `backup`, `up`, `down`; `make up` pipeline completes green end-to-end against k3d: build → trivy scan (0 HIGH/CRITICAL) → push to local k3d registry → `tf-validate` → `helm-lint` → deploy → smoke
   2. `make smoke` exits 0 and verifies the full "Looks-Done-But-Isn't" checklist: `/healthz` 200, migrate Job status Succeeded, Redis AOF on (`CONFIG GET appendonly` = `yes`), `TZ=UTC` on every pod, DNS resolution succeeds (`nslookup postgres-svc` from each pod), WebSocket upgrade succeeds through Traefik ingress, SPA deep-route returns 200, PWA Service Worker does not cache `/api/*` responses
   3. `infra/runbooks/production.md` documents: cluster topology, prerequisites (tools + versions), step-by-step deploy procedure, backup/restore/rollback/scale operations, troubleshooting, and an explicit **operator-pending boundary list**: LE-prod TLS (switch ClusterIssuer), `terraform apply` on real VM (SSH creds), ЮKassa webhook reachability + sandbox payment, RU email deliverability (Yandex Postbox SPF/DKIM/DMARC), real Telegram bot token in sealed secret, Alertmanager Telegram delivery, Postgres disk durability on real hardware
+
 **Plans**: 2 plans, 2 waves
 Plans:
-- [ ] 121-01-PLAN.md — Root Makefile all OPS-01 targets (wrap infra/scripts) + composed `make up` (OPS-02) + infra/scripts/smoke.sh 8-check Looks-Done-But-Isn't smoke (OPS-03); live make up/smoke operator-pending [OPS-01, OPS-02, OPS-03] · wave 1
+
+- [x] 121-01-PLAN.md — Root Makefile all OPS-01 targets (wrap infra/scripts) + composed `make up` (OPS-02) + infra/scripts/smoke.sh 8-check Looks-Done-But-Isn't smoke (OPS-03); live make up/smoke operator-pending [OPS-01, OPS-02, OPS-03] · wave 1
 - [ ] 121-02-PLAN.md — infra/runbooks/production.md: topology + prerequisites + deploy + operations + troubleshooting + explicit operator-pending boundary list (23 UAT items aggregated, SEC-02 + BAK-03 HARD gates flagged) [OPS-04] · wave 2
 
 ## Backlog
@@ -582,7 +596,7 @@ Plans:
 | 118. Container Images + Helm Chart (Core Stack) | v4.0 | 4/4 | Complete   | 2026-06-16 |
 | 119. Networking, Security + CSRF Rename | v4.0 | 3/3 | Complete   | 2026-06-16 |
 | 120. IaC, Observability + Backup | v4.0 | 3/3 | Complete   | 2026-06-16 |
-| 121. Makefile CI/CD + Full Smoke + Runbooks | v4.0 | 0/2 | Planned | - |
+| 121. Makefile CI/CD + Full Smoke + Runbooks | v4.0 | 1/2 | In Progress|  |
 
 <details>
 <summary>✅ v3.2 Admin — Wire the Rest (Phases 112-117) — Progress (SHIPPED 2026-06-16)</summary>
