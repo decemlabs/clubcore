@@ -37,8 +37,8 @@ Traefik fronts 3 hosts:
 | Host | Backend |
 |------|---------|
 | `api.<domain>` | backend Service `:8000` |
-| `admin.<domain>` | admin-app nginx Service `:80` |
-| `app.<domain>` | client-pwa nginx Service `:80` |
+| `admin.<domain>` | admin-app nginx Service `:8080` |
+| `app.<domain>` | client-pwa nginx Service `:8080` |
 
 WebSocket (`/api/v1/client/ws/*`) upgrades through Traefik v3 automatically — no annotation required (NET-02).
 
