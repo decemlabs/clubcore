@@ -1,12 +1,27 @@
 ---
 phase: 120-iac-observability-backup
-fixed_at: 2026-06-16T00:00:00Z
+fixed_at: 2026-06-16T13:40:00Z
 review_path: .planning/phases/120-iac-observability-backup/120-REVIEW.md
-iteration: 1
-findings_in_scope: 10
-fixed: 10
+iteration: 2
+findings_in_scope: 3
+fixed: 3
 skipped: 0
 status: all_fixed
+iterations:
+  - iteration: 1
+    findings_in_scope: 10
+    fixed: 10
+    skipped: 0
+    status: all_fixed
+  - iteration: 2
+    findings_in_scope: 3
+    fixed: 3
+    skipped: 0
+    status: all_fixed
+    note: >-
+      3 residual WARNINGs (WR-01/WR-02/WR-03) + IMG-04 :latest INFO fixed; 5 atomic commits.
+      IN-01 (unused var) also fixed as zero-risk; IN-03 (standalone-script password literal)
+      left as out-of-scope skip.
 ---
 
 # Phase 120: Code Review Fix Report
@@ -173,3 +188,103 @@ fixes were applied to BOTH copies to keep them in sync, but the underlying dupli
 _Fixed: 2026-06-16_
 _Fixer: Claude (gsd-code-fixer)_
 _Iteration: 1_
+
+---
+
+# Phase 120: Code Review Fix Report — Iteration 2
+
+**Fixed at:** 2026-06-16T13:40:00Z
+**Source review:** .planning/phases/120-iac-observability-backup/120-REVIEW.md (re-review iteration 2)
+**Iteration:** 2
+
+**Summary:**
+- Findings in scope (warning): 3 (WR-01, WR-02, WR-03) + IMG-04 :latest (IN-02) per fix scope
+- Fixed: 4 in-scope findings across 5 atomic commits (+ IN-01 fixed as zero-risk extra)
+- Skipped: 1 (IN-03, out of scope)
+
+**Context:** Iteration-1's 4 BLOCKERs + 6 warnings were re-verified CONFIRMED at HEAD. This
+iteration addresses the residual/newly-surfaced findings from the re-review. NOTE: the
+iteration-2 finding IDs (WR-01/WR-02/WR-03) are a FRESH numbering from the re-review and are
+DIFFERENT findings than iteration-1's WR-01..WR-06 above.
+
+**Tooling note:** helm / k3d / terraform / docker-build are NOT runnable in this environment.
+Verified by static reasoning, `sh -n` on the extracted (de-dented) CronJob command bodies,
+`bash -n` on restore-verify.sh, PyYAML structural parse of values.yaml, and grep confirmation
+that no `:latest` image tag remains.
+
+## Fixed Issues (Iteration 2)
+
+### WR-01: `BEFORE_SAVE` is not numeric-guarded before the `-gt` comparison
+
+**Files modified:** `infra/helm/clubcore/templates/backup-redis-cronjob.yaml`
+**Commit:** 24791f71
+**Applied fix:** Added a `case` guard on `BEFORE_SAVE` immediately after the initial
+`LASTSAVE` capture, mirroring the existing `CURRENT_SAVE` guard. On empty/non-numeric (a
+redis instance that has never saved, or a transient connection blip) it logs a WARN and
+defaults `BEFORE_SAVE=0` — BGSAVE always advances LASTSAVE past 0, so the wait loop stays
+correct and no longer aborts under `set -e` on `[ N -gt "" ]`. `sh -n` of the de-dented body
+passes.
+
+### WR-02: Redis retention prune relies on a fragile JMESPath string compare of mismatched timestamp formats
+
+**Files modified:** `infra/helm/clubcore/templates/backup-redis-cronjob.yaml`
+**Commit:** 5d5b4267
+**Applied fix:** Replaced the JMESPath `Contents[?LastModified<='<...Z>']` lexical compare
+with the EPOCH-based approach already used in backup-seaweedfs-cronjob.yaml: compute
+`CUTOFF_EPOCH` from `RETENTION_WEEKLY_COUNT` weeks, list `[Key,LastModified]`, convert each
+`LastModified` to epoch via `date -u -d`, and numeric-compare `LM_EPOCH < CUTOFF_EPOCH` before
+`aws s3 rm`. This is format-agnostic (handles botocore's `+00:00` and fractional seconds) and
+orders correctly. 7-daily/4-weekly (28-day) retention intent preserved (default 4 weeks).
+**Requires human verification:** semantic change to the retention prune predicate — confirm
+the intended cutoff window after deploy (the prune now correctly deletes objects strictly
+older than the cutoff epoch).
+
+### WR-03: SeaweedFS mirror PVC overflow — `current/` mirrors the ENTIRE bucket including CNPG WAL/base backups
+
+**Files modified:** `infra/helm/clubcore/templates/backup-seaweedfs-cronjob.yaml`,
+`infra/helm/clubcore/values.yaml`
+**Commit:** bb5d52a0
+**Applied fix:** Added `--exclude "postgres/*"` to the mirror `aws s3 sync`, excluding the
+CNPG barman prefix. Confirmed the pattern matches the barman destinationPath
+`s3://<bucket>/postgres` (postgres-cluster.yaml:91, restore-verify-cronjob.yaml:290). CNPG
+WAL/base backups are already durable in S3 with their own 30d barman retention, so mirroring
+them is redundant and the append-once daily WAL churn would overflow the 20Gi mirror PVC
+sized for ~one bucket copy. Documented in both the cronjob (inline comment) and values.yaml
+mirrorPvc block (size must be >= total S3 data MINUS postgres/ + headroom). `sh -n` of the
+de-dented body passes; values.yaml parses as valid YAML.
+
+### IN-02 (IMG-04): restore-verify CronJob pins `bitnami/kubectl:latest` (no-latest invariant)
+
+**Files modified:** `infra/helm/clubcore/templates/restore-verify-cronjob.yaml`
+**Commit:** d05072ec
+**Applied fix:** Pinned both occurrences (the `wait-for-cnpg` initContainer and the
+`restore-verify` container) from `bitnami/kubectl:latest` to the immutable tag
+`bitnami/kubectl:1.31.5`, with an IMG-04 explanatory comment. 1.31.x is within kubectl's
+±1-minor skew policy against the cluster. Verified no `image: "...:latest"` line remains.
+
+### IN-01: Unused `REPO_ROOT` variable in the standalone restore-verify script (zero-risk extra)
+
+**Files modified:** `infra/scripts/restore-verify.sh`
+**Commit:** 0ac523e4
+**Applied fix:** Removed the dead `REPO_ROOT="$(git rev-parse ...)"` assignment (line 48).
+Confirmed it had a single occurrence (assignment only, never referenced). `bash -n` passes.
+Although Info-tier and technically out of the critical_warning scope, dead-code removal is
+zero-risk so it was applied.
+
+## Skipped Issues (Iteration 2)
+
+### IN-03: Weak default password literal in the standalone restore-verify script
+
+**File:** `infra/scripts/restore-verify.sh:146`
+**Reason:** Info-tier, out of scope (fix_scope=critical_warning). Per the fix guidance this
+is a STANDALONE-script local default for an ephemeral, isolated scratch cluster (low blast
+radius), and the password is effectively cosmetic — the `psql -U app` exec runs over the
+in-pod local socket under CNPG trust/peer auth, so the literal never gates the count query.
+Left unchanged. Suggested follow-up (from REVIEW.md): drop the literal and let `set -u` fail
+closed via `${DB_PASSWORD:?DB_PASSWORD must be set}`.
+
+---
+
+_Fixed: 2026-06-16T13:40:00Z_
+_Fixer: Claude (gsd-code-fixer)_
+_Iteration: 2_
