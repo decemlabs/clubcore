@@ -45,6 +45,14 @@ CHART_DIR="${REPO_ROOT}/infra/helm/clubcore"
 MIGRATE_WAIT_TIMEOUT="300s"
 POD_READY_TIMEOUT="300s"
 
+# WR-03: `make up` runs the dedicated 8-check `smoke` step after `deploy`, so the
+# inline 5-check smoke here would run a second (overlapping) time and print a
+# duplicate PASS/FAIL banner. Set SKIP_INLINE_SMOKE=1 (as `make up` does) to skip
+# this script's inline smoke and defer to the authoritative standalone smoke.sh.
+# Default (unset) keeps the inline smoke for a standalone `bash deploy-local.sh`
+# or `make deploy` run.
+SKIP_INLINE_SMOKE="${SKIP_INLINE_SMOKE:-0}"
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 log()  { echo "[deploy-local] $*"; }
 ok()   { echo "[deploy-local] PASS: $*"; }
@@ -135,6 +143,16 @@ log "      → helm install COMPLETE"
 echo ""
 
 # ── 6. Smoke checks ───────────────────────────────────────────────────────────
+# WR-03: skip the inline 5-check smoke when the caller (e.g. `make up`) runs the
+# authoritative standalone 8-check smoke.sh as a dedicated follow-up step. This
+# avoids a duplicate, overlapping PASS/FAIL banner. Deploy itself is COMPLETE at
+# this point (helm install --wait succeeded above).
+if [ "${SKIP_INLINE_SMOKE}" = "1" ]; then
+    log "[6/7] Inline smoke SKIPPED (SKIP_INLINE_SMOKE=1) — deferring to standalone smoke.sh."
+    log "      Deploy complete: ${RELEASE_NAME} @ ${TAG}."
+    exit 0
+fi
+
 log "[6/7] Running smoke checks ..."
 echo ""
 

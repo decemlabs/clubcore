@@ -100,7 +100,12 @@ backup: ## Run a verified CNPG restore round-trip to a scratch namespace (OPERAT
 	bash infra/scripts/restore-verify.sh
 
 # ── OPS-02: composed pipeline ─────────────────────────────────────────────────
-up: build scan tf-validate helm-lint deploy smoke ## Full CD pipeline: build→scan→tf-validate→helm-lint→deploy→smoke (OPERATOR-PENDING — needs k3d/helm/trivy)
+# WR-03: the dedicated `smoke` step below is the authoritative 8-check superset.
+# Export SKIP_INLINE_SMOKE=1 so the `deploy` prerequisite's deploy-local.sh skips
+# its inline 5-check smoke — the full smoke then runs exactly ONCE via `smoke`.
+# A target-specific export propagates to all prerequisite recipes in GNU Make.
+up: export SKIP_INLINE_SMOKE := 1
+up: build scan tf-validate helm-lint deploy smoke ## Full CD pipeline: build→scan→tf-validate→helm-lint→deploy→smoke, single 8-check smoke (OPERATOR-PENDING — needs k3d/helm/trivy)
 
 down: ## Delete the local k3d cluster (OPERATOR-PENDING — needs k3d)
 	k3d cluster delete $(K3D_CLUSTER)
