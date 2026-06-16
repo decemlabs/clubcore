@@ -188,14 +188,24 @@ spec:
                   # incremental mirror (only changed objects transfer; deletions
                   # propagate). NEVER sync into a fresh dated dir (that forces a full
                   # re-download every run and overflows the PVC).
-                  echo "[1/3] Incremental sync s3://${S3_BUCKET}/ -> ${CURRENT_DIR}/ ..."
+                  # WR-03: EXCLUDE the CNPG barman prefix (postgres/) from the mirror.
+                  # This PVC is a local DR copy for APP/MEDIA objects (and redis RDBs);
+                  # CNPG WAL + base backups under postgres/ are already durably stored in
+                  # S3 by barman with its own 30d retention (backup.postgres.retentionPolicy),
+                  # so mirroring them here is redundant AND dangerous: 28 days of append-once
+                  # WAL churn adds genuinely-new inodes every run (hardlink snapshots only
+                  # dedupe UNCHANGED files), which can overflow the mirror PVC that is sized
+                  # for ~a single bucket copy. The exclude prefix MUST match the barman
+                  # destinationPath in postgres-cluster.yaml: s3://<bucket>/postgres.
+                  echo "[1/3] Incremental sync s3://${S3_BUCKET}/ -> ${CURRENT_DIR}/ (excluding postgres/* CNPG WAL) ..."
                   mkdir -p "${CURRENT_DIR}"
                   aws s3 sync \
                     "s3://${S3_BUCKET}/" \
                     "${CURRENT_DIR}/" \
                     --endpoint-url "${S3_ENDPOINT_URL}" \
                     --no-progress \
-                    --delete
+                    --delete \
+                    --exclude "postgres/*"
                   OBJECT_COUNT=$(find "${CURRENT_DIR}" -type f | wc -l)
                   echo "[1/3] Sync complete: ${OBJECT_COUNT} objects in ${CURRENT_DIR}"
 

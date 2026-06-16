@@ -597,7 +597,12 @@ backup:
     mirrorPvc:
       # WR-04: a stable "current/" dir holds ONE incremental copy (aws s3 sync --delete);
       # dated snapshots are hardlink-rotated from it, so PVC growth is ~1 copy + churn,
-      # NOT retentionDays × bucket_size. Size must be >= total S3 data size + headroom.
+      # NOT retentionDays × bucket_size.
+      # WR-03: the mirror EXCLUDES the CNPG barman prefix (postgres/*) — see
+      # backup-seaweedfs-cronjob.yaml. The mirror covers APP/MEDIA objects + redis RDBs
+      # only; CNPG WAL/base backups are already durable in S3 with their own 30d barman
+      # retention, and 28 days of append-once WAL churn would otherwise overflow this PVC.
+      # Size must be >= (total S3 data size MINUS postgres/) + headroom.
       size: "20Gi"
       # storageClass: use the Retain StorageClass so PVC survives Pod/CronJob deletion (DATA-04).
       storageClass: clubcore-retain
