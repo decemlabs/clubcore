@@ -772,3 +772,36 @@ The formal verification gate marked all FE-touching phases `human_needed` and de
 ### Cost Observations
 - v3.1 build executed across phases 107–111 (autonomous + planned). Browser-UAT closeout + 6 fixes + re-verify done in one session (chrome-devtools-mcp; ~2 parallel audit workflows for the follow-on completeness/roadmap analysis).
 - Notable: the browser-UAT closeout cost was small relative to the bugs it caught — all 4 blockers were one-to-few-line FE schema fixes once located.
+
+## Milestone: v4.0 — Production Infrastructure — Self-Hosted k3s
+
+**Shipped:** 2026-06-16
+**Phases:** 4 (118–121) | **Plans:** 12 | **Tasks:** 31 | Audit: passed (39/39 reqs at local-validation bar)
+
+### What Was Built
+Containerized the full stack (6 runtime images, shared Python backend-base via CMD-override) + a Helm umbrella chart (CNPG Postgres, Redis StatefulSet, SeaweedFS subchart, migrate hook Job, all app workloads); Traefik v3 ingress + cert-manager + sealed-secrets + ASVS-hardened securityContext + default-deny NetworkPolicies; Terraform host+cluster IaC; kube-prometheus-stack/Loki/Alloy observability + FastAPI `/metrics`; CNPG barman + Redis/SeaweedFS backup CronJobs + a restore-to-scratch verification CronJob; a Makefile CD layer (`make up`) + an 8-check smoke + a production runbook with an explicit 23-item operator-pending boundary (2 HARD gates: SEC-02 RSA-key backup, BAK-03 restore round-trip).
+
+### What Worked
+- **Infra smart-discuss detection** — all 4 phases were pure-infra, so discuss collapsed to minimal CONTEXT.md referencing the locked D-V40-* decisions; zero grey-area questions needed, kept the autonomous run moving.
+- **Sequential executors without explicit worktree isolation** — the GSD executor/fixer agents self-isolate internally and fast-forward `master`; running them one-at-a-time in the foreground avoided the fragile manual worktree merge-back entirely and never raced.
+- **Code review earned its keep on infra** — caught genuinely serious, runtime-only-observable bugs that static authoring missed: the CR-01 SeaweedFS subchart-label NetworkPolicy (would sever S3), and four Phase-120 backup blockers (heredoc indent, `apk add` under readOnlyRootFilesystem, `reltuples` estimate, fail-open verify). These would have shipped silently and failed in production.
+- **Operator-pending honesty** — D-V40-LOCAL-VALIDATE held throughout; no fabricated k3d/helm/trivy evidence. Every phase's live legs were persisted as `*-UAT.md` and aggregated into production.md.
+
+### What Was Inefficient
+- **Worktree last-write-wins clobber** — the Phase-119 code-fixer made non-linearly-stacked commits; a later same-file fix (WR-03) clobbered the CR-01 blocker fix on fast-forward. Caught only by grepping HEAD after the fixer claimed `all_fixed`. Cost a re-apply + an extra re-review.
+- **Executor session-limit mid-plan** — 121-01 hit the limit after committing its work but before the SUMMARY/tracking commit; recovered by finalizing from disk state (work was sound).
+- **Orphan worktrees** — ~63 locked `agent-*` worktrees accumulated under `.claude/worktrees/` (some from phases 35/44/60); `worktree.reap-orphans` skips locked ones. Left for operator cleanup (some carry unmerged ancient commits).
+
+### Patterns Established
+- **Never trust a code-fixer's `all_fixed` — verify the fix is present at HEAD** (grep the actual file), especially when one fixer touches the same file for multiple findings. Re-review after any multi-file fix.
+- **Operator-pending boundary aggregation** — the capstone runbook consolidates every per-phase `*-UAT.md` pending item + flags the hard gates, so the operator has one production-readiness checklist.
+- **Pre-flight CSRF/state verification** — SEC-05 was scoped as "rename" but the cookie was already `clubcore_csrf`; grepping the live code first reframed it as verify + a real stray-`sportzal_csrf` bug fix, avoiding churn.
+
+### Key Lessons
+- For infra milestones validated locally, the honest done-bar is static-correct artifacts + documented operator-pending live legs — classify phases `human_needed`, not `passed`, and never fabricate runtime evidence.
+- Adversarial code review is disproportionately valuable on infra YAML/scripts (no compiler/tests to catch logic bugs); the backup phase alone surfaced 4 would-ship blockers.
+
+### Cost Observations
+- Model mix: planner = opus; executors/reviewers/fixers/verifiers/integration-checker = sonnet; orchestration = opus main loop.
+- Sessions: spanned a session-limit boundary (one executor truncated, resumed from disk).
+- Notable: code-review + fix iterations (2 rounds on Phases 119 and 120) were the highest-leverage spend — they converted "looks done" YAML into actually-correct infra.
