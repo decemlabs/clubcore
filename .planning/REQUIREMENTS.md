@@ -50,8 +50,8 @@
 - [ ] **SEC-02**: Backup controller RSA-ключа sealed-secrets off-node (рядом с репой на second PC) — **acceptance criterion, не post-hoc** (anti controller-key-loss)
 - [ ] **SEC-03**: Pod `securityContext` — `runAsNonRoot`, `readOnlyRootFilesystem`, `allowPrivilegeEscalation: false`, drop ALL capabilities
 - [ ] **SEC-04**: NetworkPolicy default-deny + explicit allow (включая CoreDNS egress UDP/TCP 53 для каждого пода)
-- [ ] **SEC-05**: NAME-01 — переименование CSRF cookie `sportzal_csrf → clubcore_csrf` (additive `openapi.json`/`schema.d.ts` regen; staff drift-gate ожидает additive-diff)
-- [ ] **SEC-06**: Ретро `/gsd:secure-phase 70` — verify/close 3 отложенных app-security пункта (proxy rate-limit bucket, QR post-decode existence, cancel idempotency)
+- [x] **SEC-05**: NAME-01 — переименование CSRF cookie `sportzal_csrf → clubcore_csrf` (additive `openapi.json`/`schema.d.ts` regen; staff drift-gate ожидает additive-diff)
+- [x] **SEC-06**: Ретро `/gsd:secure-phase 70` — verify/close 3 отложенных app-security пункта (proxy rate-limit bucket, QR post-decode existence, cancel idempotency)
 
 ### Terraform IaC (IAC)
 
@@ -161,8 +161,8 @@
 | SEC-02 | Phase 119 | Pending |
 | SEC-03 | Phase 119 | Pending |
 | SEC-04 | Phase 119 | Pending |
-| SEC-05 | Phase 119 | Pending |
-| SEC-06 | Phase 119 | Pending |
+| SEC-05 | Phase 119 | Complete |
+| SEC-06 | Phase 119 | Complete |
 | IAC-01 | Phase 120 | Pending |
 | IAC-02 | Phase 120 | Pending |
 | IAC-03 | Phase 120 | Pending |

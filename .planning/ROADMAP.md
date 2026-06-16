@@ -518,7 +518,7 @@ Plans:
 **Wave 1** *(119-01 and 119-03 run in parallel — disjoint files)*
 
 - [x] 119-01-PLAN.md — Networking: admin-app/client-pwa Deployments+Services (port 8080), Traefik v3 Ingress (3 hosts + WS + HTTPS-redirect middleware), cert-manager selfSigned/staging ClusterIssuers + Certificate [NET-01, NET-02, NET-03, NET-04] · wave 1
-- [ ] 119-03-PLAN.md — SEC-app: CSRF clubcore_csrf verify + _lib.sh/README stray-string fix + additive openapi.json/schema.d.ts regen + secure-phase 70 retro [SEC-05, SEC-06] · wave 1
+- [x] 119-03-PLAN.md — SEC-app: CSRF clubcore_csrf verify + _lib.sh/README stray-string fix + additive openapi.json/schema.d.ts regen + secure-phase 70 retro [SEC-05, SEC-06] · wave 1
 
 **Wave 2** *(119-02 edits values.yaml after 119-01 — file-ownership sequencing)*
 
@@ -573,7 +573,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 118. Container Images + Helm Chart (Core Stack) | v4.0 | 4/4 | Complete   | 2026-06-16 |
-| 119. Networking, Security + CSRF Rename | v4.0 | 1/3 | In Progress|  |
+| 119. Networking, Security + CSRF Rename | v4.0 | 2/3 | In Progress|  |
 | 120. IaC, Observability + Backup | v4.0 | 0/TBD | Not started | - |
 | 121. Makefile CI/CD + Full Smoke + Runbooks | v4.0 | 0/TBD | Not started | - |
 
