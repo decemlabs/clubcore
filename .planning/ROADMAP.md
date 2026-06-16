@@ -522,7 +522,7 @@ Plans:
 
 **Wave 2** *(119-02 edits values.yaml after 119-01 — file-ownership sequencing)*
 
-- [ ] 119-02-PLAN.md — SEC-infra: SealedSecret + kubeseal helper + RSA-key backup runbook (P6 hard gate) + securityContext hardening (4 workloads) + default-deny/allow NetworkPolicies + CoreDNS egress (P8) [SEC-01, SEC-02, SEC-03, SEC-04] · wave 2
+- [x] 119-02-PLAN.md — SEC-infra: SealedSecret + kubeseal helper + RSA-key backup runbook (P6 hard gate) + securityContext hardening (4 workloads) + default-deny/allow NetworkPolicies + CoreDNS egress (P8) [SEC-01, SEC-02, SEC-03, SEC-04] · wave 2
 **Research flag (RESOLVED at plan time)**: Traefik v3 upgrades WebSocket connections automatically over a standard HTTP router — there is NO special per-route WS annotation in v3 (confirmed via context7 /traefik/traefik) and no sticky-session annotation is needed at replicas:1; the relevant annotations are router.entrypoints/router.tls/router.middlewares. Documented inline in ingress.yaml.
 
 ### Phase 120: IaC, Observability + Backup
@@ -573,7 +573,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 118. Container Images + Helm Chart (Core Stack) | v4.0 | 4/4 | Complete   | 2026-06-16 |
-| 119. Networking, Security + CSRF Rename | v4.0 | 2/3 | In Progress|  |
+| 119. Networking, Security + CSRF Rename | v4.0 | 3/3 | Complete   | 2026-06-16 |
 | 120. IaC, Observability + Backup | v4.0 | 0/TBD | Not started | - |
 | 121. Makefile CI/CD + Full Smoke + Runbooks | v4.0 | 0/TBD | Not started | - |
 
