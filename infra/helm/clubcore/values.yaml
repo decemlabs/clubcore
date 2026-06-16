@@ -199,12 +199,53 @@ config:
 
 # ---------------------------------------------------------------------------
 # Application Secret — sensitive env vars (APP-05 / T-118-10)
-# WARNING: These are PLAINTEXT for LOCAL K3D DEVELOPMENT ONLY.
-#          Phase 119 SEC-01 replaces all values below with a SealedSecret.
-#          NEVER commit production credentials here.
-#          NEVER deploy these values to a live server.
+#
+# SEC-01 TWO-PATH ARCHITECTURE:
+#
+#   PATH A — Local k3d (plaintextForLocalK3d: true, sealed.enabled: false):
+#     Renders app-secret.yaml with plaintext stringData.
+#     ONLY for local k3d development. NEVER for live/production servers.
+#
+#   PATH B — Production (plaintextForLocalK3d: false, sealed.enabled: true):
+#     Renders sealed-secret.yaml with RSA-encrypted encryptedData.
+#     encryptedData blobs are produced by: bash infra/scripts/seal-secrets.sh
+#     SEC-02 HARD GATE: controller RSA key must be backed up off-node FIRST.
+#     See: infra/runbooks/sealed-secrets-key-backup.md
+#
+# Only ONE path should be active at a time (both can be false — no Secret rendered).
 # ---------------------------------------------------------------------------
 secrets:
+  # ─── SEC-01 path switches ────────────────────────────────────────────────
+  # plaintextForLocalK3d: true  → renders app-secret.yaml (plaintext, k3d dev only)
+  # plaintextForLocalK3d: false → no plaintext Secret rendered (use sealed path)
+  # WARNING: NEVER set this to true on a live/production server.
+  plaintextForLocalK3d: true
+
+  # SEC-01 sealed-secrets production path
+  sealed:
+    # sealed.enabled: false → production SealedSecret not rendered (default: use plaintext k3d path)
+    # sealed.enabled: true  → renders sealed-secret.yaml (RSA-encrypted, production path)
+    # To enable: run `bash infra/scripts/seal-secrets.sh` first, then set encryptedData below.
+    enabled: false
+
+    # encryptedData: RSA-encrypted ciphertext produced by kubeseal.
+    # NEVER put plaintext values here. NEVER commit production ciphertext in values.yaml.
+    # Use a SEPARATE values-production.yaml (not committed to git) for real ciphertext:
+    #   helm upgrade ... -f /path/to/values-production.yaml
+    # The placeholders below are empty — they will trigger `required` errors in the
+    # template if sealed.enabled=true but encryptedData is not populated.
+    encryptedData: {}
+    # encryptedData:
+    #   SECRET_KEY: "AgABC..."          # populated by seal-secrets.sh
+    #   DATABASE_URL: "AgABC..."        # populated by seal-secrets.sh
+    #   TELEGRAM_BOT_TOKEN: "AgABC..."  # populated by seal-secrets.sh
+    #   S3_ACCESS_KEY_ID: "AgABC..."    # populated by seal-secrets.sh
+    #   S3_SECRET_ACCESS_KEY: "AgABC..." # populated by seal-secrets.sh
+    #   EMAIL__AWS_ACCESS_KEY_ID: ""    # optional — leave empty for sandbox mode
+    #   EMAIL__AWS_SECRET_ACCESS_KEY: "" # optional
+    #   EMAIL__WEBHOOK_SECRET: ""       # optional
+
+  # ─── PATH A plaintext values (local k3d development only) ────────────────
   # JWT signing key — required, strong random value for prod (generate with openssl rand -hex 32)
   # LOCAL K3D DEFAULT ONLY — CHANGE FOR PRODUCTION.
   secretKey: "clubcore-dev-secret-key-change-in-phase119-not-for-prod"
