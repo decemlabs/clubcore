@@ -1,15 +1,19 @@
 {{/*
 backup-redis-cronjob.yaml — Weekly Redis RDB → SeaweedFS S3 backup CronJob (BAK-02)
 
-BAK-02: weekly Redis RDB snapshot upload to SeaweedFS S3 with 7-daily / 4-weekly retention.
+BAK-02: weekly Redis RDB snapshot upload to SeaweedFS S3 with 28-day age-based retention.
 
 Schedule: "0 3 * * 0" = weekly Sunday 03:00 UTC (after CNPG backup window at 02:00)
 
-Retention math:
-  Daily: keep last 7 RDB snapshots (7 days of daily runs → prune objects older than 7 days)
-  Weekly: keep last 4 weekly snapshots (4 weeks → prune objects older than 28 days)
+Retention math (WR-03 — honest contract):
+  The job runs WEEKLY, so it produces ~1 RDB/week. Retention is a single AGE-BASED
+  cutoff: delete objects older than RETENTION_WEEKLY_COUNT weeks (default 4 → 28 days),
+  which keeps roughly the last 4 weekly snapshots. There is NO separate "daily" tier —
+  a weekly job cannot produce daily snapshots, so no RETENTION_DAILY_COUNT knob exists
+  here (it would be dead config). For finer-grained daily retention, increase the
+  schedule frequency first, then add a tagging-based tiered prune.
   Implementation: after upload, list s3://clubcore/redis/ objects and delete any with
-  last-modified > retention window. Uses `aws s3api list-objects` + `aws s3 rm`.
+  last-modified older than the cutoff. Uses `aws s3api list-objects` + `aws s3 rm`.
 
 S3 credentials: reuse the EXISTING clubcore-app-secret keys (T-120-BAK1 — NEVER mint new creds).
   Keys: S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY (same keys as barmanObjectStore + backend).
@@ -111,9 +115,9 @@ spec:
                   value: {{ .Values.config.s3Bucket | default "clubcore" | quote }}
                 - name: S3_PREFIX
                   value: "redis"
-                # Retention: 7 daily / 4 weekly (in days)
-                - name: RETENTION_DAILY_COUNT
-                  value: {{ .Values.backup.redis.retentionDailyCount | default 7 | quote }}
+                # WR-03: 28-day age-based retention (weekly job → ~4 weekly snapshots kept).
+                # RETENTION_DAILY_COUNT removed — a weekly job cannot enforce a daily tier,
+                # so the knob was dead/misleading config.
                 - name: RETENTION_WEEKLY_COUNT
                   value: {{ .Values.backup.redis.retentionWeeklyCount | default 4 | quote }}
                 # Redis service in-cluster (plan 02 redis-service.yaml, clusterIP: None)
@@ -155,21 +159,31 @@ spec:
                   # ── Step 1: Trigger RDB save ──────────────────────────────────
                   echo "[1/4] Triggering BGSAVE on Redis at ${REDIS_HOST}:${REDIS_PORT}..."
                   redis-cli -h "${REDIS_HOST}" -p "${REDIS_PORT}" BGSAVE
-                  # Wait for BGSAVE to complete (poll LASTSAVE timestamp)
+                  # Wait for BGSAVE to complete (poll LASTSAVE timestamp).
+                  # WR-02: base the timeout on a WALL CLOCK (not loop count), and
+                  # validate CURRENT_SAVE is numeric before the `-gt` comparison — a
+                  # transient empty LASTSAVE (network blip) would otherwise run
+                  # `[ "" -gt N ]` and, under `set -e`, abort the whole job.
                   BEFORE_SAVE=$(redis-cli -h "${REDIS_HOST}" -p "${REDIS_PORT}" LASTSAVE)
                   echo "[1/4] Waiting for BGSAVE to complete (LASTSAVE was ${BEFORE_SAVE})..."
-                  for i in $(seq 1 30); do
+                  BGSAVE_DEADLINE=$(( $(date -u +%s) + 60 ))
+                  BGSAVE_DONE=0
+                  while [ "$(date -u +%s)" -lt "${BGSAVE_DEADLINE}" ]; do
                     sleep 2
                     CURRENT_SAVE=$(redis-cli -h "${REDIS_HOST}" -p "${REDIS_PORT}" LASTSAVE)
+                    case "${CURRENT_SAVE}" in
+                      ''|*[!0-9]*) continue ;;
+                    esac
                     if [ "${CURRENT_SAVE}" -gt "${BEFORE_SAVE}" ]; then
                       echo "[1/4] BGSAVE complete (LASTSAVE: ${CURRENT_SAVE})"
+                      BGSAVE_DONE=1
                       break
                     fi
-                    if [ "${i}" -eq 30 ]; then
-                      echo "[backup-redis] ERROR: BGSAVE did not complete within 60s" >&2
-                      exit 1
-                    fi
                   done
+                  if [ "${BGSAVE_DONE}" -ne 1 ]; then
+                    echo "[backup-redis] ERROR: BGSAVE did not complete within 60s" >&2
+                    exit 1
+                  fi
 
                   # ── Step 2: Copy RDB from Redis pod via redis-cli DEBUG RELOAD ─
                   # SeaweedFS S3: use aws CLI with --endpoint-url pointing at in-cluster service.
@@ -191,12 +205,9 @@ spec:
                   echo "[3/4] Upload complete: s3://${S3_BUCKET}/${BACKUP_KEY}"
 
                   # ── Step 4: Retention pruning ─────────────────────────────────
-                  # Retention math:
-                  #   DAILY:  delete objects older than RETENTION_DAILY_COUNT days
-                  #   WEEKLY: delete objects older than (RETENTION_WEEKLY_COUNT * 7) days
-                  #   We store all RDB backups under the same prefix; prune by age.
-                  #   Effective window = min(daily_days, weekly_days) = min(7, 28) = 7 days.
-                  #   Weekly retention (4 weeks = 28 days) is the outer bound.
+                  # WR-03: single AGE-BASED cutoff — delete objects older than
+                  #   (RETENTION_WEEKLY_COUNT weeks). Default 4 weeks = 28 days, which
+                  #   keeps ~4 weekly snapshots. No daily tier (weekly job).
                   PRUNE_BEFORE=$(date -u -d "-${RETENTION_WEEKLY_COUNT} weeks" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null \
                     || date -u -v "-${RETENTION_WEEKLY_COUNT}w" +"%Y-%m-%dT%H:%M:%SZ")
                   echo "[4/4] Pruning objects older than ${PRUNE_BEFORE} from s3://${S3_BUCKET}/${S3_PREFIX}/..."
