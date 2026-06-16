@@ -498,7 +498,7 @@ Plans:
 - [x] 118-01-PLAN.md — Container images: backend-base (pinned digest/HEALTHCHECK/tzdata) + 4 Python workloads via CMD-override + admin-app/client-pwa nginx + git-SHA tags + trivy gate [IMG-01..04] · wave 1
 - [x] 118-02-PLAN.md — Helm chart scaffold + stateful services: CNPG Cluster (instances:1, ghcr) + Redis StatefulSet (AOF+allkeys-lru) + SeaweedFS subchart (S3 standalone) + Retain StorageClass + Postgres nodeSelector [DATA-01..04] · wave 1
 - [x] 118-03-PLAN.md — ConfigMap/Secret split (no plaintext secret in ConfigMap, TZ=UTC) + SeaweedFS S3 Secret + Alembic migrate pre-install/pre-upgrade hook Job (weight -5, backoffLimit 0, deadline 300s) [APP-05, APP-01] · wave 2
-- [ ] 118-04-PLAN.md — App workloads: backend Deployment (3 probes + alembic check init + replicas:1) + arq-worker/telegram-bot (Recreate + replicas:1 invariants) + k3d bring-up & deploy scripts + live done-bar [APP-02..04] · wave 3
+- [x] 118-04-PLAN.md — App workloads: backend Deployment (3 probes + alembic check init + replicas:1) + arq-worker/telegram-bot (Recreate + replicas:1 invariants) + k3d bring-up & deploy scripts + live done-bar [APP-02..04] · wave 3
 **Research flag (planning-time)**: Verify exact `Cluster.spec.backup.barmanObjectStore` field names for SeaweedFS S3 endpoint against CNPG v1 API docs before writing the CNPG Cluster CR.
 
 ### Phase 119: Networking, Security + CSRF Rename
@@ -563,7 +563,7 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 118. Container Images + Helm Chart (Core Stack) | v4.0 | 3/4 | In Progress|  |
+| 118. Container Images + Helm Chart (Core Stack) | v4.0 | 4/4 | Complete   | 2026-06-16 |
 | 119. Networking, Security + CSRF Rename | v4.0 | 0/TBD | Not started | - |
 | 120. IaC, Observability + Backup | v4.0 | 0/TBD | Not started | - |
 | 121. Makefile CI/CD + Full Smoke + Runbooks | v4.0 | 0/TBD | Not started | - |
