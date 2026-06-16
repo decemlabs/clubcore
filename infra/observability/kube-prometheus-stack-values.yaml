@@ -1,0 +1,156 @@
+# kube-prometheus-stack Helm values (OBS-01)
+# Chart: prometheus-community/kube-prometheus-stack v86.2.3
+# Requirement: OBS-01 — single-node tuned, 7-day Prometheus retention
+# Operator-installed via infra/terraform/cluster/main.tf (helm_release) — NOT vendored.
+#
+# Install:
+#   helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+#     --version 86.2.3 --namespace monitoring --create-namespace \
+#     -f infra/observability/kube-prometheus-stack-values.yaml
+#
+# OPERATOR-PENDING: helm template/lint validation (helm absent in sandbox).
+
+# ── Prometheus ────────────────────────────────────────────────────────────────
+prometheus:
+  prometheusSpec:
+    # OBS-01: 7-day retention for single-node setup
+    retention: 7d
+
+    # Discover ServiceMonitors across ALL namespaces (so the backend ServiceMonitor
+    # in the default namespace is picked up by Prometheus in monitoring namespace).
+    # D-V40-LOCAL-VALIDATE: without this, cross-namespace ServiceMonitors are ignored.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+
+    # Single-node resource tuning (v4.0 bare-metal single node)
+    resources:
+      requests:
+        cpu: "250m"
+        memory: "512Mi"
+      limits:
+        cpu: "1000m"
+        memory: "2Gi"
+
+    # Persistent storage for metrics (survives pod restarts)
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 20Gi
+
+# ── Grafana ────────────────────────────────────────────────────────────────────
+grafana:
+  enabled: true
+
+  # OBS-04/T-120-OBS4: Admin credentials via existingSecret (sealed-secret backed).
+  # NEVER plaintext. Create the secret before installing:
+  #   kubectl create secret generic grafana-admin-credentials \
+  #     --from-literal=admin-user=admin \
+  #     --from-literal=admin-password=<strong-random> \
+  #     -n monitoring
+  # Then seal it with kubeseal (infra/scripts/seal-secrets.sh).
+  admin:
+    existingSecret: grafana-admin-credentials
+    userKey: admin-user
+    passwordKey: admin-password
+
+  # Single-node resource tuning
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+  # Auto-discover dashboards from ConfigMaps with label grafana_dashboard: "1"
+  # OBS-04 dashboards are delivered as ConfigMaps in the monitoring namespace.
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: monitoring
+    datasources:
+      enabled: true
+
+  # Persistent storage for Grafana state (dashboards, annotations, alerts)
+  persistence:
+    enabled: true
+    storageClassName: local-path
+    size: 5Gi
+
+# ── Alertmanager ──────────────────────────────────────────────────────────────
+alertmanager:
+  enabled: true
+
+  alertmanagerSpec:
+    # Single-node resource tuning
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "64Mi"
+      limits:
+        cpu: "200m"
+        memory: "256Mi"
+
+    # Alertmanager config is layered via alertmanager-rules.yaml (Task 3).
+    # The PrometheusRule CRD (OBS-05 rules) is discovered automatically because
+    # ruleSelectorNilUsesHelmValues: false above.
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 2Gi
+
+# ── Node Exporter ─────────────────────────────────────────────────────────────
+# OBS-04: node-exporter metrics feed the node-exporter Grafana dashboard.
+nodeExporter:
+  enabled: true
+
+prometheus-node-exporter:
+  resources:
+    requests:
+      cpu: "25m"
+      memory: "32Mi"
+    limits:
+      cpu: "100m"
+      memory: "128Mi"
+
+# ── kube-state-metrics ────────────────────────────────────────────────────────
+# OBS-04: kube-state-metrics feeds Kubernetes object state dashboards.
+kubeStateMetrics:
+  enabled: true
+
+kube-state-metrics:
+  resources:
+    requests:
+      cpu: "25m"
+      memory: "64Mi"
+    limits:
+      cpu: "100m"
+      memory: "256Mi"
+
+# ── Component probes (reduce noise on single-node k3s) ───────────────────────
+# k3s runs etcd, controller-manager, scheduler in-process — probing them
+# externally is noisy on k3d. Disable external scrape targets that produce
+# connection-refused errors on k3d (kube-apiserver scrape still works via
+# kubeApiServer.enabled: true default).
+kubeControllerManager:
+  enabled: false
+
+kubeScheduler:
+  enabled: false
+
+kubeProxy:
+  enabled: false
+
+kubeEtcd:
+  enabled: false

@@ -1,0 +1,118 @@
+# Loki Helm values (OBS-02)
+# Chart: grafana/loki v17.3.1 (community — loki chart version, not the app version)
+# App version: Loki v3.x (SingleBinary monolithic mode)
+# Requirement: OBS-02 — monolithic single-binary, 30-day log retention
+# Operator-installed via infra/terraform/cluster/main.tf (helm_release) — NOT vendored.
+#
+# Install:
+#   helm upgrade --install loki grafana/loki \
+#     --version 17.3.1 --namespace monitoring --create-namespace \
+#     -f infra/observability/loki-values.yaml
+#
+# OPERATOR-PENDING: helm template/lint validation (helm absent in sandbox).
+# RESEARCH-RESOLVED: value paths verified from Loki v6.x chart docs (see plan 120-02
+#   <research_resolved> block) — do NOT re-guess these paths.
+
+# ── Deployment mode ────────────────────────────────────────────────────────────
+# OBS-02: SingleBinary = monolithic mode — all Loki components in one process.
+# Correct for a single-node homelab setup; scale-out mode (microservices) is deferred.
+deploymentMode: SingleBinary
+
+# ── Loki configuration ─────────────────────────────────────────────────────────
+loki:
+  # Single-node: no replication needed
+  commonConfig:
+    replication_factor: 1
+
+  # Filesystem storage — no S3/object-store required for monolithic single-node dev.
+  # D-V40-MINIO-RETIRED: SeaweedFS is the S3 store; Loki uses local filesystem to
+  # keep observability independent of application storage.
+  storage:
+    type: filesystem
+
+  # No multi-tenant auth (single-tenant homelab)
+  auth_enabled: false
+
+  # Schema config — tsdb index (current/recommended schema for Loki v3.x)
+  schemaConfig:
+    configs:
+      - from: "2024-01-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+
+  # OBS-02: 30-day log retention
+  limits_config:
+    retention_period: 720h   # 30 days = 720 hours
+
+  # Compactor enforces retention (deletes log chunks older than retention_period)
+  compactor:
+    retention_enabled: true
+    working_directory: /var/loki/compactor
+
+# ── SingleBinary deployment ────────────────────────────────────────────────────
+singleBinary:
+  replicas: 1
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "1Gi"
+
+  persistence:
+    enabled: true
+    storageClass: local-path
+    size: 30Gi
+
+# ── Disable scale-out components (single-node / monolithic mode) ──────────────
+# Scale-out deployments (read/write/backend) are zero-replica in SingleBinary mode.
+# Caches and MinIO are not needed for filesystem-backed single-node Loki.
+backend:
+  replicas: 0
+
+read:
+  replicas: 0
+
+write:
+  replicas: 0
+
+# Disable caches (not applicable to SingleBinary mode)
+chunksCache:
+  enabled: false
+
+resultsCache:
+  enabled: false
+
+# Disable MinIO subchart (using local filesystem, not object storage)
+minio:
+  enabled: false
+
+# ── Loki gateway ──────────────────────────────────────────────────────────────
+# The gateway (nginx proxy) forwards push/query traffic to the singleBinary pod.
+# Alloy uses the gateway URL to push logs: http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push
+gateway:
+  enabled: true
+  replicas: 1
+
+  resources:
+    requests:
+      cpu: "25m"
+      memory: "32Mi"
+    limits:
+      cpu: "100m"
+      memory: "128Mi"
+
+# ── Monitoring ────────────────────────────────────────────────────────────────
+monitoring:
+  selfMonitoring:
+    enabled: false
+    grafanaAgent:
+      installOperator: false
+  lokiCanary:
+    enabled: false

@@ -1,0 +1,116 @@
+# Grafana Alloy Helm values (OBS-02)
+# Chart: grafana/alloy v1.x (community)
+# Requirement: OBS-02 — daemonset log shipper: pods → Loki
+# Operator-installed via infra/terraform/cluster/main.tf (helm_release) — NOT vendored.
+#
+# Install:
+#   helm upgrade --install alloy grafana/alloy \
+#     --namespace monitoring --create-namespace \
+#     -f infra/observability/alloy-values.yaml
+#
+# OPERATOR-PENDING: helm template/lint validation (helm absent in sandbox).
+# RESEARCH-RESOLVED: value paths verified from Grafana Alloy chart docs (see plan 120-02
+#   <research_resolved> block) — do NOT re-guess these paths.
+#
+# Purpose: Alloy runs as a DaemonSet on each node, reads pod logs from
+#   /var/log/pods/ (host mount), and ships them to the Loki gateway in the
+#   monitoring namespace. RBAC (pods/log/namespaces read) is provided by the chart.
+
+# ── Controller: DaemonSet (one Alloy pod per node) ────────────────────────────
+# DaemonSet ensures every node's pod logs are captured (OBS-02).
+controller:
+  type: daemonset
+
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
+
+# ── Alloy agent configuration ──────────────────────────────────────────────────
+alloy:
+  # Mount /var/log from the host so Alloy can read pod log files.
+  # Required for kubernetes pod log discovery.
+  mounts:
+    varlog: true
+    # Optionally mount /var/lib/docker/containers for Docker-format logs:
+    dockercontainers: false
+
+  # River/Alloy config content — defines the log scrape + ship pipeline.
+  # Pipeline: kubernetes pod discovery → read pod logs → ship to Loki
+  configMap:
+    content: |
+      // OBS-02: Grafana Alloy log shipping pipeline — pods → Loki
+      // Runs as a DaemonSet; reads pod logs from /var/log/pods on the host.
+
+      // Step 1: Discover Kubernetes pods in all namespaces
+      discovery.kubernetes "pods" {
+        role = "pod"
+      }
+
+      // Step 2: Relabel pod metadata for Loki labels
+      discovery.relabel "pod_logs" {
+        targets = discovery.kubernetes.pods.targets
+
+        // Keep only running pods (skip completed/failed pods)
+        rule {
+          source_labels = ["__meta_kubernetes_pod_phase"]
+          regex         = "Pending|Running"
+          action        = "keep"
+        }
+
+        // Map pod name → label
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+
+        // Map namespace → label
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+
+        // Map container name → label
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+
+        // Map app label → label (for Grafana Explore filtering)
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+          target_label  = "app"
+        }
+
+        // Map component label (e.g. backend, arq-worker)
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_component"]
+          target_label  = "component"
+        }
+
+        // Build the pod log path from pod UID + container
+        rule {
+          source_labels = ["__meta_kubernetes_pod_uid", "__meta_kubernetes_pod_container_name"]
+          separator     = "/"
+          target_label  = "__path__"
+          replacement   = "/var/log/pods/*$1/*.log"
+        }
+      }
+
+      // Step 3: Read pod logs from discovered paths
+      loki.source.kubernetes "pod_logs" {
+        targets    = discovery.relabel.pod_logs.output
+        forward_to = [loki.write.default.receiver]
+      }
+
+      // Step 4: Ship logs to the Loki gateway in the monitoring namespace
+      // URL: loki-gateway.monitoring.svc.cluster.local — the monolithic Loki
+      // single-binary serves the push API at this gateway service (OBS-02).
+      loki.write "default" {
+        endpoint {
+          url = "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"
+        }
+      }
