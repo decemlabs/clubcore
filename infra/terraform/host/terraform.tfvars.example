@@ -1,0 +1,26 @@
+# terraform.tfvars.example — IAC-01: host module example variables (PLACEHOLDER VALUES ONLY)
+#
+# Copy this file to terraform.tfvars and replace placeholders with real values.
+# NEVER commit terraform.tfvars — it contains the SSH key path to your bare-metal node.
+# Add terraform.tfvars to .gitignore to prevent accidental commits (threat T-120-TF).
+#
+# Backend state is stored locally alongside this directory (backend "local" {}).
+# No remote backend is used — the project has no git remote (D-V40-MAKEFILE-CD).
+
+# ── SSH access to the bare-metal node ─────────────────────────────────────────
+# Replace with the actual IP or hostname of your server.
+ssh_host = "192.0.2.10"
+
+# Replace with the SSH username on your node (typically "ubuntu", "debian", or "root").
+ssh_user = "ubuntu"
+
+# Path to the SSH private key on YOUR machine (not the server).
+# Generate with: ssh-keygen -t ed25519 -f ~/.ssh/clubcore_node
+# Then add the public key to ~/.ssh/authorized_keys on the bare-metal node.
+# NEVER put the private key content here — only the file path.
+ssh_private_key_path = "~/.ssh/clubcore_node"
+
+# ── k3s version ───────────────────────────────────────────────────────────────
+# Pin to the same version tested in k3d during Phase 118/119 development.
+# Check current releases: https://github.com/k3s-io/k3s/releases
+k3s_version = "v1.32.5+k3s1"
