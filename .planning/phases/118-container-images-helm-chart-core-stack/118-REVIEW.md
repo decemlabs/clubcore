@@ -2,164 +2,209 @@
 phase: 118-container-images-helm-chart-core-stack
 reviewed: 2026-06-16T00:00:00Z
 depth: standard
-files_reviewed: 14
+iteration: 2
+files_reviewed: 19
 files_reviewed_list:
-  - infra/docker/backend.Dockerfile
-  - infra/docker/admin-app.Dockerfile
-  - infra/docker/client-pwa.Dockerfile
-  - infra/nginx/admin-app.conf
-  - infra/nginx/client-pwa.conf
-  - infra/helm/clubcore/templates/app-secret.yaml
   - infra/helm/clubcore/templates/app-configmap.yaml
+  - infra/helm/clubcore/templates/app-secret.yaml
+  - infra/helm/clubcore/templates/seaweedfs-s3-secret.yaml
   - infra/helm/clubcore/templates/migrate-job.yaml
   - infra/helm/clubcore/templates/postgres-cluster.yaml
   - infra/helm/clubcore/templates/redis-statefulset.yaml
+  - infra/helm/clubcore/templates/redis-service.yaml
+  - infra/helm/clubcore/templates/backend-deployment.yaml
+  - infra/helm/clubcore/templates/arq-worker-deployment.yaml
+  - infra/helm/clubcore/templates/telegram-bot-deployment.yaml
+  - infra/helm/clubcore/templates/_helpers.tpl
+  - infra/helm/clubcore/values.yaml
+  - infra/docker/backend.Dockerfile
+  - infra/docker/admin-app.Dockerfile
+  - infra/docker/client-pwa.Dockerfile
   - infra/scripts/build-images.sh
   - infra/scripts/scan-images.sh
-  - infra/scripts/k3d-up.sh
   - infra/scripts/deploy-local.sh
+  - infra/scripts/k3d-up.sh
 findings:
-  critical: 1
-  warning: 6
-  info: 4
-  total: 11
+  critical: 0
+  warning: 2
+  info: 3
+  total: 5
 status: issues_found
 ---
 
-# Phase 118: Code Review Report
+# Phase 118: Code Review Report (Re-review — Iteration 2)
 
 **Reviewed:** 2026-06-16
 **Depth:** standard
-**Files Reviewed:** 14 (plus cross-referenced: values.yaml, _helpers.tpl, Chart.yaml, redis-config.yaml, redis-service.yaml, storageclass.yaml, postgres-app-secret.yaml, backend-deployment.yaml, seaweedfs-s3-secret.yaml, seaweedfs-values.yaml, .dockerignore, .dockerignore.web)
-**Status:** issues_found
+**Files Reviewed:** 19
+**Status:** issues_found (no new Critical / no regression in the CR-01 fix)
 
 ## Summary
 
-This is a pure-infrastructure phase: three container images, two nginx configs, a Helm umbrella chart, and four bash orchestration scripts. Container hardening is largely solid — all base images are digest-pinned, all app containers run non-root, frozen lockfiles are used, and the trivy gate is wired. Secret/ConfigMap separation is correct: no sensitive key leaks into the ConfigMap, and the plaintext-placeholder-for-local-k3d pattern is documented and intentional (Phase 119 seals it), so it is not flagged as a leak.
+This is iteration 2, focused on confirming the iteration-1 fixes are internally
+consistent and introduced no regressions. The primary goal — verifying the CR-01
+service-DNS-divergence fix — is **CONFIRMED RESOLVED**. The chart now names stateful
+services, builds `DATABASE_URL` / `REDIS_URL`, and runs the migrate wait-loop on one
+consistent basis, and `helm install <any-name> ./clubcore` is correct.
 
-The most serious problem is a latent service-discovery bug: half the chart names resources with `Release.Name` and the other half with the `clubcore.fullname` helper, which only collapse to the same string when the release is literally named `clubcore`. The deploy scripts hard-code that release name, so local validation passes and the bug stays hidden. Several secondary issues weaken the stated supply-chain/secret-exclusion guarantees (the web `.dockerignore` is never applied by Docker) and the deploy-time tag/manifest contract.
+**CR-01 trace (the load-bearing verification):**
 
-## Narrative Findings (AI reviewer)
+- **Postgres leg** — CNPG `Cluster` is named `{{ include "clubcore.fullname" . }}-postgres`
+  (`postgres-cluster.yaml:27`). CNPG derives the `-rw` service from the cluster name,
+  so the read-write service is `<fullname>-postgres-rw`. `DATABASE_URL` in
+  `app-secret.yaml:60` is built with `(include "clubcore.fullname" .)` → host
+  `<fullname>-postgres-rw`. The migrate `initContainer` wait-loop (`migrate-job.yaml:110,120`)
+  also targets `<fullname>-postgres-rw`. All three agree. ✓
+- **Redis leg** — StatefulSet, headless Service, and `serviceName` all use
+  `<fullname>-redis` (`redis-statefulset.yaml:19,24`, `redis-service.yaml:16`).
+  `REDIS_URL` in `app-configmap.yaml:51` is built with `(include "clubcore.fullname" .)`
+  → `redis://<fullname>-redis:6379/0`. All agree. ✓
+- **SeaweedFS leg** — `S3_ENDPOINT_URL` (`app-configmap.yaml:59`) and the S3 identity
+  Secret name (`seaweedfs-s3-secret.yaml:34`) both use `.Release.Name`, which is the
+  **correct** basis for a subchart dependency (a subchart derives its own resource names
+  from `.Release.Name`, not the parent's `fullname`). The fixer correctly did NOT convert
+  these to `clubcore.fullname` — doing so would have re-introduced divergence against the
+  subchart's own naming. `seaweedfs.s3.existingConfigSecret` is a fixed literal read
+  identically by both the producing Secret and the subchart lookup, so they agree for any
+  release name. ✓
 
-## Critical Issues
+The mixed basis (`fullname` for first-party resources, `Release.Name` for the subchart)
+is internally consistent because each reference matches the naming basis of the resource
+it points at. No CR-01 regression.
 
-### CR-01: Service DNS breaks for any release name not containing "clubcore"
+**Other iteration-1 fixes confirmed:**
 
-**File:** `infra/helm/clubcore/templates/app-secret.yaml:55`, `infra/helm/clubcore/templates/app-configmap.yaml:49`, `infra/helm/clubcore/templates/migrate-job.yaml:110,113,141,143`, `infra/helm/clubcore/templates/backend-deployment.yaml:89,91`
+- **`clubcore.image` required-tag guard** (`_helpers.tpl:80-83`) — `required` on
+  `.Values.image.tag` fires before `printf`, so a missing tag fails loudly. Used uniformly
+  across migrate Job, backend/arq/telegram Deployments. `values.yaml:18` keeps `tag: ""`.
+  `deploy-local.sh:103,131` and the `helm lint` path all pass `--set image.tag=${TAG}`. ✓
+- **scan-images.sh fail-closed-in-CI** (`scan-images.sh:56-67`) — `REQUIRE_TRIVY=1`
+  branch exits 1 when trivy is absent (before the operator-pending `exit 0`); diagnostics
+  on stderr. `set -euo pipefail` present. ✓
+- **migrate single-wait-loop** (`migrate-job.yaml:108-134`) — the outer shell `until`
+  loop was removed; the Python wait runs once with its own 240s deadline, `set -e` fails
+  the initContainer on non-zero exit, and the Job `activeDeadlineSeconds: 300` is the outer
+  backstop (240 < 300, so the timeout message reaches logs before force-kill). Logic is
+  sound; both the success path (`sys.exit(0)`) and failure path (`sys.exit(1)`) are reachable. ✓
 
-**Issue:** The chart is internally inconsistent about how it derives resource names. Stateful resources and their services are named with the `clubcore.fullname` helper:
+Remaining issues are NEW quality/reliability concerns (the frontend build context lacks a
+`.dockerignore`) plus latent multi-tenancy items — none block this phase given the local-k3d
+scope and the explicit Phase-119 deferrals.
 
-- CNPG `Cluster` → `{{ include "clubcore.fullname" . }}-postgres` ⇒ CNPG auto-creates service `<fullname>-postgres-rw` (`postgres-cluster.yaml:27`)
-- Redis `Service` and `StatefulSet.serviceName` → `{{ include "clubcore.fullname" . }}-redis` (`redis-service.yaml:16`, `redis-statefulset.yaml:24`)
+## Known / Deferred (NOT re-flagged as new Criticals)
 
-But the connection strings and `envFrom` references that must point at those services are built from `.Release.Name`:
-
-- `DATABASE_URL: postgresql+asyncpg://app:%s@%s-postgres-rw:5432/clubcore` using `.Release.Name` (`app-secret.yaml:55`)
-- `REDIS_URL: redis://%s-redis:6379/0` using `.Release.Name` (`app-configmap.yaml:49`)
-- migrate-job wait-loop polls `{{ include "clubcore.fullname" . }}-postgres-rw` (correct) but the `DATABASE_URL` it loads from the Secret points at `{{ .Release.Name }}-postgres-rw` (wrong) — they disagree with each other inside the same Job.
-
-Per `_helpers.tpl:13-24`, `fullname` returns `.Release.Name` only when `Release.Name` *contains* the chart name `clubcore`; otherwise it returns `<Release.Name>-clubcore`. So with `helm install foo ./clubcore`:
-- Postgres service = `foo-clubcore-postgres-rw`, but `DATABASE_URL` host = `foo-postgres-rw` → DNS NXDOMAIN, backend and migrate Job cannot connect.
-- Redis service = `foo-clubcore-redis`, but `REDIS_URL` host = `foo-redis` → ARQ/cache/session backend cannot connect.
-
-This is masked locally only because `deploy-local.sh:37` and `k3d-up.sh:27` hard-code `RELEASE_NAME="clubcore"`. Any other release name (multi-tenant install, staging side-by-side, or a Phase-119 rename) silently produces a non-functional cluster.
-
-**Fix:** Use one naming source consistently. Since the services are named via `clubcore.fullname`, the connection strings must use the same helper:
-```yaml
-# app-secret.yaml
-DATABASE_URL: {{ printf "postgresql+asyncpg://app:%s@%s-postgres-rw:5432/clubcore" .Values.postgres.password (include "clubcore.fullname" .) | quote }}
-
-# app-configmap.yaml
-REDIS_URL: {{ .Values.config.redisUrl | default (printf "redis://%s-redis:6379/0" (include "clubcore.fullname" .)) | quote }}
-```
-Also align the ConfigMap/Secret object names (`{{ .Release.Name }}-config`, `-app-secret`) and all `envFrom` references to a single helper, and make `postgres.appSecretName` / `s3` secret names release-scoped rather than the hard-coded literal `clubcore-...`. Add a `helm template foo ./clubcore` (non-"clubcore" release name) render check to the deploy gate so this divergence cannot regress.
+- **WR-04 (Redis runs as root, `bind 0.0.0.0`, no auth, no NetworkPolicy)** — explicit
+  Phase-119 deferral (SEC-03 + NET + sealed-secrets). `redis-config.yaml:38-49` and
+  `redis-statefulset.yaml:40` carry TODO Phase-119 markers. Recorded as a known item, not a
+  new blocker.
+- **Plaintext secret placeholders in `values.yaml`** (postgres password, secretKey, S3 keys,
+  telegram token) — documented LOCAL-k3d-only pattern; every Secret template carries the
+  `clubcore.io/replace-with-sealed-secret: "phase-119-sec-01"` annotation. Not a leak.
+- **Render verification (helm / k3d / trivy / kubeconform)** — tooling not installed in this
+  environment; reasoned statically. All findings below derive from source inspection, not a
+  live render.
 
 ## Warnings
 
-### WR-01: Web `.dockerignore` is never applied — `.env*`/`.git` exclusion (T-118-03) not enforced
+### WR-01: Frontend image builds ship the host `node_modules` / `.git` / `.planning` into the build context (no root `.dockerignore`)
 
-**File:** `infra/docker/.dockerignore.web:1`, `infra/docker/admin-app.Dockerfile:9`, `infra/docker/client-pwa.Dockerfile:10`
+**File:** `infra/docker/admin-app.Dockerfile:39`, `infra/docker/client-pwa.Dockerfile:40`, `infra/scripts/build-images.sh:60,70` (build context = repo root)
+**Issue:** Both frontend Dockerfiles use the **repo root** as their build context
+(`build-images.sh` passes `"${REPO_ROOT}"`). There is **no root `.dockerignore`** — only
+`apps/backend/.dockerignore` exists, and it does not apply to the root context. Two distinct
+problems result:
 
-**Issue:** Docker only honors a `.dockerignore` located at the root of the build context, or (with BuildKit) a file named `<dockerfile-basename>.dockerignore` next to the Dockerfile *and resolved relative to the context*. The frontend images build with context = repo root (`build-images.sh:51,61`) and the Dockerfile lives at `infra/docker/admin-app.Dockerfile`. A file at `infra/docker/.dockerignore.web` matches none of these rules and is silently ignored. The comment claims it enforces T-118-03 ("Environment files never in build context"), but in practice the entire repo root — including `.git/`, root `.env*`, and every `node_modules/` — is sent to the daemon. Secrets are not *baked into image layers* (the Dockerfiles `COPY` only explicit paths), so this is not a CR, but the stated supply-chain/secret-exclusion guarantee is not actually realized, and the large context slows every build.
+1. **Build-corruption risk (reliability).** After the frozen-lockfile `pnpm install`, the
+   Dockerfiles run `COPY apps/admin-app/ ./apps/admin-app/` and
+   `COPY packages/api-client/ ./packages/api-client/`. With no ignore rules, these COPY
+   commands pull in the developer's **host** `node_modules` (verified present:
+   `apps/admin-app/node_modules` = 357M, `packages/api-client/node_modules`) and host `dist/`
+   directories on top of the clean in-image install. A macOS-built `node_modules` copied into
+   `node:20-alpine` can shadow the clean install with platform-mismatched native binaries and
+   stale workspace symlinks — a classic "passes on a fresh checkout, breaks from a dev
+   machine" failure. This was not caught because the review environment cannot run `docker build`.
+2. **Context bloat (build hygiene).** The daemon receives `node_modules` (796M root +
+   357M admin-app), `.git` (72M), and `.planning` (27M) on every frontend build — ~1.2GB of
+   irrelevant context that also busts the layer cache whenever any of those change.
 
-**Fix:** Either place the ignore rules in a real `.dockerignore` at the repo root, or rename per BuildKit convention so it resolves against the context — e.g. `infra/docker/admin-app.Dockerfile.dockerignore` and `client-pwa.Dockerfile.dockerignore` (with `# syntax=docker/dockerfile:1.7` already present, BuildKit looks up `<path-to-Dockerfile>.dockerignore`). Verify by adding a root `.env` and confirming it is absent from the build context (`docker build --no-cache` + check it is not COPYable).
+**Fix:** Add a root `.dockerignore` (the build context root) so the frontend builds are
+reproducible regardless of host working-tree state:
+```gitignore
+# /.dockerignore — applies to repo-root build context (frontend images)
+**/node_modules
+**/dist
+**/.venv
+.git
+.planning
+**/.turbo
+**/coverage
+**/*.log
+.env*
+```
+The backend image is unaffected (it builds from `apps/backend/` and already has its own
+`.dockerignore`), but consider adding `**/node_modules` + `dist` symmetry there as well.
 
-### WR-02: build-images.sh and Helm default tag can silently disagree (dirty tree / uncommitted build)
+### WR-02: First-party stateful Secrets / StorageClass use fixed literal names, so two releases collide in one namespace
 
-**File:** `infra/scripts/build-images.sh:28`, `infra/scripts/deploy-local.sh:77`, `infra/helm/clubcore/values.yaml:14`
-
-**Issue:** Both scripts derive the tag from `git rev-parse --short HEAD`, but neither checks for a dirty working tree. If images are built from uncommitted changes, the tag reflects the parent commit while the image contents do not — two different image builds can share one tag, defeating the IMG-04 "immutable tag" intent. Separately, `values.yaml:14` hard-codes `tag: "6e42d106"`; `migrate-job.yaml` / `backend-deployment.yaml` consume `.Values.image.tag` directly. `deploy-local.sh` always passes `--set image.tag=$TAG`, but anyone running `helm install` manually (or `helm template` for the kubeconform gate without `--set`, e.g. CI on a different checkout) gets the stale pinned tag, pulling/failing on an image that may not exist locally.
-
-**Fix:** In both scripts, fail or append `-dirty` when `! git diff --quiet || ! git diff --cached --quiet`. Consider making `values.yaml` `image.tag` empty with a `required` guard, or document that it must be overridden, so a stale literal can never be silently deployed.
-
-### WR-03: scan-images.sh exits 0 when trivy is absent — gate is bypassable
-
-**File:** `infra/scripts/scan-images.sh:35-53`
-
-**Issue:** When `trivy` is not on PATH the script prints an "OPERATOR-PENDING" warning and `exit 0`. If `scan-images.sh` is wired into an automated pipeline (the header and `build-images.sh:75` present it as the next step), a CI runner without trivy installed turns the HIGH/CRITICAL CVE gate into a no-op while reporting success. The D-V40-LOCAL-VALIDATE "no fabricated evidence" intent is honored for a human operator, but for an automated gate this is a security control that silently fails open.
-
-**Fix:** Add an opt-in strict mode, e.g. `if [[ "${REQUIRE_TRIVY:-0}" == "1" ]]; then err "trivy required"; fi` before the soft-exit, and have any CI invocation set `REQUIRE_TRIVY=1`. At minimum emit the warning to stderr so it is visible in failing-fast pipelines.
-
-### WR-04: Redis is reachable cluster-wide with no auth and `bind 0.0.0.0`
-
-**File:** `infra/helm/clubcore/templates/redis-config.yaml:38-45`, `infra/helm/clubcore/templates/redis-statefulset.yaml:39-40`
-
-**Issue:** `redis.conf` sets `bind 0.0.0.0` with no `requirepass` and `protected-mode` left at default (which Redis disables once an explicit `bind` is present). The headless Service exposes 6379 cluster-wide and there is no NetworkPolicy. Any pod in the cluster — including a compromised frontend or a future tenant — can read/write/`FLUSHALL` the session/cache/queue store. `runAsNonRoot: false` (`redis-statefulset.yaml:40`) additionally leaves the Redis container running as root. Both are explicitly tagged as Phase-119 deferrals in-code, so this is a documented gap rather than an oversight, but it is a real exposure if anything ships before Phase 119 hardening lands.
-
-**Fix:** Track as a hard Phase-119 prerequisite: add `requirepass` from a Secret (and `REDIS_URL` with credentials), set `runAsNonRoot: true` + `runAsUser: 999`, and add a NetworkPolicy restricting 6379 to backend/arq pods. Until then, do not expose this cluster to any untrusted workload.
-
-### WR-05: migrate-job double-loops the postgres wait with conflicting deadlines
-
-**File:** `infra/helm/clubcore/templates/migrate-job.yaml:108-127`
-
-**Issue:** The init wait runs `until python3 -c "...inner 240s deadline loop..."; do sleep 1; done`. The inner Python already loops to a 240s deadline and `sys.exit(1)` on timeout; the outer `until ... do sleep 1; done` then *retries the whole 240s Python loop forever* on that non-zero exit, relying solely on the Job's `activeDeadlineSeconds: 300` to terminate. With `set -e` active this is the only thing that stops an unreachable-Postgres Job from hanging at the outer loop. The two timeout mechanisms (inner 240s, Job 300s) overlap confusingly and the outer `until` is logically dead code on the success path and a near-infinite retry on the failure path.
-
-**Fix:** Drop the outer `until/do/done` and run the Python wait once — let its own deadline + the Job `activeDeadlineSeconds` govern. Ensure the inner deadline (240s) is comfortably below `activeDeadlineSeconds` (300s) so the Python timeout message reaches the logs before the Job is force-killed.
-
-### WR-06: deploy-local.sh smoke check (a) treats missing/false Job status as a hard fail but swallows wait errors
-
-**File:** `infra/scripts/deploy-local.sh:136-148`
-
-**Issue:** `kubectl wait job ... --for=condition=Complete ... 2>/dev/null || true` discards both the timeout and any error (e.g. the Job condition becoming `Failed`). The subsequent `status.succeeded` read defaults to `"0"` via `|| echo "0"`, so a *Failed* migration and a *still-running* migration both surface identically as `succeeded = '0'`. With `set -e`, the `|| true` is required to avoid aborting, but it also masks the distinct "Job Failed" signal that an operator most needs. The smoke summary then reports a generic failure without the underlying Job condition.
-
-**Fix:** After the wait, also read `.status.failed` and `.status.conditions[?(@.type=="Failed")]` and report the distinction (Failed vs Timed-out vs Running). Capture `kubectl wait` stderr to a log rather than `2>/dev/null` so the operator sees why it failed.
+**File:** `infra/helm/clubcore/values.yaml:48,128,27`; `postgres-app-secret.yaml:24`; `seaweedfs-s3-secret.yaml:34`; `storageclass.yaml:14`
+**Issue:** The CR-01 fix made the app config/services release-name-correct, but three
+resource names remain **hardcoded literals** rather than `fullname`/`Release.Name`-scoped:
+`postgres.appSecretName: clubcore-postgres-app`, `seaweedfs.s3.existingConfigSecret:
+clubcore-seaweedfs-s3`, and `storageClass.name: clubcore-retain`. These are internally
+consistent (producer and consumer read the same literal), so they do not break the
+"any release name" goal for a single install — but installing **two** releases of this
+chart into the same namespace would collide on the Postgres app Secret and the SeaweedFS
+identity Secret, and the cluster-scoped StorageClass collides even across different
+namespaces. For the documented single-node v4.0 scope this is latent, not active — hence
+Warning, not Blocker.
+**Fix:** Either document the single-release-per-cluster constraint explicitly, or derive the
+namespaced Secret names from `clubcore.fullname` (and gate StorageClass creation behind a
+`storageClass.create` flag so the shared cluster-scoped object is created once):
+```yaml
+# values.yaml
+postgres:
+  appSecretName: ""   # empty = derive {{ include "clubcore.fullname" . }}-postgres-app
+```
+```yaml
+# postgres-app-secret.yaml
+name: {{ .Values.postgres.appSecretName | default (printf "%s-postgres-app" (include "clubcore.fullname" .)) }}
+```
 
 ## Info
 
-### IN-01: HEALTHCHECK urlopen has no explicit timeout
+### IN-01: `deploy-local.sh` smoke checks hardcode `RELEASE_NAME="clubcore"` and `${RELEASE_NAME}-retain`
 
-**File:** `infra/docker/backend.Dockerfile:71`
+**File:** `infra/scripts/deploy-local.sh:37,147,248-253`
+**Issue:** The smoke checks reference `${RELEASE_NAME}-migrate` and the StorageClass
+`${RELEASE_NAME}-retain`. The StorageClass check only passes because `RELEASE_NAME=clubcore`
+*coincidentally* equals `storageClass.name=clubcore-retain`; if the release were renamed the
+StorageClass lookup (`clubcore-retain`, a fixed literal) would diverge from
+`${RELEASE_NAME}-retain`. This is a local-script convenience constant, not a chart defect,
+but the coupling is fragile.
+**Fix:** Read the StorageClass name from values (`helm get values` / a `--set` echo) or pin a
+`STORAGECLASS_NAME="clubcore-retain"` constant separate from `RELEASE_NAME`.
 
-**Issue:** `urllib.request.urlopen('http://127.0.0.1:8000/healthz')` has no `timeout` argument; it relies entirely on the `HEALTHCHECK --timeout=3s` to bound a hung connection. If Docker's timeout enforcement is loose under load, the probe process can linger.
+### IN-02: tag-derivation logic duplicated across three scripts; `scan-images.sh` omits the dirty suffix
 
-**Fix:** Pass an explicit timeout: `urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)`.
+**File:** `infra/scripts/build-images.sh:32-37`, `infra/scripts/deploy-local.sh:79-83`, `infra/scripts/scan-images.sh:26`
+**Issue:** The `<sha>` / `<sha>-dirty` tag logic is duplicated in three scripts. `build` and
+`deploy-local` both reproduce the dirty-suffix branch; `scan-images` derives only the bare
+SHA (`TAG="${TAG:-$(git rev-parse --short HEAD)}"`) with no dirty suffix. On a dirty tree,
+`build-images.sh` produces `clubcore/backend:<sha>-dirty`, but a bare `scan-images.sh` (no
+`TAG=` override) would scan `clubcore/backend:<sha>` — a non-existent tag. The header comments
+tell the operator to pass `TAG=` explicitly, so this is a documented foot-gun rather than a bug.
+**Fix:** Factor tag derivation into a shared `infra/scripts/_tag.sh` sourced by all three, so
+the dirty-suffix rule is defined once.
 
-### IN-02: build-images.sh comments describe React 18, project is React 19
+### IN-03: Header comment drift — frontends are React 19, `build-images.sh` says "React 18"
 
 **File:** `infra/scripts/build-images.sh:14-15`
-
-**Issue:** Comments say "React 18 + TanStack" / "React 18 + vite-plugin-pwa", but CLAUDE.md and package manifests specify React 19. Stale documentation only; no behavioral impact.
-
-**Fix:** Update the comments to React 19.
-
-### IN-03: redis-statefulset comment claims TZ via env but P9 contract is envFrom ConfigMap
-
-**File:** `infra/helm/clubcore/templates/redis-statefulset.yaml:54-57`
-
-**Issue:** Redis sets `TZ=UTC` via an inline `env` entry while every other workload gets `TZ` from the `clubcore-config` ConfigMap (the documented P9 mechanism). This works, but it is a second source of truth for the same invariant; if the ConfigMap value ever changes, Redis will drift. The smoke check `check_tz`/Redis branch in `deploy-local.sh:185-199` reads `env` so it still passes either way.
-
-**Fix:** Optionally consume `TZ` from the ConfigMap via `envFrom` for consistency, or add a comment noting the intentional divergence (alpine Redis image without the ConfigMap mounted).
-
-### IN-04: app-secret/app-configmap header comments list "YooKassa keys" but no such key is templated
-
-**File:** `infra/helm/clubcore/templates/app-configmap.yaml:9`, `infra/helm/clubcore/templates/app-secret.yaml`
-
-**Issue:** The ConfigMap invariant comment enumerates "YooKassa keys" among sensitive keys that must live in the Secret, but neither template defines any YooKassa key. Either a payment-provider secret was dropped from this phase or the comment is aspirational. Worth confirming the backend does not expect `YOOKASSA_*` env vars at startup (config.py), since a missing required SecretStr would fail-fast the pods.
-
-**Fix:** Verify backend config requirements; either add the YooKassa keys to `app-secret.yaml` (sensitive) or remove the misleading reference from the comment.
+**Issue:** Comments describe the frontends as "React 18 + TanStack". Per CLAUDE.md the stack is
+React 19.2.5. Cosmetic, but worth correcting to avoid future confusion.
+**Fix:** Update the comment to "React 19".
 
 ---
 
 _Reviewed: 2026-06-16_
 _Reviewer: Claude (gsd-code-reviewer)_
-_Depth: standard_
+_Depth: standard (iteration 2 re-review)_
