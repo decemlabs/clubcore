@@ -36,6 +36,7 @@ Allow edges defined (per workload):
   backend → CoreDNS:53         (P8 mandatory — UDP+TCP)
   arq-worker → redis:6379      (ARQ job queue)
   arq-worker → postgres-rw:5432 (background task DB access)
+  arq-worker → seaweedfs-s3:8333 (storage client at worker startup + media forward)
   arq-worker → CoreDNS:53      (P8 mandatory — UDP+TCP)
   telegram-bot → redis:6379    (Telegram bot uses Redis for state)
   telegram-bot → postgres-rw:5432 (Telegram bot reads DB)
@@ -51,8 +52,11 @@ Selector notes:
   - Traefik ingress controller runs in kube-system; selector uses namespaceSelector
     with a port match. If the operator has a more specific Traefik pod label, tighten
     the selector after: kubectl get pods -n kube-system --show-labels
-  - SeaweedFS S3 pod labels may vary — the port match (8333) is sufficient as-is;
-    tighten the namespaceSelector if SeaweedFS runs in a dedicated namespace.
+  - SeaweedFS is a SUBCHART: its pods carry app.kubernetes.io/name=seaweedfs +
+    app.kubernetes.io/instance=<release> + (S3 gateway) component=s3 — NOT
+    clubcore.selectorLabels. The backend→S3 and arq-worker→S3 rules below match
+    those subchart labels explicitly; add a namespaceSelector if SeaweedFS runs in
+    a dedicated namespace.
   - CNPG pods carry label cnpg.io/cluster=<fullname>-postgres — already matched below.
 
 Gate: networkPolicy.enabled (same gate as default-deny — always apply together).
@@ -129,14 +133,22 @@ spec:
         - protocol: TCP
           port: 6379
     # ── SeaweedFS S3 API :8333 ────────────────────────────────────────────────
-    # SeaweedFS runs as a subchart; pod labels depend on the subchart version.
-    # Using a namespace-scoped port match (port 8333) is sufficient for same-namespace.
-    # OPERATOR NOTE: if SeaweedFS is in a different namespace, add a namespaceSelector.
-    # Tighten selector after: kubectl get pods --show-labels | grep seaweedfs
+    # SeaweedFS runs as the `seaweedfs` Helm SUBCHART (Chart.yaml dep v4.33.0).
+    # Its pods do NOT carry clubcore.selectorLabels — they carry the subchart's
+    # own standard labels: app.kubernetes.io/name=seaweedfs,
+    # app.kubernetes.io/instance=<release>, and the S3 gateway pods additionally
+    # carry app.kubernetes.io/component=s3 (s3.enabled: true → dedicated S3 svc
+    # <release>-seaweedfs-s3:8333). We therefore match the subchart labels, NOT
+    # clubcore.selectorLabels (which matched ZERO SeaweedFS pods → S3 outage).
+    # OPERATOR NOTE: if SeaweedFS is deployed to a different namespace, add a
+    #   namespaceSelector alongside the podSelector.
+    # Verify labels after deploy: kubectl get pods --show-labels | grep seaweedfs
     - to:
         - podSelector:
             matchLabels:
-              {{- include "clubcore.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/name: seaweedfs
+              app.kubernetes.io/instance: {{ .Release.Name }}
+              app.kubernetes.io/component: s3
       ports:
         - protocol: TCP
           port: 8333
@@ -192,6 +204,21 @@ spec:
       ports:
         - protocol: TCP
           port: 5432
+    # ── SeaweedFS S3 API :8333 ────────────────────────────────────────────────
+    # ARQ tasks build the storage client at worker startup
+    # (app/workers/__init__.py build_storage) and forward_to_staff handles media —
+    # so arq-worker needs the same SeaweedFS subchart S3 egress as backend, or
+    # default-deny severs it. Matches the subchart's standard labels (NOT
+    # clubcore.selectorLabels). See the backend policy header note above.
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: seaweedfs
+              app.kubernetes.io/instance: {{ .Release.Name }}
+              app.kubernetes.io/component: s3
+      ports:
+        - protocol: TCP
+          port: 8333
 ---
 # ─────────────────────────────────────────────────────────────────────────────
 # Policy 3: telegram-bot — egress to redis + postgres + internet:443 + CoreDNS
