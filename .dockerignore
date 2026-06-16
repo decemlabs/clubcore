@@ -1,0 +1,57 @@
+# Root build-context .dockerignore (WR-01 belt-and-suspenders, Phase 118).
+#
+# The frontend image builds (admin-app, client-pwa) use the repo root as their
+# build context. The per-Dockerfile ignore files at
+# infra/docker/<name>.Dockerfile.dockerignore are honored by BuildKit, but the
+# legacy builder only ever reads THIS root .dockerignore. Keeping the same
+# exclusions here guarantees host node_modules (macOS-native binaries), dist
+# output, git/planning metadata, and .env files never enter the build context
+# regardless of which builder runs — preventing build corruption and ~1.2GB of
+# context bloat.
+#
+# NOTE: the backend image builds with context apps/backend/ (NOT repo root), so
+# this file does not affect it — apps/backend/.dockerignore covers that build.
+
+# Local dependency installs (reinstalled fresh inside the build container)
+node_modules/
+**/node_modules/
+
+# Existing build output (produced inside the container, not copied from host)
+apps/admin-app/dist/
+apps/client-pwa/dist/
+**/dist/
+
+# Backend source (not needed for frontend builds)
+apps/backend/
+
+# Test and tooling artifacts
+**/__pycache__/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/coverage/
+**/htmlcov/
+**/.coverage
+
+# Git and editor metadata
+.git/
+.gitignore
+**/.gitkeep
+
+# Planning and docs
+.planning/
+*.md
+**/CLAUDE.md
+
+# Environment files (never in build context — T-118-03)
+**/.env*
+
+# TypeScript build info (stale artifacts)
+**/*.tsbuildinfo
+
+# Design assets (not needed for production builds)
+apps/admin-app/design/
+apps/client-pwa/plans/
+
+# Local worktrees / agent scratch (must never enter a build context)
+.claude/

@@ -11,8 +11,8 @@
 #      - arq-worker   → command: arq app.workers.WorkerSettings       (Helm/compose override)
 #      - migrate      → command: alembic upgrade head                 (Helm/compose override)
 #      No separate Dockerfile is needed for the other 3 Python workloads.
-#   2. clubcore/admin-app:<sha> — staff admin panel (React 18 + TanStack, nginx static)
-#   3. clubcore/client-pwa:<sha>— client PWA (React 18 + vite-plugin-pwa, nginx static)
+#   2. clubcore/admin-app:<sha> — staff admin panel (React 19 + TanStack, nginx static)
+#   3. clubcore/client-pwa:<sha>— client PWA (React 19 + vite-plugin-pwa, nginx static)
 #
 # Usage:
 #   cd /path/to/clubcore && bash infra/scripts/build-images.sh
