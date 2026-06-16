@@ -177,5 +177,24 @@ No new network endpoints or auth paths introduced. All files are Terraform HCL a
 - Phase 121 (OPS-01): root `Makefile` exists; Phase 121 can append additional targets without conflict
 
 ---
+## Self-Check: PASSED
+
+| Item | Status |
+|------|--------|
+| infra/terraform/host/main.tf | FOUND |
+| infra/terraform/host/variables.tf | FOUND |
+| infra/terraform/host/terraform.tfvars.example | FOUND |
+| infra/terraform/cluster/main.tf | FOUND |
+| infra/terraform/cluster/variables.tf | FOUND |
+| infra/terraform/cluster/terraform.tfvars.example | FOUND |
+| Makefile | FOUND |
+| 120-01-SUMMARY.md | FOUND |
+| Commit e69ee2b3 (Task 1) | FOUND |
+| Commit 079df78d (Task 2) | FOUND |
+| Commit 4ba1475e (Task 3) | FOUND |
+| Commit be27ebe5 (metadata) | FOUND |
+
+---
+
 *Phase: 120-iac-observability-backup*
 *Completed: 2026-06-16*
