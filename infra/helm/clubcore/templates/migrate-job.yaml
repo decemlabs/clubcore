@@ -1,0 +1,175 @@
+{{/*
+migrate-job.yaml — Alembic migration Helm pre-install/pre-upgrade hook Job (APP-01)
+
+P4 ARCHITECTURAL INVARIANT — the following are acceptance criteria, NOT tuning knobs:
+  - helm.sh/hook: pre-install,pre-upgrade          (runs BEFORE any app pod starts)
+  - helm.sh/hook-weight: "-5"                      (earlier than other hooks at weight 0)
+  - helm.sh/hook-delete-policy: before-hook-creation (clean reruns — removes prior Job)
+  - backoffLimit: 0                                 (no silent retry of a partial migration)
+  - activeDeadlineSeconds: 300                      (hard timeout — hung migration is fatal)
+  - restartPolicy: Never                            (Job semantics, not restart loop)
+
+These values encode the architectural invariant that migrations MUST complete
+(status: Succeeded) BEFORE any backend/worker pod reaches Ready. Relaxing any of
+these values creates a migrate-races-API window that can corrupt startup or leave
+a half-applied schema.
+
+CROSS-REFERENCE — plan 04 belt-and-suspenders:
+  The backend Deployment (plan 04) adds an initContainer that runs `alembic check`
+  to assert the schema is up-to-date before the main container starts. This provides
+  belt-and-suspenders protection: the Job (hook) migrates; the initContainer verifies.
+  The initContainer does NOT run migrations — it only gates the pod on schema currency.
+
+Image:
+  Shared backend image from plan 01: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+  Same git-SHA-pinned image that passed the plan-01 trivy gate (T-118-SC).
+  Command override: alembic upgrade head (mirrors docker-compose.yml migrate service).
+
+Environment:
+  envFrom: configMapRef clubcore-config (TZ=UTC, ENVIRONMENT, etc.)
+          + secretRef clubcore-app-secret (DATABASE_URL → clubcore-postgres-rw)
+
+Postgres wait initContainer:
+  Mirrors compose `depends_on: postgres healthy` invariant.
+  Uses pg_isready (included in postgres:16 client tools) or a TCP-ready loop.
+  The CNPG -rw service may not accept connections the instant the hook fires
+  (CNPG operator reconcile loop has latency on fresh install); the initContainer
+  polls until the service is reachable before running alembic upgrade head.
+
+Security context:
+  runAsNonRoot: true stub — full SEC-03 securityContext hardening is Phase 119 scope.
+  runAsUser: 1000 (matches the "app" user created in backend.Dockerfile).
+*/}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "clubcore.fullname" . }}-migrate
+  labels:
+    {{- include "clubcore.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrate
+  annotations:
+    # P4 invariant: hook runs migrations BEFORE app pods start (pre-install = fresh cluster,
+    # pre-upgrade = rolling upgrade — both phases require schema to be current first).
+    helm.sh/hook: pre-install,pre-upgrade
+    # Hook weight -5 ensures this Job runs before other hooks at weight 0.
+    # Negative weight = earlier execution in the hook ordering pass.
+    helm.sh/hook-weight: "-5"
+    # before-hook-creation: delete any prior Job of this name before creating a new one.
+    # Ensures helm upgrade reruns are clean — no "Job already exists" collision.
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  # ---------------------------------------------------------------------------
+  # P4 architectural invariants — DO NOT CHANGE:
+  # ---------------------------------------------------------------------------
+  # backoffLimit: 0 — no silent retry of a failed/partial migration.
+  # A failed migration must surface immediately (Job status Failed) so the
+  # operator knows to inspect logs before the next deploy attempt. A retry
+  # could apply migration steps twice on a partially-completed state.
+  backoffLimit: 0
+
+  # activeDeadlineSeconds — hard timeout for the entire Job (initContainer + main container).
+  # A hung migration (e.g., waiting for a lock that never clears) must not block
+  # the release indefinitely. 300s (5 min) is the P4 architectural minimum.
+  # Override via .Values.migrate.activeDeadlineSeconds if a specific migration
+  # is known to take longer, but NEVER set to 0 (infinite) — that breaks P4.
+  activeDeadlineSeconds: {{ .Values.migrate.activeDeadlineSeconds | default 300 }}
+
+  template:
+    metadata:
+      labels:
+        {{- include "clubcore.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: migrate
+    spec:
+      # Never restart the pod — Job-level backoffLimit: 0 controls failure handling.
+      restartPolicy: Never
+
+      # Security context stub (non-root user from backend.Dockerfile USER app).
+      # Full SEC-03 pod-level securityContext hardening is Phase 119 scope.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+
+      # -----------------------------------------------------------------------
+      # initContainer: wait for Postgres -rw service to accept connections
+      # Mirrors compose `depends_on: postgres healthy` (condition: service_healthy).
+      # The CNPG -rw service DNS = {{ include "clubcore.fullname" . }}-postgres-rw:5432
+      # CNPG operator reconcile latency on fresh install means the service may not
+      # be ready the moment the hook fires; this loop prevents a premature connect.
+      # -----------------------------------------------------------------------
+      initContainers:
+        - name: wait-for-postgres
+          # Use the same backend image — it includes tzdata + Python + psycopg deps.
+          # A postgres-client image is not pulled separately (supply-chain simplicity).
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "Waiting for Postgres at {{ include "clubcore.fullname" . }}-postgres-rw:5432 ..."
+              until python3 -c "
+              import socket, sys, time
+              host, port = '{{ include "clubcore.fullname" . }}-postgres-rw', 5432
+              deadline = time.time() + 240
+              while time.time() < deadline:
+                  try:
+                      s = socket.create_connection((host, port), timeout=2)
+                      s.close()
+                      print(f'Postgres reachable at {host}:{port}')
+                      sys.exit(0)
+                  except OSError:
+                      print(f'Waiting for {host}:{port} ...')
+                      time.sleep(2)
+              print(f'Timed out waiting for Postgres at {host}:{port}', file=sys.stderr)
+              sys.exit(1)
+              "; do sleep 1; done
+              echo "Postgres is ready — proceeding to alembic upgrade head"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+          # The initContainer needs DATABASE_URL (for the host/port) and TZ=UTC (P9).
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-config
+            - secretRef:
+                name: {{ .Release.Name }}-app-secret
+
+      # -----------------------------------------------------------------------
+      # Main container: alembic upgrade head
+      # -----------------------------------------------------------------------
+      containers:
+        - name: alembic-migrate
+          # Shared backend image from plan 01 (git-SHA-pinned, same trivy-gated image).
+          # Command override mirrors docker-compose.yml migrate service:
+          #   command: alembic upgrade head
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
+          command: ["alembic", "upgrade", "head"]
+
+          # Consume full env from ConfigMap (TZ=UTC, ENVIRONMENT) + Secret (DATABASE_URL).
+          # This is the same envFrom pattern as the backend/worker Deployments (plan 04).
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-config
+            - secretRef:
+                name: {{ .Release.Name }}-app-secret
+
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+
+          resources:
+            requests:
+              cpu: {{ .Values.migrate.resources.requests.cpu | default "100m" | quote }}
+              memory: {{ .Values.migrate.resources.requests.memory | default "128Mi" | quote }}
+            limits:
+              cpu: {{ .Values.migrate.resources.limits.cpu | default "500m" | quote }}
+              memory: {{ .Values.migrate.resources.limits.memory | default "512Mi" | quote }}
