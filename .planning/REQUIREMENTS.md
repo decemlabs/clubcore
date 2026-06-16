@@ -31,11 +31,11 @@
 
 ### App Workloads + Migration — Helm (APP)
 
-- [ ] **APP-01**: Alembic migrate как Helm `pre-install,pre-upgrade` hook Job (`backoffLimit=0`, `activeDeadlineSeconds: 300`, `hook-weight: -5`) + `alembic check` initContainer на backend (belt-and-suspenders)
+- [x] **APP-01**: Alembic migrate как Helm `pre-install,pre-upgrade` hook Job (`backoffLimit=0`, `activeDeadlineSeconds: 300`, `hook-weight: -5`) + `alembic check` initContainer на backend (belt-and-suspenders)
 - [ ] **APP-02**: backend Deployment — `replicas: 1`, startup/liveness/readiness пробы, `resources.requests`+`limits`, `TZ=UTC`
 - [ ] **APP-03**: arq-worker Deployment — `strategy: Recreate` + `replicas: 1` + `TZ=UTC` (anti cron double-fire; инвариант, не tuning)
 - [ ] **APP-04**: telegram-bot Deployment — `strategy: Recreate` + `replicas: 1` (anti long-polling double-consume)
-- [ ] **APP-05**: ConfigMap/Secret separation; маппинг переменных из `.env.example` в ConfigMap + Secret refs
+- [x] **APP-05**: ConfigMap/Secret separation; маппинг переменных из `.env.example` в ConfigMap + Secret refs
 
 ### Networking + Frontends + TLS (NET)
 
@@ -148,11 +148,11 @@
 | DATA-02 | Phase 118 | Complete |
 | DATA-03 | Phase 118 | Complete |
 | DATA-04 | Phase 118 | Complete |
-| APP-01 | Phase 118 | Pending |
+| APP-01 | Phase 118 | Complete |
 | APP-02 | Phase 118 | Pending |
 | APP-03 | Phase 118 | Pending |
 | APP-04 | Phase 118 | Pending |
-| APP-05 | Phase 118 | Pending |
+| APP-05 | Phase 118 | Complete |
 | NET-01 | Phase 119 | Pending |
 | NET-02 | Phase 119 | Pending |
 | NET-03 | Phase 119 | Pending |
