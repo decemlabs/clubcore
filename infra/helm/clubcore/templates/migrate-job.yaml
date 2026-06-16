@@ -49,17 +49,21 @@ metadata:
   labels:
     {{- include "clubcore.labels" . | nindent 4 }}
     app.kubernetes.io/component: migrate
-  annotations:
-    # P4 invariant: hook runs migrations BEFORE app pods start (pre-install = fresh cluster,
-    # pre-upgrade = rolling upgrade — both phases require schema to be current first).
-    helm.sh/hook: pre-install,pre-upgrade
-    # Hook weight -5 ensures this Job runs before other hooks at weight 0.
-    # Negative weight = earlier execution in the hook ordering pass.
-    helm.sh/hook-weight: "-5"
-    # before-hook-creation: delete any prior Job of this name before creating a new one.
-    # Ensures helm upgrade reruns are clean — no "Job already exists" collision.
-    helm.sh/hook-delete-policy: before-hook-creation
+  # v4.0 live-deploy fix: migrate is a NORMAL chart resource, NOT a helm pre-install hook.
+  # WHY: a pre-install hook runs BEFORE normal resources, so on a FIRST install the CNPG
+  # Cluster (a normal resource) does not exist yet → the migrate hook deadlocks waiting for
+  # Postgres (verified live). As a normal resource it is created alongside the Cluster; the
+  # wait-for-postgres initContainer gates migrate until Postgres is reachable, and the
+  # backend's alembic-check initContainer gates the backend on a migrated schema — so
+  # ordering (postgres → migrate → backend) resolves via init dependencies + `helm --wait`
+  # (which waits for BOTH the Job to complete AND the backend to be Ready; no hook-phase
+  # deadlock). ttlSecondsAfterFinished (below) auto-removes the completed Job so the next
+  # `helm upgrade` recreates + re-runs it — replacing the old hook-delete-policy re-run.
 spec:
+  # ttlSecondsAfterFinished: auto-delete the completed Job so a subsequent `helm upgrade`
+  # recreates it fresh (Jobs are immutable; this avoids an "already exists / immutable
+  # field" collision on re-run, now that migrate is a normal resource not a hook).
+  ttlSecondsAfterFinished: 600
   # ---------------------------------------------------------------------------
   # P4 architectural invariants — DO NOT CHANGE:
   # ---------------------------------------------------------------------------

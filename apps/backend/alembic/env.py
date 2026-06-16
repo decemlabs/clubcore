@@ -138,15 +138,28 @@ def _include_object(
 
 def do_run_migrations(connection: Connection) -> None:
     """Synchronous migration runner invoked via connection.run_sync()."""
-    from sqlalchemy import String
+    # Phase 108 / v4.0 fix: 7 revision IDs exceed Alembic's default
+    # alembic_version.version_num VARCHAR(32) (longest:
+    # 0036_payments_received_by_user_id_nullable = 42 chars).
+    # `version_num_col_type=String(255)` is NOT an honored EnvironmentContext.configure()
+    # kwarg — it is silently ignored (verified on a fresh DB: the column was created
+    # VARCHAR(32) and `alembic upgrade head` truncated at rev 0033 with
+    # StringDataRightTruncationError). Pre-create / widen the version table explicitly so a
+    # FRESH `alembic upgrade head` runs end-to-end. Both statements are idempotent: CREATE
+    # handles a fresh DB (wide from the start); ALTER widens a legacy VARCHAR(32) table.
+    connection.exec_driver_sql(
+        "CREATE TABLE IF NOT EXISTS alembic_version ("
+        "version_num VARCHAR(255) NOT NULL, "
+        "CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num))"
+    )
+    connection.exec_driver_sql(
+        "ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(255)"
+    )
 
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
         include_object=_include_object,  # Pitfall 1: skip raw-DDL GIN trgm indexes
-        # Phase 108: revision IDs exceed Alembic's default VARCHAR(32);
-        # use VARCHAR(255) to accommodate the project's long revision ID naming scheme.
-        version_num_col_type=String(255),
     )
     with context.begin_transaction():
         context.run_migrations()
