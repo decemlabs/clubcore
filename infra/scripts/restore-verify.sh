@@ -96,6 +96,13 @@ kubectl get crd clusters.postgresql.cnpg.io >/dev/null 2>&1 \
   || err "CNPG CRD clusters.postgresql.cnpg.io not found — is the CNPG operator installed?"
 
 # ── Step 1: Capture live row-count snapshot ───────────────────────────────────
+# CR-03: use an EXACT count(*) of a stable, always-non-empty core table (users —
+# the system always has at least one owner account, seeded at install). The
+# previous pg_class.reltuples sum is a planner ESTIMATE that is unset/-1 on a
+# freshly-restored, never-ANALYZEd cluster, so it proved nothing about restorability.
+# CR-04: FAIL CLOSED — a failed/empty/non-numeric/zero live count is a hard error,
+# NOT a silent default of 0 that can later "match" an empty scratch DB (false PASS).
+VERIFY_TABLE="${VERIFY_TABLE:-users}"
 step "1/6 — Capture live row-count snapshot from ${LIVE_CLUSTER_NAME} (READ-ONLY)"
 log "Connecting to live cluster read-write service: ${LIVE_CLUSTER_NAME}-rw.${LIVE_NAMESPACE}"
 LIVE_COUNT=$(kubectl exec -n "${LIVE_NAMESPACE}" \
@@ -103,14 +110,16 @@ LIVE_COUNT=$(kubectl exec -n "${LIVE_NAMESPACE}" \
      -l cnpg.io/cluster="${LIVE_CLUSTER_NAME}",cnpg.io/instanceRole=primary \
      -o jsonpath='{.items[0].metadata.name}')" \
   -- psql -U "${DB_OWNER}" -d "${DB_NAME}" -At \
-  -c "SELECT SUM(reltuples::bigint) FROM pg_class WHERE relkind='r' AND relnamespace NOT IN (SELECT oid FROM pg_namespace WHERE nspname LIKE 'pg_%' OR nspname='information_schema');" \
-  2>/dev/null || echo "0")
-log "Live row-count snapshot: ${LIVE_COUNT} rows (across all user tables)"
+  -c "SELECT count(*) FROM ${VERIFY_TABLE};") \
+  || err "Live count query failed (table ${VERIFY_TABLE}) — cannot verify restorability (FAIL CLOSED)"
+log "Live row-count snapshot: ${LIVE_COUNT} rows in ${VERIFY_TABLE}"
 
-if [ -z "${LIVE_COUNT}" ] || [ "${LIVE_COUNT}" = "0" ]; then
-    log "WARNING: live row count is 0 or empty — database may be empty or query failed"
-    log "         Proceeding with restore verification; mismatch will still be detected"
-fi
+# CR-04: reject empty / non-numeric / zero — a measurement we could not obtain (or
+# an empty core table) must never be reported as a passing verify.
+case "${LIVE_COUNT}" in
+    ''|*[!0-9]*) err "Live count empty or non-numeric ('${LIVE_COUNT}') — cannot verify (FAIL CLOSED)" ;;
+esac
+[ "${LIVE_COUNT}" = "0" ] && err "Live count for ${VERIFY_TABLE} is 0 — refusing to claim a passing verify (FAIL CLOSED)"
 
 # ── Step 2: Create scratch namespace and copy S3 credentials ─────────────────
 step "2/6 — Create scratch namespace ${SCRATCH_NAMESPACE}"
@@ -237,19 +246,22 @@ SCRATCH_POD=$(kubectl get pod -n "${SCRATCH_NAMESPACE}" \
     || err "No primary pod found in scratch cluster ${SCRATCH_CLUSTER_NAME}")
 
 log "Running row-count query on scratch cluster pod: ${SCRATCH_POD}"
+# CR-03: exact count(*) of the same stable table on the restored scratch cluster.
+# CR-04: FAIL CLOSED on a query failure rather than substituting a sentinel that
+# could be misread as a legitimate count.
 SCRATCH_COUNT=$(kubectl exec -n "${SCRATCH_NAMESPACE}" "${SCRATCH_POD}" \
   -- psql -U "${DB_OWNER}" -d "${DB_NAME}" -At \
-  -c "SELECT SUM(reltuples::bigint) FROM pg_class WHERE relkind='r' AND relnamespace NOT IN (SELECT oid FROM pg_namespace WHERE nspname LIKE 'pg_%' OR nspname='information_schema');" \
-  2>/dev/null || echo "-1")
+  -c "SELECT count(*) FROM ${VERIFY_TABLE};") \
+  || err "Row-count query on scratch cluster FAILED — backup may be corrupted or restore incomplete (FAIL CLOSED)"
 
 log "Live row count:    ${LIVE_COUNT}"
 log "Scratch row count: ${SCRATCH_COUNT}"
 
 # ── Step 6: Compare and alert on mismatch ────────────────────────────────────
 step "6/6 — Compare row counts and exit non-zero on mismatch"
-if [ "${SCRATCH_COUNT}" = "-1" ]; then
-    err "Row-count query on scratch cluster FAILED — backup may be corrupted or restore incomplete"
-fi
+case "${SCRATCH_COUNT}" in
+    ''|*[!0-9]*) err "Scratch count empty or non-numeric ('${SCRATCH_COUNT}') — backup may be corrupted or restore incomplete (FAIL CLOSED)" ;;
+esac
 
 if [ "${LIVE_COUNT}" != "${SCRATCH_COUNT}" ]; then
     err "ROW COUNT MISMATCH — live: ${LIVE_COUNT} vs scratch: ${SCRATCH_COUNT}

@@ -218,6 +218,14 @@ spec:
                   log "Live:    ${LIVE_CLUSTER_NAME} / ns=${LIVE_NAMESPACE}"
                   log "Scratch: ${SCRATCH_CLUSTER_NAME} / ns=${SCRATCH_NAMESPACE}"
 
+                  # CR-03: exact count(*) of a stable, always-non-empty core table
+                  # (users — the system always has >=1 owner account). The previous
+                  # pg_class.reltuples sum is a planner ESTIMATE that is unset/-1 on a
+                  # freshly-restored never-ANALYZEd cluster and proves nothing.
+                  # CR-04: FAIL CLOSED — a failed/empty/non-numeric/zero live count is a
+                  # hard error, never a silent 0 that "matches" an empty scratch (false PASS).
+                  VERIFY_TABLE="users"
+
                   # [1/6] Live row-count snapshot
                   log "[1/6] Capturing live row-count snapshot..."
                   LIVE_POD=$(kubectl get pod -n "${LIVE_NAMESPACE}" \
@@ -225,8 +233,12 @@ spec:
                     -o jsonpath='{.items[0].metadata.name}')
                   LIVE_COUNT=$(kubectl exec -n "${LIVE_NAMESPACE}" "${LIVE_POD}" \
                     -- psql -U "${DB_OWNER}" -d "${DB_NAME}" -At \
-                    -c "SELECT SUM(reltuples::bigint) FROM pg_class WHERE relkind='r' AND relnamespace NOT IN (SELECT oid FROM pg_namespace WHERE nspname LIKE 'pg_%' OR nspname='information_schema');" \
-                    2>/dev/null || echo "0")
+                    -c "SELECT count(*) FROM ${VERIFY_TABLE};") \
+                    || err "Live count query failed (table ${VERIFY_TABLE}) — cannot verify (FAIL CLOSED)"
+                  case "${LIVE_COUNT}" in
+                    ''|*[!0-9]*) err "Live count empty or non-numeric ('${LIVE_COUNT}') — cannot verify (FAIL CLOSED)" ;;
+                  esac
+                  [ "${LIVE_COUNT}" = "0" ] && err "Live count for ${VERIFY_TABLE} is 0 — refusing to claim a passing verify (FAIL CLOSED)"
                   log "[1/6] Live row count: ${LIVE_COUNT}"
 
                   # [2/6] Create SCRATCH namespace + copy credentials
@@ -305,16 +317,20 @@ spec:
                   SCRATCH_POD=$(kubectl get pod -n "${SCRATCH_NAMESPACE}" \
                     -l "cnpg.io/cluster=${SCRATCH_CLUSTER_NAME},cnpg.io/instanceRole=primary" \
                     -o jsonpath='{.items[0].metadata.name}')
+                  # CR-03/CR-04: exact count(*) of the same stable table; FAIL CLOSED
+                  # on a query failure rather than substituting a sentinel.
                   SCRATCH_COUNT=$(kubectl exec -n "${SCRATCH_NAMESPACE}" "${SCRATCH_POD}" \
                     -- psql -U "${DB_OWNER}" -d "${DB_NAME}" -At \
-                    -c "SELECT SUM(reltuples::bigint) FROM pg_class WHERE relkind='r' AND relnamespace NOT IN (SELECT oid FROM pg_namespace WHERE nspname LIKE 'pg_%' OR nspname='information_schema');" \
-                    2>/dev/null || echo "-1")
+                    -c "SELECT count(*) FROM ${VERIFY_TABLE};") \
+                    || err "Scratch row-count query failed — backup may be corrupted (FAIL CLOSED)"
                   log "[5/6] Live: ${LIVE_COUNT}  Scratch: ${SCRATCH_COUNT}"
 
                   # [6/6] Compare and fail on mismatch
                   # Exit non-zero to fire OBS-05 RestoreVerifyJobFailed alert
                   log "[6/6] Comparing row counts..."
-                  [ "${SCRATCH_COUNT}" = "-1" ] && err "Scratch row-count query failed — backup may be corrupted"
+                  case "${SCRATCH_COUNT}" in
+                    ''|*[!0-9]*) err "Scratch count empty or non-numeric ('${SCRATCH_COUNT}') — backup may be corrupted (FAIL CLOSED)" ;;
+                  esac
                   [ "${LIVE_COUNT}" != "${SCRATCH_COUNT}" ] && \
                     err "ROW COUNT MISMATCH: live=${LIVE_COUNT} scratch=${SCRATCH_COUNT} — RestoreVerifyJobFailed alert will fire"
                   log "[6/6] Row count MATCH: ${LIVE_COUNT} rows"
