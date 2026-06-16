@@ -139,20 +139,35 @@ log "[6/7] Running smoke checks ..."
 echo ""
 
 # ── (a) migrate Job Succeeded ─────────────────────────────────────────────────
+# WR-06: distinguish Succeeded vs Failed vs Timed-out/Running. Capture wait
+# stderr to a log instead of discarding it, and read .status.failed +
+# the Failed condition so an operator sees WHY the migration did not complete.
 log "  (a) migrate Job: waiting for Succeeded ..."
+MIGRATE_WAIT_LOG="$(mktemp)"
 kubectl wait job/"${RELEASE_NAME}-migrate" \
     --for=condition=Complete \
     --timeout="${MIGRATE_WAIT_TIMEOUT}" \
-    -n "${NAMESPACE}" 2>/dev/null || true
+    -n "${NAMESPACE}" >"${MIGRATE_WAIT_LOG}" 2>&1 || true
 
-MIGRATE_STATUS="$(kubectl get job "${RELEASE_NAME}-migrate" \
+MIGRATE_SUCCEEDED="$(kubectl get job "${RELEASE_NAME}-migrate" \
     -n "${NAMESPACE}" \
     -o jsonpath='{.status.succeeded}' 2>/dev/null || echo "0")"
-if [ "${MIGRATE_STATUS}" = "1" ]; then
+MIGRATE_FAILED="$(kubectl get job "${RELEASE_NAME}-migrate" \
+    -n "${NAMESPACE}" \
+    -o jsonpath='{.status.failed}' 2>/dev/null || echo "0")"
+MIGRATE_FAILED_COND="$(kubectl get job "${RELEASE_NAME}-migrate" \
+    -n "${NAMESPACE}" \
+    -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null || echo "")"
+
+if [ "${MIGRATE_SUCCEEDED}" = "1" ]; then
     ok "(a) migrate Job status.succeeded = 1  (migrations applied before backend started)"
+elif [ "${MIGRATE_FAILED_COND}" = "True" ] || [ "${MIGRATE_FAILED:-0}" != "0" ]; then
+    fail "(a) migrate Job FAILED (status.failed='${MIGRATE_FAILED}', Failed condition='${MIGRATE_FAILED_COND}') — check 'kubectl logs job/${RELEASE_NAME}-migrate'"
 else
-    fail "(a) migrate Job status.succeeded = '${MIGRATE_STATUS}' (expected 1)"
+    fail "(a) migrate Job did not complete (Timed-out/Running after ${MIGRATE_WAIT_TIMEOUT}; status.succeeded='${MIGRATE_SUCCEEDED}'). kubectl wait output below:"
+    sed 's/^/        /' "${MIGRATE_WAIT_LOG}" >&2 || true
 fi
+rm -f "${MIGRATE_WAIT_LOG}"
 
 # ── (b) backend Ready AFTER migrate ──────────────────────────────────────────
 log "  (b) backend pod: waiting for Ready ..."
