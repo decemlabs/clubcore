@@ -19,7 +19,7 @@ COOKIE_SECURE must be "true" for prod/staging (config.py startup assertion).
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ .Release.Name }}-config
+  name: {{ include "clubcore.fullname" . }}-config
   labels:
     {{- include "clubcore.labels" . | nindent 4 }}
 data:
@@ -44,9 +44,11 @@ data:
 
   # ---------------------------------------------------------------------------
   # Data services — in-cluster service DNS (plan 02 SUMMARY)
-  # Redis: headless ClusterIP service from redis-service.yaml
+  # Redis: headless ClusterIP service from redis-service.yaml.
+  # Host uses clubcore.fullname (same basis the redis Service is named with) so
+  # the URL resolves for ANY release name, not just one named "clubcore" (CR-01 fix).
   # ---------------------------------------------------------------------------
-  REDIS_URL: {{ .Values.config.redisUrl | default (printf "redis://%s-redis:6379/0" .Release.Name) | quote }}
+  REDIS_URL: {{ .Values.config.redisUrl | default (printf "redis://%s-redis:6379/0" (include "clubcore.fullname" .)) | quote }}
 
   # ---------------------------------------------------------------------------
   # S3 / SeaweedFS (DATA-03 zero-app-code-change — same boto3/aioboto3 env vars)

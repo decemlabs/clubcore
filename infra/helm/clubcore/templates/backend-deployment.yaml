@@ -86,9 +86,9 @@ spec:
           # alembic needs DATABASE_URL (from Secret) and ENVIRONMENT/TZ (from ConfigMap).
           envFrom:
             - configMapRef:
-                name: {{ .Release.Name }}-config
+                name: {{ include "clubcore.fullname" . }}-config
             - secretRef:
-                name: {{ .Release.Name }}-app-secret
+                name: {{ include "clubcore.fullname" . }}-app-secret
           securityContext:
             runAsNonRoot: true
             runAsUser: 1000
@@ -126,9 +126,9 @@ spec:
           # TZ=UTC arrives via the ConfigMap — P9 invariant.
           envFrom:
             - configMapRef:
-                name: {{ .Release.Name }}-config
+                name: {{ include "clubcore.fullname" . }}-config
             - secretRef:
-                name: {{ .Release.Name }}-app-secret
+                name: {{ include "clubcore.fullname" . }}-app-secret
 
           # ---------------------------------------------------------------
           # APP-02: Three probes on /healthz — startup / liveness / readiness

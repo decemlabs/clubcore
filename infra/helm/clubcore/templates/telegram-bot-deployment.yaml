@@ -97,9 +97,9 @@ spec:
           # TZ=UTC arrives via ConfigMap — P9 invariant.
           envFrom:
             - configMapRef:
-                name: {{ .Release.Name }}-config
+                name: {{ include "clubcore.fullname" . }}-config
             - secretRef:
-                name: {{ .Release.Name }}-app-secret
+                name: {{ include "clubcore.fullname" . }}-app-secret
 
           securityContext:
             runAsNonRoot: true

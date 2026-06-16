@@ -138,9 +138,9 @@ spec:
           # The initContainer needs DATABASE_URL (for the host/port) and TZ=UTC (P9).
           envFrom:
             - configMapRef:
-                name: {{ .Release.Name }}-config
+                name: {{ include "clubcore.fullname" . }}-config
             - secretRef:
-                name: {{ .Release.Name }}-app-secret
+                name: {{ include "clubcore.fullname" . }}-app-secret
 
       # -----------------------------------------------------------------------
       # Main container: alembic upgrade head
@@ -158,9 +158,9 @@ spec:
           # This is the same envFrom pattern as the backend/worker Deployments (plan 04).
           envFrom:
             - configMapRef:
-                name: {{ .Release.Name }}-config
+                name: {{ include "clubcore.fullname" . }}-config
             - secretRef:
-                name: {{ .Release.Name }}-app-secret
+                name: {{ include "clubcore.fullname" . }}-app-secret
 
           securityContext:
             runAsNonRoot: true
