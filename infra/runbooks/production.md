@@ -87,13 +87,33 @@ The local k3d registry runs at `localhost:5111` (in-cluster: `clubcore-registry:
 | docker | latest stable | https://docs.docker.com/get-docker/ |
 | kubectl | 1.29+ | bundled with k3d or `brew install kubectl` |
 | k3d | **>= 5.6** | `curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh \| bash` |
-| helm | **>= 3.14** | `curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 \| bash` |
+| helm | **>= 3.17** | `curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 \| bash` |
 | terraform | >= 1.8 | https://developer.hashicorp.com/terraform/install |
 | trivy | >= 0.50 | `brew install aquasecurity/trivy/trivy` |
 | kubeconform | latest | `brew install kubeconform` OR `go install sigs.k8s.io/kubeconform/cmd/kubeconform@latest` |
 | kubeseal | 0.37.x (pin to controller version) | `brew install kubeseal` OR from GitHub releases |
 
 Source cross-reference: `infra/scripts/k3d-up.sh` lines 11–16 (k3d/helm/kubectl/docker), `infra/scripts/deploy-local.sh` lines 18–24 (helm/kubeconform).
+
+> **helm >= 3.17 (not 3.14):** the SeaweedFS subchart (`charts/seaweedfs` v4.33.0) uses the `fromToml` template function, which is unavailable in Helm 3.16 and earlier (`helm lint` fails with `function "fromToml" not defined`). Verified locally 2026-06-16: lint/template pass on Helm 3.17+/4.x.
+
+### Local validation performed (2026-06-16, build sandbox via Docker)
+
+What was actually run (not just authored) — Docker was available so build + the tool-as-container checks ran for real:
+
+| Check | Tool | Result |
+|-------|------|--------|
+| `make build` (4 images) | docker | ✅ all 4 built (backend/admin-app/client-pwa/backup) |
+| `helm lint` + `helm template` (full chart, all gates on) | helm 4.x (container) | ✅ renders 49 objects; lint clean |
+| Manifest schema validation | kubeconform (container) | ✅ 43/43 standard objects valid (6 CRDs skipped) |
+| `terraform validate` (host + cluster) | terraform 1.9 (container) | ✅ both green (after fixing the helm-provider `kubernetes` attribute syntax) |
+| trivy CVE gate (HIGH/CRITICAL) | trivy (container) | admin-app ✅ 0 · client-pwa ✅ 0 · backup ✅ 0 · **backend ✗ 2** |
+
+**Still OPERATOR-PENDING** (could not run in the sandbox — no k3d binary, host has no network to install it):
+- Live `make up` / `make smoke` against a real k3s/k3d cluster (deploy + 8-check smoke).
+- The 2 HARD GATES (SEC-02 RSA-key off-node backup, BAK-03 restore round-trip).
+
+**Outstanding finding — backend image CVEs (IMG-04 gate, backend only):** `starlette` 0.52.1 has 2 HIGH CVEs (CVE-2026-48818 SSRF via StaticFiles → fixed 1.1.0; CVE-2026-54283 form-DoS → fixed 1.3.1). Fix: bump `starlette` (via `fastapi`/direct pin) to `>= 1.3.1`, `uv lock`, rebuild, re-scan. Requires network for the lock — deferred to the operator. The 3 other images pass the gate clean (frontends patched via `apk upgrade` in the nginx stage).
 
 ### Hardware
 

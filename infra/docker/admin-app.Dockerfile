@@ -45,6 +45,11 @@ RUN pnpm --filter @clubcore/admin-app build
 # Pinned digest: nginx:1.27-alpine (resolved 2026-06-16)
 FROM nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10 AS runtime
 
+# Patch base-image OS CVEs flagged by the trivy IMG-04 gate (e.g. nghttp2-libs,
+# zlib HIGH/CRITICAL). The pinned digest keeps the build reproducible; `apk upgrade`
+# pulls the latest alpine security patches available at build time.
+RUN apk upgrade --no-cache
+
 # Configure nginx to run as the built-in `nginx` user (non-root, T-118-04).
 # Create writable directories the nginx worker needs (owned by nginx user).
 RUN mkdir -p /var/cache/nginx /tmp/client_body /tmp/proxy /tmp/fastcgi /tmp/uwsgi /tmp/scgi \
