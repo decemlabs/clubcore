@@ -222,18 +222,27 @@ spec:
                   # WR-03: single AGE-BASED cutoff — delete objects older than
                   #   (RETENTION_WEEKLY_COUNT weeks). Default 4 weeks = 28 days, which
                   #   keeps ~4 weekly snapshots. No daily tier (weekly job).
-                  PRUNE_BEFORE=$(date -u -d "-${RETENTION_WEEKLY_COUNT} weeks" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null \
-                    || date -u -v "-${RETENTION_WEEKLY_COUNT}w" +"%Y-%m-%dT%H:%M:%SZ")
-                  echo "[4/4] Pruning objects older than ${PRUNE_BEFORE} from s3://${S3_BUCKET}/${S3_PREFIX}/..."
+                  # WR-02: compare on EPOCH in shell (mirrors backup-seaweedfs-cronjob.yaml's
+                  # CUTOFF_EPOCH approach) instead of a JMESPath lexical string compare.
+                  # botocore serializes LastModified as `...+00:00`, but PRUNE_BEFORE was
+                  # `...Z`; `'...Z'` sorts AFTER `'...+00:00'` for the same instant, so the
+                  # JMESPath cutoff was off and prune was unreliable. Numeric epoch compare
+                  # is format-agnostic and orders correctly.
+                  CUTOFF_EPOCH=$(date -u -d "-${RETENTION_WEEKLY_COUNT} weeks" +%s 2>/dev/null \
+                    || date -u -v "-${RETENTION_WEEKLY_COUNT}w" +%s 2>/dev/null || echo 0)
+                  echo "[4/4] Pruning objects older than ${RETENTION_WEEKLY_COUNT} weeks (cutoff epoch ${CUTOFF_EPOCH}) from s3://${S3_BUCKET}/${S3_PREFIX}/..."
                   aws s3api list-objects \
                     --bucket "${S3_BUCKET}" \
                     --prefix "${S3_PREFIX}/" \
                     --endpoint-url "${S3_ENDPOINT_URL}" \
-                    --query "Contents[?LastModified<='${PRUNE_BEFORE}'].Key" \
-                    --output text 2>/dev/null | tr '\t' '\n' | while read -r OLD_KEY; do
+                    --query "Contents[].[Key,LastModified]" \
+                    --output text 2>/dev/null | while read -r OLD_KEY LM; do
                     [ -z "${OLD_KEY}" ] && continue
-                    echo "[4/4] Deleting stale backup: s3://${S3_BUCKET}/${OLD_KEY}"
-                    aws s3 rm "s3://${S3_BUCKET}/${OLD_KEY}" --endpoint-url "${S3_ENDPOINT_URL}"
+                    LM_EPOCH=$(date -u -d "${LM}" +%s 2>/dev/null || echo 0)
+                    if [ "${CUTOFF_EPOCH}" -gt 0 ] && [ "${LM_EPOCH}" -gt 0 ] && [ "${LM_EPOCH}" -lt "${CUTOFF_EPOCH}" ]; then
+                      echo "[4/4] Deleting stale backup: s3://${S3_BUCKET}/${OLD_KEY}"
+                      aws s3 rm "s3://${S3_BUCKET}/${OLD_KEY}" --endpoint-url "${S3_ENDPOINT_URL}"
+                    fi
                   done
                   echo "[4/4] Retention pruning complete"
 
