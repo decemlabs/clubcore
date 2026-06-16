@@ -19,7 +19,7 @@
 #   - Cookies set by issue_session_cookies (app/core/security.py):
 #       sz_access       HTTP-only access JWT, Path=/
 #       sz_refresh      HTTP-only refresh token, Path=/api/v1/auth
-#       sportzal_csrf   non-HttpOnly CSRF token, Path=/, used as X-CSRF-Token
+#       clubcore_csrf   non-HttpOnly CSRF token, Path=/, used as X-CSRF-Token
 #                       header value on every mutating verb.
 #   - Auth flows via the sz_access cookie automatically when curl reuses the
 #     cookie jar with -b "$COOKIE_JAR" — there is NO access JWT in the login
@@ -54,7 +54,7 @@ CSRF_TOKEN=""
 
 # login_as <owner|reception>
 # POST /api/v1/auth/login (CSRF-exempt). Writes cookies to $COOKIE_JAR; extracts
-# the sportzal_csrf value via awk on the Netscape cookie-jar format (column 6 =
+# the clubcore_csrf value via awk on the Netscape cookie-jar format (column 6 =
 # cookie name, column 7 = cookie value). Exports CSRF_TOKEN for mut().
 login_as() {
   local role="$1"
@@ -79,9 +79,9 @@ login_as() {
     -c "$COOKIE_JAR" \
     -d "{\"email\":\"$email\",\"password\":\"$password\"}"
 
-  CSRF_TOKEN="$(awk '$6=="sportzal_csrf"{print $7}' "$COOKIE_JAR")"
+  CSRF_TOKEN="$(awk '$6=="clubcore_csrf"{print $7}' "$COOKIE_JAR")"
   if [ -z "$CSRF_TOKEN" ]; then
-    echo "login_as: failed to extract sportzal_csrf from cookie jar" >&2
+    echo "login_as: failed to extract clubcore_csrf from cookie jar" >&2
     return 1
   fi
   export CSRF_TOKEN

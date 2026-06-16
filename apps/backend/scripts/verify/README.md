@@ -168,6 +168,7 @@ The seed (`seed_p102_walkthrough.py`) creates:
 ## Notes (General)
 
 - Each v1.x scenario is hermetic (own cookie jar per `_lib.sh`).
-- v1.x scripts use the legacy `_lib.sh` with old cookie names (`sz_access`, `sportzal_csrf`).
-  The P102 walkthrough script uses the v3.0 cookie names (`cc_access`, `clubcore_csrf`).
+- v1.x scripts use `_lib.sh` (shared helper). Cookie names in `_lib.sh` are aligned with the
+  live backend: `cc_access`, `clubcore_csrf` (updated per NAME-01/SEC-05 from the pre-rename
+  v1.x values). The P102 walkthrough script uses the same v3.0 cookie names.
 - If `apps/backend/.env` is mutated mid-sweep: `docker compose up -d --force-recreate --no-deps backend`.
