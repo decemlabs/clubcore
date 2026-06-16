@@ -64,23 +64,19 @@ spec:
     # standard HTTPS router — no WS-specific annotation required.
     # The chat endpoint /api/v1/client/ws/messages is reachable via the
     # prefix "/" rule below (any path under the API host).
-    # An explicit /api/v1/client/ws entry is added for self-documentation
-    # so reviewers understand WS routing without reading the backend code.
+    #
+    # WR-04: A dedicated /api/v1/client/ws path rule was REMOVED. It pointed at
+    # the identical backend/port as "/", so it did no routing work, and relying
+    # on it implied longest-prefix precedence that Traefik v3 Ingress does NOT
+    # guarantee (IngressRoute priority would be required for real precedence).
+    # The single "/" prefix already routes WS + all REST to the backend, and WS
+    # upgrade is native in Traefik v3 — no separate WS rule is needed or safe.
     # ------------------------------------------------------------------
     - host: {{ .Values.ingress.hosts.api | quote }}
       http:
         paths:
-          # Explicit WebSocket path (NET-02 self-documentation).
-          # Points at the same backend as the root rule; ensures future
-          # reviewers know WS is handled here (no separate WS annotation needed).
-          - path: /api/v1/client/ws
-            pathType: Prefix
-            backend:
-              service:
-                name: {{ include "clubcore.fullname" . }}-backend
-                port:
-                  number: 8000
-          # Root prefix rule — catches all /api/* REST endpoints.
+          # Root prefix rule — catches all /api/* REST endpoints AND the
+          # WebSocket chat path (/api/v1/client/ws/messages), upgraded natively.
           - path: /
             pathType: Prefix
             backend:
