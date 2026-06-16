@@ -55,9 +55,9 @@
 
 ### Terraform IaC (IAC)
 
-- [ ] **IAC-01**: `infra/terraform/host/` — k3s install на bare-metal node (`null_resource` + `remote-exec`, `terraform.tfvars.example`, local `backend "local"` state); `validate` green (apply operator-pending — нужны SSH-креды)
-- [ ] **IAC-02**: `infra/terraform/cluster/` — namespaces + `helm_release` (provider v3.2 list-syntax, `tfvars.example`, local state); `validate` + `plan` green против k3d
-- [ ] **IAC-03**: `make tf-validate` + `make tf-plan` зелёные
+- [x] **IAC-01**: `infra/terraform/host/` — k3s install на bare-metal node (`null_resource` + `remote-exec`, `terraform.tfvars.example`, local `backend "local"` state); `validate` green (apply operator-pending — нужны SSH-креды)
+- [x] **IAC-02**: `infra/terraform/cluster/` — namespaces + `helm_release` (provider v3.2 list-syntax, `tfvars.example`, local state); `validate` + `plan` green против k3d
+- [x] **IAC-03**: `make tf-validate` + `make tf-plan` зелёные
 
 ### Observability (OBS)
 
@@ -163,9 +163,9 @@
 | SEC-04 | Phase 119 | Complete |
 | SEC-05 | Phase 119 | Complete |
 | SEC-06 | Phase 119 | Complete |
-| IAC-01 | Phase 120 | Pending |
-| IAC-02 | Phase 120 | Pending |
-| IAC-03 | Phase 120 | Pending |
+| IAC-01 | Phase 120 | Complete |
+| IAC-02 | Phase 120 | Complete |
+| IAC-03 | Phase 120 | Complete |
 | OBS-01 | Phase 120 | Pending |
 | OBS-02 | Phase 120 | Pending |
 | OBS-03 | Phase 120 | Pending |

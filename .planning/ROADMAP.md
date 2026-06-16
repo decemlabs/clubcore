@@ -538,7 +538,7 @@ Plans:
   5. A full Postgres restore round-trip has been executed in k3d: backup snapshot taken, CNPG cluster restored to a scratch namespace, row counts verified against pre-backup snapshot, result documented in `infra/runbooks/restore.md`; the runbook covers Redis and SeaweedFS restore procedures as well
 **Plans**: 3 plans
 Plans:
-- [ ] 120-01-PLAN.md — Terraform host + cluster modules (k3s remote-exec, monitoring ns + helm_release v3.2 list-syntax) + Makefile tf-validate/tf-plan (IAC-01..03) [wave 1]
+- [x] 120-01-PLAN.md — Terraform host + cluster modules (k3s remote-exec, monitoring ns + helm_release v3.2 list-syntax) + Makefile tf-validate/tf-plan (IAC-01..03) [wave 1]
 - [ ] 120-02-PLAN.md — FastAPI /metrics + ServiceMonitor, kube-prometheus-stack + Loki/Alloy values, Grafana dashboards, Alertmanager rules + Telegram receiver (OBS-01..05) [wave 1]
 - [ ] 120-03-PLAN.md — CNPG barmanObjectStore + ScheduledBackup, Redis/SeaweedFS backup CronJobs, restore-verify CronJob + restore.md runbook (BAK-01..04) [wave 2]
 **Research flag (planning-time, RESOLVED)**: CNPG v1.27 barmanObjectStore field shape + Loki v6.x single-binary / Alloy values schema resolved at plan time via Context7/WebFetch; encoded verbatim in plan `<research_resolved>` blocks.
@@ -578,7 +578,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 118. Container Images + Helm Chart (Core Stack) | v4.0 | 4/4 | Complete   | 2026-06-16 |
 | 119. Networking, Security + CSRF Rename | v4.0 | 3/3 | Complete   | 2026-06-16 |
-| 120. IaC, Observability + Backup | v4.0 | 0/TBD | Not started | - |
+| 120. IaC, Observability + Backup | v4.0 | 1/3 | In Progress|  |
 | 121. Makefile CI/CD + Full Smoke + Runbooks | v4.0 | 0/TBD | Not started | - |
 
 <details>
