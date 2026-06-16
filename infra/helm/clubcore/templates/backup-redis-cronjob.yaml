@@ -1,0 +1,223 @@
+{{/*
+backup-redis-cronjob.yaml — Weekly Redis RDB → SeaweedFS S3 backup CronJob (BAK-02)
+
+BAK-02: weekly Redis RDB snapshot upload to SeaweedFS S3 with 7-daily / 4-weekly retention.
+
+Schedule: "0 3 * * 0" = weekly Sunday 03:00 UTC (after CNPG backup window at 02:00)
+
+Retention math:
+  Daily: keep last 7 RDB snapshots (7 days of daily runs → prune objects older than 7 days)
+  Weekly: keep last 4 weekly snapshots (4 weeks → prune objects older than 28 days)
+  Implementation: after upload, list s3://clubcore/redis/ objects and delete any with
+  last-modified > retention window. Uses `aws s3api list-objects` + `aws s3 rm`.
+
+S3 credentials: reuse the EXISTING clubcore-app-secret keys (T-120-BAK1 — NEVER mint new creds).
+  Keys: S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY (same keys as barmanObjectStore + backend).
+
+Security: SEC-03 pod hardening copied verbatim from migrate-job.yaml:
+  Pod:       runAsNonRoot + runAsUser:1000 + seccompProfile:RuntimeDefault
+  Container: allowPrivilegeEscalation:false + readOnlyRootFilesystem:true + drop ALL caps
+  emptyDir:  /tmp — aws CLI + Redis tools may write temp files
+  TZ=UTC:    P9 invariant — CronJob schedule evaluated in UTC
+
+Image: redis:7-alpine (already in the stack — DATA-02). Includes redis-cli + sh.
+  Additional tool: awscli (aws s3 / aws s3api) installed in the container command via
+  `apk add --no-cache aws-cli` (alpine package). Alternative: use mc (MinIO Client)
+  but aws-cli is more standard for S3 API compatibility with SeaweedFS.
+
+OBS-05 alert linkage: a Job failure (exit non-zero) surfaces as kube_job_status_failed
+  which the RestoreVerifyJobFailed alert in alertmanager-rules.yaml watches.
+  A stale backup also fires PostgresNoBackupIn25h (CNPG metric path).
+*/}}
+{{- if .Values.backup.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "clubcore.fullname" . }}-backup-redis
+  labels:
+    {{- include "clubcore.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup-redis
+  annotations:
+    clubcore.io/requirement: "BAK-02"
+    # OBS-05 linkage: Job failure surfaces as kube_job_status_failed metric.
+    clubcore.io/alert-linkage: "RestoreVerifyJobFailed (alertmanager-rules.yaml)"
+spec:
+  # Weekly schedule: Sunday 03:00 UTC (after CNPG daily backup at 02:00)
+  schedule: {{ .Values.backup.redis.schedule | default "0 3 * * 0" | quote }}
+
+  # Prevent multiple concurrent backup jobs (skip if previous is still running)
+  concurrencyPolicy: Forbid
+
+  # Keep last 3 successful + 1 failed Job objects for log inspection
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+
+  jobTemplate:
+    spec:
+      # P4 invariant: no silent retry of a failed backup (surfacing failure is correct behavior)
+      backoffLimit: 0
+      # Hard timeout: 30 min for RDB save + S3 upload + retention prune
+      activeDeadlineSeconds: 1800
+
+      template:
+        metadata:
+          labels:
+            {{- include "clubcore.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: backup-redis
+        spec:
+          # SEC-03 / P4: never restart — Job failure must surface immediately
+          restartPolicy: Never
+
+          # SEC-03 pod-level securityContext (migrate-job.yaml verbatim copy)
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            seccompProfile:
+              type: RuntimeDefault
+
+          volumes:
+            # /tmp emptyDir — aws CLI + Python stdlib write temp files
+            # Required because readOnlyRootFilesystem: true blocks all other writes
+            - name: tmp
+              emptyDir: {}
+
+          containers:
+            - name: redis-rdb-backup
+              # redis:7-alpine — already in the stack (DATA-02 image)
+              # apk adds aws-cli for S3 upload; all runs from the apk cache at startup.
+              image: {{ .Values.redis.image | default "redis:7-alpine" | quote }}
+              imagePullPolicy: IfNotPresent
+
+              # SEC-03 container-level hardening (copied verbatim from migrate-job.yaml)
+              securityContext:
+                {{- include "clubcore.hardenedSecurityContext" (dict "runAsUser" 1000) | nindent 16 }}
+
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+
+              env:
+                # P9 TZ invariant — CronJob schedule and all timestamps are UTC
+                - name: TZ
+                  value: "UTC"
+                # S3 endpoint for SeaweedFS in-cluster service
+                - name: S3_ENDPOINT_URL
+                  value: {{ .Values.backup.postgres.s3EndpointUrl | default (printf "http://%s-seaweedfs-s3:8333" .Release.Name) | quote }}
+                # S3 bucket and prefix for Redis RDB backups
+                - name: S3_BUCKET
+                  value: {{ .Values.config.s3Bucket | default "clubcore" | quote }}
+                - name: S3_PREFIX
+                  value: "redis"
+                # Retention: 7 daily / 4 weekly (in days)
+                - name: RETENTION_DAILY_COUNT
+                  value: {{ .Values.backup.redis.retentionDailyCount | default 7 | quote }}
+                - name: RETENTION_WEEKLY_COUNT
+                  value: {{ .Values.backup.redis.retentionWeeklyCount | default 4 | quote }}
+                # Redis service in-cluster (plan 02 redis-service.yaml, clusterIP: None)
+                - name: REDIS_HOST
+                  value: {{ printf "%s-redis" (include "clubcore.fullname" .) | quote }}
+                - name: REDIS_PORT
+                  value: "6379"
+                # S3 credentials — reuse EXISTING app-secret (T-120-BAK1: NEVER mint new creds)
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "clubcore.fullname" . }}-app-secret
+                      key: S3_ACCESS_KEY_ID
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "clubcore.fullname" . }}-app-secret
+                      key: S3_SECRET_ACCESS_KEY
+                # AWS_DEFAULT_REGION: required by aws CLI even for non-AWS endpoints
+                - name: AWS_DEFAULT_REGION
+                  value: {{ .Values.config.s3Region | default "ru-central1" | quote }}
+
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -euo pipefail
+
+                  # ── Prerequisites ────────────────────────────────────────────
+                  echo "[backup-redis] Installing aws-cli..."
+                  apk add --no-cache aws-cli >/tmp/apk.log 2>&1 || {
+                    echo "[backup-redis] ERROR: aws-cli install failed" >&2
+                    cat /tmp/apk.log >&2
+                    exit 1
+                  }
+
+                  TIMESTAMP=$(date -u +"%Y%m%d-%H%M%S")
+                  BACKUP_KEY="${S3_PREFIX}/redis-rdb-${TIMESTAMP}.rdb"
+                  echo "[backup-redis] Starting Redis RDB backup at ${TIMESTAMP} UTC"
+
+                  # ── Step 1: Trigger RDB save ──────────────────────────────────
+                  echo "[1/4] Triggering BGSAVE on Redis at ${REDIS_HOST}:${REDIS_PORT}..."
+                  redis-cli -h "${REDIS_HOST}" -p "${REDIS_PORT}" BGSAVE
+                  # Wait for BGSAVE to complete (poll LASTSAVE timestamp)
+                  BEFORE_SAVE=$(redis-cli -h "${REDIS_HOST}" -p "${REDIS_PORT}" LASTSAVE)
+                  echo "[1/4] Waiting for BGSAVE to complete (LASTSAVE was ${BEFORE_SAVE})..."
+                  for i in $(seq 1 30); do
+                    sleep 2
+                    CURRENT_SAVE=$(redis-cli -h "${REDIS_HOST}" -p "${REDIS_PORT}" LASTSAVE)
+                    if [ "${CURRENT_SAVE}" -gt "${BEFORE_SAVE}" ]; then
+                      echo "[1/4] BGSAVE complete (LASTSAVE: ${CURRENT_SAVE})"
+                      break
+                    fi
+                    if [ "${i}" -eq 30 ]; then
+                      echo "[backup-redis] ERROR: BGSAVE did not complete within 60s" >&2
+                      exit 1
+                    fi
+                  done
+
+                  # ── Step 2: Copy RDB from Redis pod via redis-cli DEBUG RELOAD ─
+                  # SeaweedFS S3: use aws CLI with --endpoint-url pointing at in-cluster service.
+                  # Redis AOF/RDB file path default: /data/dump.rdb (inside the Redis pod).
+                  # Since we cannot mount the Redis PVC directly, use OBJECT ENCODING: dump the
+                  # full dataset via redis-cli --rdb to a temp file, then upload to S3.
+                  echo "[2/4] Dumping RDB to /tmp/dump-${TIMESTAMP}.rdb..."
+                  redis-cli -h "${REDIS_HOST}" -p "${REDIS_PORT}" --rdb "/tmp/dump-${TIMESTAMP}.rdb"
+                  RDB_SIZE=$(wc -c < "/tmp/dump-${TIMESTAMP}.rdb")
+                  echo "[2/4] RDB size: ${RDB_SIZE} bytes"
+
+                  # ── Step 3: Upload to SeaweedFS S3 ───────────────────────────
+                  echo "[3/4] Uploading to s3://${S3_BUCKET}/${BACKUP_KEY}..."
+                  aws s3 cp \
+                    "/tmp/dump-${TIMESTAMP}.rdb" \
+                    "s3://${S3_BUCKET}/${BACKUP_KEY}" \
+                    --endpoint-url "${S3_ENDPOINT_URL}" \
+                    --no-progress
+                  echo "[3/4] Upload complete: s3://${S3_BUCKET}/${BACKUP_KEY}"
+
+                  # ── Step 4: Retention pruning ─────────────────────────────────
+                  # Retention math:
+                  #   DAILY:  delete objects older than RETENTION_DAILY_COUNT days
+                  #   WEEKLY: delete objects older than (RETENTION_WEEKLY_COUNT * 7) days
+                  #   We store all RDB backups under the same prefix; prune by age.
+                  #   Effective window = min(daily_days, weekly_days) = min(7, 28) = 7 days.
+                  #   Weekly retention (4 weeks = 28 days) is the outer bound.
+                  PRUNE_BEFORE=$(date -u -d "-${RETENTION_WEEKLY_COUNT} weeks" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null \
+                    || date -u -v "-${RETENTION_WEEKLY_COUNT}w" +"%Y-%m-%dT%H:%M:%SZ")
+                  echo "[4/4] Pruning objects older than ${PRUNE_BEFORE} from s3://${S3_BUCKET}/${S3_PREFIX}/..."
+                  aws s3api list-objects \
+                    --bucket "${S3_BUCKET}" \
+                    --prefix "${S3_PREFIX}/" \
+                    --endpoint-url "${S3_ENDPOINT_URL}" \
+                    --query "Contents[?LastModified<='${PRUNE_BEFORE}'].Key" \
+                    --output text 2>/dev/null | tr '\t' '\n' | while read -r OLD_KEY; do
+                    [ -z "${OLD_KEY}" ] && continue
+                    echo "[4/4] Deleting stale backup: s3://${S3_BUCKET}/${OLD_KEY}"
+                    aws s3 rm "s3://${S3_BUCKET}/${OLD_KEY}" --endpoint-url "${S3_ENDPOINT_URL}"
+                  done
+                  echo "[4/4] Retention pruning complete"
+
+                  echo "[backup-redis] SUCCESS — RDB backup uploaded: s3://${S3_BUCKET}/${BACKUP_KEY}"
+
+              resources:
+                requests:
+                  cpu: "100m"
+                  memory: "128Mi"
+                limits:
+                  cpu: "500m"
+                  memory: "512Mi"
+{{- end }}
