@@ -1,0 +1,139 @@
+{
+  "title": "Redis — clubcore",
+  "description": "Import wrapper for grafana.com dashboard ID 763 (Redis Dashboard by oliver006). OBS-04.",
+  "tags": ["redis", "cache", "clubcore", "obs-04"],
+  "schemaVersion": 39,
+  "version": 1,
+  "__gsd_import_instructions": {
+    "comment": "This is a curated import wrapper. Load the full dashboard via Grafana UI or ConfigMap import.",
+    "grafana_com_id": 763,
+    "grafana_com_url": "https://grafana.com/grafana/dashboards/763",
+    "import_method": "Grafana UI → Dashboards → Import → Enter ID 763 → select Prometheus datasource",
+    "revision": "latest",
+    "exporter_note": "Requires oliver006/redis_exporter (deploy alongside Redis StatefulSet or as standalone Deployment pointing at <release>-redis:6379)"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "label": "Prometheus datasource"
+      },
+      {
+        "name": "addr",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "query": "label_values(redis_up, addr)",
+        "label": "Redis Instance",
+        "refresh": 2
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "Import Instructions",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 5 },
+      "options": {
+        "mode": "markdown",
+        "content": "## Redis Dashboard (grafana.com ID: 763)\n\nThis panel is a placeholder. Load the full dashboard:\n1. Grafana → Dashboards → Import\n2. Enter ID **763**\n3. Select your Prometheus datasource\n\n### Prerequisite\nThis dashboard requires `oliver006/redis_exporter`. Deploy as a sidecar or standalone:\n```yaml\n# Standalone Deployment example (add to helm chart or separately)\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: redis-exporter\nspec:\n  template:\n    spec:\n      containers:\n      - name: redis-exporter\n        image: oliver006/redis_exporter:latest\n        env:\n        - name: REDIS_ADDR\n          value: redis://<release>-redis:6379\n```\n\nAlternatively, use the ConfigMap import path described in `README.md`."
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Redis Up",
+      "gridPos": { "x": 0, "y": 5, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "redis_up{addr=~\"$addr\"}",
+          "legendFormat": "{{addr}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Connected Clients",
+      "gridPos": { "x": 6, "y": 5, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "redis_connected_clients{addr=~\"$addr\"}",
+          "legendFormat": "Clients",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Memory Used",
+      "gridPos": { "x": 12, "y": 5, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "redis_memory_used_bytes{addr=~\"$addr\"}",
+          "legendFormat": "Used",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bytes" } }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Operations/sec (Commands Processed)",
+      "gridPos": { "x": 0, "y": 9, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "rate(redis_commands_processed_total{addr=~\"$addr\"}[5m])",
+          "legendFormat": "cmd/s",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops" } }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Memory Usage Over Time",
+      "gridPos": { "x": 12, "y": 9, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "redis_memory_used_bytes{addr=~\"$addr\"}",
+          "legendFormat": "used",
+          "refId": "A"
+        },
+        {
+          "expr": "redis_memory_max_bytes{addr=~\"$addr\"}",
+          "legendFormat": "max",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bytes" } }
+    }
+  ]
+}

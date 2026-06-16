@@ -1,0 +1,251 @@
+# alertmanager-rules.yaml — PrometheusRule CRD + Alertmanager Telegram receiver (OBS-05)
+#
+# Two Kubernetes manifests in one file (separated by ---):
+#   1. PrometheusRule: 6 alert rules discovered by kube-prometheus-stack Prometheus
+#   2. Alertmanager ConfigMap: routing + Telegram receiver (token via secret/file ref)
+#
+# Operator-install:
+#   kubectl apply -f infra/observability/alertmanager-rules.yaml -n monitoring
+#
+# OPERATOR-PENDING:
+#   - Telegram delivery: create the sealed secret (see T-120-OBS2 + D-V40-SECRETS below)
+#     before alerting is functional. Real bot token MUST be in a sealed secret, NEVER here.
+#   - Live alert test: trigger a test alert after installing to verify Telegram delivery.
+#
+# T-120-OBS2 / D-V40-SECRETS: Bot token is referenced via bot_token_file pointing to
+# a file mounted from a Kubernetes Secret. The Secret is created externally (sealed
+# with kubeseal, see infra/scripts/seal-secrets.sh). NEVER commit a real token here.
+#
+# The verify-grep gate in 120-02-PLAN.md enforces:
+#   ! grep -iE 'bot[0-9]{6,}:[A-Za-z0-9_-]{30,}' alertmanager-rules.yaml
+
+---
+# ── PrometheusRule: 6 alert rules (OBS-05) ───────────────────────────────────
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: clubcore-alerts
+  namespace: monitoring
+  labels:
+    # 'release' label must match the kube-prometheus-stack Helm release name
+    # so the Prometheus operator discovers this PrometheusRule.
+    release: kube-prometheus-stack
+    app.kubernetes.io/name: clubcore-alerts
+    app.kubernetes.io/part-of: clubcore
+spec:
+  groups:
+    - name: clubcore.pods
+      interval: 1m
+      rules:
+        # ── Alert 1: Pod Not Ready ────────────────────────────────────────────
+        - alert: KubePodNotReady
+          expr: |
+            sum by (namespace, pod) (
+              max by (namespace, pod) (
+                kube_pod_status_phase{phase=~"Pending|Unknown|Failed", namespace="default"}
+              ) * on (namespace, pod) group_left(owner_kind)
+              topk by (namespace, pod) (1, max by (namespace, pod, owner_kind) (
+                label_replace(kube_pod_owner{owner_kind!="Job"}, "pod", "$1", "pod", "(.*)")
+              ))
+            ) > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Pod {{ $labels.pod }} not ready"
+            description: |
+              Pod {{ $labels.namespace }}/{{ $labels.pod }} has been in a non-ready
+              state for more than 5 minutes.
+
+    - name: clubcore.http
+      interval: 1m
+      rules:
+        # ── Alert 2: High HTTP Error Rate (5xx) ──────────────────────────────
+        - alert: HighHTTPErrorRate
+          expr: |
+            (
+              sum(rate(http_requests_total{namespace="default", status=~"5.."}[5m]))
+              /
+              sum(rate(http_requests_total{namespace="default"}[5m]))
+            ) > 0.05
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "High HTTP 5xx error rate on clubcore backend"
+            description: |
+              More than 5% of HTTP requests are returning 5xx status codes
+              (current: {{ $value | humanizePercentage }}).
+              Check backend logs in Loki: {namespace="default", component="backend"}.
+
+    - name: clubcore.node
+      interval: 2m
+      rules:
+        # ── Alert 3: Node Disk Pressure ───────────────────────────────────────
+        - alert: NodeDiskPressure
+          expr: |
+            (
+              node_filesystem_avail_bytes{mountpoint="/", fstype!~"tmpfs|overlay"}
+              /
+              node_filesystem_size_bytes{mountpoint="/", fstype!~"tmpfs|overlay"}
+            ) < 0.15
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Node disk space below 15%"
+            description: |
+              Disk space on {{ $labels.instance }} mount {{ $labels.mountpoint }}
+              is below 15% free (available: {{ $value | humanizePercentage }}).
+              Consider cleaning up old images or expanding storage.
+
+    - name: clubcore.tls
+      interval: 5m
+      rules:
+        # ── Alert 4: TLS Certificate Expiring Soon ────────────────────────────
+        # Ties to NET-03 (cert-manager ClusterIssuer). cert-manager exposes the
+        # certmanager_certificate_expiration_timestamp_seconds metric.
+        - alert: CertManagerCertExpiringSoon
+          expr: |
+            (certmanager_certificate_expiration_timestamp_seconds - time()) < (14 * 24 * 3600)
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "TLS certificate expiring in less than 14 days"
+            description: |
+              Certificate {{ $labels.name }} in namespace {{ $labels.namespace }}
+              expires in {{ $value | humanizeDuration }}.
+              Check cert-manager ClusterIssuer and ACME challenges.
+
+    - name: clubcore.backup
+      interval: 30m
+      rules:
+        # ── Alert 5: No PostgreSQL Backup in 25 Hours ─────────────────────────
+        # Watches the CNPG collector metric that reports the last successful backup
+        # timestamp. BAK-01 (Phase 120 Plan 03) adds CNPG WAL archiving to SeaweedFS;
+        # the cnpg-collector sidecar in every CNPG Cluster pod exposes this metric.
+        # Metric: cnpg_collector_last_available_backup_timestamp (Unix timestamp)
+        - alert: PostgresNoBackupIn25h
+          expr: |
+            (time() - cnpg_collector_last_available_backup_timestamp) > (25 * 3600)
+          for: 30m
+          labels:
+            severity: critical
+          annotations:
+            summary: "No PostgreSQL backup in the last 25 hours"
+            description: |
+              CNPG cluster {{ $labels.cluster }} has not completed a successful
+              backup in more than 25 hours. Last backup was
+              {{ $value | humanizeDuration }} ago.
+              Check CNPG ScheduledBackup status and SeaweedFS S3 connectivity
+              (BAK-01 barmanObjectStore — Phase 120 Plan 03).
+
+        # ── Alert 6: Restore Verification Job Failed ──────────────────────────
+        # BAK-04: the restore-verify CronJob (infra/helm/clubcore/templates/restore-verify-cronjob.yaml)
+        # runs weekly and exits non-zero on failure. kube_job_failed surfaces that.
+        - alert: RestoreVerifyJobFailed
+          expr: |
+            kube_job_failed{
+              namespace="default",
+              job_name=~".*restore-verify.*"
+            } > 0
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Weekly PostgreSQL restore verification job failed"
+            description: |
+              The BAK-04 restore-verify CronJob {{ $labels.job_name }} has failed.
+              This means the CNPG backup may NOT be restorable.
+              Investigate immediately: kubectl logs -n default -l job-name={{ $labels.job_name }}
+              See runbook: infra/runbooks/restore.md
+
+---
+# ── Alertmanager Configuration (Telegram receiver) ───────────────────────────
+# Delivered as a ConfigMap that Alertmanager mounts as its config.
+# kube-prometheus-stack supports overriding alertmanager config via
+# alertmanager.config in values.yaml; this ConfigMap is an alternative
+# for operator-manual install.
+#
+# T-120-OBS2 / D-V40-SECRETS:
+#   Bot token is referenced via bot_token_file — Alertmanager reads the token
+#   from a file path, which must be mounted from a Kubernetes Secret.
+#   The Secret "alertmanager-telegram-bot-token" MUST be created with kubeseal
+#   BEFORE enabling Telegram notifications:
+#
+#   kubectl create secret generic alertmanager-telegram-bot-token \
+#     --from-literal=bot_token=<REAL_BOT_TOKEN_FROM_BOTFATHER> \
+#     -n monitoring --dry-run=client -o yaml | kubeseal > /tmp/alertmanager-telegram-sealed.yaml
+#   kubectl apply -f /tmp/alertmanager-telegram-sealed.yaml
+#
+#   Then ensure Alertmanager mounts the secret at /etc/alertmanager/secrets/telegram.
+#   In kube-prometheus-stack values.yaml, add:
+#     alertmanager.alertmanagerSpec.secrets: ["alertmanager-telegram-bot-token"]
+#
+# OPERATOR-PENDING: real Telegram delivery requires:
+#   1. A real @BotFather bot token in the sealed secret above
+#   2. A real Telegram chat ID (owner's personal chat or a group)
+#   3. The secret mounted into the Alertmanager pod
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-clubcore-config
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: alertmanager-clubcore-config
+    app.kubernetes.io/part-of: clubcore
+data:
+  alertmanager.yaml: |
+    global:
+      # Resolve timeout: alert is considered resolved after this duration without firing
+      resolve_timeout: 5m
+
+    route:
+      receiver: 'telegram-clubcore'
+      group_by: ['alertname', 'severity']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 12h
+
+      # Route critical alerts immediately, warnings with longer repeat
+      routes:
+        - matchers:
+            - severity = "critical"
+          receiver: 'telegram-clubcore'
+          repeat_interval: 4h
+        - matchers:
+            - severity = "warning"
+          receiver: 'telegram-clubcore'
+          repeat_interval: 24h
+
+    receivers:
+      - name: 'telegram-clubcore'
+        telegram_configs:
+          # T-120-OBS2: bot token via file ref — NEVER inline.
+          # Mounted from the sealed Secret "alertmanager-telegram-bot-token"
+          # at /etc/alertmanager/secrets/telegram/bot_token.
+          # OPERATOR-PENDING: real delivery requires the sealed secret + correct chat_id.
+          - bot_token_file: /etc/alertmanager/secrets/telegram/bot_token
+            # chat_id: Your Telegram chat/group ID.
+            # Obtain by messaging @userinfobot or @getidsbot.
+            # Replace with the real value; this placeholder will cause send errors.
+            chat_id: -1001234567890
+            parse_mode: 'HTML'
+            message: |
+              <b>{{ .Status | toUpper }}</b>{{ if eq .Status "firing" }} 🔥{{ else }} ✅{{ end }}
+              <b>Alert:</b> {{ .GroupLabels.alertname }}
+              <b>Severity:</b> {{ .GroupLabels.severity }}
+              {{ range .Alerts }}
+              <b>Summary:</b> {{ .Annotations.summary }}
+              <b>Description:</b> {{ .Annotations.description }}
+              {{ end }}
+
+    inhibit_rules:
+      # Inhibit warning-level alerts if the same alertname is already firing as critical
+      - source_matchers:
+          - severity = "critical"
+        target_matchers:
+          - severity = "warning"
+        equal: ['alertname']

@@ -1,0 +1,116 @@
+{
+  "title": "CloudNativePG (CNPG) — clubcore",
+  "description": "Import wrapper for grafana.com dashboard ID 20417 (CloudNativePG official). OBS-04.",
+  "tags": ["cnpg", "postgres", "database", "clubcore", "obs-04"],
+  "schemaVersion": 39,
+  "version": 1,
+  "__gsd_import_instructions": {
+    "comment": "This is a curated import wrapper. Load the full dashboard via Grafana UI or ConfigMap import.",
+    "grafana_com_id": 20417,
+    "grafana_com_url": "https://grafana.com/grafana/dashboards/20417",
+    "import_method": "Grafana UI → Dashboards → Import → Enter ID 20417 → select Prometheus datasource",
+    "revision": "latest"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "label": "Prometheus datasource"
+      },
+      {
+        "name": "cluster",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "query": "label_values(cnpg_collector_up, cluster)",
+        "label": "CNPG Cluster",
+        "refresh": 2
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "Import Instructions",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 4 },
+      "options": {
+        "mode": "markdown",
+        "content": "## CloudNativePG Dashboard (grafana.com ID: 20417)\n\nThis panel is a placeholder. Load the full official CNPG dashboard:\n1. Grafana → Dashboards → Import\n2. Enter ID **20417**\n3. Select your Prometheus datasource\n\n### Key CNPG metrics used by alertmanager-rules.yaml (OBS-05)\n- `cnpg_collector_last_available_backup_timestamp` — used by `PostgresNoBackupIn25h` alert\n  (BAK-01: CNPG WAL archiving to SeaweedFS S3, added in Phase 120 Plan 03)\n- `cnpg_collector_up` — cluster health probe\n- `cnpg_backends_total` — active connections\n\nAlternatively, use the ConfigMap import path described in `README.md`."
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Cluster Up",
+      "gridPos": { "x": 0, "y": 4, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "cnpg_collector_up{cluster=~\"$cluster\"}",
+          "legendFormat": "{{cluster}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Last Backup Age",
+      "description": "Time since last successful CNPG backup. Alert fires if > 25h (OBS-05 PostgresNoBackupIn25h).",
+      "gridPos": { "x": 6, "y": 4, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "time() - cnpg_collector_last_available_backup_timestamp{cluster=~\"$cluster\"}",
+          "legendFormat": "{{cluster}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 86400 },
+              { "color": "red", "value": 90000 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Active Connections",
+      "gridPos": { "x": 12, "y": 4, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "sum(cnpg_backends_total{cluster=~\"$cluster\"})",
+          "legendFormat": "Connections",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" } }
+    }
+  ]
+}
