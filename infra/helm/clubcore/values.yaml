@@ -245,6 +245,70 @@ migrate:
   activeDeadlineSeconds: 300
 
 # ---------------------------------------------------------------------------
+# Backend Deployment — APP-02
+# Probes and replica count for the uvicorn API server.
+# replicas: 1 — D-V40-REPLICAS constraint for v4.0 single-node.
+# TZ=UTC arrives via envFrom → clubcore-config (P9 invariant — NOT set here).
+# ---------------------------------------------------------------------------
+backend:
+  # D-V40-REPLICAS: single bare-metal node, v4.0 constraint.
+  # Do NOT increase without adding session/state sharing strategy.
+  replicas: 1
+
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "256Mi"
+    limits:
+      cpu: "1000m"
+      memory: "512Mi"
+
+  probes:
+    startup:
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      failureThreshold: 30   # 300s max cold-boot window (uvicorn + db pool init)
+      timeoutSeconds: 3
+    liveness:
+      periodSeconds: 30
+      failureThreshold: 3
+      timeoutSeconds: 5
+    readiness:
+      periodSeconds: 10
+      failureThreshold: 3
+      timeoutSeconds: 3
+
+# ---------------------------------------------------------------------------
+# arq-worker Deployment — APP-03
+# ARCHITECTURAL INVARIANT: replicas is NOT exposed here (fixed at 1 in template).
+# Only resource requests/limits are tunable.
+# See arq-worker-deployment.yaml for the D-V40-REPLICAS + Recreate rationale.
+# ---------------------------------------------------------------------------
+arqWorker:
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+# ---------------------------------------------------------------------------
+# telegram-bot Deployment — APP-04
+# ARCHITECTURAL INVARIANT: replicas is NOT exposed here (fixed at 1 in template).
+# Only resource requests/limits are tunable.
+# See telegram-bot-deployment.yaml for the D-V40-REPLICAS + Recreate rationale.
+# ---------------------------------------------------------------------------
+telegramBot:
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "64Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
+
+# ---------------------------------------------------------------------------
 # Optional overrides
 # ---------------------------------------------------------------------------
 nameOverride: ""

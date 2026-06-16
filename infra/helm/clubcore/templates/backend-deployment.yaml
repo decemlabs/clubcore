@@ -1,0 +1,190 @@
+{{/*
+backend-deployment.yaml — Deployment clubcore-backend (APP-02)
+
+APP-02 ARCHITECTURAL REQUIREMENTS:
+  - replicas: 1  (D-V40-REPLICAS: single bare-metal node, v4.0 constraint)
+  - Three probes on /healthz:8000  (startup / liveness / readiness)
+    startup:   generous failureThreshold=30 for cold boot (uvicorn startup + alembic wait)
+    liveness:  detects hung process; periodic after startup succeeds
+    readiness: gates traffic — pod only enters rotation when healthy
+  - resources.requests + limits  (single-node tuned, modest)
+  - TZ=UTC arrives via envFrom → clubcore-config ConfigMap  (P9 invariant)
+  - alembic-check initContainer: belt-and-suspenders on top of the migrate hook (P4).
+    Runs `alembic check` and exits non-zero if any migrations are pending.
+    This prevents a backend that raced past a failed or partial migrate hook from
+    corrupting its own schema on startup.
+
+Cross-reference:
+  - migrate hook (migrate-job.yaml, plan 03) runs alembic upgrade head BEFORE this
+    Deployment starts (pre-install/pre-upgrade weight -5).
+  - alembic-check initContainer (this file) verifies schema is current BEFORE the
+    main uvicorn container runs.  Belt-and-suspenders: hook migrates; initContainer verifies.
+  - readinessProbe gates load-balancer traffic until uvicorn reports /healthz OK.
+
+Image:
+  Shared backend image from plan 01: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+  Command: uvicorn factory (prod — NO --reload).
+
+Security:
+  securityContext stub (non-root) present.  Full SEC-03 hardening is Phase 119 scope.
+*/}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "clubcore.fullname" . }}-backend
+  labels:
+    {{- include "clubcore.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  # D-V40-REPLICAS: single bare-metal node; v4.0 constraint.
+  # Increase only after adding a proper session/state sharing strategy.
+  replicas: {{ .Values.backend.replicas | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "clubcore.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        {{- include "clubcore.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: backend
+    spec:
+      # Security context stub — full SEC-03 hardening (readOnlyRootFilesystem,
+      # drop ALL capabilities) is Phase 119 scope.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+
+      # -------------------------------------------------------------------
+      # initContainer: alembic-check (P4 belt-and-suspenders)
+      #
+      # Runs `alembic check` — exits non-zero if any migration is pending.
+      # This gates the main uvicorn container on schema currency, providing
+      # belt-and-suspenders on top of the pre-install/pre-upgrade migrate hook.
+      #
+      # Why both hook + initContainer?
+      #   The migrate hook is the PRIMARY gate (runs before any pod starts).
+      #   The alembic-check initContainer is the SECONDARY gate (runs per-pod
+      #   startup).  Together they defend against:
+      #     1. A CI/CD run where the hook was skipped (e.g., --no-hooks flag).
+      #     2. A cluster where a stale Job from a prior failed deploy is hiding
+      #        a pending migration.
+      #   If the hook did its job, `alembic check` exits 0 immediately and adds
+      #   only ~2s of startup latency.  If migrations are pending, the pod never
+      #   enters Ready state — surfacing the problem before it corrupts the schema.
+      # -------------------------------------------------------------------
+      initContainers:
+        - name: alembic-check
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
+          command: ["alembic", "check"]
+          # alembic needs DATABASE_URL (from Secret) and ENVIRONMENT/TZ (from ConfigMap).
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-config
+            - secretRef:
+                name: {{ .Release.Name }}-app-secret
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+
+      containers:
+        - name: backend
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy | default "IfNotPresent" }}
+
+          # Prod uvicorn factory — NO --reload (dev-only flag; would hot-reload in prod).
+          # Mirrors docker-compose.yml backend service command without --reload.
+          command:
+            - uvicorn
+            - "app.main:create_app"
+            - "--factory"
+            - "--host"
+            - "0.0.0.0"
+            - "--port"
+            - "8000"
+
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+
+          # Consume full environment from ConfigMap (TZ=UTC, ENVIRONMENT, REDIS_URL, etc.)
+          # and Secret (DATABASE_URL, SECRET_KEY, TELEGRAM_BOT_TOKEN, S3 creds, etc.).
+          # TZ=UTC arrives via the ConfigMap — P9 invariant.
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-config
+            - secretRef:
+                name: {{ .Release.Name }}-app-secret
+
+          # ---------------------------------------------------------------
+          # APP-02: Three probes on /healthz — startup / liveness / readiness
+          #
+          # /healthz is root-mounted (no auth required) — health.py confirms.
+          # All three probes hit the same endpoint to keep the contract simple.
+          # ---------------------------------------------------------------
+
+          # startupProbe: allows a generous window for cold-boot.
+          # uvicorn may take several seconds on first start (db pool init, bucket ensure).
+          # failureThreshold * periodSeconds = 30 * 10s = 300s max cold-boot window.
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: {{ .Values.backend.probes.startup.initialDelaySeconds | default 5 }}
+            periodSeconds: {{ .Values.backend.probes.startup.periodSeconds | default 10 }}
+            failureThreshold: {{ .Values.backend.probes.startup.failureThreshold | default 30 }}
+            successThreshold: 1
+            timeoutSeconds: {{ .Values.backend.probes.startup.timeoutSeconds | default 3 }}
+
+          # livenessProbe: detects a hung uvicorn process after successful startup.
+          # Kubernetes will restart the container if /healthz stops responding.
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 0
+            periodSeconds: {{ .Values.backend.probes.liveness.periodSeconds | default 30 }}
+            failureThreshold: {{ .Values.backend.probes.liveness.failureThreshold | default 3 }}
+            successThreshold: 1
+            timeoutSeconds: {{ .Values.backend.probes.liveness.timeoutSeconds | default 5 }}
+
+          # readinessProbe: gates load-balancer traffic.
+          # Pod only receives traffic when /healthz returns 200.
+          # This is the key probe for rolling deploys and post-migrate ordering.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 0
+            periodSeconds: {{ .Values.backend.probes.readiness.periodSeconds | default 10 }}
+            failureThreshold: {{ .Values.backend.probes.readiness.failureThreshold | default 3 }}
+            successThreshold: 1
+            timeoutSeconds: {{ .Values.backend.probes.readiness.timeoutSeconds | default 3 }}
+
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+
+          # Resource requests + limits — single-node tuned (modest for k3d dev).
+          # Override for production sizing: --set backend.resources.limits.memory=1Gi etc.
+          resources:
+            requests:
+              cpu: {{ .Values.backend.resources.requests.cpu | default "250m" | quote }}
+              memory: {{ .Values.backend.resources.requests.memory | default "256Mi" | quote }}
+            limits:
+              cpu: {{ .Values.backend.resources.limits.cpu | default "1000m" | quote }}
+              memory: {{ .Values.backend.resources.limits.memory | default "512Mi" | quote }}

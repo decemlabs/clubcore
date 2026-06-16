@@ -1,0 +1,29 @@
+{{/*
+backend-service.yaml — ClusterIP Service clubcore-backend
+
+Exposes the backend Deployment on port 8000 within the cluster.
+This is the target that Phase-119 Traefik Ingress will route to.
+
+Service name: {{ include "clubcore.fullname" . }}-backend
+In-cluster DNS: <release>-backend.<namespace>.svc.cluster.local:8000
+Short DNS:      <release>-backend:8000  (within same namespace)
+
+With release name "clubcore": clubcore-backend:8000
+*/}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "clubcore.fullname" . }}-backend
+  labels:
+    {{- include "clubcore.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "clubcore.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8000
+      targetPort: 8000
