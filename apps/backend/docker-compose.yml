@@ -128,6 +128,37 @@ services:
       - "8025:8025"
     restart: unless-stopped
 
+  # Local full-stack frontends (nginx static build + /api reverse-proxy).
+  # Production images use infra/nginx/{admin,client}.conf (no /api upstream —
+  # the k8s ingress routes /api). Locally there is no ingress, so we mount the
+  # *.local.conf override that proxies /api → backend. Build context is the repo
+  # root (the Dockerfiles COPY pnpm-lock.yaml + workspace packages).
+  admin:
+    build:
+      context: ../..
+      dockerfile: infra/docker/admin.Dockerfile
+    volumes:
+      - ../../infra/nginx/admin.local.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "5173:8080"
+    depends_on:
+      backend:
+        condition: service_started
+    restart: unless-stopped
+
+  client:
+    build:
+      context: ../..
+      dockerfile: infra/docker/client.Dockerfile
+    volumes:
+      - ../../infra/nginx/client.local.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "5174:8080"
+    depends_on:
+      backend:
+        condition: service_started
+    restart: unless-stopped
+
 volumes:
   postgres-data:
   seaweedfs-data:
