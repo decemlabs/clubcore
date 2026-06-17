@@ -37,6 +37,7 @@ dev = [
     "import-linter>=2.0",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
+    "pytest-timeout>=2.3",
     "asgi-lifespan>=2.1",
     "fakeredis>=2.35.1",
     "respx>=0.21",
@@ -90,6 +91,22 @@ warn_required_dynamic_aliases = true
 asyncio_mode = "auto"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+# Safety net: any test that blocks for >180s (e.g. a future lock-vs-subprocess
+# contention like the working_hours_config self-deadlock) is auto-failed instead
+# of hanging the whole run forever. See debug session pytest-isolation-deadlock.
+# `signal` (SIGALRM on the main thread) FAILS ONLY THE OFFENDING TEST and lets the
+# run continue to completion — unlike `thread`, which calls os._exit() and aborts
+# the whole session. Tests here run on the main thread (pytest-asyncio runner), so
+# SIGALRM interrupts even a blocked syscall (DB lock wait, network read).
+timeout = 180
+timeout_method = "signal"
+markers = [
+    # Tests that spawn `alembic downgrade` in a subprocess must NOT hold the
+    # autouse permissive_booking_config UPDATE row lock on working_hours_config,
+    # or the downgrade's DELETE/DROP deadlocks against it. This marker makes the
+    # autouse fixture early-return for such tests. See pytest-isolation-deadlock.
+    "no_permissive_booking_config: skip the autouse permissive_booking_config fixture (alembic-downgrade subprocess tests)",
+]
 filterwarnings = [
     "error",
     "ignore::DeprecationWarning:pydantic.*",
@@ -107,4 +124,13 @@ filterwarnings = [
     # This is a test-isolation limitation of mixing sync WS tests with async tests;
     # the production WS code is unaffected (Phase 90 RT-01/03 plan 03).
     "ignore::pytest.PytestUnraisableExceptionWarning",
+    # starlette 1.x (bumped to 1.3.1, commit 1352ef74) emits StarletteDeprecationWarning
+    # at IMPORT time of `starlette.testclient`/`fastapi.testclient` when the optional
+    # `httpx2` package is absent ("Using `httpx` with `starlette.testclient` is
+    # deprecated; install `httpx2` instead"). With filterwarnings=error this aborts
+    # COLLECTION of every module importing the sync TestClient (tests/messaging WS
+    # tests + tests/unit/test_webhook_router_smoke.py), interrupting the whole run.
+    # We intentionally keep the sync TestClient (WS tests need it) and are not adopting
+    # httpx2 here, so suppress this specific deprecation. Mirrors the botocore idiom above.
+    "ignore::starlette.exceptions.StarletteDeprecationWarning",
 ]

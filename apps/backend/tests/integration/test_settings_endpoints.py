@@ -271,6 +271,13 @@ async def test_owner_put_working_hours_unknown_key_422(
 # ---------------------------------------------------------------------------
 
 
+# Opt out of the autouse permissive_booking_config fixture: it overwrites
+# booking_config.booking_ahead_days=365 / cutoff_minutes=0, but this test asserts
+# the migration-0071 SEEDED singleton (booking_ahead_days=14, cutoff_minutes=60).
+# Without the opt-out the endpoint (reading the same overridden db_session) returns
+# the permissive values and the test fails `assert 365 == 14` even in isolation.
+# See debug session pytest-isolation-deadlock.
+@pytest.mark.no_permissive_booking_config
 async def test_owner_get_booking_config_returns_seeded_singleton(
     http_client_owner: AsyncClient,
 ) -> None:

@@ -31,6 +31,16 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.config import get_settings
 
+# These tests spawn `alembic downgrade` in a subprocess (separate connection). The
+# round-trip test downgrades below revision 0070, executing the 0071 `DELETE FROM
+# working_hours_config` + 0070 `DROP TABLE working_hours_config`. The autouse
+# permissive_booking_config fixture holds an uncommitted UPDATE row lock on that
+# singleton row for the whole test, so the downgrade subprocess deadlocks against
+# it (circular self-deadlock — see debug session pytest-isolation-deadlock). These
+# tests use their own real-commit engine session and never read booking/working-
+# hours config, so opting out of the fixture is safe.
+pytestmark = pytest.mark.no_permissive_booking_config
+
 BACKEND_DIR = Path(__file__).resolve().parent.parent.parent.parent
 
 _REV_PREV = "0044_client_refresh_token"
@@ -65,9 +75,7 @@ async def direct_engine_session() -> AsyncIterator[AsyncSession]:
             await probe.execute(text("select 1"))
     except Exception as exc:
         await engine.dispose()
-        pytest.skip(
-            f"DATABASE_URL not reachable; run `docker compose up postgres` first ({exc!r})"
-        )
+        pytest.skip(f"DATABASE_URL not reachable; run `docker compose up postgres` first ({exc!r})")
 
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     async with session_factory() as session:

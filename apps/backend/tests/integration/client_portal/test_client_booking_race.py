@@ -44,6 +44,17 @@ from app.modules.pt_packages.models import PtPackage, PtPackagePlan
 from app.modules.schedule.models import TrainerAvailabilitySlot
 from app.modules.trainers.models import Trainer
 
+# This test sets working_hours_config + booking_config EXPLICITLY via its own
+# real-commit session (db_session_real_commit) so the concurrent HTTP bookings
+# see permissive timing. The autouse permissive_booking_config fixture runs on a
+# SEPARATE SAVEPOINT db_session connection and holds an uncommitted UPDATE row
+# lock on the SAME working_hours_config singleton — so this test's own
+# `UPDATE working_hours_config` deadlocks against the fixture (circular
+# self-deadlock; verified via pg_blocking_pids — see debug session
+# pytest-isolation-deadlock). Opt out of the autouse fixture: this test owns its
+# config setup, so the fixture is both redundant and actively harmful here.
+pytestmark = pytest.mark.no_permissive_booking_config
+
 # ---------------------------------------------------------------------------
 # db_session_real_commit fixture — copied verbatim from test_booking_race.py
 # (see bookings/test_booking_race.py:54-101; TRUNCATE list extended for
@@ -90,6 +101,44 @@ async def db_session_real_commit() -> AsyncIterator[AsyncSession]:
                 "otp_codes, client_refresh_tokens, audit_log "
                 "RESTART IDENTITY CASCADE"
             )
+        )
+        # The test mutates the booking_config + working_hours_config SINGLETONS via
+        # REAL commits (so the concurrent HTTP bookings see permissive timing).
+        # Those rows are NOT in the TRUNCATE list (and must not be — they are seeded
+        # singletons), and this test opts out of the autouse permissive_booking_config
+        # fixture (no_permissive_booking_config) which would otherwise roll them back.
+        # So restore them to the migration 0071 seeded defaults here; otherwise the
+        # mutated values (booking_ahead_days=365 etc.) leak into the shared DB and
+        # break later tests that assert the pristine seeded singleton
+        # (e.g. test_settings_endpoints::test_owner_get_booking_config_returns_seeded_singleton).
+        await conn.execute(
+            text(
+                "UPDATE booking_config "
+                "SET booking_ahead_days = 14, cutoff_minutes = 60 "
+                "WHERE id = CAST(:id AS uuid)"
+            ),
+            {"id": "00000000-0000-0000-0000-000000000003"},
+        )
+        _seeded_schedule = [
+            {"day_of_week": 0, "open": "08:00", "close": "22:00"},
+            {"day_of_week": 1, "open": "08:00", "close": "22:00"},
+            {"day_of_week": 2, "open": "08:00", "close": "22:00"},
+            {"day_of_week": 3, "open": "08:00", "close": "22:00"},
+            {"day_of_week": 4, "open": "08:00", "close": "22:00"},
+            {"day_of_week": 5, "open": "09:00", "close": "21:00"},
+            {"day_of_week": 6, "open": "09:00", "close": "21:00"},
+        ]
+        await conn.execute(
+            text(
+                "UPDATE working_hours_config "
+                "SET schedule = CAST(:schedule AS jsonb), closures = CAST(:closures AS jsonb) "
+                "WHERE id = CAST(:id AS uuid)"
+            ),
+            {
+                "schedule": json.dumps(_seeded_schedule),
+                "closures": json.dumps([]),
+                "id": "00000000-0000-0000-0000-000000000004",
+            },
         )
     await engine.dispose()
 
@@ -228,8 +277,7 @@ async def test_concurrent_client_create_booking_partial_unique_at_db_layer(
     # time (now+48h) is accepted regardless of time-of-day. The real-commit
     # session makes this visible to the concurrent HTTP booking requests.
     _all_days_open = [
-        {"day_of_week": dow, "open_time": "00:00", "close_time": "23:59"}
-        for dow in range(7)
+        {"day_of_week": dow, "open_time": "00:00", "close_time": "23:59"} for dow in range(7)
     ]
     await db_session_real_commit.execute(
         text(
@@ -312,8 +360,7 @@ async def test_concurrent_client_create_booking_partial_unique_at_db_layer(
 
     statuses = sorted(r.status_code for r in responses)  # type: ignore[union-attr]
     assert statuses == [201, 409], (
-        f"Expected [201, 409], got {statuses}; "
-        f"bodies: {[r.text for r in responses]}"  # type: ignore[union-attr]
+        f"Expected [201, 409], got {statuses}; bodies: {[r.text for r in responses]}"  # type: ignore[union-attr]
     )
 
     bodies_409 = [r.json() for r in responses if r.status_code == 409]  # type: ignore[union-attr]
@@ -343,9 +390,7 @@ async def test_concurrent_client_create_booking_partial_unique_at_db_layer(
     assert refreshed_slot.status == "booked"
 
     created_count = await db_session_real_commit.scalar(
-        select(func.count())
-        .select_from(AuditLog)
-        .where(AuditLog.action == "booking_created")
+        select(func.count()).select_from(AuditLog).where(AuditLog.action == "booking_created")
     )
     assert created_count == 1, (
         f"Expected exactly 1 booking_created audit row after race, got {created_count}"

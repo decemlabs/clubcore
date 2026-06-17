@@ -63,13 +63,15 @@ _WORKING_HOURS_CONFIG_ID = "00000000-0000-0000-0000-000000000004"
 # All-day schedule for all 7 weekdays — used by permissive booking config reset.
 # day_of_week: 0=Monday … 6=Sunday (CR-01 fix: 0-based, matches seed/frontend convention).
 _ALL_DAYS_OPEN = [
-    {"day_of_week": dow, "open_time": "00:00", "close_time": "23:59"}
-    for dow in range(0, 7)
+    {"day_of_week": dow, "open_time": "00:00", "close_time": "23:59"} for dow in range(0, 7)
 ]
 
 
 @pytest_asyncio.fixture(autouse=True)
-async def permissive_booking_config(db_session: AsyncSession) -> None:
+async def permissive_booking_config(
+    request: pytest.FixtureRequest,
+    db_session: AsyncSession,
+) -> None:
     """Reset booking_config and working_hours_config to permissive values before each test.
 
     Phase 108 Plan 03 added enforcement guards in bookings/service.py that read
@@ -89,7 +91,15 @@ async def permissive_booking_config(db_session: AsyncSession) -> None:
     Tests in test_booking_settings_enforcement.py override these values
     explicitly within each test body and restore them on teardown
     (their transactions roll back anyway).
+
+    DEADLOCK GUARD (debug session pytest-isolation-deadlock): mirrors the parent
+    tests/integration/conftest.py fixture — tests marked
+    ``@pytest.mark.no_permissive_booking_config`` skip the UPDATE so they hold no
+    working_hours_config row lock that an ``alembic downgrade`` subprocess would
+    deadlock against.
     """
+    if request.node.get_closest_marker("no_permissive_booking_config") is not None:
+        return
     # Reset booking_config to permissive values.
     await db_session.execute(
         sa.text(  # noqa: TABLE_REF
