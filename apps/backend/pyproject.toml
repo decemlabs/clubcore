@@ -12,6 +12,9 @@ dependencies = [
     "asyncpg>=0.30",
     "email-validator>=2.0",
     "fastapi>=0.115",
+    # CVE-2026-48710 "BadHost" — HIGH host-header auth-bypass, fixed in starlette 1.0.1.
+    # FastAPI only floors starlette>=0.46.0, so pin the security minimum explicitly.
+    "starlette>=1.0.1",
     "httpx>=0.27",
     "jinja2>=3.1.4,<4",
     "pydantic>=2.11,<3",
@@ -23,7 +26,8 @@ dependencies = [
     "structlog>=24.0",
     "uvicorn[standard]>=0.30",
     "python-multipart>=0.0.9",
-    "prometheus-fastapi-instrumentator>=7.1,<8",
+    # v8+ required: 7.1.0 caps starlette<1.0.0, blocking the CVE-2026-48710 fix.
+    "prometheus-fastapi-instrumentator>=8,<9",
 ]
 
 [dependency-groups]
