@@ -35,6 +35,72 @@ tools/        Вспомогательные скрипты (Newman, генер�
 
 ---
 
+## Архитектура
+
+Backend — **модульный монолит**: единое приложение FastAPI, разбитое на изолированные бизнес-домены (`app/modules/<домен>`) поверх инфраструктурного слоя (`app/core`). Границы между слоями и доменами проверяются `import-linter`. Два независимых принципала аутентификации — персонал (cookies `cc_*`) и клиент (cookies `cc_client_*`), доступ разграничивается RBAC.
+
+Фронтенд — две SPA, обращающиеся к backend через типизированный `api-client`. Локально статика отдаётся nginx, который проксирует `/api` на backend; в k3s ту же роль выполняет ingress.
+
+```mermaid
+flowchart TB
+    subgraph Users["Пользователи"]
+        Staff["Персонал<br/>(браузер)"]
+        Cust["Клиент<br/>(браузер / PWA)"]
+    end
+
+    subgraph Compose["Docker Compose (локально)"]
+        subgraph FE["Frontend — nginx + статика"]
+            Admin["admin :5173<br/>React 19 SPA"]
+            ClientApp["client :5174<br/>React 19 PWA"]
+        end
+        Backend["backend :8000<br/>FastAPI — модульный монолит"]
+        Arq["arq-worker<br/>периодические задачи"]
+        Bot["telegram-bot<br/>long-polling"]
+        subgraph Data["Хранилища"]
+            PG[("PostgreSQL 16")]
+            Redis[("Redis 7")]
+            S3[("SeaweedFS · S3")]
+        end
+    end
+
+    subgraph Ext["Внешние сервисы"]
+        YK["ЮKassa<br/>(песочница)"]
+        TG["Telegram API"]
+    end
+
+    Staff --> Admin
+    Cust --> ClientApp
+    Admin -- "/api" --> Backend
+    ClientApp -- "/api" --> Backend
+
+    Backend --> PG
+    Backend --> Redis
+    Backend --> S3
+    Arq --> PG
+    Arq --> Redis
+    Bot --> PG
+
+    Backend -- "создание платежа" --> YK
+    YK -- "webhook payment.succeeded" --> Backend
+    Bot <-->|OTP / уведомления| TG
+    Arq -- "напоминания" --> TG
+```
+
+### Бизнес-домены (`app/modules`)
+
+| Группа | Модули |
+|---|---|
+| Доступ и пользователи | `auth`, `client_auth`, `users`, `client_portal` |
+| Клиенты и абонементы | `clients`, `memberships`, `pt_packages`, `pt_sessions`, `visits` |
+| Расписание | `schedule`, `bookings`, `trainers` |
+| Деньги | `payments`, `online_payments`, `online_refunds`, `payment_methods`, `autopay_charges`, `billing`, `fiscal_receipts`, `promo_codes`, `loyalty`, `referrals` |
+| Коммуникации | `messaging`, `notifications`, `gym` |
+| Отчётность и настройки | `reports`, `payroll`, `settings` |
+
+Сквозные механизмы (`app/core`): аудит-лог всех значимых операций, деньги в копейках (целочисленно), идемпотентность платёжных операций, фоновые задачи и крон через ARQ (Redis), structlog с request-id.
+
+---
+
 ## Быстрый старт (локально, всё в Docker)
 
 Требуется Docker.
