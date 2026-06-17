@@ -1,7 +1,7 @@
 [project]
-name = "sportzal-backend"
+name = "clubcore-backend"
 version = "0.1.0"
-description = "Sportzal — gym CRM backend (modular monolith)."
+description = "clubcore — gym CRM backend (modular monolith)."
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "aioboto3>=13.0,<14",
