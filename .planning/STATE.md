@@ -2,9 +2,12 @@
 gsd_state_version: 1.0
 milestone: v4.1
 milestone_name: Codebase Hardening
+current_phase: 122
 status: planning
-last_updated: "2026-07-26T11:30:00.000Z"
+stopped_at: Phase 122 context gathered
+last_updated: "2026-07-26T11:34:38.913Z"
 last_activity: 2026-07-26
+last_activity_desc: v4.1 ROADMAP.md created, 32/32 requirements mapped, 100% coverage confirmed
 progress:
   total_phases: 6
   completed_phases: 0
@@ -178,8 +181,10 @@ These are the D-V40-LOCAL-VALIDATE operator-pending boundary — static validati
 
 ## Session Continuity
 
-Last session: 2026-07-26T11:30:00.000Z
-Stopped at: v4.1 ROADMAP.md created (Phases 122-127), REQUIREMENTS.md traceability filled (32/32 mapped), STATE.md updated
+**Resume file:** .planning/phases/122-audit-registry-producing-read-only-pass/122-CONTEXT.md
+
+Last session: 2026-07-26T11:34:38.905Z
+Stopped at: Phase 122 context gathered
 Resume: `/gsd-plan-phase 122` (Audit — Registry-Producing Read-Only Pass)
 
 ## Operator Next Steps
