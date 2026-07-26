@@ -863,3 +863,26 @@ zero FAILED/ERROR in the fresh full run (pytest-full-run-2026-07-26.log); this
 targeted re-run over both files' full test collections (24 items total) still
 reports zero failures. Not a full-suite re-run — targeted node-ID/path subset
 only, per D-123-06.
+
+===============================================================================
+Plan 123-02 Task 2 — bookings fixture-date time-bomb fix verification (V41-HYG-080)
+===============================================================================
+
+Command (verbatim):
+
+DATABASE_URL='postgresql+asyncpg://app:app@localhost:5432/clubcore' REDIS_URL='redis://localhost:6379/0' \
+uv run pytest tests/integration/bookings/test_bookings_create.py::test_create_booking_pt_package_expired_before_slot_moscow_tz -v
+
+Result: 1 passed in 0.34s
+
+Full file re-run (all 12 tests in test_bookings_create.py): 12 passed in 3.97s
+
+Fix: replaced the hardcoded 2026-07-01/2026-06-30 fixture dates (now in the past
+relative to wall-clock "today" 2026-07-26, tripping the booking service's
+defensive slot-freshness guard before the intended PtPackageExpiredBeforeSlotError
+assertion) with dates computed relative to datetime.now(UTC) + timedelta(days=365),
+preserving the exact same Moscow-TZ business-date relationship the test asserts.
+Trivial, import-only-adjacent, inside apps/backend/tests/** footprint — disposed
+`fixed+verified` per D-123-08 item 8's decision tree (trivial-and-in-footprint).
+`uv run ruff check tests/integration/bookings/test_bookings_create.py` — All checks
+passed (zero new lint findings from the fix).
