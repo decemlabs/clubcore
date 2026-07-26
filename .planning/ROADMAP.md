@@ -514,7 +514,13 @@ Containerized the full stack + IaC (Terraform on-prem k3s) + observability (kube
   6. All 23 v4.0 operator-pending items are each triaged into their own registry row, tagged either provable-locally-in-k3d `(k3d-scope)` or genuinely hardware/credential-gated.
   7. Git history for this phase shows zero application-code diffs — only the registry artifact (and any dedicated audit-sweep scripts) were added.
 
-**Plans**: TBD
+**Plans**: 6 plans
+- [ ] 122-01-PLAN.md — Tracer: registry skeleton + staging protocol + read-only guard (proven on the HARD GATE payload)
+- [ ] 122-02-PLAN.md — 1a static hygiene sweep (markers + 4 pinned tools + import-linter/ESLint) + three-way reachability manifest
+- [ ] 122-03-PLAN.md — 1b edge-case seed dataset (per-domain matrix + additive idempotent seed_edge_cases.py) — AUD-04 precondition
+- [ ] 122-04-PLAN.md — 1c infra operator-pending triage (k3d-scope vs hardware/cred-gated; HARD GATEs stay open)
+- [ ] 122-05-PLAN.md — 1b live-backend hunt: 29-domain Zod↔wire manifest + browser UAT walk on the edge seed
+- [ ] 122-06-PLAN.md — Merge + freeze registry + AUD-08 read-only enforcement (git-diff allowlist)
 **UI hint**: yes
 
 ### Phase 123: Test-Infra Unblock
