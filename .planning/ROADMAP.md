@@ -492,7 +492,7 @@ Containerized the full stack + IaC (Terraform on-prem k3s) + observability (kube
 
 **k3d-honesty constraint (INFRA):** находки, полученные в k3d, несут квалификатор `(k3d-scope)`; два HARD GATE'а v4.0 (SEC-02 off-node custody RSA-ключа sealed-secrets, BAK-03 verified restore round-trip) НЕ объявляются закрытыми и остаются открытыми/неотредактированными.
 
-- [ ] **Phase 122: Audit — Registry-Producing Read-Only Pass** - Три параллельных read-only sub-pass'а (статическая гигиена, live-backend hunt, infra-триаж) производят один замороженный реестр дефектов
+- [x] **Phase 122: Audit — Registry-Producing Read-Only Pass** - Три параллельных read-only sub-pass'а (статическая гигиена, live-backend hunt, infra-триаж) производят один замороженный реестр дефектов — completed 2026-07-26
 - [ ] **Phase 123: Test-Infra Unblock** - Autouse-fixture deadlock backend pytest устранён либо задокументирован узкий обход, таймбоксировано
 - [ ] **Phase 124: FUNC Fixes — Risk-First** - Каждый функциональный дефект (schema-drift/недостижимость/reachability) получает терминальную диспозицию, locked-invariant-риски — первыми
 - [ ] **Phase 125: HYGIENE Fixes** - Каждая находка гигиены (TODO/dead-code/дубли/границы/устаревшие доки) получает терминальную диспозицию
@@ -531,7 +531,7 @@ Containerized the full stack + IaC (Terraform on-prem k3s) + observability (kube
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 122-06-PLAN.md — Merge + freeze registry + AUD-08 read-only enforcement (git-diff allowlist)
+- [x] 122-06-PLAN.md — Merge + freeze registry + AUD-08 read-only enforcement (git-diff allowlist)
 
 **UI hint**: yes
 
@@ -634,7 +634,7 @@ Containerized the full stack + IaC (Terraform on-prem k3s) + observability (kube
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 122. Audit — Registry-Producing Read-Only Pass | v4.1 | 5/6 | In Progress|  |
+| 122. Audit — Registry-Producing Read-Only Pass | v4.1 | 6/6 | Complete   | 2026-07-26 |
 | 123. Test-Infra Unblock | v4.1 | 0/TBD | Not started | - |
 | 124. FUNC Fixes — Risk-First | v4.1 | 0/TBD | Not started | - |
 | 125. HYGIENE Fixes | v4.1 | 0/TBD | Not started | - |

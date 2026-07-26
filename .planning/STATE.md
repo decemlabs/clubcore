@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v4.1
 milestone_name: Codebase Hardening
-status: executing
-stopped_at: "Completed 122-05-PLAN.md (static Zod-wire coverage manifest; live-run AUD-05 divergence + AUD-06 browser walk deferred:blocked, no seed creds)"
-last_updated: "2026-07-26T14:35:19.294Z"
+status: verifying
+stopped_at: Completed 122-06-PLAN.md (registry merged + frozen, 136 rows; AUD-08 read-only check PASSED; Phase 122 complete, ready for verification)
+last_updated: "2026-07-26T14:57:17.247Z"
 last_activity: 2026-07-26
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 6
-  completed_plans: 5
-  percent: 0
+  completed_plans: 6
+  percent: 17
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md
 
 Phase: 122 (audit-registry-producing-read-only-pass) — EXECUTING
 Plan: 6 of 6
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-07-26
 
 ## v4.1 Roadmap Summary (current milestone)
@@ -183,8 +183,8 @@ These are the D-V40-LOCAL-VALIDATE operator-pending boundary — static validati
 
 **Resume file:** None
 
-Last session: 2026-07-26T14:35:19.289Z
-Stopped at: Completed 122-05-PLAN.md (static Zod-wire coverage manifest; live-run AUD-05 divergence + AUD-06 browser walk deferred:blocked, no seed creds)
+Last session: 2026-07-26T14:57:17.242Z
+Stopped at: Completed 122-06-PLAN.md (registry merged + frozen, 136 rows; AUD-08 read-only check PASSED; Phase 122 complete, ready for verification)
 Resume: `/gsd-plan-phase 122` (Audit — Registry-Producing Read-Only Pass)
 
 ## Operator Next Steps
@@ -200,6 +200,7 @@ Resume: `/gsd-plan-phase 122` (Audit — Registry-Producing Read-Only Pass)
 | Phase 122 P3 | 35min | 2 tasks | 3 files |
 | Phase 122 P4 | 25min | 1 tasks | 1 files |
 | Phase 122 P05 | 45min | 1 tasks | 4 files |
+| Phase 122 P06 | 25min | 2 tasks | 5 files |
 
 ## Decisions
 
@@ -209,3 +210,5 @@ Resume: `/gsd-plan-phase 122` (Audit — Registry-Producing Read-Only Pass)
 - [Phase 122]: Zero-kopeck money boundary lives on MembershipPlan.price_kopecks, not Payment.amount_kopecks, because Payment's CHECK constraint forbids a literal zero amount (D-122-12)
 - [Phase 122]: Re-derived v4.0 operator-pending count = 29 distinct items (2 HARD GATEs + 27 non-gate rows), not the quoted 23 nor STATE.md's 27 tally — recorded as V41-INFRA-030 reconciliation row rather than force-fit (D-122-22)
 - [Phase ?]: 122-05: static Zod<->wire coverage manifest delivered in full (29 domains, 5 with capture+contract-test pattern, 24 gap); live runtime-divergence check + browser UAT walk honestly rowed deferred:blocked (owner seed creds permission-protected this session) rather than fabricated
+- [Phase 122]: Two-commit freeze stamp: frozen_at_commit recorded in an immediate follow-up commit (2ce5da33 substantive freeze -> f02f9c68 SHA stamp), since a commit cannot embed its own resulting hash
+- [Phase 122]: Merged all three audit staging files (136 rows: FUNC=34, HYGIENE=72, INFRA=30) and froze the v4.1 defect registry; fixed an escaped-pipe parsing bug in merge-registry.mjs discovered during the real merge
