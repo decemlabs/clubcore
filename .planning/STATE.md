@@ -5,8 +5,8 @@ milestone_name: Codebase Hardening
 current_phase: 123
 current_phase_name: Test-Infra Unblock
 status: planning
-stopped_at: Completed 122-06-PLAN.md (registry merged + frozen, 136 rows; AUD-08 read-only check PASSED; Phase 122 complete, ready for verification)
-last_updated: "2026-07-26T15:04:29.808Z"
+stopped_at: Phase 123 context gathered
+last_updated: "2026-07-26T15:23:14.639Z"
 last_activity: 2026-07-26
 last_activity_desc: Phase 122 complete, transitioned to Phase 123
 progress:
@@ -184,10 +184,10 @@ These are the D-V40-LOCAL-VALIDATE operator-pending boundary — static validati
 
 ## Session Continuity
 
-**Resume file:** None
+**Resume file:** .planning/phases/123-test-infra-unblock/123-CONTEXT.md
 
-Last session: 2026-07-26T14:57:17.242Z
-Stopped at: Completed 122-06-PLAN.md (registry merged + frozen, 136 rows; AUD-08 read-only check PASSED; Phase 122 complete, ready for verification)
+Last session: 2026-07-26T15:23:14.632Z
+Stopped at: Phase 123 context gathered
 Resume: `/gsd-plan-phase 122` (Audit — Registry-Producing Read-Only Pass)
 
 ## Operator Next Steps
