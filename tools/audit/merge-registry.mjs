@@ -38,12 +38,19 @@ const CATEGORIES = ['FUNC', 'HYGIENE', 'INFRA']
 const COLUMN_COUNT = 11 // id, category, severity, anchor, repro, evidence, disposition,
 // owning_phase, blocks/blocked_by, locked_invariant_risk, reason (D-122-03)
 
-/** Split a single `| a | b | c |` markdown table line into trimmed cell strings. */
+/**
+ * Split a single `| a | b | c |` markdown table line into trimmed cell strings.
+ * Splits only on unescaped `|` — a `\|` inside a cell (the standard markdown-table escape for a
+ * literal pipe, e.g. inside a shell one-liner like `foo \| bar`) is treated as cell content, not
+ * a column separator. Without this, any row whose evidence/repro cell contains a shell pipe
+ * breaks the 11-column parse (discovered merging the 1c-infra.md staging rows for V41-INFRA-007/
+ * 018/023, whose repro commands legitimately contain `\|`).
+ */
 function splitRow(line) {
   let body = line.trim()
   if (body.startsWith('|')) body = body.slice(1)
   if (body.endsWith('|')) body = body.slice(0, -1)
-  return body.split('|').map((c) => c.trim())
+  return body.split(/(?<!\\)\|/).map((c) => c.trim())
 }
 
 /**
