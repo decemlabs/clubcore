@@ -556,7 +556,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 123-02-PLAN.md — F821 closure across both test files, terminal-disposition rows appended to the frozen registry's `## Discovered during fix`, and the D-123-11 footprint gate (TEST-02, TEST-01 verification row)
+- [x] 123-02-PLAN.md — F821 closure across both test files, terminal-disposition rows appended to the frozen registry's `## Discovered during fix`, and the D-123-11 footprint gate (TEST-02, TEST-01 verification row)
 
 ### Phase 124: FUNC Fixes — Risk-First
 

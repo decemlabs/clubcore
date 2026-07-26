@@ -33,7 +33,7 @@
 - [x] **TEST-01**: Свежий полный прогон backend pytest подтверждает, что фикс isolation-deadlock от закрытия v3.2 (`f438ced2` — маркер `no_permissive_booking_config` на 4 модулях + восстановление teardown booking-race + `pytest-timeout` 180s; диагноз в `.planning/debug/pytest-isolation-deadlock.md`) всё ещё держится: сюит доходит до конца без зависания. Если deadlock регрессировал или фикс оказался частичным — устранить либо задокументировать ограниченный per-module обход. Таймбокс соблюдён, расширение в полную археологию тестов не допущено.
   **Посылка исправлена 2026-07-26:** формулировка изначально предполагала, что deadlock всё ещё открыт — это взято из устаревшего текста закрытия v3.2 в `PROJECT.md`; реестр отложенного в `STATE.md` фиксирует его как ✅ RESOLVED. Требование = верификация, а не починка с нуля.
 
-- [ ] **TEST-02**: Остаточные падения последнего известного полного прогона (3 failed / 2 errors при 3058 passed — `test_freeze_race`, promo F821, `test_alembic_clean` и остальные) перепроверены на свежем прогоне и занесены отдельными строками реестра; допустимо финальное `deferred` с причиной `accepted-risk`
+- [x] **TEST-02**: Остаточные падения последнего известного полного прогона (3 failed / 2 errors при 3058 passed — `test_freeze_race`, promo F821, `test_alembic_clean` и остальные) перепроверены на свежем прогоне и занесены отдельными строками реестра; допустимо финальное `deferred` с причиной `accepted-risk`
 
 ### Functional fixes (FUNC) — баги на живых данных
 
@@ -130,7 +130,7 @@
 | AUD-07 | Phase 122 | Complete |
 | AUD-08 | Phase 122 | Complete |
 | TEST-01 | Phase 123 | Complete |
-| TEST-02 | Phase 123 | Pending |
+| TEST-02 | Phase 123 | Complete |
 | FUNC-01 | Phase 124 | Pending |
 | FUNC-02 | Phase 124 | Pending |
 | FUNC-03 | Phase 124 | Pending |
