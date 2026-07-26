@@ -155,3 +155,7 @@ None - no external service configuration required.
 ---
 *Phase: 122-audit-registry-producing-read-only-pass*
 *Completed: 2026-07-26*
+
+## Self-Check: PASSED
+
+All 9 claimed files verified present on disk; all 4 claimed commit hashes (`b81d7da2`, `4f1be780`, `eb4080c7`, `64262149`) verified present in git history.
