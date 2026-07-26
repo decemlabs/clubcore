@@ -3,16 +3,17 @@ gsd_state_version: 1.0
 milestone: v4.1
 milestone_name: Codebase Hardening
 current_phase: 122
-status: planning
-stopped_at: Phase 122 context gathered
-last_updated: "2026-07-26T11:48:37.460Z"
+current_phase_name: audit-registry-producing-read-only-pass
+status: executing
+stopped_at: Completed 122-01-PLAN.md
+last_updated: "2026-07-26T12:43:20.032Z"
 last_activity: 2026-07-26
-last_activity_desc: v4.1 ROADMAP.md created, 32/32 requirements mapped, 100% coverage confirmed
+last_activity_desc: Phase 122 execution started
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 6
+  completed_plans: 1
   percent: 0
 ---
 
@@ -23,14 +24,14 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 122 — Audit — Registry-Producing Read-Only Pass
+**Current focus:** Phase 122 — audit-registry-producing-read-only-pass
 
 ## Current Position
 
-Phase: 122 — Audit — Registry-Producing Read-Only Pass (Not started)
-Plan: —
-Status: Roadmap created (6 phases, 122-127); ready for `/gsd-plan-phase 122`
-Last activity: 2026-07-26 — v4.1 ROADMAP.md created, 32/32 requirements mapped, 100% coverage confirmed
+Phase: 122 (audit-registry-producing-read-only-pass) — EXECUTING
+Plan: 2 of 6
+Status: Ready to execute
+Last activity: 2026-07-26 — Phase 122 execution started
 
 ## v4.1 Roadmap Summary (current milestone)
 
@@ -181,12 +182,22 @@ These are the D-V40-LOCAL-VALIDATE operator-pending boundary — static validati
 
 ## Session Continuity
 
-**Resume file:** .planning/phases/122-audit-registry-producing-read-only-pass/122-CONTEXT.md
+**Resume file:** None
 
-Last session: 2026-07-26T11:48:37.453Z
-Stopped at: Phase 122 context gathered
+Last session: 2026-07-26T12:43:20.024Z
+Stopped at: Completed 122-01-PLAN.md
 Resume: `/gsd-plan-phase 122` (Audit — Registry-Producing Read-Only Pass)
 
 ## Operator Next Steps
 
 - Run `/gsd-plan-phase 122` to plan the Audit phase (read-only, three parallel sub-passes: static hygiene / live-backend hunt / infra triage).
+
+## Performance Metrics
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 122 P1 | 15min | 2 tasks | 8 files |
+
+## Decisions
+
+- [Phase ?]: 122-01: registry rows route by per-row category column (not staging-file name); reworded a schema-legend example ID that collided with real HARD GATE row data in the plan's verify grep

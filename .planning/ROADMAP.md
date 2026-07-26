@@ -517,7 +517,7 @@ Containerized the full stack + IaC (Terraform on-prem k3s) + observability (kube
 **Plans**: 6 plans
 **Wave 1**
 
-- [ ] 122-01-PLAN.md — Tracer: registry skeleton + staging protocol + read-only guard (proven on the HARD GATE payload)
+- [x] 122-01-PLAN.md — Tracer: registry skeleton + staging protocol + read-only guard (proven on the HARD GATE payload)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

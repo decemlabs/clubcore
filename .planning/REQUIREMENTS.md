@@ -8,6 +8,7 @@
 **Done-bar (наследует D-V40-LOCAL-VALIDATE):** каждая строка DEFECT-реестра имеет терминальную диспозицию (`fixed+verified` либо `deferred`+причина); боевое железо и продакшн-креды вне scope, сфабрикованные доказательства запрещены.
 
 **Registry contract:** строка реестра = `id, category, severity, anchor, repro, evidence, disposition, owning_phase, blocks/blocked_by, locked_invariant_risk, reason (если deferred)`.
+
 - **Disposition (3 состояния):** `fixed+verified` (evidence — перезапускаемый артефакт: команда + вывод, путь к логу/скриншоту, имя contract-теста; проза не принимается) · `fixed+unverified` (транзитное, не финальное — до закрытия milestone должно стать `fixed+verified` либо `deferred`) · `deferred` (финальное, с причиной `operator-pending` / `out-of-scope` / `accepted-risk`).
 - **Category (3):** FUNC · HYGIENE · INFRA.
 - **Severity (3):** Blocker (падает / недоступно / неюзабельно) · Major (работает неверно без падения) · Minor (косметика, ноль поведенческого эффекта).
@@ -18,19 +19,20 @@
 
 ### Audit (AUD) — read-only фаза, производит единственный реестр
 
-- [ ] **AUD-01**: Существует единственный артефакт `.planning/audits/v4.1-DEFECT-REGISTRY.md` со схемой строки из Registry contract выше; на закрытии аудит-фазы он заморожен (findings, обнаруженные позже, дописываются с тегом `discovered-during-fix` и НЕ порождают новый аудит-проход)
+- [x] **AUD-01**: Существует единственный артефакт `.planning/audits/v4.1-DEFECT-REGISTRY.md` со схемой строки из Registry contract выше; на закрытии аудит-фазы он заморожен (findings, обнаруженные позже, дописываются с тегом `discovered-during-fix` и НЕ порождают новый аудит-проход)
 - [ ] **AUD-02**: Статический прогон гигиены выполнен и весь его вывод затриажен в строки реестра: перечисление всех TODO/FIXME/HACK/XXX маркеров, одноразовые прогоны Knip + jscpd + vulture + deptry, ревизия 3 контрактов import-linter и ESLint-границ admin
 - [ ] **AUD-03**: Построен reachability-манифест — трёхсторонний join `router` × `nav-items` × реальный экранный компонент — для `apps/admin` и `apps/client`; каждый задуманный экран либо доказан достижимым, либо стал строкой реестра
 - [ ] **AUD-04**: Edge-case seed-датасет авторски создан ДО live-backend охоты: nullable-поля реально null, сущности с пустой историей, пагинация дальше первой страницы, все семейства ошибок (422/403/404/409/429/anti-oracle), денежные и DST-граничные значения. Повторный прогон чистого демо-сида доказательством не считается
 - [ ] **AUD-05**: Построен Zod↔wire манифест (каждый call-site API × его Zod-схема) и проверен механически по всем ~25 доменам `apps/admin/src/features/*` за один проход; каждое расхождение — строка реестра
 - [ ] **AUD-06**: Браузерный UAT-обход каждого достижимого экрана `apps/admin` и `apps/client` против реального backend на edge-case сиде; падения, пустые экраны и ошибки консоли — строки реестра
 - [ ] **AUD-07**: 23 operator-pending пункта v4.0 затриажены на «доказуемо локально в k3d» vs «требует железа/кредов»; каждый — строка реестра, локальные с квалификатором `(k3d-scope)`
-- [ ] **AUD-08**: Во время аудит-фазы код приложения не правится (read-only): ни один дефект не починен инлайн без строки реестра
+- [x] **AUD-08**: Во время аудит-фазы код приложения не правится (read-only): ни один дефект не починен инлайн без строки реестра
 
 ### Test infrastructure (TEST) — ранняя, таймбоксированная, узкая
 
 - [ ] **TEST-01**: Свежий полный прогон backend pytest подтверждает, что фикс isolation-deadlock от закрытия v3.2 (`f438ced2` — маркер `no_permissive_booking_config` на 4 модулях + восстановление teardown booking-race + `pytest-timeout` 180s; диагноз в `.planning/debug/pytest-isolation-deadlock.md`) всё ещё держится: сюит доходит до конца без зависания. Если deadlock регрессировал или фикс оказался частичным — устранить либо задокументировать ограниченный per-module обход. Таймбокс соблюдён, расширение в полную археологию тестов не допущено.
   **Посылка исправлена 2026-07-26:** формулировка изначально предполагала, что deadlock всё ещё открыт — это взято из устаревшего текста закрытия v3.2 в `PROJECT.md`; реестр отложенного в `STATE.md` фиксирует его как ✅ RESOLVED. Требование = верификация, а не починка с нуля.
+
 - [ ] **TEST-02**: Остаточные падения последнего известного полного прогона (3 failed / 2 errors при 3058 passed — `test_freeze_race`, promo F821, `test_alembic_clean` и остальные) перепроверены на свежем прогоне и занесены отдельными строками реестра; допустимо финальное `deferred` с причиной `accepted-risk`
 
 ### Functional fixes (FUNC) — баги на живых данных
@@ -119,14 +121,14 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AUD-01 | Phase 122 | Pending |
+| AUD-01 | Phase 122 | Complete |
 | AUD-02 | Phase 122 | Pending |
 | AUD-03 | Phase 122 | Pending |
 | AUD-04 | Phase 122 | Pending |
 | AUD-05 | Phase 122 | Pending |
 | AUD-06 | Phase 122 | Pending |
 | AUD-07 | Phase 122 | Pending |
-| AUD-08 | Phase 122 | Pending |
+| AUD-08 | Phase 122 | Complete |
 | TEST-01 | Phase 123 | Pending |
 | TEST-02 | Phase 123 | Pending |
 | FUNC-01 | Phase 124 | Pending |
@@ -153,6 +155,7 @@
 | CLOSE-04 | Phase 127 | Pending |
 
 **Coverage:**
+
 - v4.1 requirements: 32 total
 - Mapped to phases: 32
 - Unmapped: 0 ✓
