@@ -1,20 +1,24 @@
 ---
 phase: 123-test-infra-unblock
 verified: 2026-07-26T20:15:00Z
-status: human_needed
+status: passed
 score: 14/14 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
 human_verification:
+
   - test: "Confirm the f438ced2 isolation-deadlock fix (no_permissive_booking_config marker + booking-race teardown restore + pytest-timeout 180s) holds as a *general* property of the suite, not merely as an artifact of this one fresh run."
     expected: "Reviewer judgment that one green, unnarrowed, clean-DB run with zero lock-family `Failed: Timeout >180.0s` entries is sufficient standing evidence for the general claim (the plan authors this explicitly as a backstop/judgment truth — no single mechanical check can promote 'held once' to 'holds as a property')."
     why_human: "This is a `verification: backstop` truth in 123-01-PLAN.md's must_haves — by construction unresolvable by grep/presence checks. Evidence exists (0 timeout matches, terminal summary line, D-123-09 verdict NOT REGRESSED) but the generalization beyond this one run is a judgment call, not a mechanical fact."
+
   - test: "Confirm the residual set recorded in residuals-isolation-2026-07-26.log and the SUMMARY's per-residual table is the complete and honest residual set for this run — nothing was suppressed, deselected, or quietly excluded from the pytest invocation."
     expected: "Reviewer judgment, informed by: the full-run invocation has no -k/-m/--deselect/path narrowing (confirmed: `collected 3071 items`, command line verbatim in SUMMARY §2); the green-washing scan (independently re-run during verification) found zero added skip/xfail/deselect markers in the tests tree; exactly 5 FAILED/ERROR node IDs appear in the full log and all 5 appear in the isolation log."
     why_human: "This is a `verification: backstop` truth in 123-01-PLAN.md's must_haves. Mechanical evidence strongly supports honesty (independently re-verified: unnarrowed invocation, zero suppression markers added) but the plan author explicitly routes 'nothing was suppressed' claims to human judgment rather than a mechanical pass."
+
   - test: "Confirm each deferred registry row (V41-HYG-075 test_freeze_race, V41-HYG-079 asgi_lifespan) received the honest reason category (accepted-risk vs out-of-scope vs operator-pending) rather than whichever label was most convenient to close the row."
     expected: "Reviewer judgment that `deferred:accepted-risk` is the correct category for both rows given their evidence: test_freeze_race fails alone / passes together (genuine scheduling-dependent flake, not a fix-avoidance label), and the asgi_lifespan row passes in isolation both alone and together (full-suite-only pollution, structural fix explicitly named as out-of-scope-for-this-phase in the row's own prose)."
     why_human: "This is a `verification: backstop` truth in 123-02-PLAN.md's must_haves. The row cells are internally consistent with the isolation evidence (independently re-checked against residuals-isolation-2026-07-26.log during this verification) but the labeling honesty itself is a judgment call the plan explicitly defers to a human, not a mechanical check."
+
   - test: "Confirm every appended registry row's repro/reason cell truthfully states the item is known-pre-freeze and carried from TEST-01/TEST-02, rather than being presented as a new audit discovery."
     expected: "Reviewer judgment that the 'Known-pre-freeze... not a new audit discovery (D-123-02)' sentence appended to rows V41-HYG-073 through 079 is an accurate characterization, and that row V41-HYG-080 (the fixture-date time-bomb) is correctly labeled 'NEW finding surfaced 2026-07-26... not one of the roadmap-named or June-diagnosis residuals' rather than mislabeled as pre-existing."
     why_human: "This is a `verification: backstop` truth in 123-02-PLAN.md's must_haves. All 8 rows were read directly during verification and each row's honesty language is present and internally consistent with the surrounding evidence, but the mechanical-tag-honesty claim (D-123-02) is explicitly a judgment call per the plan, not a grep-checkable fact."
@@ -51,6 +55,7 @@ human_verification:
 **Score:** 14/14 truths verified (0 present, behavior-unverified)
 
 **Backstop (judgment) truths — routed to human verification, not counted toward the score above:**
+
 - "f438ced2 holds as a general property of the suite" (123-01, backstop)
 - "the residual set is complete and honest" (123-01, backstop)
 - "each deferred row received the honest reason category" (123-02, backstop)

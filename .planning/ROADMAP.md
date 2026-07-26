@@ -493,7 +493,7 @@ Containerized the full stack + IaC (Terraform on-prem k3s) + observability (kube
 **k3d-honesty constraint (INFRA):** находки, полученные в k3d, несут квалификатор `(k3d-scope)`; два HARD GATE'а v4.0 (SEC-02 off-node custody RSA-ключа sealed-secrets, BAK-03 verified restore round-trip) НЕ объявляются закрытыми и остаются открытыми/неотредактированными.
 
 - [x] **Phase 122: Audit — Registry-Producing Read-Only Pass** - Три параллельных read-only sub-pass'а (статическая гигиена, live-backend hunt, infra-триаж) производят один замороженный реестр дефектов — completed 2026-07-26
-- [ ] **Phase 123: Test-Infra Unblock** - Autouse-fixture deadlock backend pytest устранён либо задокументирован узкий обход, таймбоксировано
+- [x] **Phase 123: Test-Infra Unblock** - Autouse-fixture deadlock backend pytest устранён либо задокументирован узкий обход, таймбоксировано (completed 2026-07-26)
 - [ ] **Phase 124: FUNC Fixes — Risk-First** - Каждый функциональный дефект (schema-drift/недостижимость/reachability) получает терминальную диспозицию, locked-invariant-риски — первыми
 - [ ] **Phase 125: HYGIENE Fixes** - Каждая находка гигиены (TODO/dead-code/дубли/границы/устаревшие доки) получает терминальную диспозицию
 - [ ] **Phase 126: INFRA Fixes — Parallel Track** - k3d-доказуемые пункты prod-readiness исполнены с re-runnable evidence; HARD GATE'ы v4.0 не тронуты

@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v4.1
 milestone_name: Codebase Hardening
-current_phase: 123
-current_phase_name: Test-Infra Unblock
-status: verifying
+current_phase: 124
+current_phase_name: FUNC Fixes — Risk-First
+status: planning
 stopped_at: Completed 123-02-PLAN.md
-last_updated: "2026-07-26T16:31:18.381Z"
+last_updated: "2026-07-26T17:05:53.777Z"
 last_activity: 2026-07-26
-last_activity_desc: Phase 123 execution started
+last_activity_desc: Phase 123 complete, transitioned to Phase 124
 progress:
   total_phases: 6
   completed_phases: 2
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 123 — Test-Infra Unblock
+**Current focus:** Phase 124 — FUNC Fixes — Risk-First
 
 ## Current Position
 
-Phase: 123 (Test-Infra Unblock) — EXECUTING
-Plan: 2 of 2
-Status: Phase complete — ready for verification
-Last activity: 2026-07-26 — Phase 123 execution started
+Phase: 124 — FUNC Fixes — Risk-First
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-07-26 — Phase 123 complete, transitioned to Phase 124
 
 ## v4.1 Roadmap Summary (current milestone)
 
@@ -109,21 +109,19 @@ Last activity: 2026-07-26 — Phase 123 execution started
 ### Research Flags (investigate at plan-phase time, not pre-flight)
 
 - **Phase 122** (audit, sub-pass 1b): the exact shape of the edge-case seed-data authoring task (which entities/lifecycle states/error families per domain) may need a short planning-time pass per domain — PITFALLS' matrix is a starting checklist, not a domain-by-domain enumeration.
-- **Phase 123**: before doing any new work, confirm whether the pre-existing v3.2-close fix (commit `f438ced2`, `no_permissive_booking_config` marker on 4 modules, documented in `.planning/debug/pytest-isolation-deadlock.md`) already satisfies TEST-01 on a fresh full-suite run, or whether the deadlock has resurfaced/regressed since. Do not assume new root-cause work is required from scratch.
+- **Phase 123**: ✅ RESOLVED 2026-07-26 — fresh clean-DB full run confirmed f438ced2 NOT REGRESSED (D-123-09); no new root-cause work was needed. See registry rows V41-HYG-073..080.
 - **Phase 124**: exact list of `apps/admin` domains still lacking the capture-then-contract-test pattern is qualitative (~20 of ~25) per research — Phase 122's static sweep must produce the definitive list before Phase 124 planning.
 
 ### Pending Todos
 
-- v4.1 roadmap created (Phases 122-127, 32/32 requirements mapped). Next: `/gsd-plan-phase 122` (Audit — Registry-Producing Read-Only Pass).
-- Phase 122 plan: author the edge-case seed dataset BEFORE any live-backend hunt starts (AUD-04 precondition); keep all three sub-passes (static hygiene / live-backend hunt / infra triage) writing only to the registry, zero app-code diffs.
-- Phase 123 plan: check `.planning/debug/pytest-isolation-deadlock.md` + commit `f438ced2` first — the fix may already be structurally in place; the phase may reduce to verification + registry-row documentation rather than new code.
-- Phase 124 plan: risk-first ordering — fix `locked_invariant_risk` registry rows before any other FUNC row; update the parity mirror in the same commit and re-run its negative-test fixture.
+- Phases 122-123 complete (2026-07-26). Next: `/gsd-plan-phase 124` (FUNC Fixes — Risk-First).
+- Phase 124 plan: risk-first ordering — fix `locked_invariant_risk` registry rows before any other FUNC row; update the parity mirror in the same commit and re-run its negative-test fixture. Phase 123 routed two `open` rows here: V41-HYG-077 (LOCKED_AUDIT_EVENTS 117 vs 118 count parity) and V41-HYG-078 (`/metrics` route-gate declaration) — both locked-invariant lane per FUNC-04.
 - Phase 125 plan: add the `features/x → features/y` ESLint zone LAST, after violations are cleared — do not add it first and then chase a red gate.
 - Phase 126 plan: tag every finding `(k3d-scope)`; do not edit or close the v4.0 SEC-02/BAK-03 HARD GATE registry rows — reference them, don't replace them.
 
 ### Blockers/Concerns
 
-None at milestone open. Note: STATE.md `## Deferred Items` (below) records the fixture-ordering deadlock as `✅ RESOLVED` at v3.2 close (2026-06-17, commit `f438ced2`), while v4.1's TEST-01 describes the same deadlock as needing resolution — Phase 123 planning must reconcile this (see Research Flags above) rather than assume either document is stale.
+Deadlock-ledger reconciliation closed by Phase 123 (2026-07-26): fresh clean-DB full run confirmed `f438ced2` NOT REGRESSED (0 lock-family timeouts, `4 failed / 3058 passed / 8 skipped / 1 error in 894s`) — the `## Deferred Items` `✅ RESOLVED` entry stands; TEST-01 satisfied via registry row V41-HYG-073.
 
 - AUD-05 (runtime divergence) + AUD-06 (browser UAT walk) deferred:blocked in 122-05 — owner seed credentials for apps/backend/scripts/seed_edge_cases.py are permission-protected this session; needs a seeded re-run to close V41-FUNC-033/034
 
@@ -151,7 +149,7 @@ v2.6 was expected to carry them but became Referral System instead. They are ope
 
 | Category | Item | Status |
 |----------|------|--------|
-| tech-debt (test-infra) | ~~Full backend pytest not run green — systemic test-isolation deadlock (`permissive_booking_config` × `working_hours_config`)~~ | ✅ RESOLVED `f438ced2` (2026-06-17) — autouse fixture held an uncommitted `working_hours_config` row lock that alembic-downgrade subprocess tests + the real-commit booking-race test deadlocked against. Fix: `no_permissive_booking_config` marker on those 4 modules + booking-race teardown restore + `pytest-timeout` 180s safety net + suppress starlette-1.x TestClient deprecation that aborted collection. Full suite now completes ~15m: 3058 passed / 3 failed / 2 errors (all pre-existing/flaky). Diagnosis: `.planning/debug/pytest-isolation-deadlock.md`. **v4.1 TEST-01 (Phase 123) must confirm this still holds on a fresh run before assuming new work is needed — see Research Flags above.** |
+| tech-debt (test-infra) | ~~Full backend pytest not run green — systemic test-isolation deadlock (`permissive_booking_config` × `working_hours_config`)~~ | ✅ RESOLVED `f438ced2` (2026-06-17) — autouse fixture held an uncommitted `working_hours_config` row lock that alembic-downgrade subprocess tests + the real-commit booking-race test deadlocked against. Fix: `no_permissive_booking_config` marker on those 4 modules + booking-race teardown restore + `pytest-timeout` 180s safety net + suppress starlette-1.x TestClient deprecation that aborted collection. Full suite now completes ~15m: 3058 passed / 3 failed / 2 errors (all pre-existing/flaky). Diagnosis: `.planning/debug/pytest-isolation-deadlock.md`. **v4.1 TEST-01 confirmed 2026-07-26 (Phase 123): fresh clean-DB full run, 0 lock-family timeouts, D-123-09 verdict NOT REGRESSED — registry row V41-HYG-073 `fixed+verified`.** |
 | human-verify | Browser/human UAT for all 6 v3.2 phases (112-117 VERIFICATION = human_needed) | ✅ SMOKE-PASSED 2026-06-17 (live browser, owner+client) — admin Dashboard(115)/Reports+CSV(114/115/116)/Finance+CSV(112)/Plans+promo FIRST500·FIT10(113)/Chat inbox(116)/Audit-log-with-null-actor(the v3.0 crash case, now clean) all render with ZERO console errors; client PWA OTP→onboarding→home on real seeded plan. CAVEAT: fresh re-seed has no transactions, so revenue-POPULATED report/finance views weren't exercised live — those shapes are covered by the v3.2 real-backend contract tests (green). Hero KPIs (847 clients/MRR) remain known decorative mock chrome. |
 | security | Phase 70 CR-02/IN-01/IN-02 (proxy rate-limit, QR post-decode, cancel idempotency) | → SEC-06 in Phase 119 |
 | production | RUN-01 ЮKassa sale+refund | ✅ TEST-SHOP SUFFICIENT (user decision 2026-06-17 — live credentialed leg NOT needed for MVP/demo). Verified live: client checkout against sandbox shop 1372271 (`YOOKASSA_SANDBOX=true`) returns a real `confirmationUrl` (yoomoney.ru hosted page) + `onlinePaymentId`. Demo: pay with test card 5555 5555 5555 4477, activate via webhook (`POST /api/v1/_internal/yookassa/webhook` with the real online_payments id). Live prod creds remain the only un-done part, explicitly out of scope. |
@@ -186,9 +184,9 @@ These are the D-V40-LOCAL-VALIDATE operator-pending boundary — static validati
 
 **Resume file:** None
 
-Last session: 2026-07-26T16:31:18.373Z
-Stopped at: Completed 123-02-PLAN.md
-Resume: `/gsd-plan-phase 122` (Audit — Registry-Producing Read-Only Pass)
+Last session: 2026-07-26T17:10:00Z
+Stopped at: Phase 123 complete (UAT 4/4 passed, verification passed), ready to plan Phase 124
+Resume: `/gsd-plan-phase 124` (FUNC Fixes — Risk-First)
 
 ## Operator Next Steps
 
