@@ -5,10 +5,10 @@ milestone_name: Codebase Hardening
 current_phase: 123
 current_phase_name: Test-Infra Unblock
 status: executing
-stopped_at: Phase 123 context gathered
-last_updated: "2026-07-26T15:46:17.565Z"
+stopped_at: Completed 123-01-PLAN.md (fresh full-suite pytest run + residual isolation, TEST-01/TEST-02 evidence)
+last_updated: "2026-07-26T16:14:22.017Z"
 last_activity: 2026-07-26
-last_activity_desc: Phase 122 complete, transitioned to Phase 123
+last_activity_desc: Phase 123 execution started
 progress:
   total_phases: 6
   completed_phases: 1
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 122 — audit-registry-producing-read-only-pass
+**Current focus:** Phase 123 — Test-Infra Unblock
 
 ## Current Position
 
-Phase: 123 — Test-Infra Unblock
-Plan: Not started
+Phase: 123 (Test-Infra Unblock) — EXECUTING
+Plan: 2 of 2
 Status: Ready to execute
-Last activity: 2026-07-26 — Phase 122 complete, transitioned to Phase 123
+Last activity: 2026-07-26 — Phase 123 execution started
 
 ## v4.1 Roadmap Summary (current milestone)
 
@@ -184,10 +184,10 @@ These are the D-V40-LOCAL-VALIDATE operator-pending boundary — static validati
 
 ## Session Continuity
 
-**Resume file:** .planning/phases/123-test-infra-unblock/123-CONTEXT.md
+**Resume file:** None
 
-Last session: 2026-07-26T15:23:14.632Z
-Stopped at: Phase 123 context gathered
+Last session: 2026-07-26T16:14:22.009Z
+Stopped at: Completed 123-01-PLAN.md (fresh full-suite pytest run + residual isolation, TEST-01/TEST-02 evidence)
 Resume: `/gsd-plan-phase 122` (Audit — Registry-Producing Read-Only Pass)
 
 ## Operator Next Steps
@@ -204,6 +204,7 @@ Resume: `/gsd-plan-phase 122` (Audit — Registry-Producing Read-Only Pass)
 | Phase 122 P4 | 25min | 1 tasks | 1 files |
 | Phase 122 P05 | 45min | 1 tasks | 4 files |
 | Phase 122 P06 | 25min | 2 tasks | 5 files |
+| Phase 123 P123-01 | ~35min | 2 tasks | 3 files |
 
 ## Decisions
 
@@ -215,3 +216,5 @@ Resume: `/gsd-plan-phase 122` (Audit — Registry-Producing Read-Only Pass)
 - [Phase ?]: 122-05: static Zod<->wire coverage manifest delivered in full (29 domains, 5 with capture+contract-test pattern, 24 gap); live runtime-divergence check + browser UAT walk honestly rowed deferred:blocked (owner seed creds permission-protected this session) rather than fabricated
 - [Phase 122]: Two-commit freeze stamp: frozen_at_commit recorded in an immediate follow-up commit (2ce5da33 substantive freeze -> f02f9c68 SHA stamp), since a commit cannot embed its own resulting hash
 - [Phase 122]: Merged all three audit staging files (136 rows: FUNC=34, HYGIENE=72, INFRA=30) and froze the v4.1 defect registry; fixed an escaped-pipe parsing bug in merge-registry.mjs discovered during the real merge
+- [Phase ?]: 123-01: D-123-09 verdict is NOT REGRESSED -- f438ced2 fix holds on fresh clean-DB run (4 failed/3058 passed/8 skipped/1 error, 14m53s, zero lock-family timeouts)
+- [Phase ?]: 123-01: force-added the two gitignored *.log evidence artifacts (git add -f) rather than editing root .gitignore, keeping the phase-123 footprint check scoped to .planning/**

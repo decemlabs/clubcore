@@ -552,7 +552,7 @@ Containerized the full stack + IaC (Terraform on-prem k3s) + observability (kube
 Plans:
 **Wave 1**
 
-- [ ] 123-01-PLAN.md — Clean-DB fresh full-suite pytest run archived as log + SUMMARY, with residual isolation re-runs and the bounded D-123-09/10 regression branch (TEST-01)
+- [x] 123-01-PLAN.md — Clean-DB fresh full-suite pytest run archived as log + SUMMARY, with residual isolation re-runs and the bounded D-123-09/10 regression branch (TEST-01)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
