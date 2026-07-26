@@ -4,8 +4,8 @@ milestone: v4.0
 milestone_name: Production Infrastructure — Self-Hosted k3s
 status: Awaiting next milestone
 stopped_at: Completed 118-01-PLAN.md — container images
-last_updated: "2026-06-16T14:38:36.093Z"
-last_activity: 2026-06-16 — Milestone v4.0 completed and archived
+last_updated: "2026-07-26T09:44:12.517Z"
+last_activity: 2026-07-26 — Completed quick task 260726-hou: UAT audit follow-through (audit-uat false All Clear fixed, 11 stale UAT statuses reconciled, Phase-94 typing consumer path pinned)
 progress:
   total_phases: 4
   completed_phases: 4
@@ -98,8 +98,20 @@ None at milestone open.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260616-xa9 | Rename apps: admin-app→admin, client-pwa→client (dirs + package names + all infra/backend/CI/docs refs) | 2026-06-16 | f2a3570c | [260616-xa9-rename-apps-admin-app-to-admin-client-pw](./quick/260616-xa9-rename-apps-admin-app-to-admin-client-pw/) |
+| 260726-hou | UAT audit follow-through: fix audit-uat's false All Clear after milestone archival + reconcile 11 stale UAT statuses + pin the Phase-94 typing-indicator consumer path | 2026-07-26 | 299de980 | [260726-hou-sync-stale-uat-statuses-fix-audit-uat-gl](./quick/260726-hou-sync-stale-uat-statuses-fix-audit-uat-gl/) |
 
 ## Deferred Items
+
+**Restored to the ledger by the 2026-07-26 cross-phase UAT audit (quick `260726-hou`).**
+These were tracked at v2.5 close, then silently dropped when the v2.5 block was pruned —
+v2.6 was expected to carry them but became Referral System instead. They are open, not done.
+
+| Category | Item | Status |
+|----------|------|--------|
+| bug (dormant) | **Chat typing indicator does not surface in the live dev browser.** Consumer path is now PROVEN CORRECT in jsdom — `apps/client/src/screens/ChatScreen.typing.test.jsx`, 5/5 green: bridge installs, dots + «печатает…» render in the open thread, 5s auto-dismiss fires, WR-06 ownership guard restores the previous handler. So the defect is NOT the component's render logic; likeliest cause is the original console probe having REPLACED `window.__chatTyping` with its own counting wrapper (suppresses the real handler while still reporting handlerCalls=1), or a stale service worker. | open — but UNREACHABLE in production: no typing PRODUCER exists (Telegram has no typing API; the staff frontend never got one). Close together with a producer. See `94-VERIFICATION.md`. |
+| tech-debt (v2.6 carry) | RCPT-02 typing PRODUCER — WS fan-out + PWA consumer are wired, nothing publishes `publish_typing` | open — needs a staff-side producer |
+| infra | `seaweedfs-s3` gateway pod CrashLoops in-cluster (surfaced in the 2026-06-16 live k3s run; not diagnosed — backend was the critical path; possibly S3 `existingConfigSecret`/auth) | open — needs a live cluster to reproduce |
+| test-infra | 6 unresolved `test_sell_*` online-payment tests use unscoped `select(OnlinePayment)` and assert absolute row counts, so leftover rows in the host `clubcore` DB break them | open — see `999.5-…/deferred-items.md` |
 
 **Carried forward from v3.2 close (2026-06-16):**
 
