@@ -15,6 +15,7 @@ Two client seeds: client_a (phone _phone(51)), client_b (phone _phone(52)).
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID, uuid4
 
 import pytest

@@ -18,7 +18,7 @@ Behaviors locked (D-05/D-07/D-08/D-09/D-10):
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession

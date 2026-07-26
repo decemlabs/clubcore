@@ -844,3 +844,22 @@ tests/integration/visits/test_visits_self_checkin.py::test_self_checkin_happy_pa
 
 ============================== 1 passed in 0.30s ===============================
 exit=0
+
+===============================================================================
+Plan 123-02 Task 1 — post-F821-fix targeted node-ID subset (behavior-no-change proof)
+===============================================================================
+
+Command (verbatim, same env as baseline full run):
+
+DATABASE_URL='postgresql+asyncpg://app:app@localhost:5432/clubcore' REDIS_URL='redis://localhost:6379/0' \
+uv run pytest tests/messaging/test_attachment_idor.py tests/modules/client_portal/test_client_me_service.py -v
+
+Result: 24 passed in 7.12s
+
+Purpose: prove the two F821 import-only fixes (from typing import Any in
+test_attachment_idor.py; widened `from uuid import UUID, uuid4` in
+test_client_me_service.py) introduced zero behavior change. Both files reported
+zero FAILED/ERROR in the fresh full run (pytest-full-run-2026-07-26.log); this
+targeted re-run over both files' full test collections (24 items total) still
+reports zero failures. Not a full-suite re-run — targeted node-ID/path subset
+only, per D-123-06.
