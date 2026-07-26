@@ -4,15 +4,15 @@ milestone: v4.1
 milestone_name: Codebase Hardening
 current_phase: 123
 current_phase_name: Test-Infra Unblock
-status: planning
+status: executing
 stopped_at: Phase 123 context gathered
-last_updated: "2026-07-26T15:23:14.639Z"
+last_updated: "2026-07-26T15:46:17.565Z"
 last_activity: 2026-07-26
 last_activity_desc: Phase 122 complete, transitioned to Phase 123
 progress:
   total_phases: 6
   completed_phases: 1
-  total_plans: 6
+  total_plans: 8
   completed_plans: 6
   percent: 17
 ---
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md
 
 Phase: 123 — Test-Infra Unblock
 Plan: Not started
-Status: Ready to plan
+Status: Ready to execute
 Last activity: 2026-07-26 — Phase 122 complete, transitioned to Phase 123
 
 ## v4.1 Roadmap Summary (current milestone)

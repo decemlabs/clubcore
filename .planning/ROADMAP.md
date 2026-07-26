@@ -550,7 +550,12 @@ Containerized the full stack + IaC (Terraform on-prem k3s) + observability (kube
 **Plans**: 2 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 123-01-PLAN.md — Clean-DB fresh full-suite pytest run archived as log + SUMMARY, with residual isolation re-runs and the bounded D-123-09/10 regression branch (TEST-01)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 123-02-PLAN.md — F821 closure across both test files, terminal-disposition rows appended to the frozen registry's `## Discovered during fix`, and the D-123-11 footprint gate (TEST-02, TEST-01 verification row)
 
 ### Phase 124: FUNC Fixes — Risk-First
