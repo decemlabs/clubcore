@@ -1,0 +1,44 @@
+Downloading grimp (2.0MiB)
+ Downloaded grimp
+Installed 8 packages in 20ms
+
+╔══╗─────────▶╔╗ ╔╗      ╔╗◀───┐
+╚╣╠╝◀─────┐  ╔╝╚╗║║────▶╔╝╚╗   │
+ ║║   ╔══╦══╦╩╗╔╝║║  ╔╦═╩╗╔╝╔═╦══╗
+ ║║╔══╣╔╗║╔╗║╔╣║ ║║ ╔╬╣╔╗║║ ║│║╔═╝
+╔╣╠╣║║║╚╝║╚╝║║║╚╗║╚═╝║║║║║╚╗║═╣║
+╚══╩╩╩╣╔═╩══╩╝╚═╝╚═══╩╩╝╚╩═╩╩═╩╝
+  └──▶║║                    ▲ 
+      ╚╝────────────────────┘
+
+
+---------
+Contracts
+---------
+
+Analyzed 283 files, 864 dependencies.
+-------------------------------------
+
+core must not import modules KEPT
+modules cannot import each other KEPT (5 warnings)
+integrations must not import modules KEPT
+
+Contracts: 3 kept, 0 broken.
+
+--------
+Warnings
+--------
+
+modules cannot import each other
+--------------------------------
+
+- No matches for ignored import app.modules.online_payments.service -> 
+app.modules.promo_codes.service.
+- No matches for ignored import app.modules.client_portal.service -> 
+app.modules.payment_methods.repository.
+- No matches for ignored import app.modules.online_payments.service -> 
+app.modules.users.display.
+- No matches for ignored import app.modules.client_portal.service -> 
+app.modules.promo_codes.models.
+- No matches for ignored import app.modules.online_payments.service -> 
+app.modules.promo_codes.models.

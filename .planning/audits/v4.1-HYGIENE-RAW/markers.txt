@@ -1,0 +1,46 @@
+apps/client/src/screens/ReferralLandingScreen.jsx:29:  // TODO Phase 99: wire actual days from resolver response when field is added.
+infra/scripts/seal-secrets.sh:123:CERT_FILE="$(mktemp /tmp/sealed-secrets-cert-XXXXXX.pem)"
+infra/scripts/seal-secrets.sh:163:PLAINTEXT_SECRET_FILE="$(mktemp /tmp/app-secret-plaintext-XXXXXX.yaml)"
+infra/scripts/seal-secrets.sh:185:SEALED_OUTPUT_FILE="$(mktemp /tmp/sealed-secret-output-XXXXXX.yaml)"
+apps/admin/src/pages/trainer/components/TrainerKpis.tsx:7: * TODO Phase 104: wire to real aggregate endpoint when available.
+apps/admin/src/pages/trainer/components/OverviewTab.tsx:5: * Completes the Plan 102-02 TODO handoff. (UI-SPEC §7.1)
+apps/admin/src/pages/trainer/components/OverviewTab.tsx:8: * // TODO Phase 104: wire regulars to real endpoint when available.
+apps/admin/src/pages/trainer/components/OverviewTab.tsx:45:  // TODO Phase 104: wire regulars to real endpoint when available.
+apps/admin/src/pages/trainer/components/OverviewTab.tsx:129:        {/* Regulars — stays on mock, TODO Phase 104 */}
+apps/admin/src/pages/trainer/components/OverviewTab.tsx:140:            {/* TODO Phase 104: wire regulars to real endpoint when available */}
+apps/admin/src/pages/trainer/TrainerPage.tsx:10: *              // TODO Phase 104: wire history to real endpoint
+apps/admin/src/pages/trainer/TrainerPage.tsx:64:      {/* TODO Phase 104: wire history to real endpoint */}
+apps/backend/app/modules/reports/router.py:317:# TODO Phase 117: the four advanced-analytics paths (/reports/cohort | /reports/anomaly
+apps/backend/app/modules/billing/__init__.py:3:TODO Phase B+: invoices + ЮKassa integration (Stripe forbidden in RU).
+apps/backend/app/modules/notifications/__init__.py:9:TODO Phase B+: event-bus outbox pattern for async Telegram/email delivery channels.
+apps/backend/app/modules/messaging/__init__.py:7:TODO Phase 91: read receipts + typing indicators (RCPT-01..03).
+apps/backend/app/modules/messaging/__init__.py:8:TODO Phase 92: photo attachments + attachment_id FK (ATT-01..03).
+apps/backend/app/modules/messaging/__init__.py:9:TODO Phase 93: Telegram bridge forward + reply routing (BRDG-01..03).
+apps/backend/app/modules/messaging/service.py:19:A Phase 93 forward seam is documented here as a clearly-marked no-op TODO.
+apps/backend/app/modules/messaging/service.py:200:    # TODO Phase 93: Telegram bridge forward seam (record + enqueue ARQ DM)
+apps/backend/app/modules/client_auth/__init__.py:4:TODO Phase C+: client OTP request/verify, session cookies, /me endpoints.
+apps/backend/app/modules/auth/__init__.py:3:TODO Phase C+: login, register, refresh, JWT issue/verify, password hashing.
+apps/backend/app/modules/bookings/__init__.py:1:"""Bookings module placeholder. TODO Phase B+: reservations + capacity rules."""
+apps/backend/app/workers/tasks/notifications.py:3:TODO Phase B+: send_telegram_message, send_email task functions.
+apps/backend/app/modules/schedule/__init__.py:1:"""Schedule module placeholder. TODO Phase B+: class schedule + recurring slots."""
+apps/backend/app/workers/tasks/reports.py:3:TODO Phase B+: generate_daily_report, generate_monthly_summary task functions.
+apps/backend/app/workers/tasks/reminders.py:3:TODO Phase B+: send_visit_reminder, send_membership_expiry_alert task functions.
+apps/backend/app/integrations/email/__init__.py:3:TODO Phase X+: SMTP/transactional email adapter.
+apps/backend/app/integrations/yookassa/webhook_verifier.py:14:     is deferred to Phase 50 (TODO marker below).
+apps/backend/app/integrations/yookassa/webhook_verifier.py:70:         toggle is a Phase 50 concern (TODO marker below).
+apps/backend/app/integrations/yookassa/webhook_verifier.py:92:    # TODO Phase 50: honour X-Forwarded-For (first hop, comma-split, strip)
+apps/backend/app/integrations/yookassa/webhook_verifier.py:135:    # TODO Phase 50: Phase 50 webhook route will emit the canonical audit DB
+apps/backend/app/core/middleware.py:102:    # TODO Phase X: CORS once frontend integrates (CONTEXT.md Deferred Ideas).
+apps/backend/docs/adr/template.md:3:- Status: proposed | accepted | deprecated | superseded by ADR-XXXX
+apps/backend/docs/architecture.md:41:В Phase A — единственный реальный endpoint `GET /healthz` (см. `app/api/v1/health.py`), возвращает `{"status": "ok"}`. Префикс `/api/v1` будет добавлен в Phase B+, когда появятся бизнес-роутеры (TODO в `app/api/router.py`); пока v1 включён с empty prefix, чтобы `/healthz` был доступен по корневому пути (Kubernetes liveness convention).
+apps/backend/docs/architecture.md:54:- **`/healthz` mount** — единственный реальный endpoint в Phase A. Подключён через empty-prefix v1 router: `api.include_router(v1)` без `prefix=`. Префикс `/api/v1` добавится в Phase B+ когда появятся бизнес-роутеры (TODO в `app/api/router.py`).
+apps/backend/docs/architecture.md:59:- **Нет auth** — нет JWT, нет OAuth, нет password hashing, нет refresh tokens, нет permission системы. Auth — отдельная фаза (Phase C+) с собственным дизайном (вероятно через Telegram). `app/core/security.py` в Phase A — placeholder с TODO docstring.
+infra/helm/clubcore/templates/redis-statefulset.yaml:40:        runAsNonRoot: false  # TODO Phase 119 SEC-03: set true + runAsUser: 999 (redis uid)
+apps/admin/src/features/settings/api.ts:42: *   TODO: Remove when all SettingsPage sections are wired to real endpoints.
+apps/admin/src/features/clients/schemas.ts:61:  phone: z.string().regex(/^\+[1-9]\d{1,14}$/, 'Введите телефон в формате +7XXXXXXXXXX'),
+apps/admin/src/features/clients/schemas.test.ts:115:      expect(result.error.flatten().fieldErrors.phone?.[0]).toContain('+7XXXXXXXXXX')
+apps/admin/plans/README.md:30:Status values: TODO | IN PROGRESS | DONE | BLOCKED (one-line reason) | REJECTED (one-line rationale).
+apps/admin/plans/013-integration-merge-runbook.md:217:git worktree remove .claude/worktrees/agent-XXXX     # for each advisor worktree
+apps/backend/tests/integrations/yookassa/test_webhook_verifier.py:19:TODO Phase 50: tests for X-Forwarded-For trust (gated by
+apps/backend/scripts/verify/p102_walkthrough.sh:52:COOKIE_JAR="$(mktemp -t p102-verify-XXXX.cookies)"
+apps/backend/scripts/verify/_lib.sh:46:COOKIE_JAR="$(mktemp -t sportzal-verify-XXXX.cookies)"

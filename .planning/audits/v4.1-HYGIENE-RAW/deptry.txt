@@ -1,0 +1,60 @@
+Downloading deptry (1.8MiB)
+ Downloaded deptry
+Installed 5 packages in 5ms
+Assuming the corresponding module name of package 'aioboto3' is 'aioboto3'. Install the package or configure a package_module_name_map entry to override this behaviour.
+Assuming the corresponding module name of package 'filetype' is 'filetype'. Install the package or configure a package_module_name_map entry to override this behaviour.
+Assuming the corresponding module name of package 'alembic' is 'alembic'. Install the package or configure a package_module_name_map entry to override this behaviour.
+Assuming the corresponding module name of package 'argon2-cffi' is 'argon2_cffi'. Install the package or configure a package_module_name_map entry to override this behaviour.
+Assuming the corresponding module name of package 'arq' is 'arq'. Install the package or configure a package_module_name_map entry to override this behaviour.
+Assuming the corresponding module name of package 'asyncpg' is 'asyncpg'. Install the package or configure a package_module_name_map entry to override this behaviour.
+Assuming the corresponding module name of package 'email-validator' is 'email_validator'. Install the package or configure a package_module_name_map entry to override this behaviour.
+Assuming the corresponding module name of package 'fastapi' is 'fastapi'. Install the package or configure a package_module_name_map entry to override this behaviour.
+Assuming the corresponding module name of package 'starlette' is 'starlette'. Install the package or configure a package_module_name_map entry to override this behaviour.
+Assuming the corresponding module name of package 'httpx' is 'httpx'. Install the package or configure a package_module_name_map entry to override this behaviour.
+Assuming the corresponding module name of package 'jinja2' is 'jinja2'. Install the package or configure a package_module_name_map entry to override this behaviour.
+Assuming the corresponding module name of package 'pydantic' is 'pydantic'. Install the package or configure a package_module_name_map entry to override this behaviour.
+Assuming the corresponding module name of package 'pydantic-settings' is 'pydantic_settings'. Install the package or configure a package_module_name_map entry to override this behaviour.
+Assuming the corresponding module name of package 'pyjwt' is 'pyjwt'. Install the package or configure a package_module_name_map entry to override this behaviour.
+Assuming the corresponding module name of package 'python-telegram-bot' is 'python_telegram_bot'. Install the package or configure a package_module_name_map entry to override this behaviour.
+Assuming the corresponding module name of package 'redis' is 'redis'. Install the package or configure a package_module_name_map entry to override this behaviour.
+Assuming the corresponding module name of package 'sqlalchemy' is 'sqlalchemy'. Install the package or configure a package_module_name_map entry to override this behaviour.
+Assuming the corresponding module name of package 'structlog' is 'structlog'. Install the package or configure a package_module_name_map entry to override this behaviour.
+Assuming the corresponding module name of package 'uvicorn' is 'uvicorn'. Install the package or configure a package_module_name_map entry to override this behaviour.
+Assuming the corresponding module name of package 'python-multipart' is 'python_multipart'. Install the package or configure a package_module_name_map entry to override this behaviour.
+Assuming the corresponding module name of package 'prometheus-fastapi-instrumentator' is 'prometheus_fastapi_instrumentator'. Install the package or configure a package_module_name_map entry to override this behaviour.
+Assuming the corresponding module name of package 'ruff' is 'ruff'. Install the package or configure a package_module_name_map entry to override this behaviour.
+Assuming the corresponding module name of package 'mypy' is 'mypy'. Install the package or configure a package_module_name_map entry to override this behaviour.
+Assuming the corresponding module name of package 'import-linter' is 'import_linter'. Install the package or configure a package_module_name_map entry to override this behaviour.
+Assuming the corresponding module name of package 'pytest' is 'pytest'. Install the package or configure a package_module_name_map entry to override this behaviour.
+Assuming the corresponding module name of package 'pytest-asyncio' is 'pytest_asyncio'. Install the package or configure a package_module_name_map entry to override this behaviour.
+Assuming the corresponding module name of package 'pytest-timeout' is 'pytest_timeout'. Install the package or configure a package_module_name_map entry to override this behaviour.
+Assuming the corresponding module name of package 'asgi-lifespan' is 'asgi_lifespan'. Install the package or configure a package_module_name_map entry to override this behaviour.
+Assuming the corresponding module name of package 'fakeredis' is 'fakeredis'. Install the package or configure a package_module_name_map entry to override this behaviour.
+Assuming the corresponding module name of package 'respx' is 'respx'. Install the package or configure a package_module_name_map entry to override this behaviour.
+Scanning 370 files...
+
+[1mapp/core/security.py[m[36m:[m17[36m:[m8[36m:[m [1m[31mDEP001[m 'jwt' imported but missing from the dependency definitions
+[1mapp/core/security.py[m[36m:[m18[36m:[m1[36m:[m [1m[31mDEP001[m 'argon2' imported but missing from the dependency definitions
+[1mapp/core/security.py[m[36m:[m19[36m:[m1[36m:[m [1m[31mDEP001[m 'argon2' imported but missing from the dependency definitions
+[1mapp/integrations/email/client.py[m[36m:[m34[36m:[m1[36m:[m [1m[31mDEP001[m 'botocore' imported but missing from the dependency definitions
+[1mapp/integrations/email/client.py[m[36m:[m35[36m:[m1[36m:[m [1m[31mDEP001[m 'botocore' imported but missing from the dependency definitions
+[1mapp/integrations/email/factory.py[m[36m:[m31[36m:[m1[36m:[m [1m[31mDEP001[m 'botocore' imported but missing from the dependency definitions
+[1mapp/integrations/storage/s3.py[m[36m:[m28[36m:[m1[36m:[m [1m[31mDEP001[m 'botocore' imported but missing from the dependency definitions
+[1mapp/integrations/telegram/bot.py[m[36m:[m17[36m:[m1[36m:[m [1m[31mDEP001[m 'telegram' imported but missing from the dependency definitions
+[1mapp/integrations/telegram/bot.py[m[36m:[m18[36m:[m1[36m:[m [1m[31mDEP001[m 'telegram' imported but missing from the dependency definitions
+[1mapp/integrations/telegram/handlers.py[m[36m:[m47[36m:[m1[36m:[m [1m[31mDEP001[m 'telegram' imported but missing from the dependency definitions
+[1mapp/integrations/telegram/sender.py[m[36m:[m14[36m:[m1[36m:[m [1m[31mDEP001[m 'telegram' imported but missing from the dependency definitions
+[1mapp/integrations/telegram/sender.py[m[36m:[m15[36m:[m1[36m:[m [1m[31mDEP001[m 'telegram' imported but missing from the dependency definitions
+[1mapp/modules/auth/service.py[m[36m:[m85[36m:[m5[36m:[m [1m[31mDEP001[m 'argon2' imported but missing from the dependency definitions
+[1mapp/workers/telegram_bot.py[m[36m:[m24[36m:[m1[36m:[m [1m[31mDEP001[m 'telegram' imported but missing from the dependency definitions
+[1mapp/workers/telegram_bot.py[m[36m:[m25[36m:[m1[36m:[m [1m[31mDEP001[m 'telegram' imported but missing from the dependency definitions
+[1mpyproject.toml[m[36m:[m [1m[31mDEP002[m 'argon2-cffi' defined as a dependency but not used in the codebase
+[1mpyproject.toml[m[36m:[m [1m[31mDEP002[m 'asyncpg' defined as a dependency but not used in the codebase
+[1mpyproject.toml[m[36m:[m [1m[31mDEP002[m 'email-validator' defined as a dependency but not used in the codebase
+[1mpyproject.toml[m[36m:[m [1m[31mDEP002[m 'pyjwt' defined as a dependency but not used in the codebase
+[1mpyproject.toml[m[36m:[m [1m[31mDEP002[m 'python-telegram-bot' defined as a dependency but not used in the codebase
+[1mpyproject.toml[m[36m:[m [1m[31mDEP002[m 'uvicorn' defined as a dependency but not used in the codebase
+[1mpyproject.toml[m[36m:[m [1m[31mDEP002[m 'python-multipart' defined as a dependency but not used in the codebase
+[1m[31mFound 22 dependency issues.[m
+
+For more information, see the documentation: https://deptry.com/

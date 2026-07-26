@@ -1,0 +1,4 @@
+
+> @clubcore/admin@0.0.1 lint /Users/andre/Workspace/Development/clubcore/apps/admin
+> eslint .
+

@@ -1,0 +1,537 @@
+Progress: resolved 1, reused 0, downloaded 0, added 0
+ WARN  GET https://registry.npmjs.org/picomatch error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
+Progress: resolved 11, reused 0, downloaded 8, added 0
+Progress: resolved 12, reused 0, downloaded 12, added 0
+Progress: resolved 13, reused 0, downloaded 12, added 0
+Progress: resolved 13, reused 0, downloaded 13, added 0
+Progress: resolved 14, reused 0, downloaded 13, added 0
+ WARN  GET https://registry.npmjs.org/@oxc-parser%2Fbinding-linux-s390x-gnu error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
+ WARN  GET https://registry.npmjs.org/@oxc-parser%2Fbinding-darwin-arm64 error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
+ WARN  GET https://registry.npmjs.org/@oxc-resolver%2Fbinding-wasm32-wasi error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
+Progress: resolved 38, reused 0, downloaded 17, added 0
+ WARN  GET https://registry.npmjs.org/@oxc-resolver%2Fbinding-darwin-x64 error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
+ WARN  GET https://registry.npmjs.org/@oxc-parser%2Fbinding-linux-arm-musleabihf error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
+Progress: resolved 51, reused 0, downloaded 18, added 0
+Progress: resolved 52, reused 0, downloaded 19, added 0
+ WARN  GET https://registry.npmjs.org/@oxc-parser%2Fbinding-linux-s390x-gnu error (ECONNRESET). Will retry in 1 minute. 1 retries left.
+Progress: resolved 53, reused 0, downloaded 19, added 0
+ WARN  GET https://registry.npmjs.org/@oxc-resolver%2Fbinding-darwin-x64 error (ECONNRESET). Will retry in 1 minute. 1 retries left.
+Progress: resolved 54, reused 0, downloaded 19, added 0
+ WARN  GET https://registry.npmjs.org/@oxc-resolver%2Fbinding-wasm32-wasi error (ECONNRESET). Will retry in 1 minute. 1 retries left.
+Progress: resolved 55, reused 0, downloaded 19, added 0
+Progress: resolved 60, reused 0, downloaded 23, added 0
+Progress: resolved 61, reused 0, downloaded 25, added 0
+Packages: +20
+++++++++++++++++++++
+Progress: resolved 64, reused 0, downloaded 25, added 20, done
+Unused files (137)
+.planning/milestones/v2.0-phases/73-downloads-home-html/mockup-src/components/Icon.jsx               
+.planning/milestones/v2.0-phases/73-downloads-home-html/mockup-src/components/PullToRefresh.jsx      
+.planning/milestones/v2.0-phases/73-downloads-home-html/mockup-src/components/QRPattern.jsx          
+.planning/milestones/v2.0-phases/73-downloads-home-html/mockup-src/components/StatusBar.jsx          
+.planning/milestones/v2.0-phases/73-downloads-home-html/mockup-src/data/gym.js                       
+.planning/milestones/v2.0-phases/73-downloads-home-html/mockup-src/screens/HomeScreen.jsx            
+.planning/milestones/v2.5-phases/94-pwa-chatscreen-wiring/94-REFERENCE-ChatScreen.jsx                
+.planning/refs/v2.6-REFERENCE-ReferFriendScreen.jsx                                                  
+apps/admin/design/mobile-dock.js                                                                     
+apps/admin/src/components/charts/DonutChart.tsx                                                      
+apps/admin/src/components/data/BulkBar.tsx                                                           
+apps/admin/src/components/ui/avatar.tsx                                                              
+apps/admin/src/components/ui/breadcrumb.tsx                                                          
+apps/admin/src/components/ui/calendar.tsx                                                            
+apps/admin/src/components/ui/card.tsx                                                                
+apps/admin/src/components/ui/combobox.tsx                                                            
+apps/admin/src/components/ui/field.tsx                                                               
+apps/admin/src/components/ui/input-group.tsx                                                         
+apps/admin/src/components/ui/item.tsx                                                                
+apps/admin/src/components/ui/kbd.tsx                                                                 
+apps/admin/src/components/ui/label.tsx                                                               
+apps/admin/src/components/ui/MetricTile.tsx                                                          
+apps/admin/src/components/ui/PagePlaceholder.tsx                                                     
+apps/admin/src/components/ui/popover.tsx                                                             
+apps/admin/src/components/ui/progress.tsx                                                            
+apps/admin/src/components/ui/scroll-area.tsx                                                         
+apps/admin/src/components/ui/select.tsx                                                              
+apps/admin/src/components/ui/StatTile.tsx                                                            
+apps/admin/src/components/ui/table.tsx                                                               
+apps/admin/src/components/ui/tabs.tsx                                                                
+apps/admin/src/components/ui/textarea.tsx                                                            
+apps/admin/src/components/ui/toggle-group.tsx                                                        
+apps/admin/src/components/ui/toggle.tsx                                                              
+apps/admin/src/features/attendance/types.ts                                                          
+apps/admin/src/features/branches/api.ts                                                              
+apps/admin/src/features/branches/StatusPill.tsx                                                      
+apps/admin/src/features/cashbox/types.ts                                                             
+apps/admin/src/features/clients/components/StatusPill.tsx                                            
+apps/admin/src/features/import-export/api.ts                                                         
+apps/admin/src/features/import-export/types.ts                                                       
+apps/admin/src/features/notifications/api.ts                                                         
+apps/admin/src/features/notifications/types.ts                                                       
+apps/admin/src/features/reports/types.ts                                                             
+apps/admin/src/features/roles/api.ts                                                                 
+apps/admin/src/features/roles/types.ts                                                               
+apps/admin/src/features/system-settings/api.ts                                                       
+apps/admin/src/features/system-settings/types.ts                                                     
+apps/admin/src/features/trainers/components/StatusPill.tsx                                           
+apps/admin/src/features/trash/api.ts                                                                 
+apps/admin/src/features/trash/types.ts                                                               
+apps/admin/src/mocks/attendance.ts                                                                   
+apps/admin/src/mocks/audit.ts                                                                        
+apps/admin/src/mocks/cashbox.ts                                                                      
+apps/admin/src/mocks/dashboard.ts                                                                    
+apps/admin/src/mocks/finance.ts                                                                      
+apps/admin/src/mocks/import-export.ts                                                                
+apps/admin/src/mocks/index.ts                                                                        
+apps/admin/src/mocks/load.ts                                                                         
+apps/admin/src/mocks/messages.ts                                                                     
+apps/admin/src/mocks/notifications.ts                                                                
+apps/admin/src/mocks/reports.ts                                                                      
+apps/admin/src/mocks/roles.ts                                                                        
+apps/admin/src/mocks/schedule.ts                                                                     
+apps/admin/src/mocks/system-settings.ts                                                              
+apps/admin/src/mocks/trash.ts                                                                        
+apps/admin/src/pages/attendance/components/AnomalyCards.tsx                                          
+apps/admin/src/pages/attendance/components/AttendanceFilters.tsx                                     
+apps/admin/src/pages/attendance/components/AttendanceKpis.tsx                                        
+apps/admin/src/pages/attendance/components/CohortCard.tsx                                            
+apps/admin/src/pages/attendance/components/DayOfWeekCard.tsx                                         
+apps/admin/src/pages/attendance/components/DurationCard.tsx                                          
+apps/admin/src/pages/attendance/components/FrequencyCard.tsx                                         
+apps/admin/src/pages/attendance/components/HeatmapCard.tsx                                           
+apps/admin/src/pages/attendance/components/HourCurveCard.tsx                                         
+apps/admin/src/pages/attendance/components/PeakHero.tsx                                              
+apps/admin/src/pages/attendance/components/RiskList.tsx                                              
+apps/admin/src/pages/branch-settings/BranchSettingsPage.tsx                                          
+apps/admin/src/pages/branch-settings/components/parts.tsx                                            
+apps/admin/src/pages/branches/BranchesPage.tsx                                                       
+apps/admin/src/pages/branches/components/parts.tsx                                                   
+apps/admin/src/pages/cashbox/components/ShiftDrawer.tsx                                              
+apps/admin/src/pages/client/components/ProfileHero.tsx                                               
+apps/admin/src/pages/client/components/ProfileSide.tsx                                               
+apps/admin/src/pages/client/components/StatStrip.tsx                                                 
+apps/admin/src/pages/clients/components/BulkBar.tsx                                                  
+apps/admin/src/pages/clients/components/ClientCard.tsx                                               
+apps/admin/src/pages/clients/components/ClientFilterTabs.tsx                                         
+apps/admin/src/pages/clients/components/ClientsPageHead.tsx                                          
+apps/admin/src/pages/clients/components/columns.tsx                                                  
+apps/admin/src/pages/clients/components/EmptyState.tsx                                               
+apps/admin/src/pages/clients/components/Pagination.tsx                                               
+apps/admin/src/pages/clients/components/parts.tsx                                                    
+apps/admin/src/pages/clients/components/status-styles.ts                                             
+apps/admin/src/pages/dashboard/components/ClientMessages.tsx                                         
+apps/admin/src/pages/dashboard/components/OccupancyNow.tsx                                           
+apps/admin/src/pages/dashboard/components/Segmented.tsx                                              
+apps/admin/src/pages/finance/components/FinanceModals.tsx                                            
+apps/admin/src/pages/import-export/components/parts.tsx                                              
+apps/admin/src/pages/import-export/ImportExportPage.tsx                                              
+apps/admin/src/pages/login/components/TwoFactorScreen.tsx                                            
+apps/admin/src/pages/notifications/components/Composer.tsx                                           
+apps/admin/src/pages/notifications/components/parts.tsx                                              
+apps/admin/src/pages/notifications/NotificationsPage.tsx                                             
+apps/admin/src/pages/plans/components/AddonsCard.tsx                                                 
+apps/admin/src/pages/reports/components/RankedListCard.tsx                                           
+apps/admin/src/pages/reports/components/ReportsKpis.tsx                                              
+apps/admin/src/pages/reports/components/ReportsPageHead.tsx                                          
+apps/admin/src/pages/reports/components/RevenueCard.tsx                                              
+apps/admin/src/pages/reports/components/RevenueMixCard.tsx                                           
+apps/admin/src/pages/roles/components/helpers.ts                                                     
+apps/admin/src/pages/roles/components/parts.tsx                                                      
+apps/admin/src/pages/roles/RolesPage.tsx                                                             
+apps/admin/src/pages/system-settings/components/rows.tsx                                             
+apps/admin/src/pages/system-settings/SystemSettingsPage.tsx                                          
+apps/admin/src/pages/trainer/components/TrainerKpis.tsx                                              
+apps/admin/src/pages/trainers/components/EarningsCard.tsx                                            
+apps/admin/src/pages/trainers/components/LoadHeatmap.tsx                                             
+apps/admin/src/pages/trainers/components/parts.tsx                                                   
+apps/admin/src/pages/trainers/components/RequestsCard.tsx                                            
+apps/admin/src/pages/trainers/components/status.ts                                                   
+apps/admin/src/pages/trainers/components/TrainerFilterTabs.tsx                                       
+apps/admin/src/pages/trainers/components/TrainersKpis.tsx                                            
+apps/admin/src/pages/trash/components/parts.tsx                                                      
+apps/admin/src/pages/trash/TrashPage.tsx                                                             
+apps/admin/src/types/shared.ts                                                                       
+apps/backend/.venv/lib/python3.12/site-packages/importlinter/ui/static/explorer.js                   
+apps/backend/.venv/lib/python3.12/site-packages/importlinter/ui/static/viz-standalone.js             
+apps/backend/.venv/lib/python3.12/site-packages/urllib3/contrib/emscripten/emscripten_fetch_worker.js
+apps/client/public/sw.js                                                                             
+apps/client/src/components/ComingSoon.tsx                                                            
+apps/client/src/components/ContextMenu.jsx                                                           
+apps/client/src/data/notifications.js                                                                
+apps/client/src/data/plans.js                                                                        
+apps/client/src/hooks/useLongPress.js                                                                
+apps/client/src/hooks/useRipple.js                                                                   
+apps/client/src/utils/subInfo.js                                                                     
+tools/audit/merge-registry.mjs                                                                       
+Unused dependencies (2)
+@base-ui/react    apps/admin/package.json:22:6
+react-day-picker  apps/admin/package.json:32:6
+Unused devDependencies (2)
+postcss   apps/admin/package.json:57:6
+prettier  apps/admin/package.json:58:6
+Unlisted binaries (2)
+lint       .github/workflows/ci.yml
+typecheck  .github/workflows/ci.yml
+Unused exports (163)
+STAFF_AUTH_EXEMPT_PATHS                                 apps/admin/src/api/client.ts:30:14                              
+staffRefreshOnce                              function  apps/admin/src/api/client.ts:74:17                              
+HEAT_SCALE                                              apps/admin/src/components/charts/heatmap-utils.ts:40:14         
+TOOLBAR_FIELD_CLS                                       apps/admin/src/components/data/Toolbar.tsx:14:14                
+useTableSelection                             function  apps/admin/src/components/data/useTableSelection.ts:18:17       
+Reply                                                   apps/admin/src/components/icons/index.tsx:17:3                  
+ShoppingBag                                             apps/admin/src/components/icons/index.tsx:33:3                  
+Coffee                                                  apps/admin/src/components/icons/index.tsx:68:3                  
+Copy                                                    apps/admin/src/components/icons/index.tsx:69:3                  
+Archive                                                 apps/admin/src/components/icons/index.tsx:78:3                  
+Heart                                                   apps/admin/src/components/icons/index.tsx:83:3                  
+TrendingDown                                            apps/admin/src/components/icons/index.tsx:85:3                  
+Settings                                                apps/admin/src/components/icons/index.tsx:96:3                  
+MapPin                                                  apps/admin/src/components/icons/index.tsx:98:3                  
+LayoutDashboard                                         apps/admin/src/components/icons/index.tsx:100:3                 
+Table                                                   apps/admin/src/components/icons/index.tsx:105:3                 
+Command                                                 apps/admin/src/components/icons/index.tsx:114:3                 
+CornerDownLeft                                          apps/admin/src/components/icons/index.tsx:115:3                 
+Panel                                         function  apps/admin/src/components/layout/Panel.tsx:5:17                 
+PanelHead                                     function  apps/admin/src/components/layout/Panel.tsx:18:17                
+PanelTitle                                    function  apps/admin/src/components/layout/Panel.tsx:27:17                
+PanelBody                                     function  apps/admin/src/components/layout/Panel.tsx:36:17                
+ToggleSwitch                                  function  apps/admin/src/components/modals/fields.tsx:412:17              
+NEW_CLIENT_PLANS                                        apps/admin/src/components/modals/options.ts:10:14               
+SOURCE_OPTIONS                                          apps/admin/src/components/modals/options.ts:41:14               
+TRAINER_SELECT_OPTIONS                                  apps/admin/src/components/modals/options.ts:50:14               
+RECENT_CHECKINS                                         apps/admin/src/components/modals/options.ts:105:14              
+FieldGrid                                     function  apps/admin/src/components/settings/controls.tsx:99:17           
+LabeledField                                  function  apps/admin/src/components/settings/controls.tsx:108:17          
+TextField                                     function  apps/admin/src/components/settings/controls.tsx:122:17          
+MoneyField                                    function  apps/admin/src/components/settings/controls.tsx:166:17          
+TextArea                                      function  apps/admin/src/components/settings/controls.tsx:192:17          
+Switch                                        function  apps/admin/src/components/settings/controls.tsx:268:17          
+ToggleRow                                     function  apps/admin/src/components/settings/controls.tsx:307:17          
+buttonVariants                                          apps/admin/src/components/ui/button.tsx:64:18                   
+ChartTooltipContent                                     apps/admin/src/components/ui/chart.tsx:336:3                    
+ChartLegend                                             apps/admin/src/components/ui/chart.tsx:337:3                    
+ChartLegendContent                                      apps/admin/src/components/ui/chart.tsx:338:3                    
+ChartStyle                                              apps/admin/src/components/ui/chart.tsx:339:3                    
+CommandDialog                                           apps/admin/src/components/ui/command.tsx:151:3                  
+CommandInput                                            apps/admin/src/components/ui/command.tsx:152:3                  
+CommandShortcut                                         apps/admin/src/components/ui/command.tsx:157:3                  
+CommandSeparator                                        apps/admin/src/components/ui/command.tsx:158:3                  
+DialogClose                                             apps/admin/src/components/ui/dialog.tsx:132:3                   
+DialogFooter                                            apps/admin/src/components/ui/dialog.tsx:135:3                   
+DialogOverlay                                           apps/admin/src/components/ui/dialog.tsx:137:3                   
+DialogPortal                                            apps/admin/src/components/ui/dialog.tsx:138:3                   
+DialogTrigger                                           apps/admin/src/components/ui/dialog.tsx:140:3                   
+DrawerPortal                                            apps/admin/src/components/ui/drawer.tsx:113:3                   
+DrawerOverlay                                           apps/admin/src/components/ui/drawer.tsx:114:3                   
+DrawerTrigger                                           apps/admin/src/components/ui/drawer.tsx:115:3                   
+DrawerClose                                             apps/admin/src/components/ui/drawer.tsx:116:3                   
+DrawerHeader                                            apps/admin/src/components/ui/drawer.tsx:118:3                   
+DrawerFooter                                            apps/admin/src/components/ui/drawer.tsx:119:3                   
+DropdownMenuPortal                                      apps/admin/src/components/ui/dropdown-menu.tsx:214:3            
+DropdownMenuGroup                                       apps/admin/src/components/ui/dropdown-menu.tsx:217:3            
+DropdownMenuLabel                                       apps/admin/src/components/ui/dropdown-menu.tsx:218:3            
+DropdownMenuCheckboxItem                                apps/admin/src/components/ui/dropdown-menu.tsx:220:3            
+DropdownMenuShortcut                                    apps/admin/src/components/ui/dropdown-menu.tsx:224:3            
+DropdownMenuSub                                         apps/admin/src/components/ui/dropdown-menu.tsx:225:3            
+DropdownMenuSubTrigger                                  apps/admin/src/components/ui/dropdown-menu.tsx:226:3            
+DropdownMenuSubContent                                  apps/admin/src/components/ui/dropdown-menu.tsx:227:3            
+SheetTrigger                                            apps/admin/src/components/ui/sheet.tsx:127:3                    
+SheetClose                                              apps/admin/src/components/ui/sheet.tsx:128:3                    
+SheetFooter                                             apps/admin/src/components/ui/sheet.tsx:131:3                    
+SidebarGroupAction                                      apps/admin/src/components/ui/sidebar.tsx:674:3                  
+SidebarGroupContent                                     apps/admin/src/components/ui/sidebar.tsx:675:3                  
+SidebarInput                                            apps/admin/src/components/ui/sidebar.tsx:678:3                  
+SidebarMenuAction                                       apps/admin/src/components/ui/sidebar.tsx:681:3                  
+SidebarMenuBadge                                        apps/admin/src/components/ui/sidebar.tsx:682:3                  
+SidebarMenuSkeleton                                     apps/admin/src/components/ui/sidebar.tsx:685:3                  
+SidebarMenuSub                                          apps/admin/src/components/ui/sidebar.tsx:686:3                  
+SidebarMenuSubButton                                    apps/admin/src/components/ui/sidebar.tsx:687:3                  
+SidebarMenuSubItem                                      apps/admin/src/components/ui/sidebar.tsx:688:3                  
+SidebarRail                                             apps/admin/src/components/ui/sidebar.tsx:690:3                  
+SidebarSeparator                                        apps/admin/src/components/ui/sidebar.tsx:691:3                  
+useSidebar                                              apps/admin/src/components/ui/sidebar.tsx:693:3                  
+attendanceVisitsKeys                                    apps/admin/src/features/attendance/api.ts:15:24                 
+ApiError                                                apps/admin/src/features/audit/api.ts:61:10                      
+useLogout                                     function  apps/admin/src/features/auth/api.ts:89:17                       
+BookingCreateSchema                                     apps/admin/src/features/bookings/schemas.ts:63:14               
+CancelBookingSchema                                     apps/admin/src/features/bookings/schemas.ts:71:14               
+CompletePtSessionSchema                                 apps/admin/src/features/bookings/schemas.ts:81:14               
+cashboxPaymentsKeys                                     apps/admin/src/features/cashbox/api.ts:20:26                    
+ApiError                                                apps/admin/src/features/cashbox/api.ts:21:10                    
+clientsKeys                                             apps/admin/src/features/clients/api.ts:37:14                    
+DEFAULT_DIR                                             apps/admin/src/features/clients/sort.ts:3:14                    
+dashboardKeys                   dashboardApi            apps/admin/src/features/dashboard/api.ts:33:14                  
+ApiError                        dashboardApi            apps/admin/src/features/dashboard/api.ts:117:10                 
+ApiError                                                apps/admin/src/features/finance/api.ts:15:10                    
+loadKeys                                                apps/admin/src/features/load/api.ts:24:30                       
+useMembership                                 function  apps/admin/src/features/memberships/api.ts:57:17                
+FreezePeriodSchema                                      apps/admin/src/features/memberships/schemas.ts:21:14            
+StaffThreadSchema                                       apps/admin/src/features/messages/api.ts:48:14                   
+messagesKeys                                            apps/admin/src/features/messages/api.ts:59:14                   
+paymentsKeys                                            apps/admin/src/features/payments/api.ts:27:14                   
+PaymentsLedgerQuerySchema                               apps/admin/src/features/payments/schemas.ts:54:14               
+RunAccrualSchema                                        apps/admin/src/features/payroll/schemas.ts:79:14                
+plansKeys                                               apps/admin/src/features/plans/api.ts:38:14                      
+promoCodesKeys                                          apps/admin/src/features/promoCodes/api.ts:34:14                 
+ptPackagesKeys                                          apps/admin/src/features/pt-packages/api.ts:45:14                
+PtPackageRefundSchema                                   apps/admin/src/features/pt-packages/schemas.ts:146:14           
+ApiError                                                apps/admin/src/features/reports/api.ts:216:10                   
+VisitsReportDailyBucketSchema                           apps/admin/src/features/reports/schemas.ts:24:14                
+VisitsReportHourlyBucketSchema                          apps/admin/src/features/reports/schemas.ts:29:14                
+RevenueBucketSchema                                     apps/admin/src/features/reports/schemas.ts:51:14                
+TrainerRowSchema                                        apps/admin/src/features/reports/schemas.ts:93:14                
+CohortMonthSchema                                       apps/admin/src/features/reports/schemas.ts:137:14               
+CohortEntrySchema                                       apps/admin/src/features/reports/schemas.ts:142:14               
+VisitAnomalyPointSchema                                 apps/admin/src/features/reports/schemas.ts:163:14               
+AtRiskItemSchema                                        apps/admin/src/features/reports/schemas.ts:187:14               
+useRecurringTemplates                         function  apps/admin/src/features/schedule/api.ts:63:17                   
+useTimeOffBlocks                              function  apps/admin/src/features/schedule/api.ts:78:17                   
+useCancelSlot                                 function  apps/admin/src/features/schedule/api.ts:127:17                  
+useDeactivateTemplate                         function  apps/admin/src/features/schedule/api.ts:185:17                  
+useDeleteTimeOff                              function  apps/admin/src/features/schedule/api.ts:256:17                  
+settingsKeys                                            apps/admin/src/features/settings/api.ts:72:14                   
+ApiError                                                apps/admin/src/features/settings/api.ts:361:10                  
+SessionSchema                                           apps/admin/src/features/settings/schemas.ts:22:14               
+usersKeys                                               apps/admin/src/features/users/api.ts:37:14                      
+UserSchema                                              apps/admin/src/features/users/schemas.ts:18:14                  
+visitsKeys                                              apps/admin/src/features/visits/api.ts:27:14                     
+APP_ROLE_LABEL                                          apps/admin/src/lib/constants.ts:2:14                            
+AuditDateGroup                                function  apps/admin/src/pages/audit/components/parts.tsx:86:17           
+AuditRow                                      function  apps/admin/src/pages/audit/components/parts.tsx:163:17          
+SideCard                                      function  apps/admin/src/pages/client/components/shared.tsx:70:17         
+SideCardLink                                  function  apps/admin/src/pages/client/components/shared.tsx:100:17        
+MiniButton                                    function  apps/admin/src/pages/client/components/shared.tsx:116:17        
+Panel                                                   apps/admin/src/pages/finance/components/parts.tsx:53:10         
+Toolbar                                       function  apps/admin/src/pages/finance/components/parts.tsx:55:17         
+FinStatus                                     function  apps/admin/src/pages/finance/components/parts.tsx:94:17         
+START_HOUR                                              …ps/admin/src/pages/schedule/components/calendar-utils.ts:129:14
+END_HOUR                                                …ps/admin/src/pages/schedule/components/calendar-utils.ts:130:14
+Card                                                    apps/admin/src/pages/trainer/components/shared.tsx:6:10         
+routeRegistry                                           apps/admin/src/shared/session/registry.ts:63:14                 
+EmptyIllustration                             function  apps/client/src/components/EmptyState.jsx:46:17                 
+default                                       function  apps/client/src/components/LoadError.jsx:228:16                 
+PUSH_PRESETS                                            apps/client/src/components/PushToast.jsx:5:14                   
+SkLine                                        function  apps/client/src/components/skeletons.jsx:4:17                   
+SkBlock                                       function  apps/client/src/components/skeletons.jsx:7:17                   
+SkCircle                                      function  apps/client/src/components/skeletons.jsx:10:17                  
+SheetSkBodyList                               function  apps/client/src/components/skeletons.jsx:174:17                 
+SheetSkBodyDetail                             function  apps/client/src/components/skeletons.jsx:198:17                 
+SheetSkBodyPlans                              function  apps/client/src/components/skeletons.jsx:217:17                 
+SheetSkBodyQR                                 function  apps/client/src/components/skeletons.jsx:233:17                 
+SheetSkBodyCheckout                           function  apps/client/src/components/skeletons.jsx:253:17                 
+SheetSkBodyThread                             function  apps/client/src/components/skeletons.jsx:274:17                 
+TweakSlider                                   function  apps/client/src/components/Tweaks/TweaksPanel.jsx:232:17        
+TweakToggle                                   function  apps/client/src/components/Tweaks/TweaksPanel.jsx:241:17        
+TweakNumber                                   function  apps/client/src/components/Tweaks/TweaksPanel.jsx:327:17        
+TweakColor                                    function  apps/client/src/components/Tweaks/TweaksPanel.jsx:361:17        
+default                                       function  apps/client/src/context/RequireAuth.jsx:35:16                   
+TRAINER_CANCEL                                          apps/client/src/data/booking.js:2:14                            
+CALENDAR                                                apps/client/src/data/calendar.js:25:14                          
+TIME_SLOTS                                              apps/client/src/data/calendar.js:27:14                          
+BUSY_SLOTS                                              apps/client/src/data/calendar.js:29:14                          
+PURCHASE_HISTORY                                        apps/client/src/data/history.js:18:14                           
+CALENDAR                                                apps/client/src/data/index.js:85:10                             
+TIME_SLOTS                                              apps/client/src/data/index.js:85:20                             
+BUSY_SLOTS                                              apps/client/src/data/index.js:85:32                             
+clientRefreshOnce                             function  apps/client/src/lib/clientFetcher.ts:70:17                      
+subTotalDays                                  function  apps/client/src/lib/membership.js:10:17                         
+addHour                                       function  apps/client/src/utils/format.js:45:17                           
+Unused exported types (191)
+HeatCellData            interface  apps/admin/src/components/charts/heatmap-utils.ts:5:18    
+FilterTabTone           type       apps/admin/src/components/data/FilterTabs.tsx:4:13        
+ModalSize               type       apps/admin/src/components/modals/AdaptiveModal.tsx:8:13   
+ChangeRoleModalUser     interface  apps/admin/src/components/modals/ChangeRoleModal.tsx:72:18
+RecentCheckin           interface  apps/admin/src/components/modals/options.ts:95:18         
+ScrollspyNavLink        interface  apps/admin/src/components/settings/ScrollspyNav.tsx:63:18 
+KpiDeltaDirection       type       apps/admin/src/components/ui/KpiTile.tsx:6:13             
+KpiChipTone             type       apps/admin/src/components/ui/KpiTile.tsx:7:13             
+AuditActor              interface  apps/admin/src/features/audit/types.ts:16:18              
+AuditDiff               interface  apps/admin/src/features/audit/types.ts:22:18              
+AuditGroup              interface  apps/admin/src/features/audit/types.ts:44:18              
+AuditData               interface  apps/admin/src/features/audit/types.ts:52:18              
+LoginResponse           type       apps/admin/src/features/auth/schemas.ts:43:13             
+MeResponse              type       apps/admin/src/features/auth/schemas.ts:58:13             
+ApiErrorEnvelope        type       apps/admin/src/features/auth/schemas.ts:70:13             
+CompletePtSessionInput  type       apps/admin/src/features/bookings/schemas.ts:87:13         
+ZoneKind                type       apps/admin/src/features/branches/types.ts:17:13           
+BranchPayments          interface  apps/admin/src/features/branches/types.ts:27:18           
+BranchNotifications     interface  apps/admin/src/features/branches/types.ts:35:18           
+BranchManager           interface  apps/admin/src/features/branches/types.ts:41:18           
+BranchesSummary         interface  apps/admin/src/features/branches/types.ts:83:18           
+RichSegment             interface  apps/admin/src/features/clients/detail.ts:8:18            
+DetailSubscription      interface  apps/admin/src/features/clients/detail.ts:15:18           
+DetailTrainerStat       interface  apps/admin/src/features/clients/detail.ts:27:18           
+DetailTrainer           interface  apps/admin/src/features/clients/detail.ts:32:18           
+ContactRow              interface  apps/admin/src/features/clients/detail.ts:40:18           
+GoalBlock               interface  apps/admin/src/features/clients/detail.ts:47:18           
+StatCell                interface  apps/admin/src/features/clients/detail.ts:53:18           
+ActivityKind            type       apps/admin/src/features/clients/detail.ts:62:13           
+ActivityTone            type       apps/admin/src/features/clients/detail.ts:63:13           
+ActivityEvent           interface  apps/admin/src/features/clients/detail.ts:65:18           
+ActivityGroup           interface  apps/admin/src/features/clients/detail.ts:76:18           
+TrainingType            type       apps/admin/src/features/clients/detail.ts:81:13           
+TrainingItem            interface  apps/admin/src/features/clients/detail.ts:83:18           
+TrainingsTabData        interface  apps/admin/src/features/clients/detail.ts:97:18           
+PaymentIcon             type       apps/admin/src/features/clients/detail.ts:104:13          
+PaymentSummaryCell      interface  apps/admin/src/features/clients/detail.ts:106:18          
+PaymentItem             interface  apps/admin/src/features/clients/detail.ts:112:18          
+PaymentsTabData         interface  apps/admin/src/features/clients/detail.ts:121:18          
+ClientFilter            type       apps/admin/src/features/clients/types.ts:11:13            
+PlanTone                type       apps/admin/src/features/clients/types.ts:14:13            
+ExpiryUrgency           type       apps/admin/src/features/clients/types.ts:17:13            
+PlanType                type       apps/admin/src/features/clients/types.ts:20:13            
+ClientPlan              interface  apps/admin/src/features/clients/types.ts:22:18            
+ClientTrainer           interface  apps/admin/src/features/clients/types.ts:36:18            
+ClientExpiry            interface  apps/admin/src/features/clients/types.ts:43:18            
+ClientVisits            interface  apps/admin/src/features/clients/types.ts:53:18            
+ClientLastVisit         interface  apps/admin/src/features/clients/types.ts:64:18            
+FilterTone              type       apps/admin/src/features/clients/types.ts:96:13            
+ClientFilterTab         interface  apps/admin/src/features/clients/types.ts:98:18            
+ClientsSummary          interface  apps/admin/src/features/clients/types.ts:106:18           
+SortDir                 type       apps/admin/src/features/clients/types.ts:116:13           
+DeltaDirection          type       apps/admin/src/features/dashboard/types.ts:3:13           
+KpiDelta                interface  apps/admin/src/features/dashboard/types.ts:5:18           
+ChipTone                type       apps/admin/src/features/dashboard/types.ts:11:13          
+KpiChip                 interface  apps/admin/src/features/dashboard/types.ts:13:18          
+KpiIconName             type       apps/admin/src/features/dashboard/types.ts:18:13          
+KpiCard                 interface  apps/admin/src/features/dashboard/types.ts:20:18          
+DashboardPeriod         type       apps/admin/src/features/dashboard/types.ts:33:13          
+DashboardOverview       interface  apps/admin/src/features/dashboard/types.ts:35:18          
+HourState               type       apps/admin/src/features/dashboard/types.ts:47:13          
+HourBar                 interface  apps/admin/src/features/dashboard/types.ts:49:18          
+HourlyOccupancy         interface  apps/admin/src/features/dashboard/types.ts:57:18          
+OccupancyFace           interface  apps/admin/src/features/dashboard/types.ts:67:18          
+OccupancyCell           interface  apps/admin/src/features/dashboard/types.ts:72:18          
+OccupancyNow            interface  apps/admin/src/features/dashboard/types.ts:83:18          
+SessionType             type       apps/admin/src/features/dashboard/types.ts:96:13          
+SessionState            type       apps/admin/src/features/dashboard/types.ts:97:13          
+ScheduleSession         interface  apps/admin/src/features/dashboard/types.ts:99:18          
+ScheduleToday           interface  apps/admin/src/features/dashboard/types.ts:116:18         
+ExpiryUrgency           type       apps/admin/src/features/dashboard/types.ts:128:13         
+ExpiringMembership      interface  apps/admin/src/features/dashboard/types.ts:130:18         
+ExpiringList            interface  apps/admin/src/features/dashboard/types.ts:141:18         
+RevenuePeriod           type       apps/admin/src/features/dashboard/types.ts:149:13         
+RevenuePoint            interface  apps/admin/src/features/dashboard/types.ts:151:18         
+RevenueBreakdownCell    interface  apps/admin/src/features/dashboard/types.ts:159:18         
+RevenueSeries           interface  apps/admin/src/features/dashboard/types.ts:165:18         
+RevenueData             interface  apps/admin/src/features/dashboard/types.ts:179:18         
+TopTrainer              interface  apps/admin/src/features/dashboard/types.ts:186:18         
+ClientMessage           interface  apps/admin/src/features/dashboard/types.ts:200:18         
+DashboardData           interface  apps/admin/src/features/dashboard/types.ts:244:18         
+RegRow                  interface  apps/admin/src/features/finance/types.ts:9:18             
+FailRow                 interface  apps/admin/src/features/finance/types.ts:22:18            
+PayRow                  interface  apps/admin/src/features/finance/types.ts:36:18            
+FinanceData             interface  apps/admin/src/features/finance/types.ts:47:18            
+LoadKpiIcon             type       apps/admin/src/features/load/types.ts:7:13                
+MeterTone               type       apps/admin/src/features/load/types.ts:8:13                
+DeltaTone               type       apps/admin/src/features/load/types.ts:9:13                
+LoadKpi                 interface  apps/admin/src/features/load/types.ts:11:18               
+ZoneRow                 interface  apps/admin/src/features/load/types.ts:24:18               
+LoadHeatmapData         interface  apps/admin/src/features/load/types.ts:45:18               
+LoadData                interface  apps/admin/src/features/load/types.ts:52:18               
+FreezePeriodData        type       apps/admin/src/features/memberships/schemas.ts:28:13      
+ConvTag                 interface  apps/admin/src/features/messages/types.ts:10:18           
+LastPrefix              interface  apps/admin/src/features/messages/types.ts:16:18           
+BubbleType              type       apps/admin/src/features/messages/types.ts:41:13           
+DaySep                  interface  apps/admin/src/features/messages/types.ts:42:18           
+QuickReply              interface  apps/admin/src/features/messages/types.ts:59:18           
+ClientChip              interface  apps/admin/src/features/messages/types.ts:65:18           
+PlanRow                 interface  apps/admin/src/features/messages/types.ts:69:18           
+MessagesData            interface  apps/admin/src/features/messages/types.ts:99:18           
+StaffInboxData          interface  apps/admin/src/features/messages/types.ts:134:18          
+StaffThreadData         interface  apps/admin/src/features/messages/types.ts:139:18          
+PaymentsListResponse    type       apps/admin/src/features/payments/schemas.ts:48:13         
+PayrollConfigData       type       apps/admin/src/features/payroll/schemas.ts:22:13          
+AccrualPreviewData      type       apps/admin/src/features/payroll/schemas.ts:46:13          
+PlanKpiValueKind        type       apps/admin/src/features/plans/types.ts:8:13               
+TariffFeature           interface  apps/admin/src/features/plans/types.ts:31:18              
+TariffBadge             interface  apps/admin/src/features/plans/types.ts:35:18              
+TariffStat              interface  apps/admin/src/features/plans/types.ts:39:18              
+Tariff                  interface  apps/admin/src/features/plans/types.ts:46:18              
+SalesMonth              interface  apps/admin/src/features/plans/types.ts:62:18              
+SalesLegendItem         interface  apps/admin/src/features/plans/types.ts:70:18              
+PromoIconKind           type       apps/admin/src/features/plans/types.ts:82:13              
+PromoStatus             type       apps/admin/src/features/plans/types.ts:83:13              
+PromoStat               interface  apps/admin/src/features/plans/types.ts:84:18              
+Promo                   interface  apps/admin/src/features/plans/types.ts:88:18              
+AddonIconKind           type       apps/admin/src/features/plans/types.ts:102:13             
+Addon                   interface  apps/admin/src/features/plans/types.ts:103:18             
+PromoCodeWriteData      type       apps/admin/src/features/promoCodes/schemas.ts:49:13       
+ClientsReportData       type       apps/admin/src/features/reports/schemas.ts:87:13          
+LoadNowData             type       apps/admin/src/features/reports/schemas.ts:129:13         
+CohortEntry             type       apps/admin/src/features/reports/schemas.ts:155:13         
+CohortMonth             type       apps/admin/src/features/reports/schemas.ts:156:13         
+AtRiskItem              type       apps/admin/src/features/reports/schemas.ts:204:13         
+RecurringTemplateData   type       apps/admin/src/features/schedule/schemas.ts:49:13         
+TimeOffData             type       apps/admin/src/features/schedule/schemas.ts:72:13         
+TrainerKey              type       apps/admin/src/features/schedule/types.ts:7:13            
+SessionKind             type       apps/admin/src/features/schedule/types.ts:8:13            
+SessionState            type       apps/admin/src/features/schedule/types.ts:9:13            
+HallId                  type       apps/admin/src/features/schedule/types.ts:11:13           
+ScheduleTrainer         interface  apps/admin/src/features/schedule/types.ts:13:18           
+NowMarker               interface  apps/admin/src/features/schedule/types.ts:54:18           
+ScheduleData            interface  apps/admin/src/features/schedule/types.ts:59:18           
+SessionData             type       apps/admin/src/features/settings/schemas.ts:40:13         
+SessionsListData        type       apps/admin/src/features/settings/schemas.ts:41:13         
+WorkingHoursData        type       apps/admin/src/features/settings/schemas.ts:133:13        
+NotificationPrefsData   type       apps/admin/src/features/settings/schemas.ts:247:13        
+NavLink                 interface  apps/admin/src/features/settings/types.ts:6:18            
+NavGroup                interface  apps/admin/src/features/settings/types.ts:16:18           
+SessionRow              interface  apps/admin/src/features/settings/types.ts:21:18           
+AuditRow                interface  apps/admin/src/features/settings/types.ts:27:18           
+Role                    type       apps/admin/src/features/settings/types.ts:33:13           
+TeamMember              interface  apps/admin/src/features/settings/types.ts:34:18           
+ChannelRow              interface  apps/admin/src/features/settings/types.ts:48:18           
+IntegrationRow          interface  apps/admin/src/features/settings/types.ts:58:18           
+InvoiceRow              interface  apps/admin/src/features/settings/types.ts:71:18           
+UsageBar                interface  apps/admin/src/features/settings/types.ts:77:18           
+Swatch                  interface  apps/admin/src/features/settings/types.ts:84:18           
+RichSeg                 interface  apps/admin/src/features/trainers/detail.ts:8:18           
+TrainerKpiIcon          type       apps/admin/src/features/trainers/detail.ts:14:13          
+TrainerDetailKpi        interface  apps/admin/src/features/trainers/detail.ts:16:18          
+TrainerSession          interface  apps/admin/src/features/trainers/detail.ts:29:18          
+RegularClient           interface  apps/admin/src/features/trainers/detail.ts:39:18          
+TermRow                 interface  apps/admin/src/features/trainers/detail.ts:49:18          
+PayoutLine              interface  apps/admin/src/features/trainers/detail.ts:54:18          
+TrainerPayout           interface  apps/admin/src/features/trainers/detail.ts:61:18          
+PayoutHistoryRow        interface  apps/admin/src/features/trainers/detail.ts:78:18          
+TrainerStatusKind       type       apps/admin/src/features/trainers/types.ts:8:13            
+TrainerCategory         type       apps/admin/src/features/trainers/types.ts:11:13           
+StatTrend               type       apps/admin/src/features/trainers/types.ts:14:13           
+LoadTone                type       apps/admin/src/features/trainers/types.ts:17:13           
+TrainerStatDelta        interface  apps/admin/src/features/trainers/types.ts:19:18           
+TrainerTab              type       apps/admin/src/features/trainers/types.ts:67:13           
+TrainerFilterTab        interface  apps/admin/src/features/trainers/types.ts:69:18           
+TrainerKpiIcon          type       apps/admin/src/features/trainers/types.ts:78:13           
+TrainerKpiValueKind     type       apps/admin/src/features/trainers/types.ts:79:13           
+TrainerKpi              interface  apps/admin/src/features/trainers/types.ts:81:18           
+HeatmapDay              interface  apps/admin/src/features/trainers/types.ts:95:18           
+HeatLevel               type       apps/admin/src/features/trainers/types.ts:101:13          
+HeatCell                interface  apps/admin/src/features/trainers/types.ts:103:18          
+HeatmapRow              interface  apps/admin/src/features/trainers/types.ts:111:18          
+HeatmapData             interface  apps/admin/src/features/trainers/types.ts:121:18          
+EarningRow              interface  apps/admin/src/features/trainers/types.ts:132:18          
+EarningsData            interface  apps/admin/src/features/trainers/types.ts:145:18          
+RequestTone             type       apps/admin/src/features/trainers/types.ts:157:13          
+RequestAction           interface  apps/admin/src/features/trainers/types.ts:159:18          
+RequestItem             interface  apps/admin/src/features/trainers/types.ts:164:18          
+RequestsData            interface  apps/admin/src/features/trainers/types.ts:173:18          
+TrainersSummary         interface  apps/admin/src/features/trainers/types.ts:181:18          
+UserInviteData          type       apps/admin/src/features/users/schemas.ts:59:13            
+VisitsListResponse      type       apps/admin/src/features/visits/schemas.ts:40:13           
+GymMetaData             type       apps/admin/src/features/visits/schemas.ts:65:13           
+CheckInInput            type       apps/admin/src/features/visits/schemas.ts:74:13           
+Theme                   type       apps/admin/src/hooks/use-theme.ts:13:13                   
+NavItem                 interface  apps/admin/src/layouts/AppLayout/nav-items.ts:29:18       
+RouteEntry              interface  apps/admin/src/shared/session/registry.ts:43:18           
+GymInfoData             interface  apps/client/src/lib/clientQueries.ts:831:18               
+NotificationItem        interface  apps/client/src/lib/clientQueries.ts:861:18               
+MessageAttachmentItem   interface  apps/client/src/lib/clientQueries.ts:923:18               
+MessageItem             interface  apps/client/src/lib/clientQueries.ts:930:18               
+Duplicate exports (3)
+LoadError|default    apps/client/src/components/LoadError.jsx
+RequireAuth|default  apps/client/src/context/RequireAuth.jsx 
+LoginScreen|default  apps/client/src/screens/LoginScreen.jsx 
+Configuration hints (3)
+apps/admin     .  Create knip.json configuration file with workspaces["apps/admin"] object (117 unused files)
+. (root)       .  Create knip.json configuration file with workspaces["."] object (12 unused files)          
+apps/client    .  Create knip.json configuration file with workspaces["apps/client"] object (8 unused files) 
