@@ -29,8 +29,9 @@
 
 ### Test infrastructure (TEST) — ранняя, таймбоксированная, узкая
 
-- [ ] **TEST-01**: Fixture-ordering deadlock backend pytest (autouse `permissive_booking_config` × `working_hours_config`) устранён, либо задокументирован ограниченный per-module fixture-scoped обход; таймбокс соблюдён, расширение в полную археологию тестов не допущено
-- [ ] **TEST-02**: Остальные унаследованные флаки (`test_freeze_race`, promo F821, `test_alembic_clean`) занесены отдельными строками реестра; допустимо финальное `deferred` с причиной
+- [ ] **TEST-01**: Свежий полный прогон backend pytest подтверждает, что фикс isolation-deadlock от закрытия v3.2 (`f438ced2` — маркер `no_permissive_booking_config` на 4 модулях + восстановление teardown booking-race + `pytest-timeout` 180s; диагноз в `.planning/debug/pytest-isolation-deadlock.md`) всё ещё держится: сюит доходит до конца без зависания. Если deadlock регрессировал или фикс оказался частичным — устранить либо задокументировать ограниченный per-module обход. Таймбокс соблюдён, расширение в полную археологию тестов не допущено.
+  **Посылка исправлена 2026-07-26:** формулировка изначально предполагала, что deadlock всё ещё открыт — это взято из устаревшего текста закрытия v3.2 в `PROJECT.md`; реестр отложенного в `STATE.md` фиксирует его как ✅ RESOLVED. Требование = верификация, а не починка с нуля.
+- [ ] **TEST-02**: Остаточные падения последнего известного полного прогона (3 failed / 2 errors при 3058 passed — `test_freeze_race`, promo F821, `test_alembic_clean` и остальные) перепроверены на свежем прогоне и занесены отдельными строками реестра; допустимо финальное `deferred` с причиной `accepted-risk`
 
 ### Functional fixes (FUNC) — баги на живых данных
 
@@ -116,22 +117,46 @@
 
 ## Traceability
 
-Заполняется при создании роадмапа.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AUD-01 … AUD-08 | TBD | Pending |
-| TEST-01 … TEST-02 | TBD | Pending |
-| FUNC-01 … FUNC-06 | TBD | Pending |
-| HYG-01 … HYG-07 | TBD | Pending |
-| INFRA-01 … INFRA-05 | TBD | Pending |
-| CLOSE-01 … CLOSE-04 | TBD | Pending |
+| AUD-01 | Phase 122 | Pending |
+| AUD-02 | Phase 122 | Pending |
+| AUD-03 | Phase 122 | Pending |
+| AUD-04 | Phase 122 | Pending |
+| AUD-05 | Phase 122 | Pending |
+| AUD-06 | Phase 122 | Pending |
+| AUD-07 | Phase 122 | Pending |
+| AUD-08 | Phase 122 | Pending |
+| TEST-01 | Phase 123 | Pending |
+| TEST-02 | Phase 123 | Pending |
+| FUNC-01 | Phase 124 | Pending |
+| FUNC-02 | Phase 124 | Pending |
+| FUNC-03 | Phase 124 | Pending |
+| FUNC-04 | Phase 124 | Pending |
+| FUNC-05 | Phase 124 | Pending |
+| FUNC-06 | Phase 124 | Pending |
+| HYG-01 | Phase 125 | Pending |
+| HYG-02 | Phase 125 | Pending |
+| HYG-03 | Phase 125 | Pending |
+| HYG-04 | Phase 125 | Pending |
+| HYG-05 | Phase 125 | Pending |
+| HYG-06 | Phase 125 | Pending |
+| HYG-07 | Phase 125 | Pending |
+| INFRA-01 | Phase 126 | Pending |
+| INFRA-02 | Phase 126 | Pending |
+| INFRA-03 | Phase 126 | Pending |
+| INFRA-04 | Phase 126 | Pending |
+| INFRA-05 | Phase 126 | Pending |
+| CLOSE-01 | Phase 127 | Pending |
+| CLOSE-02 | Phase 127 | Pending |
+| CLOSE-03 | Phase 127 | Pending |
+| CLOSE-04 | Phase 127 | Pending |
 
 **Coverage:**
 - v4.1 requirements: 32 total
-- Mapped to phases: 0
-- Unmapped: 32 ⚠️ (роадмап ещё не создан)
+- Mapped to phases: 32
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-07-26*
-*Last updated: 2026-07-26 after initial definition (v4.1 Codebase Hardening)*
+*Last updated: 2026-07-26 after roadmap creation (v4.1 Codebase Hardening — Phases 122-127, 100% coverage)*

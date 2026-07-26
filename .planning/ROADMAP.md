@@ -25,6 +25,7 @@
 - ✅ **v3.1 Admin — Fill the Gaps** — Phases 107-111 (shipped 2026-06-15) — see [milestones/v3.1-ROADMAP.md](milestones/v3.1-ROADMAP.md)
 - ✅ **v3.2 Admin — Wire the Rest** — Phases 112-117 (shipped 2026-06-16) — see [milestones/v3.2-ROADMAP.md](milestones/v3.2-ROADMAP.md)
 - ✅ **v4.0 Production Infrastructure — Self-Hosted k3s** — Phases 118-121 (shipped 2026-06-16) — see [milestones/v4.0-ROADMAP.md](milestones/v4.0-ROADMAP.md)
+- 🚧 **v4.1 Codebase Hardening** — Phases 122-127 (in progress, started 2026-07-26)
 
 ## Phases
 
@@ -479,6 +480,120 @@ Containerized the full stack + IaC (Terraform on-prem k3s) + observability (kube
 
 </details>
 
+### v4.1 Codebase Hardening (Phases 122-127) — IN PROGRESS
+
+**Milestone Goal:** Закрыть все обнаруживаемые дефекты существующей кодовой базы на достижимом без боевого железа bar'е — сначала сплошной read-only аудит с единым реестром находок, затем фиксы по категориям (FUNC/HYGIENE/INFRA), пока каждая строка реестра не получит терминальную диспозицию (`fixed+verified` либо `deferred`+причина). Новых продуктовых фич нет. Наследует **D-V40-LOCAL-VALIDATE**: боевое железо и продакшн-креды вне scope, сфабрикованные доказательства запрещены.
+
+**Scope principle:** Единственный read-only аудит-проход производит ровно один `.planning/audits/v4.1-DEFECT-REGISTRY.md`; категорийные фикс-фазы (FUNC/HYGIENE/INFRA) его потребляют; узкая таймбоксированная test-infra-разблокировка идёт рано, потому что от неё зависит способность любой последующей фазы доказать `fixed+verified`; консолидация реестра + закрытие milestone — финальный гейтинг-шаг. Это 6-фазная структура, независимо предложенная research-агентами (`research/SUMMARY.md` → `## Implications for Roadmap`) и явно предписанная milestone-брифом — принята как есть; она сознательно переопределяет generic `coarse`-калибровку `config.json` (обычно 2-4 фазы для этого проекта), потому что покрытие всех 32 требований естественно ложится именно в эти 6 категорийных границ без искусственного дробления или слияния.
+
+**Hard ordering (закодирован в `Depends on` ниже):** Аудит (122) строго предшествует любым фиксам и read-only — ноль правок app-кода. Test-infra unblock (123) идёт рано и таймбоксирован. FUNC (124) — перед HYGIENE (125) на любом общем файле (registry `blocked_by`); фазы остаются раздельными, т.к. большинство файлов трогает только одна из них. INFRA (126) — полностью параллельный трек к 124/125 (нулевое пересечение файлов/гейтов). Консолидация реестра (127) — последняя.
+
+**Две решённые развилки (не переоткрываются в планировании):** `apps/client` получает contract-тесты только по денежным/auth-путям (checkout, membership, `client_auth`) — остальные ~21 эндпоинт — единая строка `deferred:out-of-scope` (FUNC-06). Все четыре hygiene-инструмента (Knip/jscpd/vulture/deptry) прогоняются один раз во время аудита и триажатся в реестр; в CI-гейт v4.1 переходит только `deptry` (HYG-06/AUD-02).
+
+**k3d-honesty constraint (INFRA):** находки, полученные в k3d, несут квалификатор `(k3d-scope)`; два HARD GATE'а v4.0 (SEC-02 off-node custody RSA-ключа sealed-secrets, BAK-03 verified restore round-trip) НЕ объявляются закрытыми и остаются открытыми/неотредактированными.
+
+- [ ] **Phase 122: Audit — Registry-Producing Read-Only Pass** - Три параллельных read-only sub-pass'а (статическая гигиена, live-backend hunt, infra-триаж) производят один замороженный реестр дефектов
+- [ ] **Phase 123: Test-Infra Unblock** - Autouse-fixture deadlock backend pytest устранён либо задокументирован узкий обход, таймбоксировано
+- [ ] **Phase 124: FUNC Fixes — Risk-First** - Каждый функциональный дефект (schema-drift/недостижимость/reachability) получает терминальную диспозицию, locked-invariant-риски — первыми
+- [ ] **Phase 125: HYGIENE Fixes** - Каждая находка гигиены (TODO/dead-code/дубли/границы/устаревшие доки) получает терминальную диспозицию
+- [ ] **Phase 126: INFRA Fixes — Parallel Track** - k3d-доказуемые пункты prod-readiness исполнены с re-runnable evidence; HARD GATE'ы v4.0 не тронуты
+- [ ] **Phase 127: Registry Consolidation + Milestone Close** - Каждая строка терминальна, spot-audit перепроверен, все существующие гейты зелёные, честный ненулевой deferred-счётчик
+
+### Phase 122: Audit — Registry-Producing Read-Only Pass
+
+**Goal**: A single, frozen, complete defect registry exists — covering static hygiene, live-backend schema/reachability divergence, and v4.0 operator-pending triage — before any fix work begins; zero app-code edits occur during this phase.
+**Depends on**: Nothing (first phase of v4.1)
+**Requirements**: AUD-01, AUD-02, AUD-03, AUD-04, AUD-05, AUD-06, AUD-07, AUD-08
+**Success Criteria** (what must be TRUE):
+
+  1. `.planning/audits/v4.1-DEFECT-REGISTRY.md` exists, every row follows the Registry contract schema (`id, category, severity, anchor, repro, evidence, disposition, owning_phase, blocks/blocked_by, locked_invariant_risk`), and the file is frozen at phase close (later findings get a `discovered-during-fix` tag, not a new registry pass).
+  2. Every TODO/FIXME/HACK/XXX marker in the repo, plus every one-shot Knip/jscpd/vulture/deptry finding and every import-linter/ESLint-boundary violation, is triaged into its own registry row.
+  3. A three-way reachability manifest (`router` × `nav-items` × real screen component) exists for both `apps/admin` and `apps/client`; every intended screen is either proven reachable or has a registry row.
+  4. An edge-case seed dataset (null fields, empty-history entities, pagination past page 1, every error family 422/403/404/409/429/anti-oracle, money/DST-boundary values) was authored and used BEFORE the live-backend hunt; re-running the existing clean demo seed alone does not satisfy this.
+  5. A Zod↔wire manifest (every API call-site × its Zod schema) across all ~25 `apps/admin/src/features/*` domains was checked mechanically in one pass, and every divergence is a registry row; a browser UAT walk of every reachable screen against the real backend on the edge-case seed logged every crash/empty-state/console-error as a registry row.
+  6. All 23 v4.0 operator-pending items are each triaged into their own registry row, tagged either provable-locally-in-k3d `(k3d-scope)` or genuinely hardware/credential-gated.
+  7. Git history for this phase shows zero application-code diffs — only the registry artifact (and any dedicated audit-sweep scripts) were added.
+
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 123: Test-Infra Unblock
+
+**Goal**: The backend pytest suite either runs to completion or has a documented, scoped isolation workaround, so every later fix phase can produce `fixed+verified` evidence; the fix stays narrow and does not expand into full test-suite archaeology.
+**Depends on**: Phase 122 (registry frozen; this phase performs its first dispositioned fix)
+**Requirements**: TEST-01, TEST-02
+**Success Criteria** (what must be TRUE):
+
+  1. A full `pytest` run on a clean database completes without hanging — either the autouse fixture-ordering deadlock (`permissive_booking_config` × `working_hours_config`) is structurally resolved, or a documented per-module fixture-scoped workaround is in place and referenced by its registry row.
+  2. The fix's file footprint is limited to fixture/test-config scope — no unrelated test rewrites, confirming the timebox held.
+  3. `test_freeze_race`, the promo F821 lint failure, and `test_alembic_clean` each have their own registry row with a terminal disposition (`fixed+verified` or `deferred`+reason) — none is left as bare carried-forward "known flake" prose.
+  4. The registry row(s) for this phase cross-reference whether the pre-existing v3.2-close fix (commit `f438ced2`, `no_permissive_booking_config` marker) already satisfies TEST-01, rather than assuming new work is required from a clean slate.
+
+**Plans**: TBD
+
+### Phase 124: FUNC Fixes — Risk-First
+
+**Goal**: Every functional defect the audit found — schema drift, crashing or unreachable screens, backend-vs-its-own-spec divergence — reaches a terminal disposition proven by re-runnable contract-test evidence, with `locked_invariant_risk` rows fixed first and their parity mirrors verified in the same commit.
+**Depends on**: Phase 123 (tests must be runnable to prove fixes)
+**Requirements**: FUNC-01, FUNC-02, FUNC-03, FUNC-04, FUNC-05, FUNC-06
+**Success Criteria** (what must be TRUE):
+
+  1. Every `apps/admin` domain lacking the capture-then-contract-test pattern (~20 of ~25) now has one: a backend-capture fixture of a real response, parsed by the real production Zod schema.
+  2. Every `apps/admin` domain has a compile-time `AssertEqual<z.infer<Schema>, GeneratedType>` structural guard running inside the existing `tsc` step, with zero new dependencies introduced.
+  3. Schemathesis (GET-scope) has been run against the live ASGI app, and every backend-runtime-vs-its-own-OpenAPI-spec divergence found has a terminal registry disposition.
+  4. Every registry row flagged `locked_invariant_risk` is fixed before any other FUNC row, its parity mirror (RBAC/`can.ts`/`LOCKED_AUDIT_EVENTS`/`LOCKED_EMAIL_TEMPLATES`/OpenAPI/import-linter, as applicable) is updated in the same commit, and its negative-test fixture is re-run and still passes.
+  5. Every connected-but-unreachable screen in `apps/admin` or `apps/client` is either wired reachable (router + nav entry) or explicitly registry-flagged `hide-for-future` — none stays silently unreachable.
+  6. `apps/client` has capture-fixture contract tests (no new `zod` dependency) covering checkout, membership, and `client_auth`; the remaining ~21 client endpoints are recorded as a single `deferred:out-of-scope` registry row.
+
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 125: HYGIENE Fixes
+
+**Goal**: Every hygiene and architecture finding — TODO/FIXME/HACK markers, dead code, duplication, layer-boundary drift, stale stack documentation — reaches a terminal disposition, verified by the existing static-gate suite, with hygiene commits kept isolated from behavioral fixes.
+**Depends on**: Phase 123 (registry + green test baseline available); rows sharing a file with a Phase 124 fix are serialized after that fix per the registry's `blocked_by` field, otherwise this phase proceeds independently of Phase 124.
+**Requirements**: HYG-01, HYG-02, HYG-03, HYG-04, HYG-05, HYG-06, HYG-07
+**Success Criteria** (what must be TRUE):
+
+  1. No TODO/FIXME/HACK/XXX marker remains un-dispositioned in the repo — each is either closed by a fix or converted to a registry row with a disposition.
+  2. Every dead-code deletion was preceded by a full-repo string-literal grep PLUS explicit checks against `app/main.py` composition-root registrations, ARQ cron string-dispatch, `alembic/versions/*` references, and AST-gated frozensets (`LOCKED_AUDIT_EVENTS`/`LOCKED_EMAIL_TEMPLATES`) — no deletion relied on a single tool's confidence score alone.
+  3. Every duplication finding has a disposition; intentional per-domain schema repetition is recorded `accepted-risk`, not silently "fixed."
+  4. The 3 import-linter contracts and existing ESLint boundaries pass, AND the previously-missing `features/x → features/y` ESLint zone is added ONLY after violations on it are cleared — the gate is green with the new zone enabled, not failing on inherited debt.
+  5. `CLAUDE.md` and `apps/admin/CLAUDE.md` stack sections describe the real `apps/admin` dependencies (`react@^18.3.1`, `vite@^5.4.14`, `react-router-dom@^6.28.2`) — the React 19/Vite 6/TanStack Router prose belonging to the deleted `apps/admin-web` is gone.
+  6. `deptry` runs as a blocking CI gate; Knip, jscpd, and vulture remain one-shot local tools by a registry-recorded deliberate decision, not an oversight.
+  7. Git log for this phase shows hygiene commits (formatting/dead-code/duplication) isolated from any behavior-changing commit — no commit mixes both.
+
+**Plans**: TBD
+
+### Phase 126: INFRA Fixes — Parallel Track
+
+**Goal**: Every locally-provable production-readiness item is executed in k3d with captured, re-runnable evidence, correctly scoped `(k3d-scope)`, without claiming to close either v4.0 HARD GATE.
+**Depends on**: Phase 122 (registry frozen); runs fully parallel to Phases 123-125 — zero file/gate overlap (Terraform/Helm/k3d vs. Python/TS toolchains).
+**Requirements**: INFRA-01, INFRA-02, INFRA-03, INFRA-04, INFRA-05
+**Success Criteria** (what must be TRUE):
+
+  1. `make up` and `make smoke` have actually been executed against k3d with a captured, re-runnable evidence artifact (command + real output/log path) — not an assertion that it "should work."
+  2. `make backup` + `restore-verify.sh` have actually been executed in k3d with captured evidence, recorded `(k3d-scope)`; the original v4.0 `BAK-03` HARD GATE registry row remains open and unedited.
+  3. sealed-secrets RSA-key backup to a test store has actually been executed with captured evidence, recorded `(k3d-scope)`; the original v4.0 `SEC-02` HARD GATE registry row remains open and unedited.
+  4. `trivy config` has been run against the Terraform/Helm/K8s manifests (mirroring the existing `scan-images.sh` pattern), and every finding has a registry disposition.
+  5. Every item genuinely requiring real hardware or production credentials is dispositioned `deferred:operator-pending` in the registry — none is marked done.
+
+**Plans**: TBD
+
+### Phase 127: Registry Consolidation + Milestone Close
+
+**Goal**: The defect registry closes out honestly — every row terminal, a sample of `fixed+verified` evidence re-verified, all existing CI gates green — without fabricating a zero-`deferred` result.
+**Depends on**: Phases 124, 125, 126 (all fix work complete)
+**Requirements**: CLOSE-01, CLOSE-02, CLOSE-03, CLOSE-04
+**Success Criteria** (what must be TRUE):
+
+  1. A mechanical grep over the registry for undispositioned rows returns zero — no bare `open`, no lingering `fixed+unverified`.
+  2. A spot-audit sample of `fixed+verified` rows has been re-verified by actually re-running the cited evidence (command/log/contract-test), not by re-reading the prose.
+  3. ruff, mypy `--strict`, import-linter, ESLint (+ negative-test fixtures), tsc, pytest, vitest, and the OpenAPI/`schema.d.ts` drift gate are all green.
+  4. The final registry shows a nonzero count of `deferred` rows (consistent with the 23 known v4.0 operator-pending items) — an all-`fixed+verified`, zero-`deferred` result is treated as a red flag and re-investigated, not accepted at face value.
+
+**Plans**: TBD
+
 ## Backlog
 
 ### Backlog 999.1 — WR-06 restore PT session credit on owner force-cancel (✅ DONE 2026-05-29 — quick task 260529-ny2)
@@ -495,7 +610,21 @@ Containerized the full stack + IaC (Terraform on-prem k3s) + observability (kube
 
 ## Progress
 
-**Current milestone:** v4.0 Production Infrastructure — Self-Hosted k3s — ✅ Shipped 2026-06-16 (Phases 118-121). Awaiting next milestone.
+**Current milestone:** v4.1 Codebase Hardening — in progress (started 2026-07-26). Phases 122-127.
+
+**Execution Order:** 122 → 123 → {124 ∥ 126} → 125 → 127 (124/126 run in parallel once 123 is green; 125 serializes after 124 only on registry rows sharing a file — see `blocked_by`)
+
+| Phase | Milestone | Plans Complete | Status | Completed |
+|-------|-----------|----------------|--------|-----------|
+| 122. Audit — Registry-Producing Read-Only Pass | v4.1 | 0/TBD | Not started | - |
+| 123. Test-Infra Unblock | v4.1 | 0/TBD | Not started | - |
+| 124. FUNC Fixes — Risk-First | v4.1 | 0/TBD | Not started | - |
+| 125. HYGIENE Fixes | v4.1 | 0/TBD | Not started | - |
+| 126. INFRA Fixes — Parallel Track | v4.1 | 0/TBD | Not started | - |
+| 127. Registry Consolidation + Milestone Close | v4.1 | 0/TBD | Not started | - |
+
+<details>
+<summary>✅ v4.0 Production Infrastructure — Self-Hosted k3s (Phases 118-121) — Progress (SHIPPED 2026-06-16)</summary>
 
 **Execution Order:** 118 → 119 → 120 → 121
 
@@ -505,6 +634,8 @@ Containerized the full stack + IaC (Terraform on-prem k3s) + observability (kube
 | 119. Networking, Security + CSRF Rename | v4.0 | 3/3 | Complete   | 2026-06-16 |
 | 120. IaC, Observability + Backup | v4.0 | 3/3 | Complete   | 2026-06-16 |
 | 121. Makefile CI/CD + Full Smoke + Runbooks | v4.0 | 2/2 | Complete   | 2026-06-16 |
+
+</details>
 
 <details>
 <summary>✅ v3.2 Admin — Wire the Rest (Phases 112-117) — Progress (SHIPPED 2026-06-16)</summary>
