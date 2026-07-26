@@ -547,7 +547,11 @@ Containerized the full stack + IaC (Terraform on-prem k3s) + observability (kube
   3. `test_freeze_race`, the promo F821 lint failure, and `test_alembic_clean` each have their own registry row with a terminal disposition (`fixed+verified` or `deferred`+reason) — none is left as bare carried-forward "known flake" prose.
   4. The registry row(s) for this phase cross-reference whether the pre-existing v3.2-close fix (commit `f438ced2`, `no_permissive_booking_config` marker) already satisfies TEST-01, rather than assuming new work is required from a clean slate.
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 123-01-PLAN.md — Clean-DB fresh full-suite pytest run archived as log + SUMMARY, with residual isolation re-runs and the bounded D-123-09/10 regression branch (TEST-01)
+- [ ] 123-02-PLAN.md — F821 closure across both test files, terminal-disposition rows appended to the frozen registry's `## Discovered during fix`, and the D-123-11 footprint gate (TEST-02, TEST-01 verification row)
 
 ### Phase 124: FUNC Fixes — Risk-First
 
