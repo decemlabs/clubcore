@@ -5,15 +5,15 @@ milestone_name: Codebase Hardening
 current_phase: 122
 current_phase_name: audit-registry-producing-read-only-pass
 status: executing
-stopped_at: Completed 122-01-PLAN.md
-last_updated: "2026-07-26T12:43:20.032Z"
+stopped_at: Completed 122-02-PLAN.md (static hygiene sweep + reachability manifest)
+last_updated: "2026-07-26T13:13:04.900Z"
 last_activity: 2026-07-26
 last_activity_desc: Phase 122 execution started
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 6
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 122 (audit-registry-producing-read-only-pass) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 Status: Ready to execute
 Last activity: 2026-07-26 — Phase 122 execution started
 
@@ -184,8 +184,8 @@ These are the D-V40-LOCAL-VALIDATE operator-pending boundary — static validati
 
 **Resume file:** None
 
-Last session: 2026-07-26T12:43:20.024Z
-Stopped at: Completed 122-01-PLAN.md
+Last session: 2026-07-26T13:13:04.893Z
+Stopped at: Completed 122-02-PLAN.md (static hygiene sweep + reachability manifest)
 Resume: `/gsd-plan-phase 122` (Audit — Registry-Producing Read-Only Pass)
 
 ## Operator Next Steps
@@ -197,7 +197,10 @@ Resume: `/gsd-plan-phase 122` (Audit — Registry-Producing Read-Only Pass)
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 122 P1 | 15min | 2 tasks | 8 files |
+| Phase 122 P2 | 55min | 3 tasks | 6 files |
 
 ## Decisions
 
 - [Phase ?]: 122-01: registry rows route by per-row category column (not staging-file name); reworded a schema-legend example ID that collided with real HARD GATE row data in the plan's verify grep
+- [Phase ?]: 122-02: high-volume tool output (knip/jscpd/vulture) clustered into theme-level registry rows rather than one row per finding, to keep the registry's 'dozens not hundreds' design intent honest against ~1600 raw findings
+- [Phase ?]: 122-02: reachability defect bar excludes chrome-less framework routes and click-through dynamic detail pages; only ComingSoon placeholders and unregistered ROUTES keys count as V41-FUNC rows

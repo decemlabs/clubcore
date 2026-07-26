@@ -521,7 +521,7 @@ Containerized the full stack + IaC (Terraform on-prem k3s) + observability (kube
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 122-02-PLAN.md — 1a static hygiene sweep (markers + 4 pinned tools + import-linter/ESLint) + three-way reachability manifest
+- [x] 122-02-PLAN.md — 1a static hygiene sweep (markers + 4 pinned tools + import-linter/ESLint) + three-way reachability manifest
 - [ ] 122-03-PLAN.md — 1b edge-case seed dataset (per-domain matrix + additive idempotent seed_edge_cases.py) — AUD-04 precondition
 - [ ] 122-04-PLAN.md — 1c infra operator-pending triage (k3d-scope vs hardware/cred-gated; HARD GATEs stay open)
 
