@@ -1,482 +1,227 @@
-# Stack Research — v4.0 Production Infrastructure
+# Stack Research — v4.1 Codebase Hardening (tooling additions)
 
-**Domain:** Self-hosted bare-metal k3s deployment, IaC, observability, secrets, backup
-**Researched:** 2026-06-16
-**Confidence:** HIGH (all versions verified via GitHub releases / ArtifactHub, June 2026)
+**Domain:** Mechanical-defect-detection tooling for an existing, fully-shipped full-stack CRM (FastAPI + two React SPAs) undergoing a quality/tech-debt milestone. No new product features.
+**Researched:** 2026-07-26
+**Confidence:** HIGH (all versions verified live via exa/npm/pypi/GitHub releases, current as of 2026-07-26; repo claims verified by reading actual source, not the milestone brief)
 
----
+**Repo-reality correction (verified by reading source, not assumed):** the milestone brief describes `apps/admin` as "React 19 + Vite 6." The actual `apps/admin/package.json` pins `react@^18.3.1`, `vite@^5.4.14`, `react-router-dom@^6.28.2` (not TanStack Router — that stack lives only in the deleted `admin-web`). `apps/client` is `react@18.3.1` + `vite@^6.0.0`. All version/compat notes below are grounded in the real files, not the brief. This is exactly the kind of drift the audit phase should log as a DEFECT (stale CLAUDE.md / PROJECT.md tech-stack prose) — flagging it here rather than silently propagating it.
 
-## 1. Kubernetes Platform
-
-### Local Validation Cluster
-
-**Use k3d v5.9.0** (released 2026-06-02) — not kind.
-
-k3d wraps k3s in Docker, so local testing uses the **same binary** that runs on the bare-metal target. kind runs a different vanilla Kubernetes distribution, which can hide k3s-specific behaviour (built-in Traefik, ServiceLB, local-path-provisioner). For a project that deploys to k3s on-prem, k3d is the only tool that gives genuine parity.
-
-```bash
-# Install
-brew install k3d           # macOS
-# or
-curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | TAG=v5.9.0 bash
-
-# Create a 1-node cluster (mirrors single bare-metal host)
-k3d cluster create clubcore \
-  --k3s-arg "--disable=traefik@server:0" \   # managed via HelmChartConfig instead
-  --port "80:80@loadbalancer" \
-  --port "443:443@loadbalancer"
-```
-
-### Production Runtime
-
-**k3s — stable channel = v1.33.x** (as of June 2026; stable is pinned at v1.33; k3s maintainers mark a minor version stable only at patch .3/.4). Latest in the v1.33 line is v1.33.12+k3s1.
-
-Do NOT run latest (v1.36.x) on production without waiting for the stable channel to advance.
-
-```bash
-# Install on bare-metal host
-curl -sfL https://get.k3s.io | INSTALL_K3S_CHANNEL=stable sh -
-# Or pin to exact version:
-curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=v1.33.12+k3s1 sh -
-```
-
-### kubectl
-
-Ships with k3s (`k3s kubectl`) and is also installed standalone via `brew install kubectl`. Pin to same minor as cluster (1.33).
+**Also verified by reading source — two "already have it" corrections to the question's premise:**
+1. `Makefile:helm-validate` already pipes `helm template | kubeconform -strict -ignore-missing-schemas -kubernetes-version 1.29.0`. Kubeconform is **not a gap** — see §(d).
+2. `infra/scripts/restore-verify.sh` already does a fail-closed, row-count-verified, auto-cleanup CNPG restore round-trip to a scratch namespace. This is **materially more specific** than any generic K8s test-framework's default assertions — see §(d) "what NOT to add."
 
 ---
 
-## 2. Package Management — Helm
+## (a) Frontend-schema-vs-backend-contract drift
 
-**Use Helm v3.21.1** (released 2026-05-14, latest v3 as of June 2026).
+### Root cause, verified in code
 
-Helm 4 (released November 2025) exists but has breaking schema changes in the `helm_release` Terraform provider. Migrating a new infra milestone to Helm 4 adds no value and introduces upgrade risk. Helm 3 receives security patches through February 2027. Pin v3 until a dedicated migration sprint.
+`apps/admin/src/api/client.ts::staffRequest()` returns `Promise<unknown>` — the OpenAPI-generated `paths` type only constrains the URL/method, never the response shape. Each of the 17 `features/*/schemas.ts` files (`apps/admin/src/features/{clients,memberships,visits,plans,...}/schemas.ts`) hand-writes a **second, independent** Zod schema for the same wire shape already described in `packages/api-client/src/schema.d.ts` (generated from `apps/backend/openapi.json` via `openapi-typescript`). Nothing cross-checks these two descriptions of the same contract against each other. `apps/client` doesn't even have this second line of defense — it has zero `zod` dependency, so its `client_auth`/`client_portal` consumers have no runtime shape validation at all.
 
-```bash
-brew install helm@3           # macOS
-# or
-curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+This is why the two real incidents (v3.0/v3.1 UAT) passed every existing gate: `tsc` type-checked the hand-written Zod-inferred type against itself (self-consistent, not against the generated contract); the OpenAPI drift gate only proves `openapi.json`/`schema.d.ts` are regenerated from the Pydantic models — it proves nothing about what the ASGI app actually **returns** at runtime, nor about whether the hand-written Zod schema on the FE matches either.
+
+Closing this gap needs **two independent, complementary layers** — a static one (FE-authoring mistakes) and a live one (backend-implementation-vs-its-own-spec mistakes). Recommended in priority order:
+
+### 1. Compile-time Zod-vs-generated-type equality assertion — HIGHEST PRIORITY, ZERO NEW DEPENDENCIES
+
+The project already has the exact mechanism needed: `packages/api-client/src/schema.contract.test.ts` uses an `AssertNonNever<T>` type helper + a `_checks` tuple to fail `tsc`/`vitest` at compile time when an OpenAPI path goes missing. Extend this **same pattern** with a structural-equality variant and apply it per domain, where the Zod schemas actually live:
+
+```ts
+// add once, e.g. packages/api-client/src/assert-equal.ts
+export type AssertEqual<A, B> = (<T>() => T extends A ? 1 : 2) extends
+  (<T>() => T extends B ? 1 : 2) ? true : false
 ```
+
+Then in each `apps/admin/src/features/<domain>/schemas.ts`, add one line per hand-written response schema:
+
+```ts
+import type { paths } from '@clubcore/api-client'
+import type { AssertEqual } from '@clubcore/api-client/assert-equal'
+
+type _ClientWireShape = paths['/api/v1/clients/{client_id}']['get']['responses']['200']['content']['application/json']['data']
+type _ClientSchemaMatchesWire = AssertEqual<z.infer<typeof ClientSchema>, _ClientWireShape>
+const _check: _ClientSchemaMatchesWire = true // fails tsc if the two diverge
+```
+
+- **What it catches:** the exact class of bug in the v3.0/v3.1 incidents where the FE Zod schema and the backend-declared OpenAPI type structurally disagree (wrong optionality, wrong union, renamed field, `number` vs `string | number`) — the moment either side changes, without a human noticing.
+- **Cost:** zero new packages, zero new CI job (rides the existing `tsc -b --noEmit` step in the `admin`/`client`/`api-client` CI jobs). One afternoon to retrofit into the 17 existing schema files.
+- **Limit:** only catches drift **the OpenAPI spec itself already documents correctly**. It cannot catch a case where the backend's actual runtime response violates its own declared spec — that needs layer 2.
+- **Where:** `apps/admin/src/features/*/schemas.ts` (17 files); mirror the pattern into `apps/client` once `zod` is introduced there (see below).
+
+### 2. Schemathesis — backend responses vs. its own OpenAPI schema (new backend dependency)
+
+| Package | Version (verified) | Purpose |
+|---|---|---|
+| `schemathesis` | **4.22.4** (PyPI, 2026-07-08) | Property-based testing that generates inputs from `apps/backend/openapi.json`/the live ASGI schema and asserts every real response conforms to what the spec declares |
+
+- **Integration:** `schemathesis.openapi.from_asgi("/openapi.json", app)` directly against the FastAPI ASGI app (no network, works with the project's `httpx ASGITransport` testing convention) — add a `apps/backend/tests/test_schema_contract.py`:
+  ```python
+  import schemathesis
+  from app.main import app
+  schema = schemathesis.openapi.from_asgi("/openapi.json", app)
+
+  @schema.parametrize()
+  def test_api_contract(case):
+      case.call_and_validate()
+  ```
+- **What it catches:** 500s on edge-case inputs, and — critically for this question — **responses that don't match the documented schema**, i.e. exactly the failure mode where the backend silently serves a shape its own `openapi.json` doesn't actually describe (which layer 1 cannot see, because layer 1 trusts the spec). Requires `fastapi>=0.86.0`, `httpx<1.0,>=0.22.0`, `pytest-asyncio<2.0,>=1.0` — all already satisfied by the pinned backend stack (FastAPI 0.115+, httpx, pytest-asyncio).
+- **Cost:** one new dev-dependency (`uv add --dev schemathesis`), one new test file, add as a step in the existing `backend` CI job (not a new parallel job) right after `pytest`.
+- **Caution:** turn off destructive/mutating-endpoint fuzzing by default (`case.call_and_validate()` on state-changing routes against a real Postgres/Redis test DB can leave garbage data) — scope the first pass to `GET`-only operations, or run in a dedicated schema-isolated test DB the pytest suite already provisions. Do not let this become an unbounded fuzzing project — cap it at "does every response conform to the schema," not full security fuzzing (that's a different, separate concern).
+
+### 3. Formalize the "≥1 live-backend contract test per domain" convention that already exists as project practice
+
+`PROJECT.md` already records the v3.1 lesson ("обязателен в gate: ≥1 contract-тест на домен, парсящий РЕАЛЬНЫЙ ответ backend") as a **decision**, not a tool gap. This is process discipline, not a package: a small helper (`apps/admin/src/test/liveContract.ts`, no new dependency) that points `staffRequest`/`clientRequest` at a running `docker compose up` backend (seeded DB) instead of jsdom/MSW mocks, and `Schema.parse()`s the real response in a `*.live.test.ts` file excluded from the default `vitest run` (only run manually / in the audit phase, since it needs a live stack). Codify this as **one file per domain**, mirroring the 17 `schemas.ts` files, so the audit phase has a mechanical "does the hand-written Zod schema survive a real HTTP round-trip" check that is independent of both layers above (it catches integration-level surprises — e.g., an nginx/proxy layer mangling a header, a cookie not round-tripping — that neither a type-checker nor an in-process ASGI schema test can see).
+
+### What NOT to add for (a)
+
+| Avoid | Why | Use instead |
+|---|---|---|
+| `orval` (8.22.0) generating Zod from OpenAPI as a wholesale replacement for the 17 hand-written schema files | The hand-written schemas encode form-validation rules the OpenAPI spec doesn't have (Russian error messages, regex, min-lengths for `ClientCreateSchema` etc. — see `apps/admin/src/features/clients/schemas.ts` lines 57+). A full swap is a rewrite of every `features/*/api.ts` consumer mid-hardening-milestone — this is scope growth, not convergence, and risks reintroducing exactly the kind of regression this milestone exists to close. Revisit for **new** domains only, never migrate existing ones in v4.1. |
+| `openapi-zod-client` (1.18.3) / `zodios` client generation | Same rewrite-cost problem as orval, plus it replaces the existing hand-rolled `staffRequest`/`clientRequest` transport (cookie/CSRF/refresh-rotation logic is bespoke and security-sensitive — not something to regenerate). |
+| `typed-openapi` | Same category as above — a client-generation tool, not a drift-detector. Out of scope. |
+| Pact / consumer-driven contract testing | Designed for N independent services with separate deploy cycles and a contract broker. This is one monolith + two frontends in one repo, one release cadence — Pact's broker/versioning machinery solves a coordination problem this project doesn't have. |
+| Prism (mock server) | Solves "develop the frontend before the backend exists" — the backend has existed and been live since v2.0. Not a drift-detector. |
+| MSW (Mock Service Worker) as a *drift-detection* tool | MSW is excellent for isolating unit tests from the network, which is what the existing `vitest` suites already do — but a mock, by construction, cannot detect that the mock itself has drifted from reality. Keep MSW/manual mocks for unit tests; drift-detection must hit a **real** backend (layers 2 and 3 above). |
 
 ---
 
-## 3. Infrastructure as Code — Terraform
+## (b) Dead code, duplication, and unused exports
 
-**Use Terraform v1.15.6** (released 2026-05-27, latest stable as of June 2026).
+### TypeScript / pnpm workspace (apps/admin, apps/client, packages/api-client, packages/ui)
 
-OpenTofu v1.12.0 (2026-05-14) is the open-source fork and a drop-in swap if BSL becomes a concern. For this project (no CI/CD runner, no BSL concern, solo developer, local state), HashiCorp Terraform is fine.
+| Tool | Version (verified) | Catches | Integration point |
+|---|---|---|---|
+| **Knip** | **6.20.0** (npm, 2026-06-24) | Unused files, unused exports (including framework-aware — understands Vite/React entry points, lazy-loaded routes when configured), unused/missing `package.json` dependencies across pnpm workspaces. This is the actively-maintained standard; it supersedes ts-prune. | Root `knip.json` with `workspaces` entries for `apps/admin`, `apps/client`, `packages/api-client`, `packages/ui`; explicit `entry` globs for each app's `main.tsx`/`vite.config.ts`/`vitest.config.ts` **and** the `lazy: async () => (await import('...'))` route entries in `apps/admin/src/app/router.tsx` (Knip's static analysis will false-positive on dynamic `import()` targets unless they're declared as entry points — this repo's lazy-route pattern is exactly the shape Knip's docs warn needs explicit entry configuration). |
+| ~~ts-prune~~ | — | Deprecated in the ecosystem in favor of Knip (Knip's own docs and multiple 2026 sources recommend migrating; ts-prune has had no meaningful releases since). **Do not add ts-prune.** |
 
-**Local state** — `backend "local"` in `terraform.tfstate`. No S3/remote state needed for a single-operator project with no git remote.
+**Rollout, not a permanent CI gate on day one:** run `npx knip` once during the audit phase, triage every finding into the DEFECT registry (file + severity + category), fix. Only wire it into `admin`/`client` CI jobs (as an additional step, not a new parallel job) **after** a clean baseline exists — added blind to a CI gate on day one in a codebase with dynamic-import lazy routes and workspace-shared `packages/ui`/`packages/api-client` will produce enough false positives that the team stops reading the output, which is the one outcome this research is explicitly told to avoid.
 
-### Terraform Providers
+### Duplication (cross-language: TS + Python in one pass)
 
-| Provider | Version | Purpose |
-|----------|---------|---------|
-| `hashicorp/kubernetes` | `3.2.0` (2026-06-04) | Deploy K8s resources (Secrets, ConfigMaps, Jobs) via Terraform |
-| `hashicorp/helm` | `3.2.0` (2026-06-04) | Manage Helm releases via Terraform `helm_release` resource |
-| `hashicorp/null` | `3.x` | `null_resource` + `local-exec` for shell steps (k3s install on host via SSH) |
-| `hashicorp/local` | `2.x` | Write kubeconfig, rendered manifests to local files |
+| Tool | Version (verified) | Notes |
+|---|---|---|
+| `jscpd` | **5.0.12** (npm, Rust engine, 2026-07-08) | Rewritten in Rust — 24-37x faster than the old Node engine, self-contained binary, supports TypeScript/TSX **and** Python in the same run. Run once, repo-root, excluding `node_modules`/`dist`/generated files (`schema.d.ts`, `openapi.json`, `routeTree.gen.ts`-equivalents) with `--min-tokens 50 --min-lines 5` to avoid flagging small, idiomatic react-hook-form/Zod boilerplate as "duplication." |
 
-**Important:** `hashicorp/helm` v3.0 (released June 2025) switched from SDK v2 to Plugin Framework — breaking schema changes. `set`, `set_list`, and `set_sensitive` are now lists of nested objects, not blocks. If upgrading from an existing helm provider pin, update all `helm_release` resource configs.
+Treat as a **one-shot audit tool**, not a gate: duplication metrics have a real false-positive rate in this codebase specifically (17 near-identical `schemas.ts` files, 20+ near-identical `features/*/api.ts` TanStack Query hook files — these are **intentional** convention-driven repetition per the project's own `features/<domain>/{types.ts,api.ts,components/}` layering rule, not tech debt). Human-triage every finding into the DEFECT registry; do not block CI on a duplication threshold.
 
-```hcl
-terraform {
-  required_version = ">= 1.15.0"
-  required_providers {
-    kubernetes = { source = "hashicorp/kubernetes", version = "~> 3.2" }
-    helm       = { source = "hashicorp/helm",       version = "~> 3.2" }
-    null       = { source = "hashicorp/null",       version = "~> 3.0" }
-    local      = { source = "hashicorp/local",      version = "~> 2.0" }
-  }
-  backend "local" {}
-}
-```
+### Python (apps/backend)
 
----
+| Tool | Version (verified) | Catches | Why it's additive, not duplicative of ruff |
+|---|---|---|---|
+| `vulture` | **2.16** (PyPI, 2026-03-25) | Whole unused functions/classes/methods that are defined but never referenced anywhere in the project — requires cross-file reachability analysis. | Ruff's `F401`/`F841` catch unused **imports/local variables** per-file; it does not do whole-project "is this function ever called" analysis. Vulture is genuinely additive, not redundant. Run `uv run vulture apps/backend/app --min-confidence 80`, triage into DEFECT registry. Use `--min-confidence 100` only if promoting to a permanent (non-blocking) pre-commit hook later. |
+| `deptry` | **0.25.1** (PyPI, 2026-03-18) | Unused declared dependencies (`DEP002`), missing-but-imported dependencies (`DEP001`), dev-deps imported in production code (`DEP004`), transitive-only deps relied on directly (`DEP003`) — reads `pyproject.toml` + `uv`'s resolved env directly. | Ruff has no dependency-graph awareness at all. Cheap, low-false-positive (unlike Knip/jscpd), safe to wire straight into the existing `backend` CI job as one more step after `ruff check` (not a new parallel job) once the initial cleanup pass is done. |
 
-## 4. TLS / Ingress
+### What NOT to add for (b)
 
-### Ingress Controller — Traefik v3 (bundled with k3s)
-
-**CRITICAL: ingress-nginx was officially retired and archived March 2026.** No security patches will ever be issued for it again. Do not install ingress-nginx. k3s ships Traefik v3 by default — use it.
-
-Traefik in k3s is managed via a `HelmChartConfig` CRD. Override values at the cluster level without running a separate Helm release.
-
-```yaml
-# k3s HelmChartConfig to tune Traefik
-apiVersion: helm.cattle.io/v1
-kind: HelmChartConfig
-metadata:
-  name: traefik
-  namespace: kube-system
-spec:
-  valuesContent: |-
-    ports:
-      web:
-        redirectTo: websecure
-    logs:
-      general:
-        level: ERROR
-```
-
-Use standard `Ingress` resources with `ingressClassName: traefik`. Traefik-specific middleware (rate-limit, IP allowlist, redirect) goes in `Middleware` CRDs and is referenced via the annotation `traefik.io/router.middlewares`.
-
-### TLS — cert-manager v1.20.2
-
-**cert-manager v1.20.2** (released 2026-04-11, latest stable as of June 2026). Supports Kubernetes 1.32–1.35. For local validation use a `ClusterIssuer` with `selfSigned` issuer or Let's Encrypt staging. For production use Let's Encrypt ACME HTTP-01 (or DNS-01 if wildcard needed).
-
-```bash
-helm install cert-manager jetstack/cert-manager \
-  --namespace cert-manager --create-namespace \
-  --version v1.20.2 \
-  --set crds.enabled=true
-```
+| Avoid | Why |
+|---|---|
+| `ts-prune` | Superseded by Knip; adding both is pure redundancy. |
+| `madge` (circular-dependency graphing) | `apps/admin`/`apps/client` already enforce the exact boundary this would check via ESLint's `import/no-restricted-paths` (per `eslint.config.js`, already ADR-locked in `CLAUDE.md`). Adding a second tool to re-verify a rule the linter already enforces on every CI run is duplicate coverage, not new coverage. If the ESLint rule itself is suspected of gaps, that's a code-review finding for the boundary rule, not a case for a new dependency-graph tool. |
+| `pylint` R0801 (duplicate-code) as a **second** Python duplication detector | `jscpd` already covers Python in the same cross-language pass; running both means triaging two divergent duplication reports for the same files. |
+| Wiring Knip/jscpd into CI as **blocking** gates on day one | Guaranteed false-positive noise (dynamic imports, intentional per-domain repetition) the team will learn to ignore — directly the anti-pattern this research is asked to avoid. Gate only after a clean, human-triaged baseline. |
 
 ---
 
-## 5. Observability Stack
+## (c) Browser-driven UAT automation (route sweep against a live backend)
 
-### Prometheus + Grafana — kube-prometheus-stack
+### What's already proven to work here — keep it
 
-**Use kube-prometheus-stack v86.2.3** (released 2026-06-13, appVersion Prometheus Operator v0.91.0).
+`apps/admin` already has `src/app/router-smoke.test.tsx`, a vitest+jsdom suite that renders every registered route — but against **mocks**, not the live backend, so it cannot catch wire-shape drift or a route silently still pointing at `ComingSoon`. Separately, prior milestones (v3.0/v3.1) closed schema-drift bugs via **interactive chrome-devtools-mcp / agent-browser sessions against a live `docker compose up` stack** — this already-proven, zero-new-tooling workflow is the right mechanism for the **exploratory, human/agent-in-the-loop audit pass** (finding unknown-unknowns, judging visual correctness). Keep using it for that job — this environment's `agent-browser` skill is the direct continuation of that same pattern.
 
-This chart bundles Prometheus Operator, Prometheus, Alertmanager, Grafana, node-exporter, kube-state-metrics, and pre-built dashboards. One chart replaces what would otherwise be 4-5 separate installs. The "overkill for single-node" argument does not apply — the chart supports single-node with minimal resources via values overrides.
+### The genuine gap: a mechanically re-runnable regression check
 
-```bash
-helm install kube-prometheus-stack \
-  oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack \
-  --version 86.2.3 \
-  --namespace monitoring --create-namespace \
-  -f monitoring-values.yaml
-```
+What's missing is a **deterministic, no-LLM-in-the-loop** script that can be re-run after every fix batch to prove "no new placeholder / crash / console error appeared," which an interactive agent session cannot cheaply provide on repeat.
 
-Minimum values for single-node (avoids OOM on a small bare-metal host):
-```yaml
-prometheus:
-  prometheusSpec:
-    retention: 7d
-    resources:
-      requests: { memory: 256Mi, cpu: 100m }
-      limits:   { memory: 512Mi }
-grafana:
-  resources:
-    requests: { memory: 128Mi, cpu: 50m }
-alertmanager:
-  alertmanagerSpec:
-    resources:
-      requests: { memory: 64Mi }
-```
+| Package | Version (verified) | Purpose |
+|---|---|---|
+| `@playwright/test` | **1.62.0** (npm, 2026-07-24) | Deterministic, scriptable browser driver + assertion/test-runner in one package. |
 
-### Log Aggregation — Loki
+**Integration (bespoke script, not a framework buildout):**
+- New root-level `e2e/route-sweep.spec.ts` (single spec, not a whole Playwright project per app) that:
+  1. Reads the **actual route sources of truth already in the repo** — `apps/admin/src/app/routes.ts` (`ROUTES` constant) + `apps/admin/src/app/nav-items.ts` + the `lazy:` registrations in `app/router.tsx` — so the route list can never silently drift from what the app really registers. Do the same for `apps/client`'s `react-router` route table.
+  2. For each route, navigates against a **live `docker compose up` backend** (seeded DB, real login), and asserts:
+     - no `page.on('pageerror')` (uncaught exception / React error boundary trip),
+     - no `page.on('console', msg => msg.type() === 'error')`,
+     - no failed network response in the 4xx/5xx range except an explicit allow-list (expected 401s pre-login, etc.),
+     - the rendered DOM does **not** match the project's `ComingSoon`/placeholder marker (a stable `data-testid` or heading text) when the route is supposed to be wired — this is the exact FND-04-class bug (wired-but-unreachable / wired-but-still-a-placeholder) the milestone names explicitly.
+  3. Install **Chromium only** (`npx playwright install --with-deps chromium`) — no reason to pay for Firefox/WebKit in a solo-maintainer internal CRM; keeps the footprint small.
+- **Run it as an on-demand script** (`pnpm e2e:route-sweep`), invoked manually during the audit phase and again after each fix-batch to prove no regression — **not** wired into the PR-blocking CI (it needs a live multi-container stack with seeded data, which is heavier and slower than the existing 5 CI gates and would either need `services:` containers for two frontends+backend in GitHub Actions, or become the next flaky gate everyone learns to skip). If continuous coverage is wanted later, wire it as a manual `workflow_dispatch` GitHub Action, never a required PR check.
 
-**MIGRATION NOTE (March 2026):** The Loki Helm chart for OSS users moved from the `grafana/grafana` repo to `grafana-community/helm-charts`. The last old-repo release was `6.55.0`. Current community repo release is **loki-17.3.1** (released 2026-06-10, appVersion Loki 3.7.x).
+### What NOT to add for (c)
 
-```bash
-helm repo add grafana-community https://grafana-community.github.io/helm-charts
-helm install loki grafana-community/loki \
-  --version 17.3.1 \
-  --namespace monitoring \
-  -f loki-values.yaml
-```
-
-Deploy in **monolithic mode** (single Deployment, single PVC). Microservices/scalable mode is for multi-TB workloads — overkill for a single gym.
-
-Use **Grafana Alloy** (successor to promtail + grafana-agent, now the single recommended log shipper) to tail pod logs and push to Loki. Alloy is included as a sub-chart in the Loki community chart.
-
-### FastAPI Metrics — prometheus-fastapi-instrumentator
-
-**Version to pin: v7.1.0** (released 2025-03-19).
-
-**Do NOT use v8.0.0** at this time. v8 is a breaking release that requires `starlette>=1.0.0` and `fastapi>=0.133.0`. The clubcore backend currently pins `fastapi>=0.115`. FastAPI 0.133.0 (released 2026-02-24) added Starlette v1 support, but upgrading FastAPI is a separate task that needs its own regression gate (729 backend tests, auth stack, middleware). Do not couple that upgrade to the infra milestone.
-
-v7.1.0 works with `fastapi>=0.115` + current Starlette <1.0.
-
-```python
-# apps/backend/app/main.py  (additive — no business logic change)
-from prometheus_fastapi_instrumentator import Instrumentator
-Instrumentator().instrument(app).expose(app)
-```
-
-Dependency pin:
-```toml
-# pyproject.toml addition
-"prometheus-fastapi-instrumentator>=7.1.0,<8"
-```
+| Avoid | Why |
+|---|---|
+| Cypress | Functionally redundant with Playwright for this use case (single-browser, console/network assertions); no reason to run two E2E runners in a solo-maintainer project. |
+| Selenium / WebdriverIO | Legacy relative to Playwright's built-in auto-waiting, tracing, and console/network hooks — more code for the same result. |
+| TestCafe | Same category, less active development than Playwright. |
+| BackstopJS / Percy / Chromatic (visual regression / pixel-diffing) | Solves a **different** problem (design-fidelity drift), not this milestone's target (crashes / blank screens / unreachable routes). This milestone is explicitly hardening, not a design-QA pass — visual regression tooling is scope creep here. |
+| A full Storybook + component-test pipeline | No Storybook exists in this repo today; introducing one plus story-level tests is a net-new investment unrelated to "walk every route against a live backend," which is a route-level, not component-level, concern. |
+| Wiring the route sweep into the PR-blocking CI from day one | Needs a live stateful multi-container stack; adding that as a **required** check either slows every PR materially or becomes the next ignored-flaky-gate anti-pattern. Keep it as an on-demand / manual-dispatch tool that proves fixes, not a merge gate. |
 
 ---
 
-## 6. Secrets Management
+## (d) Kubernetes / Helm / backup-restore verification beyond what's already there
 
-**Use sealed-secrets v0.37.0** (released 2026-05-21).
+**Important finding from reading the actual repo (not assumed from the prompt):** the project already has more than "helm lint / terraform validate / make -n":
 
-Reasoning for this project context:
+- `Makefile:helm-validate` already runs `helm template ... | kubeconform -strict -ignore-missing-schemas -kubernetes-version 1.29.0` — **kubeconform is already in the stack.** Do not re-recommend it; it's correctly wired to k3d's target version.
+- `infra/scripts/restore-verify.sh` already implements a fail-closed, auto-cleanup, row-count-verified CNPG restore round-trip to a **scratch namespace** (never touches the live cluster) — this is materially more specific and better-engineered than the default assertions any generic Kubernetes test framework would give out of the box.
+- `infra/scripts/smoke.sh` already implements an 8-check "looks-done-but-isn't" smoke (WS-upgrade-through-Traefik, PWA SW cache headers, DNS-per-pod, TZ=UTC, migrate-Job-Succeeded, Redis AOF) — again, project-specific checks a generic tool wouldn't know to write.
 
-| Option | Verdict | Reason |
-|--------|---------|--------|
-| **sealed-secrets** | **USE THIS** | Encrypts K8s Secrets with a cluster key; `SealedSecret` manifests are safe to store on-disk or in-repo; `kubeseal` CLI seals on the dev machine |
-| SOPS + age | Skip | More powerful but more moving parts — separate key management, per-file encryption ceremony. Overkill for solo no-remote project |
-| External Secrets Operator + Vault | Do NOT add | Vault is explicitly in the "what not to add" list; ESO adds an entire control-plane component |
+Given that, the honest answer biased against sprawl is: **most of the "missing" tooling for this milestone isn't tooling at all — it's actually *running* the already-built scripts against a real k3d cluster** (which is exactly what the milestone's "locally-provable production readiness" direction already targets). The one genuinely new, low-cost, zero-new-dependency addition:
 
-For a no-git-remote project, sealed-secrets is ideal: the `SealedSecret` YAML files can live in the repo tree without exposing plaintext; they can only be decrypted by the controller running in the cluster. If the cluster key is lost, re-seal with a new key (single operator, acceptable risk).
+### Extend the trivy usage that already exists, from image-scan-only to IaC-config-scan
 
-```bash
-# Install controller
-kubectl apply -f https://github.com/bitnami-labs/sealed-secrets/releases/download/v0.37.0/controller.yaml
+`infra/scripts/scan-images.sh` already wraps `trivy image --severity HIGH,CRITICAL` with a graceful degrade-if-absent / `REQUIRE_TRIVY=1` fail-closed-in-CI pattern. Trivy (already a project dependency, not a new tool) has a **second scanning mode** for exactly this milestone's remaining gap:
 
-# Install kubeseal CLI
-brew install kubeseal
+| Capability | Command | Catches |
+|---|---|---|
+| `trivy config` (misconfiguration scanner) | `trivy config infra/terraform infra/helm/clubcore` | Missing resource limits, privileged/root containers, missing NetworkPolicy, hardcoded secrets in Terraform/Helm, overly-permissive RBAC, deprecated/insecure Kubernetes API fields — across Terraform, Helm charts, and rendered Kubernetes manifests in one pass. Natively understands Helm charts and Terraform HCL — no need to pre-render with `helm template` first (though `trivy config <(helm template ...)` also works if a raw-manifest pass is preferred). |
 
-# Seal a secret
-kubectl create secret generic db-creds \
-  --from-literal=password=... \
-  --dry-run=client -o yaml \
-  | kubeseal --format yaml > infra/secrets/db-creds-sealed.yaml
-```
+**Integration:** add `infra/scripts/scan-iac.sh` mirroring the exact existing pattern in `scan-images.sh` (same graceful-degrade / `REQUIRE_TRIVY` semantics, same tool, zero new dependency to install or vet), and a `make scan-iac` target next to the existing `make scan`. This is the single highest-conviction (d) recommendation because it reuses an already-vetted tool with an already-proven integration pattern in this exact repo.
 
----
+### What NOT to add for (d)
 
-## 7. Object Storage
-
-**Keep SeaweedFS. Do NOT switch to MinIO.**
-
-MinIO's community (`minio/minio`) GitHub repository was **archived April 25, 2026**. Pre-compiled binary releases for the community version are discontinued. The community Helm chart at `charts.min.io` is frozen. MinIO now requires building from source (Go) or the commercial AIStor product.
-
-SeaweedFS is the correct call for this project:
-- Already in the stack (docker-compose uses `chrislusf/seaweedfs:3.84`)
-- S3-compatible API — zero app code changes (same boto3/aioboto3 client)
-- Actively maintained — Helm chart **v4.33.0** released 2026-06-11
-- AGPLv3 open-source, no paywall
-- Single-node standalone mode matches the existing docker-compose topology
-
-```bash
-helm repo add seaweedfs https://seaweedfs.github.io/seaweedfs/helm
-helm install seaweedfs seaweedfs/seaweedfs \
-  --version 4.33.0 \
-  --namespace storage --create-namespace \
-  -f seaweedfs-values.yaml
-```
+| Avoid | Why |
+|---|---|
+| `helm/chart-testing` (ct) — verified **v3.14.0** (2025-10-08) | `ct`'s main value (`ct lint`/`ct install` across **many changed charts** in a monorepo of charts, diffed against a target branch) doesn't apply — this project has exactly **one** umbrella chart. `ct install`'s "deploy into a live cluster and wait for readiness" is already superseded by the project's own `deploy-local.sh` + `smoke.sh`, which check project-specific behavior (WS upgrade, PWA cache headers) `ct` knows nothing about. Adding it would mean maintaining two partially-overlapping "does the chart actually deploy" mechanisms. |
+| `kuttl` (KUbernetes Test TooL) — verified **v0.26.0** (2026-05-11) | Its natural application here is exactly what `restore-verify.sh` already does (declarative "apply this, assert that state") — but the existing bash script is *already* fail-closed, row-count-verified, and self-cleaning, i.e. **already exceeds** what a first-pass kuttl `TestAssert` (typically just "Cluster reaches Ready") would give. Porting a working, well-tested, project-specific script into a second declarative-YAML system fragments the source of truth for the milestone's most safety-critical script (BAK-03) without adding verification power. Not worth it in a convergence-focused milestone. |
+| `tflint` | Marginal value here: its highest-value rulesets are cloud-provider-specific (AWS/GCP/Azure best practices), which don't apply to this project's on-prem/bare-metal `k3s` Terraform modules (`infra/terraform/{host,cluster}`). Its generic ruleset (unused declarations, deprecated syntax) has real but small value, largely superseded by adding `trivy config` (which also flags Terraform misconfigurations, with a tool already in the stack). Skip in favor of the trivy extension above; revisit only if `terraform validate` false-negatives are actually observed during the audit. |
+| Velero | The project already has a complete, working backup mechanism (CNPG barman + Redis snapshot + SeaweedFS backup CronJobs + the verified restore script). Introducing a second, general-purpose backup tool would duplicate/compete with working infrastructure — pure scope growth for a milestone whose stated goal is hardening, not re-architecting backups. |
+| Polaris / Datree / OPA-Gatekeeper / Conftest (policy-as-code engines) | These solve a multi-team, multi-cluster compliance-governance problem. This is a solo-maintainer, single-cluster, one-gym pet project; policy-as-code investment here is tooling the team (of one) will not act on repeatedly — directly the anti-pattern this research must avoid. `trivy config` already gives the highest-value subset (security misconfiguration) without a second policy DSL to learn. |
+| kube-bench / kube-hunter (live-cluster security audit tools) | Require and target a **running production-like** cluster with a threat model beyond "is this locally provable" — explicitly out of scope per the milestone's own boundary (no real hardware, no production credentials). |
+| Terratest (Go-based IaC test framework) | Steep new-language investment (Go) for a Python/TypeScript-only team, for value largely already covered by `terraform validate`/`terraform plan` + the trivy extension above. Not worth the maintenance-language sprawl in a convergence milestone. |
 
 ---
 
-## 8. Stateful Services — Postgres and Redis
+## Cross-Cutting: Sequencing Recommendation for the Roadmap
 
-### Postgres 16 — CloudNativePG operator
+1. **Audit phase (read-only, seeds the DEFECT registry):** run Knip, jscpd, vulture, deptry once each (all one-shot, no CI wiring yet); run the Playwright route-sweep once against a live seeded backend; run `trivy config` once against `infra/`. Every finding becomes a DEFECT-registry row with severity + category + file, per the milestone's own stated audit-phase contract.
+2. **Fix phase:** for every schema-drift fix, land it together with (a) the compile-time `AssertEqual` guard for that domain and (b) — if the domain doesn't already have one — a live-contract test per the existing v3.1 convention. This is the "contract-тест против РЕАЛЬНОГО ответа backend" the project has already decided on; this research just gives it two concrete, low-cost implementation mechanisms.
+3. **Only after a clean baseline:** consider wiring Knip/jscpd/deptry as additional **steps inside the existing 5 CI jobs** (never new parallel jobs) — deptry is safe to wire immediately (low false-positive rate); Knip/jscpd should stay manual/local until the baseline is clean, given this repo's dynamic-import lazy routes and intentional per-domain repetition.
+4. **Schemathesis** goes into the `backend` CI job as a new step (GET-only scope first) once the initial pass finds no destructive-endpoint side effects worth worrying about.
+5. **Playwright route-sweep** and **trivy config / k3d validation** stay manual/on-demand tools used to *prove* the audit-phase findings are fixed — never new required PR gates. This keeps the existing 5-gate CI surface exactly as fast and deterministic as it is today, which matches the milestone's explicit call to converge, not grow.
 
-**Do NOT use Bitnami PostgreSQL Helm chart.** Broadcom moved all Bitnami Docker images and Helm chart OCI packages behind a paid subscription in 2025. The `bitnami` org images are now `bitnamilegacy` and receive no updates or security patches.
+## Version Compatibility
 
-**Use CloudNativePG (CNPG) operator** — CNCF Sandbox project, fully open-source, uses its own PostgreSQL images (no Broadcom dependency).
-
-```bash
-helm repo add cnpg https://cloudnative-pg.github.io/charts
-helm install cnpg cnpg/cloudnative-pg \
-  --namespace cnpg-system --create-namespace --wait
-```
-
-Then declare a `Cluster` resource:
-```yaml
-apiVersion: postgresql.cnpg.io/v1
-kind: Cluster
-metadata:
-  name: clubcore-pg
-  namespace: app
-spec:
-  instances: 1          # single-gym: 1 instance is correct; add replica later
-  imageName: ghcr.io/cloudnative-pg/postgresql:16-bookworm
-  storage:
-    size: 20Gi
-  bootstrap:
-    initdb:
-      database: clubcore
-      owner: app
-      secret:
-        name: pg-app-secret
-```
-
-CNPG handles the `migrate` Job sequencing: the Alembic Job connects after the CNPG cluster reaches `Ready`. CNPG also provides built-in point-in-time recovery and WAL archiving to object storage (SeaweedFS S3 endpoint) — which is the primary Postgres backup mechanism.
-
-For single-gym scale, `instances: 1` is correct. Bump to 2 for HA when needed.
-
-### Redis 7 — plain StatefulSet
-
-For Redis, use a **plain StatefulSet + Service** — no operator, no Helm chart, just ~80 lines of YAML. Redis 7 official image from Docker Hub (`redis:7-alpine`) is unaffected by the Bitnami situation.
-
-The Bitnami Redis chart (even from the legacy org) still functions for Redis since the risk of unpatched Redis images is lower than for a full database, but a plain StatefulSet is simpler and has no vendor dependency at all.
-
-Redis at single-gym scale (sessions + rate-limits + ARQ queue + pub/sub) has no HA requirement. A PVC with local-path-provisioner volume is sufficient.
-
----
-
-## 9. Image Scanning — Trivy
-
-**Use Trivy v0.71.0** (released 2026-06-01) in the local Makefile. No cluster component needed.
-
-Trivy integrates into the `make build` step: scan each image immediately after `docker build`, block on CRITICAL/HIGH CVEs.
-
-```makefile
-IMAGES := backend telegram-bot arq-worker admin-app client-pwa
-
-.PHONY: scan
-scan:
-	@for img in $(IMAGES); do \
-	  echo "==> Scanning $$img"; \
-	  trivy image --exit-code 1 --severity CRITICAL,HIGH \
-	    --ignore-unfixed clubcore/$$img:$(TAG); \
-	done
-```
-
-Install:
-```bash
-brew install trivy          # macOS
-# or
-curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | \
-  sh -s -- -b /usr/local/bin v0.71.0
-```
-
----
-
-## 10. Manifest Validation — kubeconform
-
-**Use kubeconform v0.8.0** (released 2026-06-04). Kubeval is deprecated and unmaintained; kubeconform is the active replacement.
-
-```bash
-# Validate all Helm-rendered manifests before apply
-helm template clubcore ./charts/clubcore | kubeconform -strict -summary
-```
-
-Install:
-```bash
-brew install kubeconform
-# or
-go install github.com/yannh/kubeconform/cmd/kubeconform@v0.8.0
-```
-
----
-
-## 11. Makefile Automation (CI/CD)
-
-No external CI runner. No git remote. All automation lives in a root-level `Makefile`.
-
-```
-Makefile targets:
-  make build         # docker build all images (multi-stage, pinned)
-  make scan          # trivy scan all built images
-  make push          # push to local registry (k3d built-in registry)
-  make tf-plan       # terraform validate + plan
-  make tf-apply      # terraform apply (IaC: k3s install + provider bootstrap)
-  make helm-lint     # helm lint charts/*
-  make helm-validate # helm template | kubeconform -strict
-  make deploy        # helm upgrade --install all charts
-  make smoke         # wait for pods ready + curl /healthz
-  make up            # full pipeline: build → scan → push → deploy → smoke
-  make down          # k3d cluster delete (local) / helm uninstall (remote)
-```
-
-Local registry: `k3d cluster create` supports `--registry-create` to spin up a local Docker registry at `k3d-registry.localhost:5000`. Images are pushed there; k3d nodes pull directly without internet.
-
----
-
-## 12. Backup — Postgres + SeaweedFS + Redis
-
-### Postgres (CNPG)
-CloudNativePG supports scheduled WAL archiving + base backups to S3 (SeaweedFS endpoint). Configure the `Cluster.spec.backup` stanza pointing at the SeaweedFS S3 endpoint. This is the cleanest backup path — no separate CronJob.
-
-### SeaweedFS
-Daily `CronJob` that runs `weed shell` or `mc mirror` to copy bucket contents to a second PVC (local backup) or another S3 bucket. Retention: 7 daily, 4 weekly.
-
-### Redis
-Redis RDB snapshot via `CONFIG SET save "3600 1"` — persisted via PVC. Restore = copy RDB file to new pod. Sufficient for a single-gym context.
-
----
-
-## 13. What NOT to Add
-
-This section is as important as the stack above.
-
-| Tool | Why NOT for this project |
-|------|--------------------------|
-| **Service mesh (Istio, Linkerd, Cilium mesh)** | Single-node, single-gym, monolith. mTLS between Pods on the same node adds zero security benefit and real ops cost. |
-| **ArgoCD / Flux** | GitOps CD requires a git remote. The project deliberately has no git remote — backups are manual file copies to another PC. ArgoCD would be an infrastructure component that cannot function. |
-| **Vault** | Sealed-secrets covers the secret management need at 1/20th the operational complexity. Vault requires its own HA setup, unseal ceremony, and audit log. |
-| **Multi-node k3s HA** | Single gym = single host. Etcd HA requires minimum 3 nodes. Over-engineering for a pet project. |
-| **ingress-nginx** | **RETIRED March 2026**. No security patches will ever be issued. Use Traefik (bundled with k3s). |
-| **Helm 4** | Helm 4 (released Nov 2025) has breaking provider schema changes for terraform-provider-helm. Helm 3 is supported through Feb 2027. Migrate in a dedicated sprint, not inside an infra milestone. |
-| **Prometheus Adapter / KEDA** | HPA based on custom metrics — irrelevant for a single-gym app where load is deterministic and small. |
-| **OPA / Kyverno** | Policy-as-code admission controllers. Adds a blocking webhook to every pod admission. For a solo dev single cluster, the benefit (enforce pod security standards) is met more simply by `securityContext` fields in Helm chart values. |
-| **Separate log shipping (Fluentd, Logstash)** | Grafana Alloy (sub-chart in Loki 17.x) does the job. Fluentd/Logstash are overengineered for < 10 pods. |
-| **MinIO** | Community repo archived April 2026. No prebuilt binaries. Keep SeaweedFS which is already in the stack and actively maintained. |
-| **Bitnami Helm charts (Postgres/Redis)** | Images moved behind Broadcom paywall 2025. Use CloudNativePG for Postgres; plain StatefulSet for Redis. |
-| **prometheus-fastapi-instrumentator v8** | Requires FastAPI >=0.133 + Starlette v1. Current stack pins fastapi>=0.115. Upgrading FastAPI mid-infra-milestone risks breaking the 729-test auth stack. Use v7.1.0 now; schedule the FastAPI upgrade separately. |
-
----
-
-## 14. Version Compatibility Summary
-
-| Component | Version | Verified date | Notes |
-|-----------|---------|---------------|-------|
-| k3s | v1.33.12+k3s1 (stable channel) | 2026-06-16 | Latest stable; k3d wraps same binary locally |
-| k3d | v5.9.0 | 2026-06-02 | Local cluster for `make smoke` |
-| kubectl | v1.33.x | — | Ships with k3s |
-| Helm | v3.21.1 | 2026-05-14 | v3 EOL security Feb 2027; Helm 4 deferred |
-| Terraform | v1.15.6 | 2026-05-27 | Latest stable; local backend |
-| tf-provider-kubernetes | v3.2.0 | 2026-06-04 | — |
-| tf-provider-helm | v3.2.0 | 2026-06-04 | Breaking schema change from 2.x; new list syntax |
-| Traefik | v3 (bundled k3s) | — | ingress-nginx retired March 2026; do not use |
-| cert-manager | v1.20.2 | 2026-04-11 | Helm chart; supports k8s 1.32-1.35 |
-| kube-prometheus-stack | 86.2.3 | 2026-06-13 | Prometheus Operator v0.91.0 |
-| Loki (community chart) | 17.3.1 | 2026-06-10 | Moved to grafana-community repo March 2026 |
-| Grafana Alloy | sub-chart in Loki 17.x | — | Successor to promtail; use this, not promtail |
-| sealed-secrets | v0.37.0 | 2026-05-21 | Controller + `kubeseal` CLI |
-| SeaweedFS Helm | v4.33.0 | 2026-06-11 | Replaces docker-compose `chrislusf/seaweedfs:3.84` |
-| CloudNativePG operator | current via cnpg chart | — | CNCF; image: ghcr.io/cloudnative-pg/postgresql:16-bookworm |
-| Redis (plain StatefulSet) | redis:7-alpine | — | No Helm chart needed |
-| prometheus-fastapi-instrumentator | v7.1.0 | 2025-03-19 | Do NOT use v8 (needs FastAPI >=0.133) |
-| Trivy | v0.71.0 | 2026-06-01 | Local Makefile scan, not in-cluster |
-| kubeconform | v0.8.0 | 2026-06-04 | Manifest validation; kubeval is dead |
-
----
-
-## 15. Integration with Existing Stack (docker-compose to k8s mapping)
-
-| docker-compose service | K8s equivalent | Notes |
-|------------------------|----------------|-------|
-| `backend` | `Deployment` (1 replica) + `Service` + `Ingress` | Same multi-stage Dockerfile, non-root user already set |
-| `telegram-bot` | `Deployment` (1 replica, **no HPA**) | Telegram long-polling = single instance only; `strategy: Recreate` |
-| `arq-worker` | `Deployment` (1 replica) | ARQ uses `unique=True` cron tasks; single replica avoids duplicate cron fires |
-| `migrate` | `Job` (pre-install Helm hook) | `alembic upgrade head`; runs before backend pods start via `helm.sh/hook: pre-install,pre-upgrade` |
-| `postgres` | CNPG `Cluster` (1 instance) | PVC via local-path-provisioner; WAL archive to SeaweedFS |
-| `redis` | `StatefulSet` (1 replica) + `Service` | Plain YAML, redis:7-alpine, PVC for RDB snapshot |
-| `s3` (SeaweedFS) | SeaweedFS Helm chart, standalone mode | `S3_ENDPOINT_URL` env points to in-cluster ClusterIP Service |
-| `mailpit` | Omit from K8s | Dev-only; not part of production cluster |
-
----
+| Package A | Compatible with | Notes |
+|---|---|---|
+| `schemathesis@4.22.4` | `fastapi>=0.86.0`, `httpx<1.0,>=0.22.0`, `pytest-asyncio<2.0,>=1.0` | All already satisfied by the pinned backend stack (FastAPI 0.115+, httpx, pytest-asyncio per `CLAUDE.md`). |
+| `@playwright/test@1.62.0` | Node >=20 | Matches the repo's pinned `engines.node >=20.0.0`. |
+| `knip@6.20.0` | pnpm workspaces (native support), Vite, TypeScript 5.7 | No conflict with the repo's `typescript ~5.7.2` pin. |
+| `AssertEqual`/`AssertNonNever` type-level checks | `zod@^3.24.1` (admin) | Pure TS type-level comparison; no runtime Zod version constraint. If `apps/client` ever adds `zod`, use the same major version to avoid `z.infer` shape differences between Zod 3/4. |
+| `trivy config` | Existing pinned `trivy` install (`scan-images.sh`) | Same binary already used for `trivy image`; no separate install. |
 
 ## Sources
 
-- https://github.com/k3s-io/k3s/releases — k3s v1.36.1+k3s1 latest; stable channel = v1.33.x (verified 2026-06-16)
-- https://github.com/k3s-io/k3s/discussions/12950 — stable channel tracks .3/.4 patch (confirmed)
-- https://github.com/k3d-io/k3d/releases/tag/v5.9.0 — k3d v5.9.0 (2026-06-02)
-- https://github.com/helm/helm/releases — Helm v3.21.1 latest v3 (2026-05-14); v3 EOL note confirmed
-- https://github.com/helm/helm-www/blob/main/blog/2026-06-02-helm3-eol.md — Helm 3 EOL timeline official
-- https://developer.hashicorp.com/terraform/install — Terraform v1.15.6 (verified 2026-06-16)
-- https://github.com/hashicorp/terraform-provider-kubernetes/releases — v3.2.0 (2026-06-04)
-- https://github.com/hashicorp/terraform-provider-helm/releases — v3.2.0 (2026-06-04)
-- https://kubernetes.io/blog/2025/11/11/ingress-nginx-retirement/ — ingress-nginx retirement announced
-- https://dev.to/devpops/how-to-properly-set-up-k3s-on-your-homelab-or-server-2026-edition-595 — ingress-nginx archived March 2026 confirmed
-- https://cert-manager.io/docs/releases/ — v1.20.2 latest stable (2026-04-11)
-- https://artifacthub.io/packages/helm/prometheus-community/kube-prometheus-stack — v86.2.3 (2026-06-13)
-- https://github.com/grafana-community/helm-charts/releases/tag/loki-17.3.1 — Loki community chart v17.3.1 (2026-06-10)
-- https://grafana.com/docs/loki/latest/setup/upgrade/upgrade-to-community/ — Loki repo migration official docs
-- https://github.com/bitnami-labs/sealed-secrets/releases/tag/v0.37.0 — v0.37.0 (2026-05-21)
-- https://artifacthub.io/packages/helm/seaweedfs/seaweedfs — SeaweedFS Helm v4.33.0 (2026-06-11)
-- https://github.com/minio/minio — minio/minio repo ARCHIVED April 25, 2026
-- https://github.com/aquasecurity/trivy/releases/tag/v0.71.0 — Trivy v0.71.0 (2026-06-01)
-- https://newreleases.io/project/github/yannh/kubeconform/release/v0.8.0 — kubeconform v0.8.0 (2026-06-04)
-- https://github.com/trallnag/prometheus-fastapi-instrumentator/releases — v8.0.0 breaking (Starlette v1); v7.1.0 for FastAPI >=0.115
-- https://github.com/fastapi/fastapi/releases/tag/0.133.0 — FastAPI 0.133.0 = first Starlette v1 release (2026-02-24)
-- https://www.youngju.dev/blog/database/2026-04-11-kubernetes-database-operators-guide.en — Bitnami paywall + CNPG recommendation
-- https://jasongodson.com/blog/cloudnative-pg-migration/ — Bitnami images moved to bitnamilegacy, no updates
-- https://itnext.io/minio-alternative-seaweedfs-41fe42c3f7be — SeaweedFS as MinIO replacement (2026-01-30)
+- npm registry (`@playwright/test`, `knip`, `jscpd`, `openapi-zod-client`, `orval`) — versions verified live, 2026-07-26.
+- PyPI (`schemathesis`, `vulture`, `deptry`) — versions verified live, 2026-07-26.
+- GitHub Releases (`helm/chart-testing`, `kudobuilder/kuttl`, `yannh/kubeconform`) — versions verified live, 2026-07-26.
+- `schemathesis.readthedocs.io/en/latest/guides/python-apps/` — ASGI/FastAPI direct-testing pattern.
+- `trivy.dev/docs/latest/coverage/iac/terraform/` + `aquasecurity/trivy` docs — `trivy config` misconfiguration-scanner capabilities.
+- `knip.dev` (unused exports / monorepo support docs).
+- Direct repo inspection (HIGH confidence, ground truth): `apps/admin/package.json`, `apps/client/package.json`, `apps/admin/src/api/client.ts`, `apps/admin/src/features/clients/{schemas,api}.ts`, `packages/api-client/src/schema.contract.test.ts`, `.github/workflows/ci.yml`, `Makefile`, `infra/scripts/{restore-verify,smoke,scan-images}.sh`, `infra/helm/clubcore/Chart.yaml`.
 
 ---
-*Stack research for: clubcore v4.0 Production Infrastructure (on-prem k3s)*
-*Researched: 2026-06-16*
+*Stack research for: v4.1 Codebase Hardening — mechanical defect-detection tooling*
+*Researched: 2026-07-26*
