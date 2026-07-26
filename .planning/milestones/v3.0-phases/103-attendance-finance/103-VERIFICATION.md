@@ -1,10 +1,13 @@
 ---
 phase: 103-attendance-finance
 verified: 2026-06-13T21:01:00Z
-status: human_needed
+status: passed
 score: 12/12 must-haves verified
 overrides_applied: 0
-human_verification:
+# The deferred live-browser UAT for P103 was run on 2026-06-14; this frontmatter
+# lagged behind it until the 2026-07-26 cross-phase UAT audit (quick 260726-hou).
+human_uat_closed_by: .planning/v3.0-UAT-BROWSER-AUDIT.md + .planning/v3.0-UAT-VERIFICATION-PASS.md (check-in success + 409 mapping, cashbox refund row, Load no-NaN, Finance tabs — all ✅ live)
+human_verification_closed:
   - test: "Reception check-in round-trip: log in as reception staff, open Attendance page, click Чек-ин, search for a client, select them, click Отметить визит."
     expected: "POST /api/v1/visits fires, optimistic row appears with spinner, on success row is replaced by real data and a Sonner toast 'Визит зафиксирован' appears."
     why_human: "Requires a live Docker backend with seeded client and active membership; cannot be exercised by grep or static analysis."

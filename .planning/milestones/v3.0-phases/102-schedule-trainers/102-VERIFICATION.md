@@ -4,6 +4,20 @@ verified: 2026-06-13T18:30:00Z
 status: human_needed
 score: 12/12 must-haves verified
 overrides_applied: 0
+# Narrowed by the 2026-07-26 cross-phase UAT audit (quick 260726-hou).
+# The P102 set was `data-setup-blocked` at v3.0 close, then largely CLOSED by
+# v3.1 Phase 110 ("Live Verification — Deferred P102") against a live uvicorn on
+# real seeded Postgres — see 110-VERIFICATION.md (status passed, live_http_smoke
+# executed: revenue=150000k, sessions=2, accrual=115000k, status=paid):
+#   - booking lifecycle create → cancel → complete-via-pt-session  → CLOSED
+#   - slot-already-booked race surfaces a clean 409, not a crash    → CLOSED
+#   - payroll config → preview → run → pending→paid kopecks math    → CLOSED (item 4)
+#   - reception gated 403 on all 4 owner-only payroll endpoints      → CLOSED (item 5)
+#   - repeatable seed path (seed_p102_walkthrough.py + verify/p102_walkthrough.sh)
+# What Phase 110 did NOT cover is the BROWSER layer — it verified over HTTP and
+# pytest, not through the admin UI. The remaining open items are exactly those UI
+# legs (items 1–3 below); items 4–5 are retained for history only.
+p102_api_legs_closed_by: 110-VERIFICATION.md (v3.1 Phase 110 — live HTTP smoke, 4/4 must-haves)
 human_verification:
   - test: "Open the Schedule page as owner, publish a trainer slot, then attempt to create a time-off that overlaps a booked slot; confirm the force-override modal appears with conflict counts and the danger button triggers with force=true"
     expected: "Slot is published; time-off 409 conflict shows the conflict Callout + force button; forcing creates the time-off and cancels the conflicting booking server-side"

@@ -1,10 +1,13 @@
 ---
 phase: 87-notification-inbox
 verified: 2026-06-06T09:00:00Z
-status: human_needed
+status: passed
 score: 4/4
 overrides_applied: 0
-human_verification:
+# Human UAT was run and recorded; this frontmatter lagged behind it until the
+# 2026-07-26 cross-phase UAT audit (quick 260726-hou) reconciled the two.
+human_uat_closed_by: 87-HUMAN-UAT.md (status passed — 4/4 passed, 0 issues)
+human_verification_closed:
   - test: "Open NotificationsSheet in a live browser against a running docker stack"
     expected: "GET /client/notifications is called; the sheet renders inbox rows (or empty state on first use); no console errors; skeleton shows during loading"
     why_human: "Client-PWA SPA + backend both required; cannot verify HTTP round-trip with grep"

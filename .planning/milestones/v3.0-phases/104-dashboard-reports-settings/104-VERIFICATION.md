@@ -1,10 +1,15 @@
 ---
 phase: 104-dashboard-reports-settings
 verified: 2026-06-13T22:55:00Z
-status: human_needed
+status: passed
 score: 10/10 must-haves verified
 overrides_applied: 0
-human_verification:
+# The deferred live-browser UAT for P104 was run on 2026-06-14; this frontmatter
+# lagged behind it until the 2026-07-26 cross-phase UAT audit (quick 260726-hou).
+# INV-01/INV-02 (invite success parse, duplicate-email 409 copy) were found and
+# fixed in-pass (5e3b41f1) before the pass was recorded.
+human_uat_closed_by: .planning/v3.0-UAT-BROWSER-AUDIT.md + .planning/v3.0-UAT-VERIFICATION-PASS.md (dashboard KPIs, reports + CSV, audit log null-actor, sessions revoke, invite/deactivate, RBAC — all ✅ live)
+human_verification_closed:
   - test: "Owner lands on / — verify KPI/Occupancy/Revenue/TopTrainers cards show real (non-zero or coherently zero) data from the backend; KpiStrip shows kopeck amounts as formatted RUB."
     expected: "All four owner-only widgets render with data; no NaN or blank values; no JS errors in console."
     why_human: "Requires live backend; automated tests mock the data layer. NaN guard code is verified but real data flow requires a browser + running API."

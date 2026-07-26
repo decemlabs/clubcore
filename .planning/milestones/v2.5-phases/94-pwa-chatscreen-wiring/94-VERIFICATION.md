@@ -4,7 +4,39 @@ verified: 2026-06-08T05:04:50Z
 status: human_needed
 score: 3/3 must-haves verified
 overrides_applied: 0
+# Trimmed to reality by the 2026-07-26 cross-phase UAT audit (quick 260726-hou).
+# 94-HUMAN-UAT.md recorded the run on 2026-06-08: 2/3 passed, 1 issue.
+#   - Pixel-perfect parity (light) — PASSED after fix 28c53de7 (the `.sheet` class
+#     collided with the PWA's global `styles.css .sheet { animation: sheet-in both }`,
+#     which pinned the closed action sheets over the chat and blanked it).
+#   - Photo flow in-browser — PASSED (real PNG round-trip + full-screen overlay).
+#   - WS round-trip — PARTIAL after fix 865d412d (dev WS was silently failing).
+# `human_verification` below is the genuinely-open remainder; the original
+# pre-run list is preserved under `human_verification_superseded`.
+human_uat_evidence: 94-HUMAN-UAT.md (status partial — 2/3 passed, 1 issue)
 human_verification:
+  - test: "Typing indicator does not surface in the live dev browser (RCPT-02 follow-up)."
+    expected: "A WS `typing` frame flips the thread-header status to «печатает…» and shows the .typing-dots bubble, auto-dismissing after 5s."
+    finding: >
+      Consumer path PROVEN CORRECT in jsdom — see ChatScreen.typing.test.jsx (5/5
+      green, added 2026-07-26): the window.__chatTyping bridge installs, the dots
+      and status text render in the open thread, the 5s dismiss fires, and the
+      WR-06 ownership guard restores the previous handler on unmount. So the
+      live-browser non-repro is NOT in the component's render logic. Most likely
+      cause: the original console probe REPLACED window.__chatTyping with its own
+      counting wrapper, which suppresses the real handler while still reporting
+      handlerCalls=1 — or a stale service worker served old code.
+      UNREACHABLE in production either way: there is no typing PRODUCER. Telegram
+      exposes no typing API and the staff frontend never got one (v2.6 became
+      Referral System, so the planned producer never landed).
+    why_human: "Closing this needs a live browser with a real typing producer — blocked on the producer, not on the consumer."
+  - test: "Full Telegram leg: staff replies FROM Telegram and the reply lands in the PWA thread in real time."
+    expected: "Bidirectional cycle works end-to-end through the Telegram staff bridge."
+    why_human: "STAFF_TELEGRAM_CHAT_ID is unset locally so the bridge is a no-op; the 2026-06-08 run simulated the staff reply server-side via record_staff_message. Operator-pending."
+  - test: "Dark theme parity + photo flow on a PHYSICAL device (real camera/gallery, oversized-file reject)."
+    expected: "Dark mode toggles correctly via MutationObserver; device camera opens with capture=environment; >5 MB shows «Файл слишком большой (макс. 5 МБ)»."
+    why_human: "The 2026-06-08 run exercised light theme and a browser file picker only; needs a real device."
+human_verification_superseded:
   - test: "Pixel-perfect visual parity: render the ChatScreen in a real browser (dev login + reseed + hard-reload to clear stale SW cache); compare list view + thread view, animations (screen-push/pop, msg-in, typing-bounce, scene-in), gestures (swipe-to-mute 450ms long-press, pull-to-refresh, composer auto-grow, Enter-to-send, scroll-down FAB) against 94-REFERENCE-ChatScreen.jsx in both light and dark mode."
     expected: "ChatScreen is visually pixel-perfect; every animation plays; dark mode toggles correctly via MutationObserver; prototype chrome (.device/.island/.status-bar/.tabbar) is absent; unread divider, day separators, and empty state appear correctly."
     why_human: "Visual layout and animation fidelity cannot be verified by grep or tsc; requires a real browser render."

@@ -1,10 +1,13 @@
 ---
 phase: 86-gym-info-cms
 verified: 2026-06-06T12:00:00Z
-status: human_needed
+status: passed
 score: 12/12
 overrides_applied: 0
-human_verification:
+# Human UAT was run and recorded; this frontmatter lagged behind it until the
+# 2026-07-26 cross-phase UAT audit (quick 260726-hou) reconciled the two.
+human_uat_closed_by: 86-HUMAN-UAT.md (status passed — 2/2 passed, 0 issues)
+human_verification_closed:
   - test: "docker compose up, run migrations, open PWA on GymInfoSheet"
     expected: "Sheet renders gym name 'Мой зал · Тверская', address, hours with open/closed badge, amenities grid, rules, contacts — all sourced from DB (not data/gym.js)"
     why_human: "Requires live docker stack + browser + seeded Postgres; cannot verify render without running app"
