@@ -1,0 +1,281 @@
+--- a/gsd-core/bin/lib/uat.cjs
++++ b/gsd-core/bin/lib/uat.cjs
+@@ -43,24 +43,110 @@
+ const configLoader = require("./config-loader.cjs");
+ const { loadConfig } = configLoader;
+ // ─── cmdAuditUat ─────────────────────────────────────────────────────────────
+-function cmdAuditUat(cwd, raw) {
++/**
++ * Enumerate archived phase directories under `.planning/milestones/<ver>-phases/`.
++ *
++ * `/gsd-complete-milestone` moves shipped phases out of `.planning/phases/` into
++ * a per-milestone archive. Their `*-UAT.md` / `*-VERIFICATION.md` files keep
++ * carrying outstanding human-verify items, but nothing was reading them back —
++ * so once a project archived its first milestone, `audit-uat` scanned an empty
++ * `.planning/phases/` and reported a FALSE "All Clear" (0 items) while dozens of
++ * real items sat in the archive.
++ *
++ * Returns `[{ dir, phaseDir, milestone }]`, sorted by milestone then phase dir.
++ * Archived phases are deliberately NOT filtered through
++ * `getMilestonePhaseFilter` — that filter scopes to the CURRENT milestone, which
++ * by definition excludes every archived phase.
++ */
++function collectArchivedPhaseDirs(cwd) {
++    const milestonesDir = node_path_1.default.join(planningDir(cwd), 'milestones');
++    if (!node_fs_1.default.existsSync(milestonesDir))
++        return [];
++    const out = [];
++    const milestoneDirs = node_fs_1.default.readdirSync(milestonesDir, { withFileTypes: true })
++        .filter(e => e.isDirectory() && e.name.endsWith('-phases'))
++        .map(e => e.name)
++        .sort();
++    for (const milestoneDir of milestoneDirs) {
++        const abs = node_path_1.default.join(milestonesDir, milestoneDir);
++        const phaseDirs = node_fs_1.default.readdirSync(abs, { withFileTypes: true })
++            .filter(e => e.isDirectory())
++            .map(e => e.name)
++            .sort();
++        for (const dir of phaseDirs) {
++            out.push({
++                dir,
++                phaseDir: node_path_1.default.join(abs, dir),
++                // 'v3.2-phases' → 'v3.2'
++                milestone: milestoneDir.replace(/-phases$/, ''),
++            });
++        }
++    }
++    return out;
++}
++/**
++ * Is a `## Gaps` / `## Deferred Items` entry status a RESOLVED one?
++ *
++ * Exact equality against 'resolved' was too strict: the established convention in
++ * practice annotates the closure inline —
++ *   `status: RESOLVED (debug session route-collision-client-me, 2026-06-01) — ... Was: failed`
++ * — which failed the equality check and kept genuinely-closed gaps reported as
++ * open forever. Match a `resolved` PREFIX on a word boundary instead, so the
++ * annotation is allowed while a distinct status like `resolved-pending` or
++ * `unresolved` still reads as open (`unresolved` does not start with `resolved`).
++ */
++function isResolvedStatus(rawStatus) {
++    if (!rawStatus)
++        return false;
++    return /^resolved\b/i.test(rawStatus.trim());
++}
++/** Count *-UAT.md / *-VERIFICATION.md files in the archive (cheap pre-scan). */
++function countArchivedAuditFiles(cwd) {
++    let count = 0;
++    for (const { phaseDir } of collectArchivedPhaseDirs(cwd)) {
++        for (const file of node_fs_1.default.readdirSync(phaseDir)) {
++            if (!file.endsWith('.md'))
++                continue;
++            if (file.includes('-UAT') || file.includes('-VERIFICATION'))
++                count++;
++        }
++    }
++    return count;
++}
++function cmdAuditUat(cwd, raw, options = {}) {
++    // `raw` is the output-format boolean, not an argv bag — the CLI flag is parsed
++    // by routeAuditUat and handed in via options.
++    const includeArchived = options.includeArchived === true;
+     const phasesDir = node_path_1.default.join(planningDir(cwd), 'phases');
+-    if (!node_fs_1.default.existsSync(phasesDir)) {
++    const hasActivePhasesDir = node_fs_1.default.existsSync(phasesDir);
++    const archivedPhaseDirs = collectArchivedPhaseDirs(cwd);
++    // Only hard-error when there is genuinely nowhere to look. A project that has
++    // archived every milestone has no `.planning/phases/` but plenty of archive.
++    if (!hasActivePhasesDir && archivedPhaseDirs.length === 0) {
+         error('No phases directory found in planning directory');
+     }
+     const isDirInMilestone = getMilestonePhaseFilter(cwd);
+     const results = [];
+-    // Scan all phase directories
+-    const dirs = node_fs_1.default.readdirSync(phasesDir, { withFileTypes: true })
+-        .filter(e => e.isDirectory())
+-        .map(e => e.name)
+-        .filter(isDirInMilestone)
+-        .sort();
+-    for (const dir of dirs) {
++    // Scan active phase directories, then (opt-in) the milestone archive.
++    const scanTargets = [];
++    if (hasActivePhasesDir) {
++        for (const dir of node_fs_1.default.readdirSync(phasesDir, { withFileTypes: true })
++            .filter(e => e.isDirectory())
++            .map(e => e.name)
++            .filter(isDirInMilestone)
++            .sort()) {
++            scanTargets.push({ dir, phaseDir: node_path_1.default.join(phasesDir, dir), milestone: null });
++        }
++    }
++    if (includeArchived) {
++        scanTargets.push(...archivedPhaseDirs);
++    }
++    for (const { dir, phaseDir, milestone } of scanTargets) {
+         const phaseMatch = dir.match(new RegExp(`^(${PHASE_NUMBER_TOKEN_SOURCE})`, 'i'));
+         const phaseNum = phaseMatch ? phaseMatch[1] : dir;
+-        const phaseDir = node_path_1.default.join(phasesDir, dir);
+         const files = node_fs_1.default.readdirSync(phaseDir);
++        // Provenance so callers can separate live phases from archived milestones.
++        const provenance = { milestone, archived: milestone != null };
+         // Process UAT files
+         for (const file of files.filter(f => f.includes('-UAT') && f.endsWith('.md'))) {
+             const content = node_fs_1.default.readFileSync(node_path_1.default.join(phaseDir, file), 'utf-8');
+@@ -72,6 +158,7 @@
+                     file,
+                     file_path: toPosixPath(node_path_1.default.relative(cwd, node_path_1.default.join(phaseDir, file))),
+                     type: 'uat',
++                    ...provenance,
+                     status: (extractFrontmatter(content).status || 'unknown'),
+                     items,
+                 });
+@@ -90,6 +177,7 @@
+                         file,
+                         file_path: toPosixPath(node_path_1.default.relative(cwd, node_path_1.default.join(phaseDir, file))),
+                         type: 'verification',
++                        ...provenance,
+                         status,
+                         items,
+                     });
+@@ -114,6 +202,7 @@
+                     file: deferredFile,
+                     file_path: toPosixPath(node_path_1.default.relative(cwd, node_path_1.default.join(phaseDir, deferredFile))),
+                     type: 'deferred',
++                    ...provenance,
+                     status: 'unresolved',
+                     items,
+                 });
+@@ -121,9 +210,20 @@
+         }
+     }
+     // Compute summary
++    //
++    // `archived_*` fields exist so a `total_items: 0` result can never be read as
++    // "nothing outstanding anywhere". When the archive holds audit files that this
++    // run did not scan, `archived_files_unscanned` is non-zero and callers MUST
++    // report it instead of declaring All Clear (re-run with --include-archived).
++    const archivedFilesTotal = countArchivedAuditFiles(cwd);
+     const summary = {
+         total_files: results.length,
+         total_items: results.reduce((sum, r) => sum + r.items.length, 0),
++        active_items: results.filter(r => !r.archived).reduce((sum, r) => sum + r.items.length, 0),
++        archived_items: results.filter(r => r.archived).reduce((sum, r) => sum + r.items.length, 0),
++        archived_scanned: includeArchived,
++        archived_phase_dirs: archivedPhaseDirs.length,
++        archived_files_unscanned: includeArchived ? 0 : archivedFilesTotal,
+         by_category: {},
+         by_phase: {},
+     };
+@@ -465,7 +565,7 @@
+     for (const entryLines of splitGapsEntries(gapsSection.body)) {
+         const fields = extractGapEntryFields(entryLines);
+         const rawStatus = fields.status;
+-        if (rawStatus && rawStatus.toLowerCase() === 'resolved')
++        if (isResolvedStatus(rawStatus))
+             continue;
+         // Fail-safe: missing/garbled status surfaces as 'unknown' rather than
+         // being dropped (see doc comment above).
+@@ -520,7 +620,7 @@
+     for (const entryLines of splitGapsEntries(sectionBody)) {
+         const fields = extractGapEntryFields(entryLines);
+         const rawStatus = fields.status;
+-        if (rawStatus && rawStatus.toLowerCase() === 'resolved')
++        if (isResolvedStatus(rawStatus))
+             continue;
+         const text = rawGapEntryText(entryLines);
+         if (!text)
+--- a/gsd-core/bin/lib/audit-command-router.cjs
++++ b/gsd-core/bin/lib/audit-command-router.cjs
+@@ -31,10 +31,15 @@
+ const { routeHubCommandFamily } = cjsCommandRouterAdapter;
+ // ─── routeAuditUat ────────────────────────────────────────────────────────────
+ function routeAuditUat({ args, cwd, raw, error, _uat }) {
+-    // Suppress unused-variable warnings for args/error — this command has no
++    // Suppress unused-variable warning for error — this command has no
+     // subcommands and passes raw through directly to the uat module.
+-    void args;
+     void error;
++    // `--include-archived` extends the scan to `.planning/milestones/*-phases/*`
++    // (phases moved out of `.planning/phases/` by /gsd-complete-milestone). It is
++    // a flag, not a subcommand — strip it before Hub dispatch so the manifest
++    // check doesn't mistake it for one.
++    const includeArchived = args.includes('--include-archived');
++    const hubArgs = includeArchived ? args.filter((arg) => arg !== '--include-archived') : args;
+     // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unsafe-assignment
+     const u = _uat ?? require('./uat.cjs');
+     // Phase 2 (#1646): routes through the Hub for uniform observability and
+@@ -44,11 +49,11 @@
+     // now consistent with graphify/intel/host routers.
+     routeHubCommandFamily({
+         family: 'audit-uat',
+-        args,
++        args: hubArgs,
+         subcommands: ['run'],
+         defaultSubcommand: 'run',
+         handlers: {
+-            run: () => u.cmdAuditUat(cwd, raw),
++            run: () => u.cmdAuditUat(cwd, raw, { includeArchived }),
+         },
+         unknownMessage: (subcommand) => `Unknown audit-uat subcommand: "${subcommand}". audit-uat takes no subcommands.`,
+         error,
+--- a/gsd-core/workflows/audit-uat.md
++++ b/gsd-core/workflows/audit-uat.md
+@@ -8,20 +8,44 @@
+ Run the CLI audit:
+ 
+ ```bash
+-_GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; GSD_TOOLS="${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}"; if [ -f "$GSD_TOOLS" ]; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${_GSD_RUNTIME_ROOT}/.claude/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${_GSD_RUNTIME_ROOT}/.claude/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${_GSD_RUNTIME_ROOT}/.codex/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${_GSD_RUNTIME_ROOT}/.codex/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif command -v gsd-tools >/dev/null 2>&1; then GSD_TOOLS="$(command -v gsd-tools)"; gsd_run() { "$GSD_TOOLS" "$@"; }; elif [ -f "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${HERMES_HOME:-$HOME/.hermes}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${HERMES_HOME:-$HOME/.hermes}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${CURSOR_CONFIG_DIR:-$HOME/.cursor}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${CURSOR_CONFIG_DIR:-$HOME/.cursor}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${CODEX_HOME:-$HOME/.codex}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${CODEX_HOME:-$HOME/.codex}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${GEMINI_CONFIG_DIR:-$HOME/.gemini}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${GEMINI_CONFIG_DIR:-$HOME/.gemini}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${COPILOT_CONFIG_DIR:-$HOME/.copilot}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${COPILOT_CONFIG_DIR:-$HOME/.copilot}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${WINDSURF_CONFIG_DIR:-$HOME/.codeium/windsurf}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${WINDSURF_CONFIG_DIR:-$HOME/.codeium/windsurf}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${AUGMENT_CONFIG_DIR:-$HOME/.augment}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${AUGMENT_CONFIG_DIR:-$HOME/.augment}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${TRAE_CONFIG_DIR:-$HOME/.trae}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${TRAE_CONFIG_DIR:-$HOME/.trae}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${QWEN_CONFIG_DIR:-$HOME/.qwen}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${QWEN_CONFIG_DIR:-$HOME/.qwen}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${CODEBUDDY_CONFIG_DIR:-$HOME/.codebuddy}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${CODEBUDDY_CONFIG_DIR:-$HOME/.codebuddy}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${CLINE_CONFIG_DIR:-$HOME/.cline}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${CLINE_CONFIG_DIR:-$HOME/.cline}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${GROK_AGENTS_HOME:-$HOME/.agents}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${GROK_AGENTS_HOME:-$HOME/.agents}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${ANTIGRAVITY_CONFIG_DIR:-$HOME/.gemini/antigravity}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${ANTIGRAVITY_CONFIG_DIR:-$HOME/.gemini/antigravity}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${KILO_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/kilo}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${KILO_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/kilo}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; else echo "ERROR: gsd-tools.cjs not found at $GSD_TOOLS and gsd-tools is not on PATH. Run: npx -y @opengsd/gsd-core@latest --claude --local" >&2; exit 1; fi; if [ -n "${CLAUDE_ENV_FILE:-}" ] && [ -n "${GSD_TOOLS:-}" ]; then printf "export PATH='%s':\"\$PATH\"\n" "${GSD_TOOLS%/*}" >> "$CLAUDE_ENV_FILE" 2>/dev/null || true; fi
++_GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; GSD_TOOLS="${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}"; if [ -f "$GSD_TOOLS" ]; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${_GSD_RUNTIME_ROOT}/.claude/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${_GSD_RUNTIME_ROOT}/.claude/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${_GSD_RUNTIME_ROOT}/.codex/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${_GSD_RUNTIME_ROOT}/.codex/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif command -v gsd-tools >/dev/null 2>&1; then GSD_TOOLS="$(command -v gsd-tools)"; gsd_run() { "$GSD_TOOLS" "$@"; }; elif [ -f "${CLAUDE_CONFIG_DIR:-/Users/andre/Workspace/Development/clubcore/.claude}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${CLAUDE_CONFIG_DIR:-/Users/andre/Workspace/Development/clubcore/.claude}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${HERMES_HOME:-$HOME/.hermes}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${HERMES_HOME:-$HOME/.hermes}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${CURSOR_CONFIG_DIR:-$HOME/.cursor}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${CURSOR_CONFIG_DIR:-$HOME/.cursor}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${CODEX_HOME:-$HOME/.codex}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${CODEX_HOME:-$HOME/.codex}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${GEMINI_CONFIG_DIR:-$HOME/.gemini}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${GEMINI_CONFIG_DIR:-$HOME/.gemini}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${COPILOT_CONFIG_DIR:-$HOME/.copilot}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${COPILOT_CONFIG_DIR:-$HOME/.copilot}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${WINDSURF_CONFIG_DIR:-$HOME/.codeium/windsurf}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${WINDSURF_CONFIG_DIR:-$HOME/.codeium/windsurf}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${AUGMENT_CONFIG_DIR:-$HOME/.augment}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${AUGMENT_CONFIG_DIR:-$HOME/.augment}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${TRAE_CONFIG_DIR:-$HOME/.trae}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${TRAE_CONFIG_DIR:-$HOME/.trae}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${QWEN_CONFIG_DIR:-$HOME/.qwen}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${QWEN_CONFIG_DIR:-$HOME/.qwen}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${CODEBUDDY_CONFIG_DIR:-$HOME/.codebuddy}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${CODEBUDDY_CONFIG_DIR:-$HOME/.codebuddy}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${CLINE_CONFIG_DIR:-$HOME/.cline}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${CLINE_CONFIG_DIR:-$HOME/.cline}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${GROK_AGENTS_HOME:-$HOME/.agents}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${GROK_AGENTS_HOME:-$HOME/.agents}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${ANTIGRAVITY_CONFIG_DIR:-$HOME/.gemini/antigravity}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${ANTIGRAVITY_CONFIG_DIR:-$HOME/.gemini/antigravity}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; elif [ -f "${KILO_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/kilo}/gsd-core/bin/${_GSD_SHIM_NAME}" ]; then GSD_TOOLS="${KILO_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/kilo}/gsd-core/bin/${_GSD_SHIM_NAME}"; gsd_run() { node "$GSD_TOOLS" "$@"; }; else echo "ERROR: gsd-tools.cjs not found at $GSD_TOOLS and gsd-tools is not on PATH. Run: npx -y @opengsd/gsd-core@latest --claude --local" >&2; exit 1; fi; if [ -n "${CLAUDE_ENV_FILE:-}" ] && [ -n "${GSD_TOOLS:-}" ]; then printf "export PATH='%s':\"\$PATH\"\n" "${GSD_TOOLS%/*}" >> "$CLAUDE_ENV_FILE" 2>/dev/null || true; fi
+ AUDIT=$(gsd_run query audit-uat --raw)
+ ```
+ 
+ Parse JSON for `results` array and `summary` object.
+ 
+-If `summary.total_items` is 0:
++**Archived phases.** `/gsd-complete-milestone` moves shipped phases out of
++`.planning/phases/` into `.planning/milestones/<ver>-phases/`. Their `*-UAT.md` /
++`*-VERIFICATION.md` files keep carrying outstanding human-verify items. The default
++scan covers only the ACTIVE phase directory, so on any project that has archived a
++milestone a bare `total_items: 0` means "nothing outstanding in the current
++milestone" — NOT "nothing outstanding anywhere".
++
++If `summary.archived_files_unscanned` is greater than 0, re-run with the archive
++included before reporting anything:
++
++```bash
++AUDIT=$(gsd_run query audit-uat --include-archived --raw)
+ ```
++
++Each result then carries `archived` (boolean) and `milestone` (e.g. `v3.2`, or
++`null` for active phases); `summary` splits counts into `active_items` and
++`archived_items`. Group archived findings by milestone in the report and flag them
++as historical debt rather than current-milestone blockers.
++
++Only claim All Clear when `summary.total_items` is 0 AND
++`summary.archived_files_unscanned` is 0:
++```
+ ## All Clear
+ 
+ No outstanding UAT or verification items found across all phases.
+ All tests are passing, resolved, or diagnosed with fix plans.
+ ```
+ Stop here.
++
++If `total_items` is 0 but the archive was never scanned, do NOT print All Clear —
++say how many archived audit files went unscanned and re-run with
++`--include-archived`.
+ </step>
+ 
+ <step name="categorize">
+@@ -77,9 +101,9 @@
+ 
+ ## Recommended Actions
+ 
+-1. **Close stale items:** `/gsd:verify-work {phase}` — mark stale tests as resolved
++1. **Close stale items:** `/gsd-verify-work {phase}` — mark stale tests as resolved
+ 2. **Run active tests:** Human UAT test plan below
+-3. **When prerequisites met:** Retest blocked items with `/gsd:verify-work {phase}`
++3. **When prerequisites met:** Retest blocked items with `/gsd-verify-work {phase}`
+ ```
+ </step>
+ 
