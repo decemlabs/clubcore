@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v4.0
-milestone_name: Production Infrastructure — Self-Hosted k3s
-status: Awaiting next milestone
-stopped_at: Completed 118-01-PLAN.md — container images
-last_updated: "2026-07-26T09:44:12.517Z"
-last_activity: 2026-07-26 — Completed quick task 260726-hou: UAT audit follow-through (audit-uat false All Clear fixed, 11 stale UAT statuses reconciled, Phase-94 typing consumer path pinned)
+milestone: v4.1
+milestone_name: Codebase Hardening
+status: planning
+last_updated: "2026-07-26T10:41:31.474Z"
+last_activity: 2026-07-26
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 12
-  completed_plans: 12
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: Milestone v4.0 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-16 — Completed quick task 260616-xa9: rename apps admin-app→admin, client-pwa→client
+Status: Defining requirements
+Last activity: 2026-07-26 — Milestone v4.1 started
 
 ## v4.0 Roadmap Summary
 
