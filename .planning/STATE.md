@@ -2,10 +2,13 @@
 gsd_state_version: 1.0
 milestone: v4.1
 milestone_name: Codebase Hardening
-status: verifying
+current_phase: 123
+current_phase_name: Test-Infra Unblock
+status: planning
 stopped_at: Completed 122-06-PLAN.md (registry merged + frozen, 136 rows; AUD-08 read-only check PASSED; Phase 122 complete, ready for verification)
-last_updated: "2026-07-26T14:57:17.247Z"
+last_updated: "2026-07-26T15:04:29.808Z"
 last_activity: 2026-07-26
+last_activity_desc: Phase 122 complete, transitioned to Phase 123
 progress:
   total_phases: 6
   completed_phases: 1
@@ -25,10 +28,10 @@ See: .planning/PROJECT.md
 
 ## Current Position
 
-Phase: 122 (audit-registry-producing-read-only-pass) — EXECUTING
-Plan: 6 of 6
-Status: Phase complete — ready for verification
-Last activity: 2026-07-26
+Phase: 123 — Test-Infra Unblock
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-07-26 — Phase 122 complete, transitioned to Phase 123
 
 ## v4.1 Roadmap Summary (current milestone)
 
