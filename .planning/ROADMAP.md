@@ -527,7 +527,7 @@ Containerized the full stack + IaC (Terraform on-prem k3s) + observability (kube
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 122-05-PLAN.md — 1b live-backend hunt: 29-domain Zod↔wire manifest + browser UAT walk on the edge seed
+- [x] 122-05-PLAN.md — 1b live-backend hunt: 29-domain Zod↔wire manifest + browser UAT walk on the edge seed
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -634,7 +634,7 @@ Containerized the full stack + IaC (Terraform on-prem k3s) + observability (kube
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 122. Audit — Registry-Producing Read-Only Pass | v4.1 | 4/6 | In Progress|  |
+| 122. Audit — Registry-Producing Read-Only Pass | v4.1 | 5/6 | In Progress|  |
 | 123. Test-Infra Unblock | v4.1 | 0/TBD | Not started | - |
 | 124. FUNC Fixes — Risk-First | v4.1 | 0/TBD | Not started | - |
 | 125. HYGIENE Fixes | v4.1 | 0/TBD | Not started | - |

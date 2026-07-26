@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v4.1
 milestone_name: Codebase Hardening
 status: executing
-stopped_at: Completed 122-04-PLAN.md (infra operator-pending desk-review triage)
-last_updated: "2026-07-26T13:56:47.481Z"
+stopped_at: "Completed 122-05-PLAN.md (static Zod-wire coverage manifest; live-run AUD-05 divergence + AUD-06 browser walk deferred:blocked, no seed creds)"
+last_updated: "2026-07-26T14:35:19.294Z"
 last_activity: 2026-07-26
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 6
-  completed_plans: 4
+  completed_plans: 5
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md
 ## Current Position
 
 Phase: 122 (audit-registry-producing-read-only-pass) — EXECUTING
-Plan: 5 of 6
+Plan: 6 of 6
 Status: Ready to execute
 Last activity: 2026-07-26
 
@@ -122,6 +122,8 @@ Last activity: 2026-07-26
 
 None at milestone open. Note: STATE.md `## Deferred Items` (below) records the fixture-ordering deadlock as `✅ RESOLVED` at v3.2 close (2026-06-17, commit `f438ced2`), while v4.1's TEST-01 describes the same deadlock as needing resolution — Phase 123 planning must reconcile this (see Research Flags above) rather than assume either document is stale.
 
+- AUD-05 (runtime divergence) + AUD-06 (browser UAT walk) deferred:blocked in 122-05 — owner seed credentials for apps/backend/scripts/seed_edge_cases.py are permission-protected this session; needs a seeded re-run to close V41-FUNC-033/034
+
 ### Quick Tasks Completed
 
 | # | Description | Date | Commit | Directory |
@@ -181,8 +183,8 @@ These are the D-V40-LOCAL-VALIDATE operator-pending boundary — static validati
 
 **Resume file:** None
 
-Last session: 2026-07-26T13:56:47.476Z
-Stopped at: Completed 122-04-PLAN.md (infra operator-pending desk-review triage)
+Last session: 2026-07-26T14:35:19.289Z
+Stopped at: Completed 122-05-PLAN.md (static Zod-wire coverage manifest; live-run AUD-05 divergence + AUD-06 browser walk deferred:blocked, no seed creds)
 Resume: `/gsd-plan-phase 122` (Audit — Registry-Producing Read-Only Pass)
 
 ## Operator Next Steps
@@ -197,6 +199,7 @@ Resume: `/gsd-plan-phase 122` (Audit — Registry-Producing Read-Only Pass)
 | Phase 122 P2 | 55min | 3 tasks | 6 files |
 | Phase 122 P3 | 35min | 2 tasks | 3 files |
 | Phase 122 P4 | 25min | 1 tasks | 1 files |
+| Phase 122 P05 | 45min | 1 tasks | 4 files |
 
 ## Decisions
 
@@ -205,3 +208,4 @@ Resume: `/gsd-plan-phase 122` (Audit — Registry-Producing Read-Only Pass)
 - [Phase ?]: 122-02: reachability defect bar excludes chrome-less framework routes and click-through dynamic detail pages; only ComingSoon placeholders and unregistered ROUTES keys count as V41-FUNC rows
 - [Phase 122]: Zero-kopeck money boundary lives on MembershipPlan.price_kopecks, not Payment.amount_kopecks, because Payment's CHECK constraint forbids a literal zero amount (D-122-12)
 - [Phase 122]: Re-derived v4.0 operator-pending count = 29 distinct items (2 HARD GATEs + 27 non-gate rows), not the quoted 23 nor STATE.md's 27 tally — recorded as V41-INFRA-030 reconciliation row rather than force-fit (D-122-22)
+- [Phase ?]: 122-05: static Zod<->wire coverage manifest delivered in full (29 domains, 5 with capture+contract-test pattern, 24 gap); live runtime-divergence check + browser UAT walk honestly rowed deferred:blocked (owner seed creds permission-protected this session) rather than fabricated
