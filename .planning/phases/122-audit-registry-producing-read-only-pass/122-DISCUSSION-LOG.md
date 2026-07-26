@@ -6,6 +6,9 @@
 **Date:** 2026-07-26
 **Phase:** 122-audit-registry-producing-read-only-pass
 **Mode:** `--auto` — no interactive prompts; Claude selected the recommended option for every question and logged the alternatives below
+
+> **Interactive review (2026-07-26, `/gsd-discuss-phase 122 --chain`):** The auto-generated context above was re-opened for interactive review. Four gray areas were offered for revision — (1) edge-seed matrix breadth, (2) browser-UAT walk depth, (3) reachability strictness + client scope, (4) hygiene-triage verbosity. User selected **no preference**: all 25 auto-resolved decisions accepted unchanged. No decisions were revised. Proceeded to auto-advance (`--chain`) into plan-phase.
+
 **Areas discussed:** Registry artifact shape, Supporting audit artifacts, Reachability manifest (AUD-03), Zod↔wire manifest (AUD-05), Edge-case seed dataset (AUD-04), Browser UAT walk (AUD-06), Hygiene tooling (AUD-02), Infra triage (AUD-07), Read-only enforcement (AUD-08)
 
 ---

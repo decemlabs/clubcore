@@ -2,7 +2,7 @@
 
 **Gathered:** 2026-07-26
 **Status:** Ready for planning
-**Mode:** `--auto` (all gray areas auto-resolved to the recommended option; every choice logged below)
+**Mode:** `--auto` initially (all gray areas auto-resolved to the recommended option), then **reviewed interactively** on 2026-07-26 via `/gsd-discuss-phase 122 --chain`. User was offered four gray areas to revisit (edge-seed matrix breadth, browser-UAT depth, reachability strictness + client scope, hygiene-triage verbosity) and expressed **no preference** — the 25 auto-resolved decisions below stand as-is, accepted. The one genuinely open item (per-domain edge-seed grid, D-122-12) remains deferred to plan time as the acknowledged Research Flag.
 
 <domain>
 ## Phase Boundary
