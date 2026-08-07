@@ -117,7 +117,9 @@ jobs:
             server -s3 -s3.config=/etc/seaweedfs/s3.json
 
           for attempt in {1..30}; do
-            if curl --silent http://localhost:8333/ | grep --quiet Forbidden; then
+            # Any HTTP response proves that the S3 listener is ready. Auth and
+            # bucket creation are verified by the application's startup probe.
+            if curl --silent --output /dev/null http://localhost:8333/; then
               exit 0
             fi
             sleep 2
