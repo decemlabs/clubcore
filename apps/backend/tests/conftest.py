@@ -45,17 +45,33 @@ if _ENV_EXAMPLE.is_file():
 # several integration settings objects are constructed at module import time.
 from app.core.database import get_db  # noqa: E402
 from app.core.redis import get_redis  # noqa: E402
+from app.integrations.storage.s3 import S3Storage  # noqa: E402
 from app.main import create_app  # noqa: E402
+
+_storage_bucket_bootstrapped = False
 
 
 @pytest_asyncio.fixture
-async def app() -> AsyncIterator[FastAPI]:
+async def app(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[FastAPI]:
     """Per-test FastAPI instance with lifespan fired (engine + sessionmaker bound)."""
+    global _storage_bucket_bootstrapped
+
+    if _storage_bucket_bootstrapped:
+
+        async def _bucket_already_bootstrapped(_storage: S3Storage) -> None:
+            """Avoid repeating a process-startup probe for every test app."""
+
+        monkeypatch.setattr(S3Storage, "ensure_bucket", _bucket_already_bootstrapped)
+
     _app = create_app()
-    # The default five-second startup budget is too tight late in the full
-    # integration suite when PostgreSQL and Redis have handled thousands of
-    # fixture lifecycles. Keep a finite limit while avoiding load-only flakes.
+    # Keep a finite startup budget that tolerates shared CI service load while
+    # still surfacing genuine lifespan regressions promptly.
     async with LifespanManager(_app, startup_timeout=15):
+        # Production creates one application per process.  The suite creates a
+        # fresh app per test for isolation, so probing the same live S3 bucket
+        # thousands of times only overloads the test service.  Keep the first
+        # real probe and skip duplicates within this pytest process.
+        _storage_bucket_bootstrapped = True
         yield _app
 
 
