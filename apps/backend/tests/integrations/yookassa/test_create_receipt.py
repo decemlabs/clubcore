@@ -224,9 +224,7 @@ async def test_create_receipt_email_path_posts_customer_email_only(
     route = yookassa_create_receipt_ok.routes[0]
     async with httpx.AsyncClient(base_url=_BASE_URL) as http:
         client = YooKassaClient(http=http, settings=_test_settings())
-        await client.create_receipt(
-            **_receipt_kwargs(customer_email="a@b.ru", customer_phone=None)
-        )
+        await client.create_receipt(**_receipt_kwargs(customer_email="a@b.ru", customer_phone=None))
     body = json.loads(route.calls.last.request.content)
     assert body["customer"] == {"email": "a@b.ru"}
 
@@ -253,9 +251,7 @@ async def test_create_receipt_neither_contact_raises_value_error() -> None:
     async with httpx.AsyncClient(base_url=_BASE_URL) as http:
         client = YooKassaClient(http=http, settings=_test_settings())
         with pytest.raises(ValueError, match="customer_email or customer_phone"):
-            await client.create_receipt(
-                **_receipt_kwargs(customer_email=None, customer_phone=None)
-            )
+            await client.create_receipt(**_receipt_kwargs(customer_email=None, customer_phone=None))
 
 
 @pytest.mark.asyncio

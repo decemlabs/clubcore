@@ -38,8 +38,7 @@ _COLLISION_BODY = {
     "code": "invalid_request",
     "parameter": "Idempotence-Key",
     "description": (
-        "You've already used this idempotence key for another request "
-        "within the past 24 hours."
+        "You've already used this idempotence key for another request within the past 24 hours."
     ),
 }
 
@@ -132,10 +131,14 @@ async def test_collision_retries_once_with_fresh_key_and_succeeds(
     # Scope to THIS client_id — the host test DB may carry leftover rows from
     # prior manual UAT sessions (committed outside the per-test SAVEPOINT).
     rows = (
-        await db_session.execute(
-            select(OnlinePayment).where(OnlinePayment.client_id == client.id)
+        (
+            await db_session.execute(
+                select(OnlinePayment).where(OnlinePayment.client_id == client.id)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(rows) == 1
     # The persisted key is the retry-shaped key (fresh uuid4 hex appended).
     assert ":retry-" in rows[0].idempotency_key
@@ -157,10 +160,14 @@ async def test_collision_retry_fires_without_existing_row(
 
     # Pre-condition: no rows exist for THIS freshly-created client before the call.
     pre = (
-        await db_session.execute(
-            select(OnlinePayment).where(OnlinePayment.client_id == client.id)
+        (
+            await db_session.execute(
+                select(OnlinePayment).where(OnlinePayment.client_id == client.id)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert pre == []
 
     resp = await service.sell_membership(
@@ -200,10 +207,14 @@ async def test_non_idempotence_key_400_is_not_retried(
     # Only ONE POST — the non-Idempotence-Key 400 is not retried.
     assert yookassa_other_400.routes[0].call_count == 1
     rows = (
-        await db_session.execute(
-            select(OnlinePayment).where(OnlinePayment.client_id == client.id)
+        (
+            await db_session.execute(
+                select(OnlinePayment).where(OnlinePayment.client_id == client.id)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert rows == []
 
 
@@ -233,10 +244,14 @@ async def test_second_consecutive_collision_raises_bad_gateway(
     # Exactly two POSTs: original + one bounded retry. No third attempt.
     assert yookassa_collision_twice.routes[0].call_count == 2
     rows = (
-        await db_session.execute(
-            select(OnlinePayment).where(OnlinePayment.client_id == client.id)
+        (
+            await db_session.execute(
+                select(OnlinePayment).where(OnlinePayment.client_id == client.id)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert rows == []
 
 
@@ -275,8 +290,12 @@ async def test_genuine_double_tap_still_replays_without_create_payment(
     # Only ONE POST — second call hit the replay short-circuit, no new ЮKassa call.
     assert yookassa_create_payment_success.routes[0].call_count == 1
     rows = (
-        await db_session.execute(
-            select(OnlinePayment).where(OnlinePayment.client_id == client.id)
+        (
+            await db_session.execute(
+                select(OnlinePayment).where(OnlinePayment.client_id == client.id)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     assert len(rows) == 1

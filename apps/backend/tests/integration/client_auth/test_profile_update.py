@@ -123,9 +123,7 @@ async def test_patch_me_email_round_trip(
     """
     _ = redis_clean
 
-    access_token, csrf_token = await _authenticate_client(
-        async_client, db_session, linked_client
-    )
+    access_token, csrf_token = await _authenticate_client(async_client, db_session, linked_client)
 
     new_email = f"updated-{uuid4().hex[:8]}@example.com"
 
@@ -146,9 +144,7 @@ async def test_patch_me_email_round_trip(
     assert patch_data["email"] == new_email, (
         f"PATCH response should reflect new email immediately: {patch_data}"
     )
-    assert patch_data["id"] == str(linked_client.id), (
-        f"PATCH response id mismatch: {patch_data}"
-    )
+    assert patch_data["id"] == str(linked_client.id), f"PATCH response id mismatch: {patch_data}"
 
     # GET /me — fresh DB query via load_client_by_id.
     get_resp = await async_client.get(
@@ -194,9 +190,7 @@ async def test_patch_me_duplicate_email_409(
     linked_client.email = original_email
     await db_session.commit()
 
-    access_token, csrf_token = await _authenticate_client(
-        async_client, db_session, linked_client
-    )
+    access_token, csrf_token = await _authenticate_client(async_client, db_session, linked_client)
 
     # Attempt to claim the other client's email address.
     patch_resp = await async_client.patch(

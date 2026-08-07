@@ -80,7 +80,7 @@ def _channel_enabled(matrix: dict[str, Any], kind: str, channel: str) -> bool:
     Matrix shape: {kind: {channel: bool}}.
     Fail-open: absent key → True (emit normally). This mirrors the
     never-raise / fail-open contract for the full gate.
-    """
+    """  # noqa: RUF002
     kind_cfg = matrix.get(kind)
     if not isinstance(kind_cfg, dict):
         return True
@@ -112,7 +112,7 @@ def _is_quiet_hours(
       - If start < end: simple range [start, end).
       - If start >= end: window wraps midnight (start..23:59 OR 00:00..end).
     Returns False when either quiet_start or quiet_end is None (no quiet hours).
-    """
+    """  # noqa: RUF002
     if quiet_start is None or quiet_end is None:
         return False
     current: time = now_msk.time().replace(second=0, microsecond=0)
@@ -154,27 +154,31 @@ async def create_notification(
     Sender signature (forward-ready for text channels):
       - For non-in_app channels, append sender_signature to the body when set.
       - in_app bodies are untouched.
-    """
+    """  # noqa: RUF002
     # Phase 108 CFG-04: matrix + quiet-hours + always-on gate.
     # Always-on bypass first — no config read needed for these kinds.
     if kind not in _ALWAYS_ON_KINDS:
         try:
             row = (
-                await session.execute(
-                    sa.text(  # noqa: TABLE_REF
-                        "SELECT matrix, sender_signature, "
-                        "       quiet_hours_start, quiet_hours_end "
-                        "FROM notification_prefs_config "
-                        "WHERE id = CAST(:id AS uuid)"
-                    ),
-                    {"id": _NOTIFICATION_PREFS_CONFIG_ID},
+                (
+                    await session.execute(
+                        sa.text(  # Raw cross-module SQL per D-54-08.
+                            "SELECT matrix, sender_signature, "
+                            "       quiet_hours_start, quiet_hours_end "
+                            "FROM notification_prefs_config "
+                            "WHERE id = CAST(:id AS uuid)"
+                        ),
+                        {"id": _NOTIFICATION_PREFS_CONFIG_ID},
+                    )
                 )
-            ).mappings().one_or_none()
+                .mappings()
+                .one_or_none()
+            )
 
             if row is not None:
                 matrix: dict[str, Any] = row["matrix"] or {}
 
-                # Matrix gate: if the matrix explicitly disables this kind×channel → suppress.
+                # Matrix gate: suppress explicitly disabled kind/channel pairs.
                 if not _channel_enabled(matrix, kind, channel):
                     _log.info(
                         "notification_suppressed_by_matrix",
@@ -209,7 +213,7 @@ async def create_notification(
                     if sig:
                         body = f"{body}\n\n{sig}"
 
-        except Exception:  # noqa: BLE001 — never raise from gate; fail-open (T-108-11)
+        except Exception:
             _log.warning(
                 "notification_gate_config_read_error",
                 kind=kind,

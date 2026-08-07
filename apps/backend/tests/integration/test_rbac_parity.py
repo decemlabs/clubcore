@@ -63,10 +63,9 @@ def _parse_owner_only_pairs() -> set[tuple[str, str]]:
     # this filter the raw hit count inflates to 43 and relies on set() dedup
     # to collapse back to 41 — masking future add/remove mistakes (WR-06).
     non_comment_lines = [
-        ln for ln in _read_text(_CAN_TS).splitlines()
-        if not ln.lstrip().startswith('//')
+        ln for ln in _read_text(_CAN_TS).splitlines() if not ln.lstrip().startswith("//")
     ]
-    return set(_PAIR_RE.findall('\n'.join(non_comment_lines)))
+    return set(_PAIR_RE.findall("\n".join(non_comment_lines)))
 
 
 def _parse_ts_union(text: str, name: str) -> set[str]:

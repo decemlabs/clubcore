@@ -27,6 +27,9 @@ from app.main import create_app
 EXCLUDED_PATHS: frozenset[str] = frozenset(
     {
         "/healthz",  # Phase 2 D-14 — Kubernetes liveness probe
+        # Prometheus scrape endpoint is intentionally public. It exposes
+        # aggregate process metrics only and carries no user-scoped data.
+        "/metrics",
         "/api/v1/auth/login",  # identity in body
         "/api/v1/auth/refresh",  # identity in cc_refresh cookie; access cookie may be expired
         "/api/v1/auth/telegram/start",  # Phase 7 — pre-auth deep-link handshake

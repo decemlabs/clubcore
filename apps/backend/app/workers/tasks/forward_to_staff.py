@@ -53,12 +53,7 @@ _TG_CAPTION_LIMIT: Final = 1024  # send_photo caption hard limit
 _TRUNCATION_MARK: Final = "…"
 
 # Russian DM template — concise identity header for single-gym operator.
-_DM_TEMPLATE = (
-    "Новое сообщение от клиента\n"
-    "Имя: {client_name}\n"
-    "Телефон: {client_phone}\n\n"
-    "{body}"
-)
+_DM_TEMPLATE = "Новое сообщение от клиента\nИмя: {client_name}\nТелефон: {client_phone}\n\n{body}"  # noqa: RUF001
 
 
 def _render_dm(client_name: str, client_phone: str, body: str) -> str:

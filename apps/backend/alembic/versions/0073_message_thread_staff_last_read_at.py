@@ -17,6 +17,7 @@ or ALTER of existing columns; downgrade removes the column cleanly.
 from __future__ import annotations
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "0073_message_thread_staff_last_read_at"

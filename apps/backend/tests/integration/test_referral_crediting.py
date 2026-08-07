@@ -420,8 +420,7 @@ async def _count_referral_bonus_accrued_audit_rows(
         (
             await session.execute(
                 text(
-                    "SELECT COUNT(*) AS cnt FROM audit_log "
-                    "WHERE action = 'referral_bonus_accrued'"
+                    "SELECT COUNT(*) AS cnt FROM audit_log WHERE action = 'referral_bonus_accrued'"
                 )
             )
         )
@@ -580,9 +579,7 @@ async def test_ref_cred_02_replay_is_idempotent(
     )
 
     audit_count = await _count_referral_bonus_accrued_audit_rows(_credit_session)
-    assert audit_count == 2, (
-        f"After replay: expected still 2 audit rows, got {audit_count}"
-    )
+    assert audit_count == 2, f"After replay: expected still 2 audit rows, got {audit_count}"
 
 
 # ---------------------------------------------------------------------------
@@ -833,9 +830,7 @@ async def test_ref_cred_07_config_zero_amounts_no_accrual(
 
     await _credit_session.rollback()
     accrual_count = await _count_referral_accrual_rows(_credit_session)
-    assert accrual_count == 0, (
-        f"Expected 0 rows (zero config amounts), got {accrual_count}"
-    )
+    assert accrual_count == 0, f"Expected 0 rows (zero config amounts), got {accrual_count}"
 
 
 # ---------------------------------------------------------------------------
@@ -892,9 +887,7 @@ async def test_ref_cred_07b_config_absent_no_accrual(
 
     await _credit_session.rollback()
     accrual_count = await _count_referral_accrual_rows(_credit_session)
-    assert accrual_count == 0, (
-        f"Expected 0 rows (config absent), got {accrual_count}"
-    )
+    assert accrual_count == 0, f"Expected 0 rows (config absent), got {accrual_count}"
 
     # Re-insert the singleton at seed defaults so the engine teardown's UPDATE can
     # restore it, and sibling suites that assume the row exists are not broken.

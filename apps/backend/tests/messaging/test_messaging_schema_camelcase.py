@@ -11,7 +11,7 @@ Five pure schema behaviours (no DB connection required):
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 from pydantic import ValidationError
@@ -231,7 +231,7 @@ class TestTypingEventCamelCase:
         assert event.actor == "staff"
 
     def test_event_json_shape_exactly_two_keys(self) -> None:
-        """TypingEvent must serialize exactly {type, actor} — no body, preview, or id (T-91-LEAK)."""
+        """TypingEvent must serialize exactly {type, actor} — no body, preview, or id (T-91-LEAK)."""  # noqa: E501
         from app.modules.messaging.schemas import TypingEvent
 
         event = TypingEvent()
@@ -412,9 +412,9 @@ class TestSendMessageRequestBodyOrAttachment:
 
     def test_whitespace_only_body_with_attachment_id_raises_validation_error(self) -> None:
         """body='   ' even when attachmentId present → 422 (whitespace guard still applies)."""
-        import pytest
         from uuid import uuid4
 
+        import pytest
         from pydantic import ValidationError
 
         from app.modules.messaging.schemas import SendMessageRequest

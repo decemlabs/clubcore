@@ -129,9 +129,7 @@ async def client_session_refresh(
     presented = request.cookies.get("cc_client_refresh")
     if presented is None:
         raise InvalidAccessToken("missing_refresh_cookie")
-    access, raw_refresh, csrf = await service.rotate_client_refresh(
-        session, redis, presented
-    )
+    access, raw_refresh, csrf = await service.rotate_client_refresh(session, redis, presented)
     issue_client_session_cookies(
         response,
         access_token=access,

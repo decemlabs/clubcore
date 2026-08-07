@@ -105,9 +105,7 @@ def fail_reschedule_dm(monkeypatch: pytest.MonkeyPatch) -> None:
         "app.modules.bookings.service.telegram_sender",
         SimpleNamespace(send_text_dm=_raising_send_text_dm),
     )
-    monkeypatch.setattr(
-        "app.modules.bookings.service.build_bot", lambda *, token: object()
-    )
+    monkeypatch.setattr("app.modules.bookings.service.build_bot", lambda *, token: object())
 
 
 # ---------------------------------------------------------------------------
@@ -279,12 +277,8 @@ async def test_reschedule_dm_failure_returns_200_and_idempotent_replay(
     trainer = await _seed_trainer(db_session)
     pkg = await _seed_pt_package(db_session, client.id, trainer.id)
 
-    old_slot = await _seed_slot(
-        db_session, trainer.id, staff.id, start_offset=timedelta(hours=48)
-    )
-    new_slot = await _seed_slot(
-        db_session, trainer.id, staff.id, start_offset=timedelta(hours=72)
-    )
+    old_slot = await _seed_slot(db_session, trainer.id, staff.id, start_offset=timedelta(hours=48))
+    new_slot = await _seed_slot(db_session, trainer.id, staff.id, start_offset=timedelta(hours=72))
     booking = await _seed_confirmed_booking(
         db_session, client_id=client.id, slot=old_slot, pt_package_id=pkg.id
     )
@@ -311,9 +305,7 @@ async def test_reschedule_dm_failure_returns_200_and_idempotent_replay(
     await db_session.refresh(booking)
     assert booking.status == "cancelled"
     new_booking_row = await db_session.scalar(
-        select(Booking).where(
-            Booking.slot_id == new_slot.id, Booking.status == "confirmed"
-        )
+        select(Booking).where(Booking.slot_id == new_slot.id, Booking.status == "confirmed")
     )
     assert new_booking_row is not None
 
@@ -327,9 +319,7 @@ async def test_reschedule_dm_failure_returns_200_and_idempotent_replay(
     confirmed_count = len(
         (
             await db_session.execute(
-                select(Booking).where(
-                    Booking.slot_id == new_slot.id, Booking.status == "confirmed"
-                )
+                select(Booking).where(Booking.slot_id == new_slot.id, Booking.status == "confirmed")
             )
         )
         .scalars()

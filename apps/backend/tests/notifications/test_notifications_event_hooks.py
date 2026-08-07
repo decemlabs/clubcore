@@ -33,33 +33,25 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
-import pytest_asyncio
 import respx
 from httpx import AsyncClient
-from sqlalchemy import select, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permissions import Role
 from app.core.security import hash_password
-
 from app.modules.auth.models import User
 from app.modules.bookings import service as bookings_service
 from app.modules.bookings.schemas import BookingCancelRequest, BookingCreateRequest
 from app.modules.clients.models import Client
-from app.modules.notifications.models import InAppNotification
-from app.modules.online_payments.constants import (
-    CONFIRMATION_TYPE_REDIRECT,
-    STATUS_PENDING,
-)
-from app.modules.online_payments.models import OnlinePayment
 from app.modules.pt_packages.models import PtPackage, PtPackagePlan
 from app.modules.schedule.models import TrainerAvailabilitySlot
 from app.modules.trainers.models import Trainer
 
 # Re-use the real-commit fixtures from the webhook_yookassa conftest.
 from tests.integration.webhook_yookassa.conftest import (  # noqa: F401
-    SeededOnlinePayment,
     _YOOKASSA_BASE_URL,
+    SeededOnlinePayment,
     seeded_online_payment_pending,
     webhook_client,
     webhook_db_session,
@@ -67,7 +59,6 @@ from tests.integration.webhook_yookassa.conftest import (  # noqa: F401
     yookassa_get_payment_succeeded,
     yookassa_webhook_payload,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers — raw SQL count of in_app_notifications rows for assertions.
@@ -311,7 +302,7 @@ async def test_create_booking_for_client_creates_booking_confirmed_row(
     db_session: AsyncSession,
     app: Any,
 ) -> None:
-    """WR-04: create_booking_for_client must insert one booking_confirmed inbox row for the client."""
+    """WR-04: create_booking_for_client must insert one booking_confirmed inbox row for the client."""  # noqa: E501
     owner = await _seed_owner_user(db_session, suffix=uuid4().hex[:6])
     trainer = await _seed_trainer(db_session)
     client = await _seed_client(db_session, owner=owner)
@@ -393,9 +384,7 @@ async def test_cancel_booking_reception_creates_cancelled_by_client_row(
     plan = await _seed_pt_plan(db_session)
     pkg = await _seed_pt_package(db_session, client=client, plan=plan)
     # Slot must be > 24h in the future for reception cancel window
-    slot = await _seed_active_slot(
-        db_session, trainer=trainer, owner=owner, start_offset_hours=48
-    )
+    slot = await _seed_active_slot(db_session, trainer=trainer, owner=owner, start_offset_hours=48)
     booking = await _seed_confirmed_booking(
         db_session, slot=slot, client=client, pkg=pkg, owner=owner
     )
@@ -439,9 +428,7 @@ async def test_cancel_booking_for_client_creates_cancelled_by_client_row(
     plan = await _seed_pt_plan(db_session)
     pkg = await _seed_pt_package(db_session, client=client, plan=plan)
     # Client cancel window is 24h; slot must be > 24h in the future
-    slot = await _seed_active_slot(
-        db_session, trainer=trainer, owner=owner, start_offset_hours=48
-    )
+    slot = await _seed_active_slot(db_session, trainer=trainer, owner=owner, start_offset_hours=48)
     booking = await _seed_confirmed_booking(
         db_session, slot=slot, client=client, pkg=pkg, owner=owner
     )
@@ -469,7 +456,7 @@ async def test_reschedule_booking_for_client_creates_booking_rescheduled_row(
     db_session: AsyncSession,
     app: Any,
 ) -> None:
-    """reschedule_booking_for_client must insert booking_rescheduled with source_id=new_booking.id."""
+    """reschedule_booking_for_client must insert booking_rescheduled with source_id=new_booking.id."""  # noqa: E501
     owner = await _seed_owner_user(db_session, suffix=uuid4().hex[:6])
     trainer = await _seed_trainer(db_session)
     client = await _seed_client(db_session, owner=owner)
@@ -533,16 +520,14 @@ def webhook_payment_succeeded_body_factory() -> Any:
 
 @pytest.mark.asyncio
 async def test_payment_succeeded_creates_payment_succeeded_row(
-    webhook_client: AsyncClient,
-    webhook_db_session: AsyncSession,
-    seeded_online_payment_pending: SeededOnlinePayment,
-    yookassa_get_payment_succeeded: respx.MockRouter,
+    webhook_client: AsyncClient,  # noqa: F811
+    webhook_db_session: AsyncSession,  # noqa: F811
+    seeded_online_payment_pending: SeededOnlinePayment,  # noqa: F811
+    yookassa_get_payment_succeeded: respx.MockRouter,  # noqa: F811
     webhook_payment_succeeded_body_factory: Any,
 ) -> None:
     """payment.succeeded webhook must insert one payment_succeeded inbox row for the client."""
-    body = webhook_payment_succeeded_body_factory(
-        seeded_online_payment_pending.yookassa_payment_id
-    )
+    body = webhook_payment_succeeded_body_factory(seeded_online_payment_pending.yookassa_payment_id)
     response = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
     assert response.status_code == 200, response.text
 
@@ -559,10 +544,10 @@ async def test_payment_succeeded_creates_payment_succeeded_row(
 
 @pytest.mark.asyncio
 async def test_payment_succeeded_webhook_replay_creates_exactly_one_row(
-    webhook_client: AsyncClient,
-    webhook_db_session: AsyncSession,
-    seeded_online_payment_pending: SeededOnlinePayment,
-    yookassa_get_payment_succeeded: respx.MockRouter,
+    webhook_client: AsyncClient,  # noqa: F811
+    webhook_db_session: AsyncSession,  # noqa: F811
+    seeded_online_payment_pending: SeededOnlinePayment,  # noqa: F811
+    yookassa_get_payment_succeeded: respx.MockRouter,  # noqa: F811
     webhook_payment_succeeded_body_factory: Any,
 ) -> None:
     """Invoking handle_payment_succeeded twice for the same payment creates exactly ONE row (dedup).
@@ -570,9 +555,7 @@ async def test_payment_succeeded_webhook_replay_creates_exactly_one_row(
     The UNIQUE(client_id, source_type, source_id, kind) constraint on in_app_notifications
     ensures idempotent replay (T-87-11).
     """
-    body = webhook_payment_succeeded_body_factory(
-        seeded_online_payment_pending.yookassa_payment_id
-    )
+    body = webhook_payment_succeeded_body_factory(seeded_online_payment_pending.yookassa_payment_id)
 
     # First invocation — should succeed (FSM: pending → succeeded)
     r1 = await webhook_client.post("/api/v1/_internal/yookassa/webhook", json=body)
@@ -629,9 +612,9 @@ def yookassa_get_payment_canceled_fixture() -> Any:
 
 @pytest.mark.asyncio
 async def test_payment_canceled_creates_zero_inbox_rows(
-    webhook_client: AsyncClient,
-    webhook_db_session: AsyncSession,
-    seeded_online_payment_pending: SeededOnlinePayment,
+    webhook_client: AsyncClient,  # noqa: F811
+    webhook_db_session: AsyncSession,  # noqa: F811
+    seeded_online_payment_pending: SeededOnlinePayment,  # noqa: F811
     yookassa_get_payment_canceled_fixture: Any,
 ) -> None:
     """Anti-oracle (D-52-08): payment_canceled MUST NOT create any in_app_notifications rows.
@@ -683,7 +666,7 @@ async def test_autopay_charge_failed_creates_inbox_row(
     plan_id = uuid4()
     await db_session.execute(
         text(
-            "INSERT INTO membership_plans (id, name, duration_days, price_kopecks, freeze_days_limit, active, created_at, updated_at) "
+            "INSERT INTO membership_plans (id, name, duration_days, price_kopecks, freeze_days_limit, active, created_at, updated_at) "  # noqa: E501
             "VALUES (:id, :name, 30, 100000, 7, true, now(), now())"
         ),
         {"id": str(plan_id), "name": f"AutopayPlan-{nonce}"},
@@ -709,7 +692,7 @@ async def test_autopay_charge_failed_creates_inbox_row(
             "INSERT INTO client_payment_methods "
             "(id, client_id, yookassa_method_id, last4, brand, expiry_month, expiry_year, "
             " autopay_enabled, consent_recorded_at, created_at, updated_at) "
-            "VALUES (:id, :client_id, :method_id, '4477', 'MasterCard', 12, 2027, true, now(), now(), now())"
+            "VALUES (:id, :client_id, :method_id, '4477', 'MasterCard', 12, 2027, true, now(), now(), now())"  # noqa: E501
         ),
         {
             "id": str(uuid4()),
@@ -733,15 +716,13 @@ async def test_autopay_charge_failed_creates_inbox_row(
         return mock_yookassa
 
     today = datetime.now(UTC).date()
-    window_end = today + timedelta(days=5)
-
     with (
         patch(
             "app.modules.autopay_charges.service.get_yookassa_client_provider",
             return_value=_mock_provider,
         ),
     ):
-        count_attempted, declined = await autopay_service._charge_expiring_autopay_memberships(
+        _count_attempted, declined = await autopay_service._charge_expiring_autopay_memberships(
             db_session,
             today=today,
             window_days=5,

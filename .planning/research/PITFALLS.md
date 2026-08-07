@@ -1,428 +1,305 @@
-# Pitfalls Research
+# Pitfalls Research: v4.1 Codebase Hardening
 
-**Domain:** Self-hosted bare-metal k3s — containerizing and deploying an existing full-stack gym CRM (FastAPI + ARQ + Telegram long-polling + Postgres 16 + Redis 7 + SeaweedFS/MinIO + two SPA/PWA frontends)
-**Researched:** 2026-06-16
-**Confidence:** HIGH
+**Domain:** Audit-and-fix ("hardening") milestone on an existing, fully-shipped full-stack system — FastAPI modular monolith + two React frontends + locally-validated k3s infra, zero new features.
+**Researched:** 2026-07-26
+**Confidence:** HIGH (grounded directly in this repo's locked invariants, documented decisions, and its own two-time-repeated defect class — not generic advice)
+
+## Executive framing
+
+This milestone's entire justification is a repeated failure mode already recorded in `PROJECT.md`: mock-based unit tests passed a real schema divergence bug **twice** (v3.0, v3.1), caught only by manual browser UAT. A hardening milestone with no new features has no natural "done" signal — the only thing that stops it from becoming a second uncontrolled rewrite is a fixed, pre-committed contract: a closed-set DEFECT registry, a scope firewall, and an honest ledger of what could not be verified. Every pitfall below is a way that discipline erodes.
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Postgres data loss on StatefulSet rescheduling (bare-metal k3s, local-path-provisioner)
+### Pitfall 1: The audit phase never closes (infinite refactor / scope creep)
 
 **What goes wrong:**
-k3s ships with `local-path-provisioner` as its default storage class. This creates PVs that are node-affinity-bound — the PV is created in a specific directory on a specific node. If the StatefulSet pod is rescheduled to a different node (node drain, node failure, operator `kubectl delete pod`), the new pod cannot bind the old PV because the path does not exist on the new node. The pod stays Pending forever, or worse — if the PVC is recreated — a fresh empty volume is mounted and the new pod starts with no data.
+The audit finds more defects than the fix phases can close, and each fix phase's own code review surfaces new findings, so the registry grows faster than it shrinks. "While we're in here" upgrades creep in (bumping FastAPI/SQLAlchemy/Pydantic/Zod/TanStack versions, reformatting whole files, "just fixing this one other thing nearby").
 
 **Why it happens:**
-Developers apply a StatefulSet with a `volumeClaimTemplate` and assume Postgres data persists like a named Docker volume does in `docker compose`. Local-path PVs have no cross-node mobility. On a true single-node bare-metal server this is survivable; it becomes a silent trap when any node maintenance or k3s upgrade causes a pod reschedule.
+This system has ~10K+ LOC backend, ~19K LOC+ frontend across two apps, 9+ milestones of accretion, and an explicit backlog of 32 TODO/FIXME/HACK plus 23 v4.0 operator-pending items. An open-ended "fix everything" goal against that surface area has no natural stopping point; auditors are rewarded (in the moment) for finding more, not for closing the loop.
 
 **How to avoid:**
-1. Annotate the PVC with `volumeBindingMode: WaitForFirstConsumer` and verify the pod lands back on the same node via a `nodeSelector` or `nodeName` constraint pinning Postgres to the storage node.
-2. Set `terminationGracePeriodSeconds: 60` on the StatefulSet pod so Postgres flushes WAL cleanly before SIGKILL.
-3. Label the storage node explicitly (`kubectl label node <name> clubcore/postgres-storage=true`) and use a `nodeSelector` in the StatefulSet spec.
-4. Before trusting any PVC, execute a full `pg_dump` → destroy pod → `pg_restore` round-trip in the kind/k3s local validation environment. Document the restore time.
-5. Set `reclaimPolicy: Retain` on the StorageClass so a PVC delete does NOT destroy the underlying directory.
+- The audit phase produces the registry **once**, as a single frozen artifact (id + severity + category + file/screen), before any fix phase starts. Fix phases consume the registry; they do not reopen the "find more issues" activity.
+- Any defect discovered *during* a fix phase (code review, contract test failure) gets appended to the SAME registry with a new id and a `discovered-during-fix` tag — it does not silently get fixed inline without being logged, and it does not trigger a new audit sweep.
+- Hard rule: no dependency-version bumps in this milestone unless a bump is itself the fix for a specific registered CVE/defect id. Versions are Out of Scope by default (v4.1 is stated to touch zero new business/infra surface).
+- Reformatting is confined to files already touched by a registered fix; a repo-wide `ruff format` / `prettier --write` pass (if wanted) is its own single, isolated, reviewable commit — never bundled into a functional fix diff.
+- Track two numbers from day one: registry size (should only shrink after audit closes) and "items closed per phase." If registry size grows after the audit phase is declared closed, that is the warning sign to stop and re-scope, not to keep going.
 
 **Warning signs:**
-- Pod shows `Pending` after a reschedule with event `0/1 nodes are available: 1 node(s) didn't match Pod's node affinity/selector`.
-- PVC shows `Lost` binding.
-- A second PVC with the same name appears with status `Bound` but different PV.
+- Registry item count increases week-over-week after the audit phase is marked complete.
+- Diffs in "fix" commits touch files with no corresponding registry id.
+- A fix PR/commit description contains "while I was in here" or "also upgraded X."
+- Git blame on a file changes wholesale (formatting-only diff) mixed with a functional change in the same commit.
 
-**Phase to address:**
-K8s manifests / Helm phase (StatefulSet authoring); Backup & Recovery phase (restore round-trip test).
+**Phase to address:** Audit phase (registry freeze) + a standing rule enforced by every fix phase's plan/commit template.
 
 ---
 
-### Pitfall 2: ARQ cron DOUBLE-FIRE if the worker Deployment scales to replicas > 1 (or during rolling update overlap)
+### Pitfall 2: Mass reformatting destroys git blame and review signal
 
 **What goes wrong:**
-ARQ `unique=True` on a `cron()` entry uses a Redis `SET NX EX` lock keyed on the job name + scheduled time. If two worker pods are alive simultaneously (replicas=2, or during a RollingUpdate where new pod starts before old pod terminates), BOTH pods race to acquire the lock. The loser gets a cache miss for that tick and silently enqueues a second copy of the same cron job into the queue. A second worker then dequeues and executes it. The SQL-level idempotency gates (`WHERE status='active'`, `ON CONFLICT DO NOTHING`) are the real backstop — but `charge_expiring_autopay` initiates real YooKassa API calls and `dispatch_fiscal_receipt` sends real fiscal receipts; SQL-level dedup only prevents the DB row, it does NOT prevent the external API call from firing twice.
+A well-intentioned "let's finally run ruff format / prettier across everything" pass touches hundreds of files, burying the handful of real functional fixes inside noise. Reviewers (and future `git blame`/`git bisect`) can no longer distinguish "this line changed because of a bug fix" from "this line changed because a formatter moved a comma."
 
 **Why it happens:**
-Kubernetes `Deployment` default strategy is `RollingUpdate` with `maxSurge=1`. During a deploy, both old and new pods exist simultaneously. Neither pod knows about the other; the ARQ lock is per-pod-race with a 60-second TTL (`keep_result=60`). If the cron fires during the overlap window, both pods see the lock absent and both attempt enqueue.
+Hardening milestones invite exactly this because tidiness is explicitly in scope ("код-гигиена"). It feels efficient to batch it.
 
 **How to avoid:**
-1. Set `strategy: type: Recreate` on the ARQ worker Deployment. This ensures the old pod is fully terminated before the new one starts — zero overlap window.
-2. Keep `replicas: 1` on the ARQ worker Deployment permanently. There must be exactly one ARQ scheduler instance. Document this as an architectural invariant in the Helm values.
-3. Do NOT use a HorizontalPodAutoscaler on the ARQ worker.
-4. Set `maxSurge: 0, maxUnavailable: 1` if Recreate strategy seems too strong (but Recreate is preferred — brief unavailability of the scheduler is acceptable; double-fire of autopay is not).
-5. The existing `WorkerSettings.on_startup` assertion (`cron_function_names - function_names`) already catches the "cron registered but not in functions" trap at boot. Keep it.
+- Formatting-only changes go in their own commit(s), clearly labeled `chore(format): ...`, never mixed with a `fix(...)` commit touching the same file's logic.
+- If both are needed in the same file, format FIRST in an isolated commit, THEN apply the functional fix as a second commit — reviewers diff the second commit against clean-formatted code, not against a reformatted+refactored blob.
+- Prefer `git blame -w` (ignore whitespace) as the acceptance check that formatting commits didn't hide anything.
 
-**Warning signs:**
-- Two ARQ worker pods running simultaneously (check `kubectl get pods -l app=arq-worker`).
-- Duplicate `expire_memberships_complete` log lines within the same minute window in Loki.
-- `autopay_charges` table showing two rows for the same `(membership_id, period_end)` pair where the second hit `ON CONFLICT` — the conflict itself is evidence a double-fire occurred.
+**Warning signs:** A single commit's diff stat shows hundreds of files changed with the same one-line functional description.
 
-**Phase to address:**
-K8s manifests / Helm phase (Deployment strategy + replicas constraint); documented as an acceptance criterion in the ARQ worker manifest.
+**Phase to address:** Code-hygiene fix phase; enforced as a commit-hygiene rule for the whole milestone, not just that phase.
 
 ---
 
-### Pitfall 3: Telegram long-polling with replicas > 1 (or RollingUpdate overlap) — double-consume
+### Pitfall 3: Deleting code that only "looks" dead (false-positive dead-code removal)
 
 **What goes wrong:**
-The Telegram Bot API long-polling model delivers each update ONCE to the poller that calls `getUpdates`. If two `telegram_bot` worker pods are alive simultaneously, both call `getUpdates` to Telegram's API. Telegram will alternate deliveries between the two connections (or drop one). The result is that some updates are processed twice (by both pods racing) and others are dropped (delivered to the pod that did not handle them). `/checkin`, `/book`, and `/start` handlers are idempotent at the DB level but the Telegram bot API does not deduplicate — users receive duplicate confirmation DMs.
+Static dead-code detection (unused-export scanners, `vulture`, IDE "no references" hints) flags something as unreachable, it gets deleted, and a *runtime-only* reference breaks: a dynamic import, a string-keyed dispatch table, an Alembic migration's inline model snapshot, an ARQ cron entrypoint registered by string path, or a Protocol-slot implementation wired only at the composition root (`app/main.py`).
+
+**Why it happens in THIS codebase specifically:**
+- **ARQ cron entrypoints** (`expire_memberships`, `send_expiring_notifications`, `mark_no_show_bookings`, `send_booking_reminders`, `charge_expiring_autopay`, `monitor_stale_fiscal_receipts`, `poll_pending_refunds`, etc.) are referenced by string/module path in ARQ worker settings, not by direct Python import in the "business" module — a static analyzer walking import graphs from `app/main.py` will not see the edge.
+- **Protocol-slot registrations** (`ActiveMembershipResolver`, `register_user_loader`, `HandlerContext`, `PayrollClawbackRecorder`, `UserSessionInvalidator`) are wired ONLY at the composition root (`app/main.py`) per this project's explicit cross-module discipline (D-20-MODULE). A grep for the Protocol's usage inside its "home" module will show zero call sites — looking dead — when the real wiring lives in a completely different file.
+- **Migration-referenced code**: Alembic revisions (0001–0063+) frequently embed inline copies of ORM shapes or raw SQL as they existed at that revision. A "dead" helper function still referenced from an old migration's `upgrade()`/`downgrade()` will break `alembic downgrade` / a fresh `alembic upgrade head` replay even though nothing in current `app/modules/*` calls it.
+- **AST literal-string commit gates**: `LOCKED_AUDIT_EVENTS` (frozenset) and `LOCKED_EMAIL_TEMPLATES` are validated by an AST walker that requires the literal string to appear at every callsite — code that emits these via a variable/lookup (which might look like unreachable/duplicate logic to a naive dedup pass) is intentionally structured that way; "simplifying" it to a lookup table breaks the gate itself, not just runtime behavior.
+- **Telegram bot handlers** (`app/workers/telegram_bot.py`) are dispatched by python-telegram-bot's internal handler registry (string command / regex match), not by direct call from the module a static scanner starts from.
+- **Frontend**: TanStack Router's file-based route tree (`src/routeTree.gen.ts`, generated) references route files that a component-level "unused export" scanner won't see as imported; a component reachable only via `router.tsx`'s lazy-loaded ComingSoon→real swap is a second, distinct case (see Pitfall 9) that looks identical to actually-dead code from a pure import-graph view.
+- **`nav-items.ts`** entries and Zod schemas used only inside `@hookform/resolvers` wiring can look "unused" to naive tools that don't trace through generic type parameters.
+
+**How to prove code is actually dead before deleting (concrete, checkable procedure):**
+1. Run TWO independent tools and require agreement: a Python import-graph/usage tool (e.g. `vulture` in low-confidence mode, or `ruff --select F401,F811` plus a manual grep) AND a full-text grep for the symbol name across the ENTIRE repo — not just `app/` — including `alembic/versions/*`, `app/workers/*`, YAML/JSON config (ARQ cron schedule config, k8s manifests, Helm values), and test fixtures.
+2. Grep specifically for the symbol as a STRING literal, not just as a Python identifier (`"expire_memberships"`, `'ActiveMembershipResolver'`) — this catches string-referenced/dynamic dispatch that AST-based tools miss.
+3. For anything touching `app/main.py` composition-root wiring, Protocol slots, or `app/workers/`: treat "no direct call site in its home module" as INSUFFICIENT evidence of deadness — explicitly check `app/main.py` wiring and ARQ registration config before deleting.
+4. For anything under `alembic/versions/`: never delete migration-referenced helper code; migrations are immutable historical artifacts (mirrors this project's own `.planning/HISTORICAL_NOTE.md` / D-62-09 precedent of "forward-only, never rewrite history"). If a helper only exists for a migration, leave it in place or move it inline into that migration file — do not delete it from the shared module.
+5. Delete in a dedicated commit, run the FULL test suite subset that touches the deleted area (see Pitfall 4 for how to do this despite the broken suite) plus `alembic upgrade head` from a fresh DB and `alembic downgrade -1` at least one step, plus a k3d cron smoke-trigger for any ARQ job touched.
+6. For frontend: after deletion, run `tsc -b` (catches import breaks) AND grep `routeTree.gen.ts` + `nav-items.ts` + all `.test.tsx` snapshot/mock fixtures for the symbol name as a string.
+7. Never delete based on a single tool's confidence score alone — this codebase's dispatch patterns (string-keyed, Protocol-slot, AST-gated) are specifically the patterns that fool single-tool dead-code detection.
+
+**Warning signs:**
+- A "dead code removal" commit touches only one file with no corresponding test run of the ARQ scheduler, migration replay, or composition root.
+- The removed symbol's name matches an ARQ cron function, anything under `app/integrations/`, anything with `Protocol` in a nearby docstring, or anything mentioned in `LOCKED_AUDIT_EVENTS`/`LOCKED_EMAIL_TEMPLATES`.
+- CI's import-linter or mypy passes but a k3d cron smoke check or `alembic downgrade` fails post-merge.
+
+**Phase to address:** Static-audit phase should PRE-FLAG these categories (any symbol touching ARQ workers, Protocol slots, AST-gated frozensets, or `alembic/versions/`) as "requires manual grep + composition-root check" rather than routing them through automated dead-code tooling at all. The dead-code fix phase should treat this list as a standing checklist per deletion, not a one-time review.
+
+---
+
+### Pitfall 4: Treating the pre-existing broken test suite as either "fix it all first" or "ignore it entirely"
+
+**What goes wrong:**
+Two failure modes, both real risks for this milestone:
+(a) **Rabbit-holing**: the team decides the fixture deadlock (`permissive_booking_config` × `working_hours_config` autouse fixtures) must be fixed before any hardening work can be trusted, and burns the whole milestone on test-suite archaeology instead of closing DEFECT-registry items.
+(b) **Unverified shipping**: the team declares the suite "known broken, not our problem" and ships functional fixes with no proof they didn't regress anything, because "the tests don't run anyway."
 
 **Why it happens:**
-Same rolling-update overlap issue as Pitfall 2, but for the Telegram bot there is no Redis lock mechanism at all. The long-polling contract assumes exactly one consumer.
+The project's own history shows this exact suite has carried flakes across MULTIPLE milestones already (`test_freeze_race`, promo F821, `test_alembic_clean` — explicitly noted as "NOT v2.4 regressions" back in that milestone, and still present at v4.1 open). It's tempting to treat "fixing the test infra" as satisfying, high-value work — it is neither bounded nor the actual goal — or conversely to treat it as someone else's problem forever.
 
-**How to avoid:**
-1. Set `strategy: type: Recreate` on the telegram-bot Deployment. This is the only safe strategy for long-polling bots.
-2. Set `replicas: 1` permanently. Document this constraint in the Helm values and the runbook.
-3. Add a readiness probe that checks the Telegram bot token validity on startup — this prevents the new pod from accepting traffic before it is confirmed healthy, but the critical fix is Recreate strategy.
-4. Set `terminationGracePeriodSeconds: 30` so the old pod can drain in-flight `getUpdates` cleanly before SIGKILL.
+**How to avoid (disciplined middle path):**
+1. **Triage the broken suite as its OWN registry items in the audit phase**, each with an id, not as ambient background noise. Classify each: (i) the fixture-ordering deadlock (structural, likely a single root-cause fix — a shared/ordered fixture scope), (ii) `test_freeze_race` flake, (iii) promo F821 (a lint-level bug, probably trivial), (iv) `test_alembic_clean`.
+2. **Fix ONLY the items that block running the suite at all** (the deadlock) as a bounded, capped-effort fix — because it is the actual verification tool for every other fix in this milestone. This is not optional: if pytest cannot complete a run, no other fix in this milestone can be proven, which defeats the milestone's own done-bar ("fixed+verified").
+3. **Time-box the deadlock fix.** If root-causing the autouse fixture interaction exceeds a fixed budget (e.g., one phase), the fallback is NOT "give up on verification" — it is to isolate: run the affected test modules in fixture-scoped subprocess isolation (`pytest -p no:randomly --dist=no` per-module, or explicit `-k` module segmentation) as a documented workaround, and defer the *root cause* fix as its own registry item with `deferred` status and a reason.
+4. **The other pre-existing flakes (F821, `test_alembic_clean`) get fixed opportunistically but are NOT gates** for closing this milestone's functional-fix items — they were pre-existing before v4.1, are logged as their own registry entries, and can legitimately be marked `deferred` with reason "pre-existing, not a regression, tracked independently" if time runs out — but only if explicitly recorded, never silently dropped.
+5. **Every functional fix in this milestone must show a passing, targeted test run** (not "the whole suite is green" — that may never be fully achievable given item 3's workaround) as its proof: a contract test against real backend response (per the v3.0/v3.1 lesson already baked into this project's convention) plus the specific unit/integration tests for the touched module, run in isolation if the global suite can't complete.
+6. Never let "pytest exits with the deadlock" become an excuse to skip running ANY tests for a fix — the isolation workaround in item 3 exists precisely so this never happens.
 
 **Warning signs:**
-- Two `telegram-bot` pods showing `Running` simultaneously.
-- Users reporting double confirmation DMs for `/checkin` or `/book`.
-- Structlog shows the same `update_id` processed in two different pod log streams.
+- A phase's entire time budget goes to test-infra work with zero DEFECT-registry items closed.
+- A fix's "proof" section says "tests aren't running right now" instead of a scoped, isolated test run's actual output.
+- The same flaky test names recur in phase-close notes across MULTIPLE hardening phases with no registry id attached.
 
-**Phase to address:**
-K8s manifests / Helm phase (Deployment strategy + replicas constraint for telegram-bot).
+**Phase to address:** Audit phase registers all pre-existing test-suite defects with ids and severities. A dedicated early fix phase (before or parallel to the first functional-fix phase) resolves ONLY the fixture-deadlock (verification-blocking) item, time-boxed, with a documented isolation fallback if it can't be root-caused in budget. All later fix phases depend on this phase's isolation/fix being in place as their verification tool.
 
 ---
 
-### Pitfall 4: Migrate Job races API/worker boot — API starts before Alembic finishes
+### Pitfall 5: Regressing a LOCKED invariant while "just cleaning up"
 
 **What goes wrong:**
-The Alembic migrate job (~70 migrations) takes several seconds. If the API Deployment and the migrate Job are created simultaneously by `helm install` or `kubectl apply`, the API pod may pass its readiness probe and start serving requests before the `alembic upgrade head` completes. The first request that touches a new column or table fails with a Postgres `column does not exist` error, surfacing as a 500 to users.
+A refactor pass — renaming a constant, "simplifying" an enum, deduplicating what looks like repeated code, reordering an import to satisfy a linter — silently breaks one of this system's byte-parity or AST-gated invariants:
+- RBAC byte-parity between backend `Resource`/`Action`/`OWNER_ONLY` StrEnums and frontend `can.ts`/`registry.ts` (CISO-01, 41 entries).
+- The `LOCKED_AUDIT_EVENTS` frozenset + the AST literal-string commit gate on `audit.emit` callsites (currently 34+ entries and growing across milestones; SVC001 gate on `auth/service.py`).
+- The `LOCKED_EMAIL_TEMPLATES` frozenset + AST gate on `get_email_dispatcher()` callsites.
+- Byte-stable `apps/backend/openapi.json` → `packages/api-client/src/schema.d.ts` drift gate.
+- The 3 import-linter contracts on backend layers (raw-SQL cross-module reads / Protocol-slot cross-module writes discipline, D-20-MODULE).
+- ESLint `import/no-restricted-paths` layer boundaries + `VITE_API_MODE` chokepoint rule + raw-Tailwind-palette ban, each with negative-test fixtures that themselves must still fail correctly.
 
 **Why it happens:**
-Kubernetes applies all resources in a chart in one pass. Without an explicit ordering gate, pods race. Helm hooks (`pre-upgrade`, `pre-install`) on the Job are the standard fix, but they interact badly with `helm upgrade --atomic` if not configured carefully.
+These invariants are enforced by gates that are easy to satisfy ACCIDENTALLY-WRONG during a refactor: e.g. moving a `Resource.X` enum member to a different file can keep mypy/ruff green while breaking the byte-parity test if the frontend mirror isn't touched in the same commit; renaming a variable that happens to hold a `template_id` literal turns a compliant call into a non-literal one that the AST walker should reject — but only if the walker itself wasn't also "simplified" in the same pass, in which case it silently stops catching anything.
 
 **How to avoid:**
-1. Declare the migrate Job as a Helm pre-install + pre-upgrade hook: `"helm.sh/hook": pre-install,pre-upgrade` and `"helm.sh/hook-weight": "-5"`. Helm will wait for the Job to complete before deploying the rest of the chart.
-2. Alternatively, use an `initContainer` on the API pod that runs `alembic upgrade head` — but this has a downside: every pod restart re-runs migrations (safe because Alembic is idempotent, but slower startup).
-3. Helm hook approach is preferred: single migration execution, clear separation, does not add startup latency to the API on every restart.
-4. Add `"helm.sh/hook-delete-policy": before-hook-creation` so the Job is cleaned up before the next deploy creates a new one (avoids Job name collision).
-5. Set `activeDeadlineSeconds` on the Job (e.g., 300) so a stuck migration does not block helm forever.
-6. In the `alembic.ini` / `env.py`, set `connection_retries` or wrap the `run_migrations_online` in a retry loop for the DB connection (k3s may take a few seconds to provision the Postgres service endpoint on first install).
+- Before touching ANY file in `app/shared/rbac* ` / `can.ts` / `registry.ts` / anything importing `LOCKED_AUDIT_EVENTS` or `LOCKED_EMAIL_TEMPLATES` / `openapi.json` / `schema.d.ts` / `.importlinter` / `eslint.config.js`'s restricted-paths rules: run the FULL corresponding gate BEFORE and AFTER the change, not just at milestone-end. These are cheap, fast, local checks per this project's own tooling constraint ("архитектурные правила должны быть выполнимы локально") — there is no excuse to defer running them per-commit.
+- Any change to a LOCKED enum/frozenset/contract requires a corresponding same-commit update to its parity mirror (frontend `can.ts` for RBAC, `schema.d.ts` regen for OpenAPI) — never split across commits, because a partial state is exactly what a later "cleanup" pass might misinterpret as the new steady state.
+- Negative-test fixtures (the illegal-import / API-mode-leak / raw-palette / RBAC-drift fixtures) must be re-run after ANY change to the gate/rule code itself, to prove the gate STILL fails on the bad input — "the linter passes" is not proof the linter still works if the linter itself was touched.
+- Treat every one of these gates as a phase-exit checklist item, not just a CI checkbox: a human (or reviewing agent) explicitly confirms "I ran gate X against before/after" for any phase that touched adjacent code, even if the diff looks unrelated.
 
 **Warning signs:**
-- API pod logs show `column "X" of relation "Y" does not exist` within the first 30 seconds of deployment.
-- Helm upgrade hangs at `Waiting for hook to complete`.
-- `kubectl get jobs` shows migrate Job in `Active` state for longer than 60 seconds.
+- A diff touches an enum, frozenset, or `can.ts`/`registry.ts` file but the corresponding parity/drift/AST-gate test file has zero changes in the same commit.
+- CI green but the specific negative-test fixture (`raw-palette.tsx`, `api-mode-leak.ts`, `features/illegal-mock-import.ts`) wasn't re-verified to still trip its rule after a lint-config touch.
+- A "simplification" of an AST-walking gate (e.g., "let's make this walker also accept f-strings for convenience") — treat any change to the gate's own logic as maximally high-risk, requiring its own dedicated review.
 
-**Phase to address:**
-K8s manifests / Helm phase (Job + hook ordering); Containerization phase (Dockerfile CMD does NOT run migrations — migrate is a separate image CMD).
+**Phase to address:** Every fix/hygiene phase that touches RBAC, audit events, email templates, the OpenAPI contract, import-linter config, or ESLint config must run the specific named gate + its negative fixtures as an explicit phase-exit criterion — this is not delegable to "the milestone's final gate run."
 
 ---
 
-### Pitfall 5: Redis data loss on restart — sessions, ARQ queue, WebSocket pub/sub lost
+### Pitfall 6: Verification-honesty erosion — fabricated, assumed, or silently-skipped evidence
 
 **What goes wrong:**
-Redis 7 by default uses RDB snapshots with a save interval (e.g., `save 900 1, save 300 10, save 60 10000`). Between snapshots, data in RAM is not durable. A pod eviction, OOMKill, or node reboot loses up to `save_interval` seconds of data. For clubcore this means: all active JWT sessions logged out, all rate-limit counters reset, all idempotency keys lost (replay window opens), ARQ job queue emptied (in-flight tasks lost, cron locks gone), and the Redis pub/sub channel for WebSocket chat fan-out torn down (connected clients need to reconnect).
+Under time pressure, a "verified" registry item was actually just re-read (not re-run); an operator-pending item quietly gets marked `done`; browser UAT covers only the happy path and the registry item gets closed anyway; a k3d-local check stands in for something that was supposed to be operator-verified in a real cluster.
 
 **Why it happens:**
-Redis defaults are optimized for cache use, not durable queues. In a k8s pod, the PVC for Redis is a separate concern from the in-memory state; if the pod is killed ungracefully (OOMKill), data between the last RDB snapshot and the kill is gone.
+This is a genuinely hard discipline to maintain across dozens of registry items, and this project has ALREADY needed an explicit decision to prevent it (D-V40-LOCAL-VALIDATE, "no fabricated evidence," directly following the D-67-03 precedent). The milestone inherits that discipline by design — but inheriting a decision is not the same as an enforced mechanism; without a mechanism it degrades under registry-item volume and phase-count pressure exactly like it would have without the decision at all.
 
-**How to avoid:**
-1. Enable AOF persistence: `appendonly yes`, `appendfsync everysec` in the Redis ConfigMap. This reduces data loss to ~1 second in the worst case.
-2. Mount a PVC for Redis (`/data`). Use `local-path-provisioner` with node affinity (same caution as Postgres — Pitfall 1).
-3. Set `maxmemory` in the ConfigMap to ~75% of the pod's memory limit, and `maxmemory-policy: allkeys-lru`. WITHOUT `maxmemory`, Redis will grow until the pod hits its memory limit and is OOMKilled — which triggers the data loss scenario. With `allkeys-lru`, Redis evicts least-recently-used keys under pressure rather than crashing. NOTE: ARQ job queue keys should ideally not be evicted; if the queue is critical, use `maxmemory-policy: volatile-lru` with TTLs only on cache keys, and no TTL on queue keys.
-4. Set `save ""` in the ConfigMap to DISABLE RDB snapshots (to avoid a snapshot blocking the event loop) and rely solely on AOF.
-5. Set `terminationGracePeriodSeconds: 30` on the Redis pod so it has time to flush AOF on SIGTERM.
-6. Set resource limits with enough headroom: if the pod's memory limit equals the Redis dataset size, OOMKill is guaranteed.
+**How to keep the registry honest (concrete, checkable):**
+- **Every registry item's `fixed+verified` status must cite the EXACT evidence**: a command that was run + its actual output (or output file path), not a prose claim. "Verified via browser UAT" is not sufficient; "browser UAT screenshot at `.planning/evidence/DEFECT-041.png`, chrome-devtools console clean, checked with client `X` who has membership status=`frozen`" is.
+- **Distinguish three states explicitly, never collapse them**: `fixed+verified` (evidence attached and re-checkable), `fixed+unverified` (code changed, but proof is missing/incomplete — NOT allowed to be the milestone's final state for any item that isn't explicitly deferred), and `deferred` (not fixed, with an explicit reason — hardware/credentials/out-of-scope). A registry item cannot silently move from "operator-pending" to "done" — that transition requires the SAME evidence bar as any other `fixed+verified` item, and if the blocking factor (hardware/creds) is unchanged, the transition is illegitimate and should be flagged by review.
+- **Carry forward the v4.0 operator-pending boundary as an immutable list**: the 23 items (including the two HARD GATES — SEC-02 off-node sealed-secrets RSA-key backup, BAK-03 verified restore round-trip) do not get silently resolved by a k3d-only re-run in v4.1. If v4.1's k3d work touches BAK-03 (verified restore round-trip IN k3d), it must be recorded as a DISTINCT, narrower claim ("k3d-local restore round-trip verified") — not as closing the original v4.0 item, which specifically required real infrastructure. See Pitfall 12.
+- **Items that require unavailable hardware/credentials are recorded, never dropped**: each such item stays in the registry with status `deferred: operator-pending`, an explicit trigger condition for re-evaluation (mirroring this project's own `N/A-until-production` pattern used repeatedly for ЮKassa-live-leg and RU email deliverability), and a pointer to exactly what would need to change (real node/hardware, live YooKassa production credentials, RSA off-node storage target) for it to become actionable. It is never silently removed from the registry, and it is never marked `fixed` because the surrounding code was touched.
+- **Browser UAT explicitly must NOT be happy-path-only** — see Pitfall 8 for the concrete data-state matrix this requires; a registry item closed on UAT evidence must record which specific data states were exercised, not just "clicked through and it worked."
+- **A second-pass spot-audit**: before the milestone's final gate, sample a subset of `fixed+verified` items and independently re-run their cited evidence command; any that fail to reproduce get reopened. This catches drift between "evidence was true when written" and "evidence quietly stopped being true."
 
 **Warning signs:**
-- After pod restart, all staff are logged out simultaneously (session keys gone).
-- ARQ cron jobs that should have fired at 06:05 MSK did not fire (queue empty after restart).
-- WebSocket chat clients all disconnect simultaneously and cannot reconnect immediately (pub/sub channels torn down).
-- Redis logs show `BGSAVE` taking >1 second (sign that the dataset is too large for the RDB snapshot interval).
+- A registry item's evidence field is prose without a command/output/screenshot reference.
+- An operator-pending item flips to `done` without any new capability (hardware/creds) having become available.
+- Multiple registry items closed in a short window all cite the identical generic evidence line (copy-paste "verified in browser").
+- No registry items are in the `deferred` state at milestone close — for a system with 23 pre-existing operator-pending items plus real hardware/credential gaps, an all-`fixed+verified` result is itself a red flag, not a success signal.
 
-**Phase to address:**
-K8s manifests / Helm phase (Redis StatefulSet + ConfigMap + PVC); Monitoring phase (alert on `redis_connected_clients` drop to 0).
+**Phase to address:** The audit phase defines the registry schema (including the mandatory evidence field and the three-state model) before any fix phase starts. Every fix phase is gated on filling that field correctly, and the closing phase runs the spot-audit re-run before declaring done-bar met.
 
 ---
 
-### Pitfall 6: Sealed Secrets controller key loss with no git remote
+## Domain-Specific Deep Dives
+
+### Pitfall 7: Missing Zod-vs-wire divergence instances because the hunt used well-formed test data
 
 **What goes wrong:**
-Sealed Secrets encrypts k8s Secrets against the controller's RSA key pair stored in a k8s Secret in the `kube-system` namespace. If the k3s cluster is rebuilt (node reinstalled, cluster reset), the controller generates a NEW key pair. All existing SealedSecret objects in the repo become permanently undecryptable — the controller cannot unseal them with the new key. Since this project has no git remote and no off-node backup of the key, the controller key exists only on the node. Node failure + cluster rebuild = all secrets permanently lost.
+The team re-runs the exact bug class that bit this project twice (v3.0/v3.1) but still misses instances of it, because the "live backend" they tested against was seeded with clean, complete, non-edge-case data — the same blind spot that let mock-based unit tests pass before.
+
+**Why this specifically happens here, concretely:**
+- **Seeded data is well-formed by construction.** This project's seeds (`faker.seed(42)`, migration-seeded fixtures like `FIT15`, plan seeds, referral bonus seed values) were written to demonstrate the happy path, not to stress schema edges. A client with every optional field populated, a membership mid-lifecycle with no freeze history, a trainer with a bio/photo already set — none of these will surface a `nullable` field the FE Zod schema declared as required, because the field is never actually null in the seed.
+- **Nullable-only-in-production fields**: fields that are `Optional[X] = None` in the SQLAlchemy model but were always populated during backend development/testing (e.g., a trainer never given a bio in dev, `previous_membership_id` only null for a membership with no renewal chain, `actor_user_id` intentionally NULL for bot-created bookings/audit rows per D-40-05) will pass a naive smoke test and only break for a REAL member who happens to lack that field.
+- **Empty-state vs populated-state**: a client with zero visits, zero bookings, zero notifications, zero loyalty-ledger entries, an EMPTY promo/referral history — screens that branch on "empty" vs "has items" (dashboards, history tabs, the newbie-vs-active Home state) are exactly where an FE Zod schema's assumption about array-vs-null, or a computed aggregate's assumption about "at least one row," breaks. This project's own `membershipState: active|newbie|lapsed` branching is a documented example of a state that must be independently exercised.
+- **Pagination envelopes**: this project's own convention is `{ items, total, page, pageSize }` for every list endpoint — but the FIRST page of a small seeded dataset, or a dataset with exactly one page, will never exercise `total > pageSize`, an empty subsequent page, or a `page` beyond `total/pageSize`. A Zod schema for the envelope that's subtly wrong (e.g., assumes `total` is always ≥ `items.length`) won't be caught without a dataset large enough to force multi-page traversal.
+- **Error-shape divergence**: this project's error envelope is `DomainError { code, message, fields? }` server-side, and a `RequestValidationError` handler was specifically built (v1.11 Phase 64 WR-02) to normalize 422s into that shape — but 403/404/409/500 paths, rate-limit responses, and anti-oracle constant-time-floor responses (deliberately identical-looking across branches, e.g. OTP/password-reset) are all DIFFERENT code paths that each need their OWN Zod-vs-wire check; testing only the 200-success shape (or only one error family) leaves the others unchecked. Reception-403 enumeration is a documented existing pattern (121/121 test count referenced in v1.9) — the hunt for THIS milestone should reuse that discipline for the client-side error paths too, which don't have the same enumeration history.
+- **Money/date edge values**: kopecks at zero, at a DST-boundary date (Europe/Moscow spring/fall transition), a membership `end_date` inclusive-boundary edge, a freeze period still open (`ended_at IS NULL`) — these are exactly the values this project's own domain conventions flag as hazardous (see CLAUDE.md "Never `new Date(dateOnlyString)`"), and exactly the values absent from a clean demo dataset.
+
+**Test-data conditions that must be arranged for the hunt to be meaningful (concrete, checkable):**
+1. A seeded dataset that includes, for EVERY entity the FE renders: at least one row with each nullable field actually NULL, at least one row with each optional field populated, and at least one row at each documented lifecycle state (membership: active/frozen/expired/renewed-chain; booking: confirmed/cancelled/no_show/completed; payment: succeeded/canceled/refunded-partial/refunded-full; fiscal receipt: sent/succeeded/failed).
+2. At least one client with EMPTY history for every list-typed resource (zero visits, zero bookings, zero payments, zero notifications, zero loyalty entries, zero referrals) AND at least one client with enough rows to force pagination past page 1.
+3. At least one trainer/plan/entity with every OPTIONAL/additive field (bio, specialization, photo_url, freeze_days_limit, autopay fields, notif_prefs) left unset, to catch a Zod schema that wrongly assumes presence.
+4. At least one request per domain that deliberately triggers each error family (422 validation, 403 RBAC, 404 not-found/IDOR-collapse, 409 conflict/race, 429 rate-limit, and the anti-oracle-constant-response paths) — checked against the FE's error-parsing code, not just the success path.
+5. At least one date/money edge case per domain: a membership with `end_date` on today (inclusive-boundary), an event timestamp crossing the Europe/Moscow DST transition, a zero-kopeck discount, a fully-redeemed loyalty balance.
+6. This dataset must be run through BOTH admin and client frontends against the REAL backend (not mocks) — per this project's own established lesson, only browser UAT against live data catches this class; a re-run of existing seeded demo data is not new evidence, since it already passed before with the same blind spots.
+
+**Warning signs:**
+- The UAT dataset used for this milestone is the SAME seed used in previous milestones' demo/dev environments (i.e., no new edge-case seed was authored).
+- Registry items for "Zod↔wire divergence" cluster only around domains that were recently built (v2.4+) and none are found in older, more mature domains — suggests the hunt didn't cover the full surface, or the newer domains are being over-scrutinized while older ones (which have had MORE time to drift from backend changes) are under-scrutinized.
+- No registry items reference pagination, empty-state, or error-shape at all — a hunt that only found "wrong field name" bugs and none of these categories likely didn't construct the right data conditions.
+
+**Phase to address:** Audit phase — specifically, before browser UAT begins, an explicit "seed the edge-case dataset" task must exist and be checked off, separate from and prior to the UAT walkthrough itself. This is the single highest-leverage prevention: it must happen BEFORE the hunt, not be discovered as a gap during it.
+
+---
+
+### Pitfall 8: Missing route-reachability bugs (wired-but-unreachable screens)
+
+**What goes wrong:**
+A screen is fully wired to the real backend, has passing unit tests, yet a real user can never reach it because `router.tsx` still renders the `ComingSoon` placeholder for that route and/or `nav-items.ts` has no entry pointing to it — the exact documented FND-04 lesson from this project's own history (bit multiple prior milestones: v2.4's D-71-09 placeholder-graduation lesson recurred across phases 86/87/88 despite being "caught" the first time).
 
 **Why it happens:**
-Sealed Secrets is designed for GitOps where you push SealedSecrets to a remote repo and the controller key is backed up separately. Without a git remote and without an explicit controller key backup, the key lives only in the cluster's etcd (k3s SQLite/etcd backend), which lives on the node.
+Wiring a screen (hooks, API calls, Zod schema, component tree) and making it REACHABLE (router entry + nav entry) are two distinct, decoupled steps, and only the first one has automated test coverage (component tests render the screen directly, bypassing the router). It is easy to verify "the screen works" in isolation and never verify "a user can navigate to it."
 
-**How to avoid:**
-1. After installing the Sealed Secrets controller, immediately export the controller key: `kubectl get secret -n kube-system -l sealedsecrets.bitnami.com/sealed-secrets-key -o yaml > .private/sealed-secrets-controller-key.yaml`. Store this file OFF-NODE (external drive, second PC — the existing backup method is copying the repo to another PC; add this file to that backup).
-2. Document the restore procedure: `kubectl apply -f .private/sealed-secrets-controller-key.yaml` before reinstalling the controller. If the old key is present at controller startup, it uses it instead of generating a new one.
-3. ALTERNATIVE: Use SOPS + age instead of Sealed Secrets. The age private key is a single file that is easier to back up and is independent of the cluster. The age key goes into the same off-node backup. SOPS-encrypted files are decryptable on any machine with the age key, without a running cluster — useful for disaster recovery.
-4. NEVER commit the age private key or the Sealed Secrets controller key to the git repo. Put them in `.gitignore` and the off-node backup.
-5. Test the full unseal round-trip during local validation: destroy the kind cluster, restore the controller key, re-create the cluster, verify all SealedSecrets decrypt successfully.
+**How to avoid (concrete, checkable):**
+- Every registry item of the form "wire screen X" must have TWO separate acceptance checks: (a) component/contract test passes, (b) an explicit reachability check — starting from the app's root nav, click/navigate through the real UI (not a direct URL hit) and confirm the screen renders, for BOTH `apps/admin` and `apps/client`.
+- A dedicated, mechanical reachability SWEEP (not spot-checks) as its own audit-phase task: enumerate every route in `router.tsx` and every entry in `nav-items.ts` for both frontends, cross-reference them, and flag: (i) any route still pointing at `ComingSoon`/lazy-placeholder that has a real backend endpoint wired behind it, (ii) any route with no nav entry at all, (iii) any nav entry pointing at a route that doesn't exist or errors.
+- Treat this sweep as a GREP-able, scriptable check (diff route list vs nav list vs "has real API calls" list) rather than a manual click-through alone — manual UAT should CONFIRM the sweep's findings in the browser, not be the only method of finding them, since manual click-through is exactly what missed this class of bug repeatedly before.
 
 **Warning signs:**
-- `kubectl get sealedsecrets -A` shows `Error decrypting key` events.
-- Application pods crash with missing environment variables (secret mount fails silently or with `CreateContainerConfigError`).
-- Sealed Secrets controller logs: `no key could decrypt secret`.
+- A registry item's evidence is "component test passes" with no navigation-from-root screenshot/log.
+- `router.tsx` and `nav-items.ts` are not both listed as reviewed files in the audit phase's file list.
+- Any screen graduated in v2.4+ is not re-checked in this sweep (this project's own history shows the SAME class of bug recurring across MULTIPLE already-graduated screens, so "it was fixed once" is not sufficient evidence it's still fixed after intervening changes).
 
-**Phase to address:**
-Security phase (secrets management + controller key backup procedure); Documentation phase (runbook must include "before cluster rebuild, backup the controller key").
+**Phase to address:** Audit phase (mechanical reachability sweep as a standing, scripted check, separate from the Zod/wire browser-UAT pass) — should run BEFORE or alongside the schema-divergence hunt, since both need the same "walk the real app from nav" discipline.
 
 ---
 
-### Pitfall 7: k3s Traefik ingress quirks — WebSocket, TLS cert-manager rate limits, and HTTP-to-HTTPS redirect loops
-
-**What goes wrong (three sub-traps):**
-
-**7a. WebSocket through Traefik requires explicit annotation.**
-The FastAPI WebSocket endpoint for chat (`/api/v1/ws/chat/{thread_id}`) requires HTTP Upgrade. Traefik does NOT proxy WebSocket connections by default on IngressRoutes without the proper configuration. Connections silently upgrade then immediately close, appearing as a 400 or 101 followed by 0 bytes.
-
-**7b. Let's Encrypt production rate limits — use staging first.**
-If you point cert-manager's ClusterIssuer directly at `acme.lets-encrypt.org` (production), you get 5 failed validation attempts per hostname per hour before a 1-hour lockout, and 50 certificates per registered domain per week. During iterative local validation where you destroy and recreate the cluster repeatedly, you will hit the rate limit on the first real-hostname attempt. A staging cert (`acme-staging-v02.api.letsencrypt.org`) does not have this limit but produces a self-signed-CA cert (not trusted by browsers). For local validation use staging or a self-signed CA; switch to production only on the final live deploy.
-
-**7c. HTTP to HTTPS redirect loops with TLS termination at ingress.**
-If the ingress terminates TLS and also has a redirect middleware that redirects HTTP to HTTPS, AND the backend also redirects HTTP to HTTPS (e.g., `FORWARDED_ALLOW_IPS` not set, so FastAPI/uvicorn sees HTTP and redirects again), clients get an infinite redirect loop.
-
-**How to avoid:**
-1. For WebSocket: configure the IngressRoute with a dedicated route for `/api/v1/ws/` using the websocket service port. Test with `wscat` through the ingress during local validation.
-2. For TLS: use a staging ClusterIssuer for all local and iterative testing. Only switch to production issuer on the operator-pending live deploy step.
-3. For redirect loops: set `FORWARDED_ALLOW_IPS=*` (or the cluster CIDR) in the backend ConfigMap so uvicorn respects the `X-Forwarded-Proto: https` header from Traefik and does not issue its own redirect.
-4. Know that k3s Traefik is v2.x (not nginx-ingress) — `nginx.ingress.kubernetes.io/*` annotations are silently ignored. All Traefik-specific annotations use the `traefik.ingress.kubernetes.io/*` prefix.
-
-**Warning signs:**
-- WebSocket connections drop immediately with `101 Switching Protocols` followed by connection close in browser devtools.
-- `kubectl describe certificate` shows `Issuing` state for >5 minutes.
-- cert-manager logs: `429 Too Many Requests` from Let's Encrypt.
-- Browser shows `ERR_TOO_MANY_REDIRECTS`.
-
-**Phase to address:**
-Networking phase (Traefik ingress configuration + WebSocket annotation + TLS staging/production split); Documentation phase (operator-pending: switch to LE production issuer).
-
----
-
-### Pitfall 8: NetworkPolicy denying CoreDNS — pod DNS resolution fails silently
+### Pitfall 9: k3d-local infra verification is mistaken for production-equivalent proof
 
 **What goes wrong:**
-When you apply a `deny-all` default NetworkPolicy and then add allow rules for specific traffic, it is easy to forget to allow egress from application pods to CoreDNS (`kube-system` namespace, port 53 UDP/TCP). The result: all DNS lookups inside the pod fail with `NXDOMAIN` or timeout. Python's `asyncpg` and `httpx` and `python-telegram-bot` all use DNS resolution for their connection strings. The application starts, logs no DNS error, but every outbound connection eventually times out because the hostname never resolves. This is particularly insidious because pods APPEAR healthy (liveness probe against `localhost:8000/healthz` passes), but all real traffic fails.
+A "verified restore round-trip in k3d" or "k3d apply succeeded" gets treated, implicitly or explicitly, as equivalent to the still-open v4.0 HARD GATES (SEC-02 off-node key backup, BAK-03 verified restore round-trip) — even though those gates were specifically scoped to REAL hardware and were left open BY DESIGN (D-V40-LOCAL-VALIDATE).
 
-**Why it happens:**
-NetworkPolicy is additive-deny: if a policy selects a pod, ALL traffic not explicitly allowed is dropped. CoreDNS lives in `kube-system` and must be explicitly allowed in egress rules. Prometheus scraping requires ingress from the `monitoring` namespace. These are the most commonly forgotten allow rules.
+**What k3d does NOT prove, specifically:**
+- **Node failure / hardware loss**: k3d runs all "nodes" as containers on ONE host's Docker daemon. It cannot demonstrate what happens when an actual physical/VM node is lost, rebooted with different kernel/cgroup config, or has disk pressure independent from the host machine's disk. A "restore round-trip" in k3d proves the BACKUP JOB LOGIC and the RESTORE JOB LOGIC are correct — it does NOT prove the backup is retrievable when the ORIGINAL cluster (and the host machine's Docker state) is gone, which is the actual disaster scenario BAK-03 exists to cover.
+- **Off-node secret custody (SEC-02)**: the entire point of "off-node" is that the sealed-secrets RSA private key is stored somewhere OTHER than the cluster/host that could be destroyed together. A k3d environment, by construction, has no real "off-node" — any storage target reachable from the same dev machine is not an independent failure domain. Local validation can prove "the backup command runs and produces a file"; it cannot prove "that file is actually recoverable when this laptop/host is unavailable."
+- **Network topology and real ingress**: Traefik/cert-manager/NetworkPolicies behavior in k3d (single-host, often host-networking or simplified CNI) does not exercise multi-node pod-to-pod network policy enforcement, real DNS resolution, real TLS cert issuance against a public ACME endpoint (only staging/self-signed locally), or real firewall/router rules between nodes.
+- **Storage durability**: SeaweedFS/CNPG/Redis persistence in k3d typically sits on the same physical disk as the host — it does not prove durability against physical disk failure, real replication across separate physical storage, or performance/IO characteristics of the intended production storage medium.
+- **Scale/load characteristics**: resource limits, HPA behavior, and realistic CPU/memory contention under actual traffic are not exercised by a single-host k3d smoke test.
+- **Time/clock and long-running behavior**: cron reliability across REAL node reboots, kubelet restarts, or multi-day uptime is not exercised by a short-lived k3d session.
 
-**How to avoid:**
-1. Add a standard egress rule to ALL application pod NetworkPolicies: `to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}, podSelector: {matchLabels: {k8s-app: kube-dns}}}], ports: [{protocol: UDP, port: 53}, {protocol: TCP, port: 53}]`.
-2. Add a Prometheus scrape ingress rule: `from: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}}], ports: [{port: 8000}]`.
-3. Add inter-pod egress rules: backend to postgres, backend to redis, arq-worker to redis, arq-worker to postgres, telegram-bot to redis, telegram-bot to postgres. Be explicit about namespaces and pod selectors.
-4. Test NetworkPolicies with `kubectl exec <pod> -- nslookup postgres-svc` and `kubectl exec <pod> -- curl http://redis-svc:6379` before declaring networking done.
-5. Apply NetworkPolicies LAST in the phase, after all services are confirmed reachable without them.
-
-**Warning signs:**
-- Pod logs show connection timeouts to Postgres/Redis hostnames (not refused — timeout means DNS failed, not the service).
-- `kubectl exec <pod> -- nslookup google.com` hangs.
-- Python stack traces show `asyncio.TimeoutError` or `getaddrinfo failed` on DB connection strings.
-- Prometheus shows no targets in the scrape pool for clubcore pods.
-
-**Phase to address:**
-Networking phase (NetworkPolicy authoring); must include a DNS-resolution smoke test in the local validation checklist.
-
----
-
-### Pitfall 9: Image pitfalls — non-root + filesystem writes, missing tzdata, uv/venv path, :latest tags
-
-**What goes wrong (four sub-traps):**
-
-**9a. Non-root user + filesystem writes.**
-The existing Dockerfile creates a non-root `app` user (UID typically ~999). If any code path writes to a path outside `/app` or `/tmp` (e.g., a temp file written to `/var/`, a log file to `/etc/`), it will fail with `Permission denied` in the container but work fine in `docker compose` where the image ran as root. The migrate job runs `alembic upgrade head` — Alembic writes `alembic/versions/__pycache__` at import time; if the `/app/alembic` directory is owned by root in the builder stage and not re-chowned in the runtime stage, the migrate container will crash.
-
-The current Dockerfile uses `COPY --from=builder --chown=app:app /app /app` which chowns ALL of `/app` including `/app/alembic` — this is correct. Verify this chown is not dropped in a future Dockerfile edit.
-
-**9b. Missing tzdata.**
-`python:3.12-slim-bookworm` does NOT include `tzdata`. The cron jobs use `TZ=UTC` container environment and Python's `ZoneInfo("Europe/Moscow")`. `ZoneInfo` on Python 3.9+ with `tzdata` PyPI package works without system `tzdata`. Verify the `pyproject.toml` includes `tzdata` as a dependency, or install it in the Dockerfile. If absent, `ZoneInfo("Europe/Moscow")` raises `ZoneInfoNotFoundError` at runtime — but only when the code path that constructs the zone object is first called, not at import time. This means the bug appears at 03:05 UTC when `expire_memberships` fires for the first time, not at startup.
-
-**9c. uv/venv PATH.**
-The existing Dockerfile correctly sets `ENV PATH="/app/.venv/bin:$PATH"`. If this ENV line is missing from the runtime stage (e.g., copied from a different template), `python` and `uvicorn` and `alembic` resolve to the system Python which does not have the project dependencies installed. The pod starts but immediately exits with `ModuleNotFoundError`.
-
-**9d. :latest tags.**
-Using `image: clubcore-backend:latest` in Helm values means every `helm upgrade` pulls whatever is currently tagged `latest` in the local image registry. In the no-registry LOCAL setup (Makefile build + `k3s ctr images import`), `:latest` is safe because you control the tag. The risk is using `:latest` in a future registry-backed setup where a different image gets tagged `latest` accidentally. Use explicit version tags (git SHA or semver) from day one.
-
-**How to avoid:**
-1. Verify `COPY --from=builder --chown=app:app /app /app` covers all directories the non-root user needs to write to at runtime.
-2. Add `tzdata` to `pyproject.toml` dependencies (or verify it is already present).
-3. Smoke-test the image with `docker run --user app clubcore-backend python -c "from zoneinfo import ZoneInfo; ZoneInfo('Europe/Moscow')"` before deploying.
-4. Use git-SHA tags for all images from day one: `image: clubcore-backend:$(git rev-parse --short HEAD)`.
-5. Pin base images by digest in the Dockerfile: `FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim@sha256:<digest> AS builder`.
+**What must be EXPLICITLY recorded as still-unproven (not silently implied as covered):**
+- Any v4.1 registry item that closes a k3d-local check must be labeled with the narrower claim it actually supports, e.g. "BAK-03 (k3d-scope): restore round-trip verified in k3d — does NOT satisfy the original v4.0 BAK-03 hard gate, which requires a real-node round-trip." The original v4.0 gate stays open in the registry, unchanged, referencing the SAME evidence bar it always had.
+- SEC-02 (off-node RSA key backup) cannot be meaningfully advanced by k3d work at all if there is no genuinely separate storage target being exercised — if v4.1 does attempt a "test storage" off-node backup, the registry item should specify exactly what "test storage" means (is it actually a separate physical/account boundary, or just a different directory on the same machine?) and flag the latter as insufficient evidence for the real gate.
+- The v4.0 23-item operator-pending boundary (`infra/runbooks/production.md`) must be carried into v4.1's DEFECT registry as an explicit, unmodified reference — v4.1 should ADD narrower k3d-scoped findings alongside it, never edit/close the original items based on k3d evidence alone.
 
 **Warning signs:**
-- Migrate pod exits immediately with `ModuleNotFoundError: No module named 'alembic'`.
-- ARQ worker crashes at 03:05 UTC with `ZoneInfoNotFoundError`.
-- `kubectl exec <pod> -- id` shows UID 0 (image running as root unexpectedly — means USER directive was dropped).
+- Milestone-close language says "BAK-03 verified" or "SEC-02 closed" without a `(k3d-scope)` / `(local-only)` qualifier.
+- The "off-node" storage target used for a SEC-02 test is on the same host/account as the cluster being backed up.
+- Any claim that k3d work "resolves" or "closes" a HARD GATE from v4.0, rather than "advances local-provable groundwork for" it.
 
-**Phase to address:**
-Containerization phase (Dockerfile hardening + tzdata + chown audit); K8s manifests phase (image tag convention).
-
----
-
-### Pitfall 10: PWA service worker caching /api/* + nginx SPA fallback missing
-
-**What goes wrong:**
-`apps/client-pwa` has a service worker (`gym-v3`) that caches assets. If the nginx serving the PWA sets `Cache-Control: max-age=86400` on ALL paths (a common nginx static-site pattern), and if the service worker's fetch handler does not explicitly exclude `/api/*`, the SW will cache API responses and serve stale data to clients. More concretely: if someone accidentally adds `/api/v1/...` to the precache manifest, users see stale membership data offline. The existing SW comment says "SW (`gym-v3`) never caches `/api/*`" — but this depends on the nginx configuration not sending a Cache-Control header that confuses the SW, AND on the SW code being preserved correctly in the production build.
-
-The nginx SPA fallback pattern `try_files $uri $uri/ /index.html` is required for client-side routing (TanStack Router). Without it, direct navigation to `/plans` returns 404 from nginx.
-
-**How to avoid:**
-1. nginx server block for the PWA must include: `location /api/ { proxy_pass http://backend-svc:8000; }` (requests to `/api/*` must be proxied to the backend, not served from static files).
-2. nginx config must NOT set `Cache-Control` headers on the service worker file itself (`/sw.js`, `/gym-v3.js`): `location ~* sw\.js$ { add_header Cache-Control "no-cache"; }` for the SW entry point; immutable cache is fine for hashed assets (`/assets/*.js`).
-3. The `try_files $uri $uri/ /index.html` rule must be in BOTH the admin-app nginx block AND the client-pwa nginx block.
-4. Verify during local validation with a browser `Application > Service Workers > Offline` toggle that `/api/*` requests are NOT served from cache.
-5. Add a `Cache-Control: no-store` header on all `/api/*` responses from the FastAPI backend.
-
-**Warning signs:**
-- Direct navigation to `/plans` returns 404 instead of the SPA.
-- After a deploy, users still see old data (SW served a cached API response).
-- Service worker shows `api/v1/...` in `Cache Storage` in devtools.
-
-**Phase to address:**
-Containerization phase (nginx config for frontend images); local validation must include a browser smoke test for SPA routing and service worker behavior.
-
----
-
-### Pitfall 11: Resource limits, OOMKill, and slow-starting pods killed by liveness probes
-
-**What goes wrong (two sub-traps):**
-
-**11a. OOMKill from no memory limit or wrong limit.**
-Without `resources.limits.memory`, a pod can grow unboundedly and trigger the node's OOM killer — the entire node may kill processes rather than just the pod. Postgres without `shared_buffers` tuning will try to use 25% of system RAM; in a container with a 512Mi limit and `shared_buffers=128MB`, this is fine; without a limit, Postgres grows to exhaust the node. Redis without `maxmemory` (see Pitfall 5) will OOMKill itself.
-
-**11b. Liveness probes killing pods during slow startup.**
-The backend API boots by: importing all Python modules (slow on first start, ~3-5 seconds with ~70 Alembic migrations in metadata), running lifespan managers for Redis and database, registering all protocol slots. If `initialDelaySeconds` on the liveness probe is too short, the probe fires before the app is ready, the pod is killed, restarted, killed again — crash loop. A `startupProbe` with a generous `failureThreshold` (e.g., 30 attempts x 5 second period = 150 seconds) is the correct pattern: the startup probe runs until success, then liveness/readiness take over.
-
-**How to avoid:**
-1. Set `resources.requests` and `resources.limits` on every pod. Suggested starting values (tune after observing actual usage via Prometheus):
-   - `backend`: requests `cpu: 100m, memory: 256Mi`, limits `cpu: 500m, memory: 512Mi`
-   - `arq-worker`: requests `cpu: 50m, memory: 128Mi`, limits `cpu: 300m, memory: 384Mi`
-   - `telegram-bot`: requests `cpu: 25m, memory: 128Mi`, limits `cpu: 200m, memory: 256Mi`
-   - `postgres`: requests `cpu: 200m, memory: 512Mi`, limits `cpu: 1000m, memory: 1Gi`
-   - `redis`: requests `cpu: 50m, memory: 128Mi`, limits `cpu: 200m, memory: 256Mi`
-2. Use a `startupProbe` that hits `/healthz`: `initialDelaySeconds: 5, periodSeconds: 5, failureThreshold: 30`. Only after the startup probe passes do liveness and readiness probes engage.
-3. Set Postgres `command: ["postgres", "-c", "shared_buffers=256MB", "-c", "max_connections=50"]` in the StatefulSet — the defaults are tuned for large servers, not k8s pods.
-
-**Warning signs:**
-- Pod shows `OOMKilled` in `kubectl describe pod`.
-- Pod restart count climbing in `kubectl get pods` (CrashLoopBackOff).
-- `kubectl logs <pod> --previous` shows the pod was killed mid-startup with no error — the liveness probe killed it before `uvicorn` printed its first request log.
-- `kubectl describe pod` shows `Liveness probe failed: connection refused` during the first 30 seconds.
-
-**Phase to address:**
-K8s manifests / Helm phase (resource limits + startup/liveness/readiness probes); Monitoring phase (OOMKill alert).
-
----
-
-### Pitfall 12: UTC/MSK timezone: cron fires at wrong wall-clock time, gym_date STORED column miscomputed
-
-**What goes wrong:**
-The ARQ cron jobs use UTC-based `hour=` arguments that are manually offset from MSK (e.g., `hour=3, minute=5` = 06:05 MSK = 03:05 UTC). If the deployment environment sets `TZ=Europe/Moscow` on the ARQ worker container (e.g., by copying a compose env file that has this), the cron fires 3 hours late relative to MSK. The `gym_date STORED` column is computed by Postgres using `AT TIME ZONE 'Europe/Moscow'` — if the Postgres container's timezone is changed from UTC, the STORED generated column value is wrong for rows inserted before the change. All uniqueness constraints on `gym_date` break.
-
-**Why it happens:**
-`docker-compose.yml` may have `TZ=Europe/Moscow` on some services for developer convenience. When copying env configs to k8s ConfigMaps/Secrets, TZ values are carried over.
-
-**How to avoid:**
-1. All containers MUST run `TZ=UTC`. This is the locked Phase 15 Key Decision. Verify it in every ConfigMap and every Helm values template.
-2. Set `timezone = 'UTC'` in the Postgres ConfigMap to ensure the STORED column computation is consistent.
-3. The ARQ worker `__init__.py` documents the UTC offset for every cron job. Do NOT change these offsets when deploying — they are correct as-is.
-4. Run `SELECT NOW() AT TIME ZONE 'Europe/Moscow'` inside the Postgres pod after deployment to verify the MSK wall-clock is correct.
-
-**Warning signs:**
-- `expire_memberships_complete count=0` at 03:05 UTC (correct) but also a second fire at 06:05 UTC (TZ was set to Moscow on the worker).
-- `gym_date` uniqueness violations (`duplicate key value violates unique constraint "uq_visits_client_gym_date"`) for visits inserted after a timezone change.
-
-**Phase to address:**
-K8s manifests / Helm phase (TZ=UTC in all ConfigMaps); local validation checklist must include `kubectl exec arq-worker -- env | grep TZ`.
+**Phase to address:** The locally-provable-infra fix phase (k3d apply, BAK-03/SEC-02 local legs) — every deliverable from this phase must be registered with an explicit scope qualifier, and the phase's own definition of done must include "the original v4.0 registry items remain open, unedited, with the new k3d findings referenced alongside them, not replacing them."
 
 ---
 
 ## Technical Debt Patterns
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
-|----------|-------------------|----------------|-----------------|
-| `image: :latest` in Helm values | No version management needed | Uncontrolled rollouts; rollback is `helm rollback` but you don't know what image you're rolling back to | Never — use git SHA from day one |
-| Skipping `resources.limits` | Simpler Helm values | Node-level OOMKill; Postgres eats all RAM; k3s becomes unresponsive | Never on stateful pods; only acceptable for one-off debug pods |
-| Single ClusterIssuer pointing at LE production | No staging/production distinction | Rate-limit lockout during iterative testing | Never during local validation; production only on final live deploy |
-| Skipping NetworkPolicies | Faster initial setup | Any compromised pod can reach Postgres directly | Acceptable in local validation only; must be applied before any external exposure |
-| RDB-only Redis (no AOF) | Simpler config | Up to 15 minutes of session/queue data lost on crash | Acceptable in local validation environment only |
-| Recreate strategy on ALL Deployments | Simpler than tuning RollingUpdate | Brief downtime on deploy (~10-30 seconds for backend) | Acceptable for pet project — zero-downtime is a future concern; ARQ/bot REQUIRE Recreate regardless |
-
----
-
-## Integration Gotchas
-
-| Integration | Common Mistake | Correct Approach |
-|-------------|----------------|------------------|
-| Traefik (k3s built-in) | Using `nginx.ingress.kubernetes.io/` annotations | Use `traefik.ingress.kubernetes.io/` annotations or IngressRoute CRD |
-| cert-manager + Let's Encrypt | Pointing at production ACME immediately | Use staging issuer during all iterative testing; switch to production on final live deploy only |
-| Sealed Secrets | Assuming controller key is in etcd backup | Explicitly export and back up the controller key immediately after installation |
-| ARQ + Redis | Assuming `unique=True` prevents all double-fires | `unique=True` is a per-tick Redis lock; Recreate strategy + replicas=1 is the real prevention |
-| FastAPI + Traefik TLS | uvicorn redirecting HTTP to HTTPS behind an HTTPS ingress | Set `FORWARDED_ALLOW_IPS` to trust Traefik's X-Forwarded-Proto header |
-| Alembic in k8s | Running migrations as initContainer on every pod | Use a Helm pre-install/pre-upgrade hook Job; one migration per deploy, not one per pod restart |
-| SeaweedFS/MinIO | Assuming the bucket is created on first use | Bucket bootstrap must happen in a Job or the API startup sequence; the existing `ensure_bucket` call in `main.py` handles this — verify it runs before message attachment uploads |
-
----
+|----------|-------------------|-----------------|-----------------|
+| Marking a flaky pre-existing test `xfail`/skip instead of fixing the fixture deadlock | Unblocks the suite quickly | Hides future real regressions in that area permanently | Only for the NON-blocking flakes (F821, `test_alembic_clean`) — never for the fixture-deadlock itself, which blocks verification of everything else |
+| Closing a Zod-vs-wire fix with only the happy-path contract test | Fast to write, quick registry close | Same defect class recurs (this is literally the v3.0/v3.1 failure) | Never — always pair with at least one edge-case data condition per Pitfall 7 |
+| Deleting a Protocol-slot registration because its "home" module shows no call sites | Shrinks LOC, feels like progress | Silent runtime break at composition root, only caught in k3d/prod | Never without checking `app/main.py` wiring first |
+| Bundling a dependency bump into a hardening fix "since we're touching this file anyway" | Saves a future separate effort | Reintroduces unbounded scope, breaks byte-stable/AST gates unexpectedly | Never in this milestone — explicitly out of scope |
+| Treating a k3d-green check as satisfying a v4.0 HARD GATE | Feels like real progress on a hard blocker | Fabricates evidence-adjacent confidence about production readiness | Never — always scope-qualify as `(k3d-local)` |
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Postgres PVC:** `reclaimPolicy: Retain` verified on the StorageClass — a `kubectl delete pvc` should NOT delete the underlying data directory.
-- [ ] **Redis AOF:** `kubectl exec redis -- redis-cli config get appendonly` returns `yes`.
-- [ ] **Backup restore round-trip:** A `pg_dump` has been taken, the Postgres pod has been deleted and recreated from scratch, and `pg_restore` produced a working database — not just a successful command exit.
-- [ ] **Telegram bot replicas:** `kubectl get deployment telegram-bot -o jsonpath='{.spec.replicas}'` returns `1` and `kubectl get deployment telegram-bot -o jsonpath='{.spec.strategy.type}'` returns `Recreate`.
-- [ ] **ARQ worker replicas:** Same check as above for `arq-worker`.
-- [ ] **Migrate runs before API:** Helm hook ordering verified by `helm template | grep "helm.sh/hook"` — migrate Job shows `pre-install,pre-upgrade`.
-- [ ] **DNS resolution:** `kubectl exec backend-pod -- nslookup postgres-svc` succeeds.
-- [ ] **WebSocket through ingress:** `wscat -c wss://<hostname>/api/v1/ws/chat/test` establishes connection.
-- [ ] **SPA fallback routing:** Direct navigation to `https://<hostname>/plans` (admin-app) and `https://<hostname>/book` (client-pwa) returns 200, not 404.
-- [ ] **PWA service worker:** Browser devtools > Application > Cache Storage shows NO `/api/*` entries.
-- [ ] **TZ=UTC on all pods:** `kubectl exec <each-pod> -- env | grep TZ` returns `TZ=UTC` for backend, arq-worker, telegram-bot.
-- [ ] **Sealed Secrets controller key backed up:** The key YAML file exists on the off-node backup location.
-- [ ] **Trivy scan green:** `trivy image clubcore-backend:<tag>` shows no CRITICAL vulnerabilities.
+- [ ] **Zod↔wire fix:** Often missing the edge-case data condition that would have caught the ORIGINAL bug (null field, empty list, error shape) — verify the contract test actually exercises a non-happy-path value, not just a re-run of the same seed that already passed before.
+- [ ] **Dead-code removal:** Often missing a composition-root/ARQ/migration reference check — verify via full-repo string grep (not just import-graph) before merging the deletion.
+- [ ] **Reachability fix:** Often missing the `nav-items.ts` entry even after `router.tsx` is flipped from ComingSoon — verify by navigating from the root nav in the browser, not by hitting the URL directly.
+- [ ] **RBAC/audit/email-template touch:** Often missing the same-commit frontend mirror update or AST-gate negative-fixture re-run — verify the specific gate test file changed in the same commit as the enum/frozenset.
+- [ ] **k3d infra check:** Often silently implying production-equivalence — verify the registry entry has an explicit `(k3d-scope)` qualifier and the original v4.0 item is untouched.
+- [ ] **"Fixed+verified" registry item:** Often has prose evidence instead of a re-runnable command/output — verify the evidence field names an actual artifact (log, screenshot path, test name) that a reviewer could independently re-check.
 
----
+## Recovery Strategies
 
-## What Local Validation CANNOT Catch (Operator-Pending Boundary)
-
-These items will NOT be caught by kind/k3s local validation and must be explicitly listed as operator-pending in the runbook:
-
-| Item | Why Local Validation Misses It | Operator Action Required |
-|------|-------------------------------|--------------------------|
-| Let's Encrypt TLS certificate issuance | Local validation uses staging/self-signed; LE production requires a real domain with public DNS | Switch ClusterIssuer to production ACME on live server; verify cert in browser |
-| Postgres data durability on real disk failure | kind/k3s uses a loop device or tmpfs; actual bare-metal disk failure is not simulatable | Verify `pg_dumpall` backup CronJob ran and the output file is on a different physical device from the Postgres PV |
-| Redis AOF on real power loss | kind containers don't survive real node power cycles | On live server: trust AOF + verify `aof-use-rdb-preamble yes` in the running config |
-| YooKassa webhook reachability | Local kind cluster is not internet-accessible; the webhook IP allow-list check cannot be tested end-to-end | Register real webhook URL with YooKassa dashboard; send a test payment in sandbox mode |
-| RU email deliverability (Yandex Postbox) | Local stack has no real SMTP credentials or domain | Verify SPF/DKIM/DMARC pass on a real send to yandex.ru + mail.ru (pre-existing operator-pending from v1.6) |
-| Telegram bot token in production | `SENTINEL_BOT_TOKEN` check prevents bot from starting with the placeholder token | Set real `TELEGRAM_BOT_TOKEN` in the production Secret before applying |
-| Actual node failover (PVC re-bind) | Single-node kind can't simulate node failure | Test by manually draining the node if a second node exists, or document as single-node-only risk |
-| `terraform apply` on real VM | `terraform validate` and `plan` run against a mock provider; `apply` contacts the real host | Operator runs `terraform apply` with real SSH credentials to the bare-metal server |
-| Prometheus alert delivery (Telegram/webhook) | Local Alertmanager has no real notification channel | Configure Alertmanager routes with real Telegram bot token or webhook before going live |
-| `terraform plan` greenness guarantees apply success | Plan validates schema and API calls; it does not simulate race conditions, disk space, or network failures during apply | Operator reviews plan output carefully and applies with `--auto-approve` only after manual inspection |
-
----
+| Pitfall | Recovery Cost | Recovery Steps |
+|---------|---------------|-----------------|
+| Registry keeps growing past audit-close | MEDIUM | Freeze the registry NOW as-is; any newly found item becomes v4.2 backlog unless it blocks a HARD GATE or an already-registered fix; re-communicate the scope firewall |
+| A "dead" symbol turned out to be Protocol-wired/ARQ-referenced and broke prod/k3d | MEDIUM | Revert the deletion commit specifically (isolated commits make this cheap per Pitfall 2); re-add with a comment noting the wiring location found; add the wiring location to the audit-phase checklist for future deletions |
+| Test-suite deadlock fix ballooned past budget | LOW–MEDIUM | Fall back to the documented per-module isolation workaround (Pitfall 4 item 3); log the root-cause fix as `deferred` with reason; do not let it block functional-fix phases further |
+| A registry item was marked `fixed+verified` but evidence doesn't reproduce on spot-audit | LOW | Reopen the item; do not silently re-close without NEW evidence; note the false-positive pattern so the spot-audit sampling rate increases for that category |
+| A k3d claim was mistakenly recorded as closing a v4.0 HARD GATE | LOW | Add the scope qualifier retroactively; reopen the original v4.0 registry item if it was incorrectly marked closed; this is a documentation fix, not a code fix |
 
 ## Pitfall-to-Phase Mapping
 
 | Pitfall | Prevention Phase | Verification |
-|---------|------------------|--------------|
-| Postgres node-affinity data loss (P1) | K8s manifests — StatefulSet + PVC + nodeSelector | Restore round-trip test during Backup & Recovery phase |
-| ARQ cron double-fire (P2) | K8s manifests — ARQ worker Deployment strategy=Recreate, replicas=1 | `kubectl get deployment arq-worker` shows strategy=Recreate; no duplicate cron logs in Loki |
-| Telegram double-consume (P3) | K8s manifests — telegram-bot Deployment strategy=Recreate, replicas=1 | No duplicate `/checkin` DMs in smoke test |
-| Migrate race (P4) | K8s manifests / Helm — migrate Job as pre-install hook | `helm template` shows hook annotation; API smoke test completes without `column does not exist` error |
-| Redis data loss on restart (P5) | K8s manifests — Redis ConfigMap (AOF) + PVC + maxmemory | `redis-cli config get appendonly` returns `yes` after pod restart |
-| Sealed Secrets key loss (P6) | Security phase — controller key backup procedure | Key YAML verified present on off-node backup before declaring security done |
-| k3s Traefik quirks (P7) | Networking phase — IngressRoute + WebSocket annotation + staging TLS | `wscat` test through ingress; staging cert shows in browser |
-| NetworkPolicy DNS breakage (P8) | Networking phase — CoreDNS egress rule in all pod policies | `nslookup postgres-svc` from each pod succeeds after NetworkPolicies applied |
-| Image pitfalls (P9) | Containerization phase — tzdata, chown, explicit tags | `docker run --user app` smoke test; ARQ cron fires at correct MSK time |
-| PWA SW caching /api/* (P10) | Containerization phase — nginx config for frontend images | Browser devtools Cache Storage audit; `/plans` direct navigation 200 |
-| OOMKill + liveness probes (P11) | K8s manifests / Helm — resource limits + startupProbe | `kubectl describe pod` shows no OOMKilled events; startup completes before liveness probe engages |
-| UTC/MSK timezone drift (P12) | K8s manifests — TZ=UTC in all ConfigMaps | `env | grep TZ` on all pods; cron fires at 03:05 UTC not 06:05 UTC |
-
----
+|---------|-------------------|--------------|
+| 1. Infinite refactor / scope creep | Audit phase (registry freeze) + standing rule all phases | Registry size only shrinks post-audit-close; no commit lacks a registry id |
+| 2. Mass reformatting destroys blame | Code-hygiene fix phase + commit-hygiene rule | `git blame -w` shows no mixed format+logic commits |
+| 3. Dead-code false positives | Static-audit phase (pre-flag categories) + dead-code fix phase (checklist per deletion) | Full-repo string grep + composition-root check + `alembic downgrade` + k3d cron smoke pass per deletion |
+| 4. Broken test suite trap | Early fix phase (deadlock-only, time-boxed) before/parallel to functional fixes | Suite runs to completion (or documented isolation workaround in place) before any fix is marked `fixed+verified` |
+| 5. LOCKED invariant regression | Every phase touching RBAC/audit-events/email-templates/OpenAPI/import-linter/ESLint config | Named gate + its negative-test fixture re-run, same commit as the enum/frozenset change |
+| 6. Verification-honesty erosion | Audit phase (registry schema/evidence field design) + milestone-close spot-audit | Every `fixed+verified` item has a re-runnable evidence artifact; sample re-run passes |
+| 7. Zod↔wire hunt misses instances | Audit phase, BEFORE browser UAT begins (edge-case seed authoring) | Seed dataset covers null/empty/pagination/error-shape/date-money-edge matrix, verified against a checklist |
+| 8. Route-reachability misses | Audit phase (mechanical router/nav sweep, scripted) | Scripted diff of routes vs nav entries vs "has real API" list, confirmed by root-nav browser walkthrough |
+| 9. k3d mistaken for production proof | Locally-provable-infra fix phase | Every k3d-derived registry item carries an explicit scope qualifier; original v4.0 HARD GATE items remain open and unedited |
 
 ## Sources
 
-- ARQ 0.28 codebase: unique cron lock implementation (`arq/cron.py` — `SET NX EX` dedup per job name + tick time)
-- k3s documentation: built-in Traefik v2, local-path-provisioner behavior and node affinity constraints
-- Sealed Secrets: backup/restore documentation (bitnami-labs/sealed-secrets)
-- cert-manager: Let's Encrypt rate limits documentation
-- clubcore codebase: `apps/backend/app/workers/__init__.py` (WorkerSettings, cron_jobs, unique=True, MSK UTC-offset comments, on_startup cron-resolution assertion)
-- clubcore codebase: `apps/backend/Dockerfile` (non-root app user, venv PATH, chown coverage)
-- clubcore PROJECT.md: v4.0 milestone scope, TZ=UTC locked decision (Phase 15 Key Decision), ARQ cron time offset documentation
-- Prior pitfall documentation in codebase: PITFALLS Pitfall 4 (ARQ cron no-op silent trap), PITFALL 14 (structlog contextvars leak across worker runs)
+- `.planning/PROJECT.md` — this project's own milestone history, explicitly documenting: the two-time (v3.0/v3.1) mock-vs-real schema-divergence miss caught only by browser UAT; the D-71-09/FND-04 reachability lesson recurring across v2.4 phases 86-89; the pre-existing test flakes (`test_freeze_race`, promo F821, `test_alembic_clean`) carried since at least v2.4; D-V40-LOCAL-VALIDATE and the "no fabricated evidence" precedent (D-67-03, D-72-06); the v4.0 23-item operator-pending boundary with two HARD GATES (SEC-02, BAK-03); D-62-09/D-10-HISTORY-IMMUTABLE (forward-only history, never rewrite migrations/audit trail) as precedent for treating migration-referenced code as untouchable.
+- `CLAUDE.md` — locked architectural constraints: RBAC byte-parity (CISO-01), import-linter contracts, `VITE_API_MODE` chokepoint + ESLint restricted-paths with negative-test fixtures, money/date domain conventions (DST hazard), Protocol-slot composition-root wiring discipline.
+- Direct domain reasoning from this codebase's own documented architecture (no external ecosystem research was needed or applicable — this is a project-specific pitfalls analysis, not a general technology survey).
 
 ---
-*Pitfalls research for: clubcore v4.0 Production Infrastructure — self-hosted bare-metal k3s*
-*Researched: 2026-06-16*
+*Pitfalls research for: v4.1 Codebase Hardening milestone (clubcore)*
+*Researched: 2026-07-26*

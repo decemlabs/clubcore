@@ -15,14 +15,10 @@ Contract being locked (D-10):
 
 from __future__ import annotations
 
-from uuid import uuid4
-
 import pytest
-from sqlalchemy import select
 
 from app.core.exceptions import ClientEmailRequiredForOnlinePaymentError
 from app.modules.online_payments import service
-from app.modules.online_payments.models import OnlinePayment
 
 pytestmark = pytest.mark.asyncio(loop_scope="function")
 
@@ -163,5 +159,5 @@ async def test_service_has_new_gate_function() -> None:
         "_read_client_receipt_contact_or_raise must exist in service module"
     )
     assert not hasattr(service, "_read_client_email_or_raise"), (
-        "_read_client_email_or_raise must be removed (replaced by _read_client_receipt_contact_or_raise)"
+        "_read_client_email_or_raise must be removed (replaced by _read_client_receipt_contact_or_raise)"  # noqa: E501
     )

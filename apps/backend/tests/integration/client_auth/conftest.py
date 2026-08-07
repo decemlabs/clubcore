@@ -64,6 +64,7 @@ def stub_client_otp_sender(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> Non
 
     monkeypatch.setattr(client_auth_service, "_client_otp_sender", _noop_sender)
 
+
 # ---------------------------------------------------------------------------
 # Phone constants — deterministic per test run
 # ---------------------------------------------------------------------------

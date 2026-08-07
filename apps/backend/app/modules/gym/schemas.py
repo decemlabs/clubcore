@@ -21,9 +21,9 @@ class SocialItem(BackendSchemaBase):
     covers any remaining URL-unsafe chars after @ stripping.
     """
 
-    kind: Literal['tg', 'ig']
+    kind: Literal["tg", "ig"]
     label: str = Field(max_length=64)
-    handle: str = Field(max_length=64, pattern=r'^@[\w.]+$')
+    handle: str = Field(max_length=64, pattern=r"^@[\w.]+$")
 
 
 class GymInfoResponse(ResponseData):

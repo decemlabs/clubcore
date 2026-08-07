@@ -1,17 +1,20 @@
 ---
 gsd_state_version: 1.0
-milestone: v4.0
-milestone_name: Production Infrastructure — Self-Hosted k3s
-status: Awaiting next milestone
-stopped_at: Completed 118-01-PLAN.md — container images
-last_updated: "2026-06-16T14:38:36.093Z"
-last_activity: 2026-06-16 — Milestone v4.0 completed and archived
+milestone: v4.1
+milestone_name: Codebase Hardening
+current_phase: 124
+current_phase_name: FUNC Fixes — Risk-First
+status: planning
+stopped_at: Completed 123-02-PLAN.md
+last_updated: "2026-07-26T17:05:53.777Z"
+last_activity: 2026-07-26
+last_activity_desc: Phase 123 complete, transitioned to Phase 124
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 12
-  completed_plans: 12
-  percent: 100
+  total_phases: 6
+  completed_phases: 2
+  total_plans: 8
+  completed_plans: 8
+  percent: 33
 ---
 
 # Project State
@@ -21,16 +24,31 @@ progress:
 See: .planning/PROJECT.md
 
 **Core value:** Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
-**Current focus:** Phase 118 — Container Images + Helm Chart (Core Stack)
+**Current focus:** Phase 124 — FUNC Fixes — Risk-First
 
 ## Current Position
 
-Phase: Milestone v4.0 complete
-Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-16 — Completed quick task 260616-xa9: rename apps admin-app→admin, client-pwa→client
+Phase: 124 — FUNC Fixes — Risk-First
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-07-26 — Phase 123 complete, transitioned to Phase 124
 
-## v4.0 Roadmap Summary
+## v4.1 Roadmap Summary (current milestone)
+
+| Phase | Goal | Requirements |
+|-------|------|--------------|
+| 122. Audit — Registry-Producing Read-Only Pass | One frozen `.planning/audits/v4.1-DEFECT-REGISTRY.md`: static hygiene sweep, reachability manifest, edge-case-seed live-backend Zod↔wire hunt + browser UAT, 23-item v4.0 operator-pending triage — zero app-code edits | AUD-01..08 |
+| 123. Test-Infra Unblock | Backend pytest deadlock (`permissive_booking_config` × `working_hours_config`) resolved or scoped-workaround, timeboxed; carried flakes dispositioned | TEST-01, TEST-02 |
+| 124. FUNC Fixes — Risk-First | Capture-then-contract-test generalized to ~20 remaining admin domains + `AssertEqual` structural guard + Schemathesis GET-scope + reachability fixes + `apps/client` money/auth contract tests; `locked_invariant_risk` rows fixed first | FUNC-01..06 |
+| 125. HYGIENE Fixes | TODO/FIXME/HACK closure, false-positive-safe dead-code removal, duplication disposition, import-linter/ESLint boundaries (`features/x → features/y` zone added LAST), stale CLAUDE.md stack-prose fix, `deptry` CI gate | HYG-01..07 |
+| 126. INFRA Fixes — Parallel Track | k3d `make up`/`make smoke`/`make backup`/`restore-verify.sh` + sealed-secrets key backup executed with evidence, all `(k3d-scope)`; `trivy config` IaC scan; v4.0 HARD GATEs (SEC-02/BAK-03) untouched | INFRA-01..05 |
+| 127. Registry Consolidation + Milestone Close | Zero undispositioned rows, spot-audit re-verification, full gate green, honest nonzero deferred-count | CLOSE-01..04 |
+
+**Coverage:** 32/32 v4.1 requirements mapped (122: 8 · 123: 2 · 124: 6 · 125: 7 · 126: 5 · 127: 4). **Execution order: 122 → 123 → {124 ∥ 126} → 125 → 127** (124/126 parallel once 123 is green; 125 serializes after 124 only on registry rows sharing a file).
+
+**Granularity note:** `config.json` default `coarse` calibration (2-4 phases) was intentionally overridden — the milestone brief and independent research (`research/SUMMARY.md`) both converged on this 6-phase shape as the structure that makes "audit-once-then-fix" verifiable; the 32 requirements mapped cleanly onto these 6 categorical boundaries with no forced splitting or merging.
+
+## v4.0 Roadmap Summary (shipped 2026-06-16 — historical)
 
 | Phase | Goal | Requirements |
 |-------|------|--------------|
@@ -54,9 +72,21 @@ Last activity: 2026-06-16 — Completed quick task 260616-xa9: rename apps admin
 
 ## Accumulated Context
 
-### v4.0 Architecture Context (current milestone)
+### v4.1 Architecture Context (current milestone)
 
-- **D-V40-LOCAL-VALIDATE**: done-bar = local validation only (k3d + `terraform validate/plan` + `helm lint` + `make smoke`); live server apply / LE-prod TLS / real ЮKassa-leg / RU email-SMS — operator-pending (no fabricated evidence, per D-72-06 precedent)
+- **Registry contract**: a registry row = `id, category, severity, anchor, repro, evidence, disposition, owning_phase, blocks/blocked_by, locked_invariant_risk, reason (if deferred)`. Disposition is 3-state (`fixed+verified` / `fixed+unverified` transient / `deferred` terminal). Category is 3-state (FUNC/HYGIENE/INFRA). Severity is 3-tier (Blocker/Major/Minor).
+- **D-V41-AUDIT-FREEZE**: the audit phase (122) produces the registry exactly once and is read-only — no app-code edits; anything found during a later fix phase gets a `discovered-during-fix` tag appended to the frozen registry, never triggers a new audit sweep.
+- **D-V41-CLIENT-SCOPE**: `apps/client` gets contract tests (capture fixtures, NO new `zod` dependency) for money/auth paths only — checkout, membership, `client_auth`. The remaining ~21 client endpoints are a single `deferred:out-of-scope` row (FUNC-06). Full client Zod parity is v4.2+ (CLI-01/CLI-02 backlog).
+- **D-V41-HYGIENE-TOOLING**: Knip, jscpd, vulture, and deptry all run once during the audit and get triaged into the registry; only `deptry` graduates to a blocking CI gate in v4.1 (HYG-06/AUD-02). Knip/jscpd/vulture CI graduation is TOOL-01 backlog (v4.2+).
+- **D-V41-ESLINT-ZONE-LAST**: the missing `features/x → features/y` ESLint boundary zone is added LAST in Phase 125, only after existing violations on it are cleared — so the gate doesn't fail on inherited debt mid-milestone (HYG-04).
+- **D-V41-K3D-SCOPE**: every INFRA (126) finding executed in k3d carries an explicit `(k3d-scope)` qualifier. k3d cannot prove node failure, off-node secret custody, real network topology, or storage durability — the two v4.0 HARD GATEs (SEC-02 off-node sealed-secrets RSA-key custody, BAK-03 verified restore round-trip) stay open and unedited in the registry; v4.1 does NOT claim to close them (PROD-02/PROD-03 backlog, require real hardware).
+- **Repo-reality correction (load-bearing, HYG-05)**: `CLAUDE.md` and `apps/admin/CLAUDE.md` describe `apps/admin` as React 19 + Vite 6 + TanStack Router — that's the deleted `apps/admin-web`'s stack. The real `apps/admin/package.json` pins `react@^18.3.1`, `vite@^5.4.14`, `react-router-dom@^6.28.2`. Trust the code, not that prose, until Phase 125 fixes it.
+- **Anti-features (explicit, do not smuggle in)**: no coverage-percentage targets, no mass reformatting mixed with logic fixes, no speculative rearchitecting beyond import-linter conformance, no dependency bumps "while we're in there" (unless the bump IS the registered fix), no iterate-until-dry auditing, no inline audit-pass fixes without a registry row, no screen-by-screen manual drift-chasing, no Zod-from-`schema.d.ts` codegen (orval/openapi-zod-client/zodios).
+- **Layered Zod-vs-wire order (FUNC, Phase 124)**: (1) generalize capture-then-contract-test to all domains first — empirical, real response bytes; (2) add `AssertEqual<z.infer<Schema>, GeneratedType>` compile-time guard, zero new deps, rides existing `tsc -b --noEmit`; (3) Schemathesis GET-scope against the live ASGI app for spec-vs-runtime drift neither (1) nor (2) can see.
+
+### v4.0 Architecture Context (shipped — historical)
+
+- **D-V40-LOCAL-VALIDATE**: done-bar = local validation only (k3d + `terraform validate/plan` + `helm lint` + `make smoke`); live server apply / LE-prod TLS / real ЮKassa-leg / RU email-SMS — operator-pending (no fabricated evidence, per D-72-06 precedent). **Inherited by v4.1 wholesale.**
 - **D-V40-ONPREM-K3S**: ingress = Traefik v3 (bundled with k3s; ingress-nginx retired + archived March 2026 — no security patches); local validation = k3d (NOT kind — different distro, hides Traefik/ServiceLB behavior)
 - **D-V40-MINIO-RETIRED**: MinIO community repo archived April 25, 2026 — SeaweedFS in both docker-compose and k3s (zero app code change; same boto3/aioboto3 env vars); SeaweedFS Helm v4.33.0 actively maintained
 - **D-V40-BITNAMI-PAYWALLED**: Bitnami Postgres + Redis images behind Broadcom paywall (moved to `bitnamilegacy`); use CNPG operator (ghcr.io images, built-in WAL archiving) + plain Redis StatefulSet (`redis:7-alpine`)
@@ -67,7 +97,7 @@ Last activity: 2026-06-16 — Completed quick task 260616-xa9: rename apps admin
 - **D-V40-SCOPE-ADDITIVE**: OpenAPI contract unchanged except additive NAME-01 (CSRF cookie `sportzal_csrf → clubcore_csrf`); staff drift-gate expects additive diff, not byte-stable
 - **D-V40-BAK04-INCLUDED**: BAK-04 weekly automated restore-verification CronJob included in scope (justified differentiator — round-trip restore verification vs passive backup-only)
 - **D-V40-SEC06-INCLUDED**: SEC-06 `/gsd:secure-phase 70` retro included in Phase 119 (carry-over from v2.0 close: proxy rate-limit bucket, QR post-decode existence check, cancel idempotency)
-- **Pitfall invariants (from PITFALLS.md — encode as acceptance criteria):**
+- **Pitfall invariants (from PITFALLS.md — still binding, INFRA fixes in v4.1 must not regress them):**
   - P1: Postgres PVC node-affinity → `nodeSelector` pinning + `reclaimPolicy: Retain`
   - P2/P3: ARQ double-fire + Telegram duplicate-consume → `strategy: Recreate` + `replicas: 1`
   - P4: migrate race → `pre-install,pre-upgrade` hook + `hook-weight: "-5"` + `alembic check` initContainer
@@ -78,34 +108,48 @@ Last activity: 2026-06-16 — Completed quick task 260616-xa9: rename apps admin
 
 ### Research Flags (investigate at plan-phase time, not pre-flight)
 
-- **Phase 118**: CNPG `Cluster.spec.backup.barmanObjectStore` field names for SeaweedFS S3 endpoint — verify against CNPG v1 API docs
-- **Phase 119**: Traefik v3 WebSocket sticky-session annotation key — may differ from v2; verify before writing Ingress template
-- **Phase 120**: Loki community chart v17.x Alloy sub-chart values schema changed from v6.x — review migration guide before writing values files
+- **Phase 122** (audit, sub-pass 1b): the exact shape of the edge-case seed-data authoring task (which entities/lifecycle states/error families per domain) may need a short planning-time pass per domain — PITFALLS' matrix is a starting checklist, not a domain-by-domain enumeration.
+- **Phase 123**: ✅ RESOLVED 2026-07-26 — fresh clean-DB full run confirmed f438ced2 NOT REGRESSED (D-123-09); no new root-cause work was needed. See registry rows V41-HYG-073..080.
+- **Phase 124**: exact list of `apps/admin` domains still lacking the capture-then-contract-test pattern is qualitative (~20 of ~25) per research — Phase 122's static sweep must produce the definitive list before Phase 124 planning.
 
 ### Pending Todos
 
-- v4.0 roadmap created (Phases 118–121). Next: `/gsd-plan-phase 118` (Container Images + Helm Chart — Core Stack).
-- Phase 118 plan: read existing `apps/backend/Dockerfile` and `docker-compose.yml` before building (living codebase, not from scratch); check SeaweedFS Helm chart current values schema at plan time.
-- Phase 119 plan: investigate Traefik v3 WS annotation before writing Ingress; SEC-06 retro is running an existing skill (`/gsd:secure-phase 70`), not infra construction.
-- Phase 120 plan: verify CNPG `barmanObjectStore` fields + Loki v17.x Alloy schema at plan time; BAK-04 restore-verify CronJob is a differentiator — include restore evidence script.
+- Phases 122-123 complete (2026-07-26). Next: `/gsd-plan-phase 124` (FUNC Fixes — Risk-First).
+- Phase 124 plan: risk-first ordering — fix `locked_invariant_risk` registry rows before any other FUNC row; update the parity mirror in the same commit and re-run its negative-test fixture. Phase 123 routed two `open` rows here: V41-HYG-077 (LOCKED_AUDIT_EVENTS 117 vs 118 count parity) and V41-HYG-078 (`/metrics` route-gate declaration) — both locked-invariant lane per FUNC-04.
+- Phase 125 plan: add the `features/x → features/y` ESLint zone LAST, after violations are cleared — do not add it first and then chase a red gate.
+- Phase 126 plan: tag every finding `(k3d-scope)`; do not edit or close the v4.0 SEC-02/BAK-03 HARD GATE registry rows — reference them, don't replace them.
 
 ### Blockers/Concerns
 
-None at milestone open.
+Deadlock-ledger reconciliation closed by Phase 123 (2026-07-26): fresh clean-DB full run confirmed `f438ced2` NOT REGRESSED (0 lock-family timeouts, `4 failed / 3058 passed / 8 skipped / 1 error in 894s`) — the `## Deferred Items` `✅ RESOLVED` entry stands; TEST-01 satisfied via registry row V41-HYG-073.
+
+- AUD-05 (runtime divergence) + AUD-06 (browser UAT walk) deferred:blocked in 122-05 — owner seed credentials for apps/backend/scripts/seed_edge_cases.py are permission-protected this session; needs a seeded re-run to close V41-FUNC-033/034
 
 ### Quick Tasks Completed
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260616-xa9 | Rename apps: admin-app→admin, client-pwa→client (dirs + package names + all infra/backend/CI/docs refs) | 2026-06-16 | f2a3570c | [260616-xa9-rename-apps-admin-app-to-admin-client-pw](./quick/260616-xa9-rename-apps-admin-app-to-admin-client-pw/) |
+| 260726-hou | UAT audit follow-through: fix audit-uat's false All Clear after milestone archival + reconcile 11 stale UAT statuses + pin the Phase-94 typing-indicator consumer path | 2026-07-26 | 299de980 | [260726-hou-sync-stale-uat-statuses-fix-audit-uat-gl](./quick/260726-hou-sync-stale-uat-statuses-fix-audit-uat-gl/) |
 
 ## Deferred Items
+
+**Restored to the ledger by the 2026-07-26 cross-phase UAT audit (quick `260726-hou`).**
+These were tracked at v2.5 close, then silently dropped when the v2.5 block was pruned —
+v2.6 was expected to carry them but became Referral System instead. They are open, not done.
+
+| Category | Item | Status |
+|----------|------|--------|
+| bug (dormant) | **Chat typing indicator does not surface in the live dev browser.** Consumer path is now PROVEN CORRECT in jsdom — `apps/client/src/screens/ChatScreen.typing.test.jsx`, 5/5 green: bridge installs, dots + «печатает…» render in the open thread, 5s auto-dismiss fires, WR-06 ownership guard restores the previous handler. So the defect is NOT the component's render logic; likeliest cause is the original console probe having REPLACED `window.__chatTyping` with its own counting wrapper (suppresses the real handler while still reporting handlerCalls=1), or a stale service worker. | open — but UNREACHABLE in production: no typing PRODUCER exists (Telegram has no typing API; the staff frontend never got one). Close together with a producer. See `94-VERIFICATION.md`. |
+| tech-debt (v2.6 carry) | RCPT-02 typing PRODUCER — WS fan-out + PWA consumer are wired, nothing publishes `publish_typing` | open — needs a staff-side producer |
+| infra | `seaweedfs-s3` gateway pod CrashLoops in-cluster (surfaced in the 2026-06-16 live k3s run; not diagnosed — backend was the critical path; possibly S3 `existingConfigSecret`/auth) | open — needs a live cluster to reproduce |
+| test-infra | 6 unresolved `test_sell_*` online-payment tests use unscoped `select(OnlinePayment)` and assert absolute row counts, so leftover rows in the host `clubcore` DB break them | open — see `999.5-…/deferred-items.md` |
 
 **Carried forward from v3.2 close (2026-06-16):**
 
 | Category | Item | Status |
 |----------|------|--------|
-| tech-debt (test-infra) | ~~Full backend pytest not run green — systemic test-isolation deadlock (`permissive_booking_config` × `working_hours_config`)~~ | ✅ RESOLVED `f438ced2` (2026-06-17) — autouse fixture held an uncommitted `working_hours_config` row lock that alembic-downgrade subprocess tests + the real-commit booking-race test deadlocked against. Fix: `no_permissive_booking_config` marker on those 4 modules + booking-race teardown restore + `pytest-timeout` 180s safety net + suppress starlette-1.x TestClient deprecation that aborted collection. Full suite now completes ~15m: 3058 passed / 3 failed / 2 errors (all pre-existing/flaky). Diagnosis: `.planning/debug/pytest-isolation-deadlock.md`. |
+| tech-debt (test-infra) | ~~Full backend pytest not run green — systemic test-isolation deadlock (`permissive_booking_config` × `working_hours_config`)~~ | ✅ RESOLVED `f438ced2` (2026-06-17) — autouse fixture held an uncommitted `working_hours_config` row lock that alembic-downgrade subprocess tests + the real-commit booking-race test deadlocked against. Fix: `no_permissive_booking_config` marker on those 4 modules + booking-race teardown restore + `pytest-timeout` 180s safety net + suppress starlette-1.x TestClient deprecation that aborted collection. Full suite now completes ~15m: 3058 passed / 3 failed / 2 errors (all pre-existing/flaky). Diagnosis: `.planning/debug/pytest-isolation-deadlock.md`. **v4.1 TEST-01 confirmed 2026-07-26 (Phase 123): fresh clean-DB full run, 0 lock-family timeouts, D-123-09 verdict NOT REGRESSED — registry row V41-HYG-073 `fixed+verified`.** |
 | human-verify | Browser/human UAT for all 6 v3.2 phases (112-117 VERIFICATION = human_needed) | ✅ SMOKE-PASSED 2026-06-17 (live browser, owner+client) — admin Dashboard(115)/Reports+CSV(114/115/116)/Finance+CSV(112)/Plans+promo FIRST500·FIT10(113)/Chat inbox(116)/Audit-log-with-null-actor(the v3.0 crash case, now clean) all render with ZERO console errors; client PWA OTP→onboarding→home on real seeded plan. CAVEAT: fresh re-seed has no transactions, so revenue-POPULATED report/finance views weren't exercised live — those shapes are covered by the v3.2 real-backend contract tests (green). Hero KPIs (847 clients/MRR) remain known decorative mock chrome. |
 | security | Phase 70 CR-02/IN-01/IN-02 (proxy rate-limit, QR post-decode, cancel idempotency) | → SEC-06 in Phase 119 |
 | production | RUN-01 ЮKassa sale+refund | ✅ TEST-SHOP SUFFICIENT (user decision 2026-06-17 — live credentialed leg NOT needed for MVP/demo). Verified live: client checkout against sandbox shop 1372271 (`YOOKASSA_SANDBOX=true`) returns a real `confirmationUrl` (yoomoney.ru hosted page) + `onlinePaymentId`. Demo: pay with test card 5555 5555 5555 4477, activate via webhook (`POST /api/v1/_internal/yookassa/webhook` with the real online_payments id). Live prod creds remain the only un-done part, explicitly out of scope. |
@@ -113,7 +157,7 @@ None at milestone open.
 
 **Acknowledged and deferred at v4.0 close (2026-06-16):**
 
-These are the D-V40-LOCAL-VALIDATE operator-pending boundary — static validation passed; live legs require a real k3d/helm/terraform toolchain. Full list + 2 HARD GATES in `infra/runbooks/production.md` (§ Operator-Pending Boundary) and the per-phase `*-UAT.md` files.
+These are the D-V40-LOCAL-VALIDATE operator-pending boundary — static validation passed; live legs require a real k3d/helm/terraform toolchain. Full list + 2 HARD GATES in `infra/runbooks/production.md` (§ Operator-Pending Boundary) and the per-phase `*-UAT.md` files. **These 23 items + 2 HARD GATEs are the input to v4.1 AUD-07 triage (Phase 122) and INFRA-01..05 (Phase 126) — SEC-02/BAK-03 stay open per D-V41-K3D-SCOPE.**
 
 | Category | Item | Status |
 |----------|------|--------|
@@ -138,10 +182,39 @@ These are the D-V40-LOCAL-VALIDATE operator-pending boundary — static validati
 
 ## Session Continuity
 
-Last session: 2026-06-16T14:15:59.209Z
-Stopped at: Completed 118-01-PLAN.md — container images
-Resume: `/gsd-plan-phase 118` (Container Images + Helm Chart — Core Stack)
+**Resume file:** None
+
+Last session: 2026-07-26T17:10:00Z
+Stopped at: Phase 123 complete (UAT 4/4 passed, verification passed), ready to plan Phase 124
+Resume: `/gsd-plan-phase 124` (FUNC Fixes — Risk-First)
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Run `/gsd-plan-phase 122` to plan the Audit phase (read-only, three parallel sub-passes: static hygiene / live-backend hunt / infra triage).
+
+## Performance Metrics
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 122 P1 | 15min | 2 tasks | 8 files |
+| Phase 122 P2 | 55min | 3 tasks | 6 files |
+| Phase 122 P3 | 35min | 2 tasks | 3 files |
+| Phase 122 P4 | 25min | 1 tasks | 1 files |
+| Phase 122 P05 | 45min | 1 tasks | 4 files |
+| Phase 122 P06 | 25min | 2 tasks | 5 files |
+| Phase 123 P123-01 | ~35min | 2 tasks | 3 files |
+| Phase 123 P02 | 55min | 3 tasks | 5 files |
+
+## Decisions
+
+- [Phase ?]: 122-01: registry rows route by per-row category column (not staging-file name); reworded a schema-legend example ID that collided with real HARD GATE row data in the plan's verify grep
+- [Phase ?]: 122-02: high-volume tool output (knip/jscpd/vulture) clustered into theme-level registry rows rather than one row per finding, to keep the registry's 'dozens not hundreds' design intent honest against ~1600 raw findings
+- [Phase ?]: 122-02: reachability defect bar excludes chrome-less framework routes and click-through dynamic detail pages; only ComingSoon placeholders and unregistered ROUTES keys count as V41-FUNC rows
+- [Phase 122]: Zero-kopeck money boundary lives on MembershipPlan.price_kopecks, not Payment.amount_kopecks, because Payment's CHECK constraint forbids a literal zero amount (D-122-12)
+- [Phase 122]: Re-derived v4.0 operator-pending count = 29 distinct items (2 HARD GATEs + 27 non-gate rows), not the quoted 23 nor STATE.md's 27 tally — recorded as V41-INFRA-030 reconciliation row rather than force-fit (D-122-22)
+- [Phase ?]: 122-05: static Zod<->wire coverage manifest delivered in full (29 domains, 5 with capture+contract-test pattern, 24 gap); live runtime-divergence check + browser UAT walk honestly rowed deferred:blocked (owner seed creds permission-protected this session) rather than fabricated
+- [Phase 122]: Two-commit freeze stamp: frozen_at_commit recorded in an immediate follow-up commit (2ce5da33 substantive freeze -> f02f9c68 SHA stamp), since a commit cannot embed its own resulting hash
+- [Phase 122]: Merged all three audit staging files (136 rows: FUNC=34, HYGIENE=72, INFRA=30) and froze the v4.1 defect registry; fixed an escaped-pipe parsing bug in merge-registry.mjs discovered during the real merge
+- [Phase ?]: 123-01: D-123-09 verdict is NOT REGRESSED -- f438ced2 fix holds on fresh clean-DB run (4 failed/3058 passed/8 skipped/1 error, 14m53s, zero lock-family timeouts)
+- [Phase ?]: 123-01: force-added the two gitignored *.log evidence artifacts (git add -f) rather than editing root .gitignore, keeping the phase-123 footprint check scoped to .planning/**
+- [Phase ?]: D-123-12: Registry rows V41-HYG-073..080 appended (F821 fix, bookings fixture-date-timebomb fix, freeze_race/alembic_clean/asgi_lifespan dispositions, phase51/route_introspection routed to Phase 124) — footprint gate FOOTPRINT-GATE-GREEN

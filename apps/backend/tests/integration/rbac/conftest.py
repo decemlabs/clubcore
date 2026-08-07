@@ -57,7 +57,9 @@ async def app_with_fixture_routes(
     _app = create_app()
     _app.include_router(_owner_routes_router)
 
-    async with LifespanManager(_app):
+    # Match the root fixture's finite but load-tolerant startup budget. The
+    # asgi-lifespan default of five seconds flakes during the full CI suite.
+    async with LifespanManager(_app, startup_timeout=15):
 
         async def _override_get_db() -> AsyncIterator[AsyncSession]:
             yield db_session

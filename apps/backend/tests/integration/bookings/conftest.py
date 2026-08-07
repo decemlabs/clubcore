@@ -97,7 +97,7 @@ async def permissive_booking_config(
     ``@pytest.mark.no_permissive_booking_config`` skip the UPDATE so they hold no
     working_hours_config row lock that an ``alembic downgrade`` subprocess would
     deadlock against.
-    """
+    """  # noqa: RUF002
     if request.node.get_closest_marker("no_permissive_booking_config") is not None:
         return
     # Reset booking_config to permissive values.

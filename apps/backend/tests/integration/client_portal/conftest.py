@@ -500,7 +500,7 @@ async def checkout_commit_db_session(
 async def checkout_commit_client(
     app: FastAPI,
     checkout_commit_engine: Any,
-    checkout_commit_db_session: AsyncSession,  # noqa: ARG001 — ensures engine is ready before client
+    checkout_commit_db_session: AsyncSession,
 ) -> AsyncIterator[AsyncClient]:
     """AsyncClient with real-commit get_db override for checkout commit regression.
 

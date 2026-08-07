@@ -133,9 +133,7 @@ async def test_full_session_lifecycle(
     # clubcore_client_csrf — Path=/, NOT HttpOnly (PWA reads it for X-CSRF-Token)
     csrf_hdr = next(c for c in set_cookies if c.startswith("clubcore_client_csrf="))
     assert "Path=/" in csrf_hdr, f"clubcore_client_csrf missing Path=/: {csrf_hdr}"
-    assert "HttpOnly" not in csrf_hdr, (
-        f"clubcore_client_csrf must NOT be HttpOnly: {csrf_hdr}"
-    )
+    assert "HttpOnly" not in csrf_hdr, f"clubcore_client_csrf must NOT be HttpOnly: {csrf_hdr}"
 
     # Extract token values for subsequent requests
     access_token = access_hdr.split("=", 1)[1].split(";", 1)[0]
@@ -203,9 +201,7 @@ async def test_full_session_lifecycle(
     # Cookie deletion: either max-age=0 or expires in the past; name must appear
     assert "cc_client_access=" in logout_joined, "cc_client_access not cleared by logout"
     assert "cc_client_refresh=" in logout_joined, "cc_client_refresh not cleared by logout"
-    assert "clubcore_client_csrf=" in logout_joined, (
-        "clubcore_client_csrf not cleared by logout"
-    )
+    assert "clubcore_client_csrf=" in logout_joined, "clubcore_client_csrf not cleared by logout"
 
     # Step 7: GET /me without any access token cookie → 401 (missing_access_cookie).
     # Note: access tokens are stateless JWTs (no DB revocation). The "session cleared" guarantee
@@ -290,9 +286,7 @@ async def test_otp_brute_force_blocked(
             f"got {resp.status_code}: {resp.text}"
         )
         body = resp.json()
-        assert body.get("code") == "otp_invalid", (
-            f"Unexpected code on attempt {i + 1}: {body}"
-        )
+        assert body.get("code") == "otp_invalid", f"Unexpected code on attempt {i + 1}: {body}"
 
     # Final wrong attempt: hits OtpMaxAttempts — OtpMaxAttempts.status_code == 429
     last_wrong = await async_client.post(

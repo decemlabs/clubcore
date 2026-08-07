@@ -11,7 +11,7 @@ Tests the create_notification pre-emit gate added in Plan 03 Task 3:
   - Sender signature appended on text-channel body; absent on in_app body.
 
 Uses AsyncMock session (no DB) + patching repository.insert_notification to track calls.
-"""
+"""  # noqa: RUF002
 
 from __future__ import annotations
 
@@ -68,13 +68,13 @@ def _make_mock_session(
 
 
 # ---------------------------------------------------------------------------
-# CASE 1: Matrix disables non-always-on trigger×channel → suppressed.
+# CASE 1: Matrix disables non-always-on trigger×channel → suppressed.  # noqa: RUF003
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_matrix_disabled_suppresses_notification() -> None:
-    """Matrix disables booking_confirmed×in_app → no row inserted."""
+    """Matrix disables booking_confirmed×in_app → no row inserted."""  # noqa: RUF002
     matrix = {"booking_confirmed": {"in_app": False}}
     session = _make_mock_session(matrix=matrix)
 
@@ -97,13 +97,13 @@ async def test_matrix_disabled_suppresses_notification() -> None:
 
 
 # ---------------------------------------------------------------------------
-# CASE 2: Matrix enables trigger×channel → row inserted.
+# CASE 2: Matrix enables trigger×channel → row inserted.  # noqa: RUF003
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_matrix_enabled_allows_notification() -> None:
-    """Matrix enables booking_confirmed×in_app → row inserted."""
+    """Matrix enables booking_confirmed×in_app → row inserted."""  # noqa: RUF002
     matrix = {"booking_confirmed": {"in_app": True}}
     session = _make_mock_session(matrix=matrix)
 
@@ -200,26 +200,26 @@ def _msk_time(hour: int, minute: int) -> datetime.datetime:
 
 
 def test_is_quiet_hours_simple_window() -> None:
-    """Simple (non-midnight-crossing) window 09:00–22:00."""
+    """Simple (non-midnight-crossing) window 09:00–22:00."""  # noqa: RUF002
     start = datetime.time(9, 0)
     end = datetime.time(22, 0)
 
-    assert _is_quiet_hours(_msk_time(10, 0), start, end) is True   # inside
+    assert _is_quiet_hours(_msk_time(10, 0), start, end) is True  # inside
     assert _is_quiet_hours(_msk_time(22, 0), start, end) is False  # at end (exclusive)
     assert _is_quiet_hours(_msk_time(8, 59), start, end) is False  # before start
-    assert _is_quiet_hours(_msk_time(9, 0), start, end) is True    # at start (inclusive)
+    assert _is_quiet_hours(_msk_time(9, 0), start, end) is True  # at start (inclusive)
 
 
 def test_is_quiet_hours_midnight_crossing() -> None:
-    """Midnight-crossing window 22:00–07:00."""
+    """Midnight-crossing window 22:00–07:00."""  # noqa: RUF002
     start = datetime.time(22, 0)
     end = datetime.time(7, 0)
 
-    assert _is_quiet_hours(_msk_time(23, 0), start, end) is True   # inside (after midnight)
-    assert _is_quiet_hours(_msk_time(0, 30), start, end) is True   # inside (after midnight)
-    assert _is_quiet_hours(_msk_time(6, 59), start, end) is True   # inside (before end)
-    assert _is_quiet_hours(_msk_time(7, 0), start, end) is False   # at end (exclusive)
-    assert _is_quiet_hours(_msk_time(7, 1), start, end) is False   # past end
+    assert _is_quiet_hours(_msk_time(23, 0), start, end) is True  # inside (after midnight)
+    assert _is_quiet_hours(_msk_time(0, 30), start, end) is True  # inside (after midnight)
+    assert _is_quiet_hours(_msk_time(6, 59), start, end) is True  # inside (before end)
+    assert _is_quiet_hours(_msk_time(7, 0), start, end) is False  # at end (exclusive)
+    assert _is_quiet_hours(_msk_time(7, 1), start, end) is False  # past end
     assert _is_quiet_hours(_msk_time(12, 0), start, end) is False  # daytime — outside
 
 

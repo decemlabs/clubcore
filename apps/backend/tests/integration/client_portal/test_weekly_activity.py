@@ -175,11 +175,17 @@ async def _seed_visit_on_monday(
 
     # Fetch the client's active membership id for the FK
     row = (
-        await db_session.execute(
-            text("SELECT id FROM memberships WHERE client_id = :cid AND status = 'active' LIMIT 1"),
-            {"cid": str(client.id)},
+        (
+            await db_session.execute(
+                text(
+                    "SELECT id FROM memberships WHERE client_id = :cid AND status = 'active' LIMIT 1"  # noqa: E501
+                ),
+                {"cid": str(client.id)},
+            )
         )
-    ).mappings().one()
+        .mappings()
+        .one()
+    )
     membership_id = row["id"]
 
     await db_session.execute(
@@ -212,11 +218,17 @@ async def _seed_visit_at_utc(
     Moscow-midnight boundary.
     """
     row = (
-        await db_session.execute(
-            text("SELECT id FROM memberships WHERE client_id = :cid AND status = 'active' LIMIT 1"),
-            {"cid": str(client.id)},
+        (
+            await db_session.execute(
+                text(
+                    "SELECT id FROM memberships WHERE client_id = :cid AND status = 'active' LIMIT 1"  # noqa: E501
+                ),
+                {"cid": str(client.id)},
+            )
         )
-    ).mappings().one()
+        .mappings()
+        .one()
+    )
     membership_id = row["id"]
 
     await db_session.execute(

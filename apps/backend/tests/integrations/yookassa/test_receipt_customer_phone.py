@@ -116,7 +116,7 @@ async def test_create_payment_email_contact_emits_email_key() -> None:
 
 @pytest.mark.asyncio
 async def test_create_payment_phone_contact_emits_phone_key() -> None:
-    """D-999.5-03-A: customer_email=None, customer_phone present → receipt.customer = {"phone": ...}."""
+    """D-999.5-03-A: customer_email=None, customer_phone present → receipt.customer = {"phone": ...}."""  # noqa: E501
     captured_body: dict[str, Any] = {}
 
     def capture_and_respond(request: httpx.Request) -> httpx.Response:

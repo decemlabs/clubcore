@@ -40,7 +40,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import audit
 from app.core.dependencies import get_yookassa_client_provider
-from app.modules.notifications.service import create_notification
 from app.integrations.yookassa.receipt import (
     PaymentMode,
     PaymentSubject,
@@ -48,6 +47,7 @@ from app.integrations.yookassa.receipt import (
     build_receipt_item,
 )
 from app.integrations.yookassa.settings import YooKassaSettings
+from app.modules.notifications.service import create_notification
 
 _log = structlog.get_logger("modules.autopay_charges.service")
 
@@ -445,7 +445,7 @@ async def _charge_expiring_autopay_memberships(  # noqa: SVC001 caller-owns-txn
                 source_id=claim_id,
                 kind="autopay_charge_failed",
                 title="Автоплатёж не прошёл",
-                body="Не удалось списать оплату. Проверьте привязанную карту.",
+                body="Не удалось списать оплату. Проверьте привязанную карту.",  # noqa: RUF001
             )
 
             # Collect the claim id for the cron's post-commit failure notification enqueue.

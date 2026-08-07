@@ -196,15 +196,19 @@ async def test_capture_binds_referee_to_referrer(
 
     # Verify a referral_captures row exists with referrer=A, referee=B
     row = (
-        await db_session.execute(
-            text(
-                "SELECT referee_client_id, referrer_client_id "
-                "FROM referral_captures "
-                "WHERE referee_client_id = :referee"
-            ),
-            {"referee": str(client_b.id)},
+        (
+            await db_session.execute(
+                text(
+                    "SELECT referee_client_id, referrer_client_id "
+                    "FROM referral_captures "
+                    "WHERE referee_client_id = :referee"
+                ),
+                {"referee": str(client_b.id)},
+            )
         )
-    ).mappings().one_or_none()
+        .mappings()
+        .one_or_none()
+    )
     assert row is not None, "Expected a referral_captures row for client B as referee"
     assert str(row["referrer_client_id"]) == str(client_a.id), (
         f"Expected referrer=A ({client_a.id}), got {row['referrer_client_id']}"
@@ -276,14 +280,18 @@ async def test_capture_is_idempotent_second_call_no_op(
 
     # Exactly one capture row
     count_row = (
-        await db_session.execute(
-            text(
-                "SELECT COUNT(*) AS cnt FROM referral_captures "
-                "WHERE referee_client_id = :referee"
-            ),
-            {"referee": str(client_b.id)},
+        (
+            await db_session.execute(
+                text(
+                    "SELECT COUNT(*) AS cnt FROM referral_captures "
+                    "WHERE referee_client_id = :referee"
+                ),
+                {"referee": str(client_b.id)},
+            )
         )
-    ).mappings().one()
+        .mappings()
+        .one()
+    )
     assert int(count_row["cnt"]) == 1, (
         f"Expected exactly 1 capture row after two attempts, got {count_row['cnt']}"
     )
@@ -360,14 +368,18 @@ async def test_capture_referee_from_principal_not_body(
 
     # Assert referee is B (the authenticated client)
     row = (
-        await db_session.execute(
-            text(
-                "SELECT referee_client_id FROM referral_captures "
-                "WHERE referee_client_id = :referee"
-            ),
-            {"referee": str(client_b.id)},
+        (
+            await db_session.execute(
+                text(
+                    "SELECT referee_client_id FROM referral_captures "
+                    "WHERE referee_client_id = :referee"
+                ),
+                {"referee": str(client_b.id)},
+            )
         )
-    ).mappings().one_or_none()
+        .mappings()
+        .one_or_none()
+    )
     assert row is not None, "Capture row should exist with B as referee"
     assert str(row["referee_client_id"]) == str(client_b.id), (
         f"referee_client_id should be B ({client_b.id}), got {row['referee_client_id']}"

@@ -33,22 +33,14 @@ class BookingConfig(Base, UUIDPkMixin, TimestampMixin):
     __tablename__ = "booking_config"
 
     # Scheduling granularity
-    schedule_step_minutes: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default="60"
-    )
+    schedule_step_minutes: Mapped[int] = mapped_column(Integer, nullable=False, server_default="60")
 
     # Booking window
-    booking_ahead_days: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default="14"
-    )
-    cutoff_minutes: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default="60"
-    )
+    booking_ahead_days: Mapped[int] = mapped_column(Integer, nullable=False, server_default="14")
+    cutoff_minutes: Mapped[int] = mapped_column(Integer, nullable=False, server_default="60")
 
     # Cancellation policy
-    cancel_window_hours: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default="24"
-    )
+    cancel_window_hours: Mapped[int] = mapped_column(Integer, nullable=False, server_default="24")
     cancel_window_enabled: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="true"
     )
@@ -67,20 +59,14 @@ class BookingConfig(Base, UUIDPkMixin, TimestampMixin):
     )
 
     # Group class limits
-    group_limit: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default="20"
-    )
-    waitlist_limit: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default="10"
-    )
+    group_limit: Mapped[int] = mapped_column(Integer, nullable=False, server_default="20")
+    waitlist_limit: Mapped[int] = mapped_column(Integer, nullable=False, server_default="10")
     waitlist_auto_transfer: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="true"
     )
 
     # Self-booking flags
-    client_self_book: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default="true"
-    )
+    client_self_book: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     show_trainer_windows: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="true"
     )
@@ -139,7 +125,7 @@ class NotificationPrefsConfig(Base, UUIDPkMixin, TimestampMixin):
 
     sender_signature — appended to outbound text channels (Telegram/email); not used for
     in-app notifications.
-    """
+    """  # noqa: RUF002
 
     __tablename__ = "notification_prefs_config"
 

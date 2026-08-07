@@ -1,275 +1,199 @@
 # Project Research Summary
 
-**Project:** clubcore v4.0 Production Infrastructure — Self-Hosted k3s
-**Domain:** On-prem bare-metal k3s; IaC; observability; secrets; backup
-**Researched:** 2026-06-16
+**Project:** clubcore — v4.1 "Codebase Hardening"
+**Domain:** Quality/tech-debt milestone on an existing, fully-shipped full-stack CRM (FastAPI modular monolith + two React SPAs + locally-validated k3s infra). No new product features.
+**Researched:** 2026-07-26
 **Confidence:** HIGH
-
----
 
 ## Executive Summary
 
-v4.0 is a pure infra/DevOps milestone — no business features, no OpenAPI changes beyond the additive CSRF cookie rename (NAME-01). The starting point is a proven `docker compose up` stack: FastAPI backend with WebSocket chat, a Telegram long-polling worker, an ARQ cron scheduler, one-shot Alembic migrate, Postgres 16, Redis 7 (sessions/queue/pub-sub), SeaweedFS object storage, and two nginx-served SPAs. The goal is to lift this topology into a bare-metal k3s cluster declared as code (Terraform + Helm), with the done-bar set at **local validation only** — k3d smoke + `terraform validate/plan` + `helm lint` — before an operator-confirmed live apply.
+This milestone has no natural "done" signal of its own — it must borrow one from a strict process contract, because the surface area (~10K+ LOC backend, ~19K+ LOC frontend, 9+ milestones of accretion, 32 TODO/FIXME/HACK markers, 23 v4.0 operator-pending items) is large enough that an open-ended "fix everything" goal never converges. All four researchers independently converged on the same structure: one read-only audit phase produces exactly one DEFECT registry; category-scoped fix phases consume it; every row ends in a terminal, evidence-backed disposition. This is not a novel process invented for this milestone — it generalizes patterns clubcore has already used successfully (the capture-then-contract-test pattern that closed the v3.0/v3.1 schema-drift bugs, the D-71-09 placeholder-graduation precedent, the D-V40-LOCAL-VALIDATE "no fabricated evidence" rule). The job here is to apply these already-proven patterns exhaustively, for the first time, across the whole codebase, rather than invent anything new.
 
-The recommended approach builds in layers: harden and finalise all Docker images first (production multi-stage, non-root, pinned digests, trivy-clean), then author the Helm umbrella chart component by component (stateful services → migrate Job → app Deployments → networking + TLS → observability → backup), and wrap everything with a Terraform IaC layer and a root-level Makefile. Three decisions have critical external forcing functions: ingress-nginx was **retired and archived March 2026** — use only Traefik (bundled with k3s); the MinIO community repository was **archived April 2026** — keep SeaweedFS with its actively maintained Helm chart (v4.33.0); Bitnami Helm images are **behind the Broadcom paywall** — use CloudNativePG for Postgres and a plain StatefulSet for Redis.
+The single highest-leverage finding across all four documents is that schema-drift hunting and route-reachability auditing are the same method wearing different clothes: build a complete, mechanical manifest of the thing being checked (every API call site + its Zod schema; every route × every nav entry × every real screen component), then check the entire manifest programmatically. The project's own history shows the opposite approach — screen-by-screen manual chasing — is exactly what let the same two bug classes (schema divergence, unreachable-but-wired screens) recur across multiple milestones despite being "caught" before. The recommended Zod-vs-wire fix is a two-layer generalization of an existing pattern (compile-time AssertEqual type-guard, modeled on the repo's own AssertNonNever helper, PLUS the existing capture-then-contract-test harness extended to all ~25 domains) — not a new tool, not a schema-generation rewrite.
 
-The highest operational risks are: (1) ARQ cron double-fire and Telegram duplicate polling if Deployment `strategy: Recreate` + `replicas: 1` invariants are ever violated; (2) Postgres PVC node-affinity data loss on pod reschedule using k3s `local-path-provisioner`; (3) sealed-secrets controller key loss on cluster rebuild when there is no git remote — mitigated by immediately exporting and backing up the key to the off-node PC. Secrets management is resolved in favour of **sealed-secrets as primary** (k8s-native, well-suited for a no-git-remote project) with no SOPS layer needed.
-
----
-
-## Reconciliation Decisions
-
-Three researcher disagreements are resolved here. These decisions override conflicting recommendations in the individual research files.
-
-### R1: Postgres in-cluster — CloudNativePG operator vs plain StatefulSet
-
-**Decision: CloudNativePG (CNPG) operator.**
-
-Bitnami PostgreSQL Helm chart is paywalled (images moved to `bitnamilegacy`, no updates). That leaves CNPG or a plain StatefulSet. CNPG wins on two concrete v4.0 deliverables: (a) built-in WAL archiving + scheduled base backups to any S3-compatible endpoint (SeaweedFS), which is the Postgres backup story without a separate `pg_dump` CronJob; (b) own PostgreSQL images from `ghcr.io/cloudnative-pg/postgresql:16-bookworm`, completely Bitnami-free. Operator complexity is manageable at `instances: 1`: `helm install cnpg` + one `Cluster` CR. For a solo dev the operational cost is lower than maintaining a custom backup CronJob + ReclaimPolicy + nodeSelector setup. Deploy with `instances: 1`; bump to 2 for HA when needed — a one-line Cluster CR change.
-
-### R2: Object storage — SeaweedFS vs MinIO
-
-**Decision: SeaweedFS in both docker-compose and k3s.**
-
-The MinIO community (`minio/minio`) GitHub repository was archived April 25, 2026. Pre-compiled binary releases are discontinued; the community Helm chart is frozen. ARCHITECTURE.md's recommendation to switch to MinIO in k3s was written without knowledge of the archive event. SeaweedFS is the correct call: already in the docker-compose stack; S3 API is a drop-in replacement (zero app code change — same boto3/aioboto3 client, same env vars); Helm chart v4.33.0 (released 2026-06-11) is actively maintained under AGPLv3. Deploy SeaweedFS in standalone mode (`server -s3`) via Helm in both docker-compose and k3s — eliminate the dev/prod split.
-
-### R3: Backend replicas — fixed 2 vs replicas=1
-
-**Decision: `replicas: 1` for v4.0; document the WS-safe path to 2 as a future upgrade.**
-
-FEATURES.md correctly flags HPA as an anti-feature on a single node — there is nowhere to schedule additional pods. ARCHITECTURE.md's note that a **fixed** `replicas: 2` is WS-safe (Redis pub/sub fan-out ensures all backend pods receive and push WebSocket messages) is architecturally correct, but resource contention on a single bare-metal node with Postgres, Redis, SeaweedFS, and the monitoring stack makes `replicas: 2` premature. Start with `replicas: 1`. The `values.prod.yaml` should document: "Increase to 2 when observability data confirms headroom; add Traefik sticky-session annotation to the backend Ingress first." Do NOT add HPA.
-
----
+The key risks are procedural, not technical: the audit phase never actually closing (scope creep, "while we're in here" upgrades, iterate-until-dry); deleting code that only looks dead in this codebase's specific dispatch patterns (ARQ string-dispatch, Protocol composition-root wiring, AST-gated frozensets, migration-referenced helpers); quietly regressing a LOCKED invariant (RBAC byte-parity, audit-event AST gate, OpenAPI drift gate, import-linter contracts) while "just cleaning up"; and reporting k3d-local infra work as if it closes v4.0's two HARD GATES (off-node sealed-secrets key custody, real-hardware restore round-trip) when it structurally cannot. Mitigating all of these is a matter of discipline enforced by the registry schema and phase-exit checklists, not new tooling investment.
 
 ## Key Findings
 
-### Recommended Stack
+### Recommended Stack (tooling additions only — no product-stack changes)
 
-All versions verified via GitHub releases and ArtifactHub on 2026-06-16. Version choices are driven by concrete external events, not preference. Full pinned version table in `.planning/research/STACK.md`.
+This is a tooling-selection question, not a technology-stack question — the underlying stack (Python 3.12/FastAPI/SQLAlchemy async/Postgres/Redis/ARQ backend; React+Vite frontends) is locked and untouched.
 
-**Core technologies:**
+**Repo-reality correction (load-bearing for all downstream planning):** `CLAUDE.md` and `apps/admin/CLAUDE.md` describe `apps/admin` as React 19 + Vite 6 + TanStack Router. The actual `apps/admin/package.json` pins `react@^18.3.1`, `vite@^5.4.14`, `react-router-dom@^6.28.2` — that description belongs to the deleted `apps/admin-web`. This is itself a registry-worthy HYGIENE finding (stale tech-stack prose), and — critically — all downstream planning (roadmap, phase plans, execution) must trust the code, not `CLAUDE.md`'s prose, until this doc drift is fixed.
 
-- **k3s v1.33.x (stable channel) + k3d v5.9.0** — production runtime and local mirror. k3d wraps k3s in Docker for genuine parity. Do NOT use kind — it runs a different Kubernetes distribution and hides k3s-specific Traefik/ServiceLB behaviour.
-- **Helm v3.21.1** — Helm 4 (released Nov 2025) has breaking schema changes in `terraform-provider-helm`; defer migration. Helm 3 EOL security Feb 2027.
-- **Terraform v1.15.6 + providers kubernetes/helm v3.2.0** — local `backend "local"` state. `hashicorp/helm` v3.x changed the `set` block schema to a list of objects — all `helm_release` resources must use the new list syntax.
-- **Traefik v3 (bundled with k3s)** — ingress-nginx was officially retired and archived March 2026; no security patches will ever be issued. Traefik is the only viable option.
-- **cert-manager v1.20.2** — TLS automation. Use `selfSigned` ClusterIssuer for local k3d validation; `letsencrypt-staging` for iterative testing; LE production ONLY on the operator-confirmed live apply.
-- **CloudNativePG operator** — CNCF Sandbox; own PostgreSQL 16 images on ghcr.io; built-in WAL archiving to S3; Bitnami is paywalled.
-- **Redis 7 — plain StatefulSet** — `redis:7-alpine`; no operator; ~80 lines of YAML; AOF persistence mandatory (Redis stores sessions, ARQ queue, WS pub/sub — not a cache).
-- **SeaweedFS Helm v4.33.0** — S3-compatible; replaces docker-compose `chrislusf/seaweedfs:3.84`; MinIO community archived April 2026.
-- **kube-prometheus-stack v86.2.3** — bundles Prometheus Operator, Prometheus, Alertmanager, Grafana, node-exporter, kube-state-metrics. Single-node resource tuning required (see STACK.md values).
-- **Loki community chart v17.3.1** — OSS Loki chart moved from `grafana/grafana` to `grafana-community/helm-charts` March 2026; old repo frozen at v6.55.0. Deploy in monolithic mode + Grafana Alloy log shipper (replaces promtail, included as sub-chart).
-- **sealed-secrets v0.37.0** — `SealedSecret` manifests are safe on-disk; `kubeseal` CLI seals on the dev machine. CRITICAL: export and back up the controller RSA key immediately after installation.
-- **prometheus-fastapi-instrumentator v7.1.0** — pin `>=7.1.0,<8`. v8.0.0 requires FastAPI >=0.133 + Starlette v1; current stack pins fastapi>=0.115.
-- **Trivy v0.71.0 + kubeconform v0.8.0** — local Makefile gates only; no in-cluster components.
+**Core tooling additions, all zero-or-low-cost, all one-shot-first:**
+- Compile-time `AssertEqual<z.infer<Schema>, GeneratedType>` (new: `packages/api-client/src/assert-equal.ts`) — zero new dependencies, extends the existing `AssertNonNever` pattern in `packages/api-client/src/schema.contract.test.ts`. Catches FE-Zod-vs-declared-OpenAPI-type drift at `tsc` time.
+- Schemathesis 4.22.4 (new backend dev-dependency) — property-based testing against the live ASGI app via `schemathesis.openapi.from_asgi(...)`, GET-only scope first. Catches backend-runtime-vs-its-own-spec drift, which layer 1 cannot see.
+- The existing "≥1 live-contract-test per domain" convention, formalized as one `*.live.test.ts` file per domain hitting a real running backend — catches integration-level surprises neither of the above two layers can see (proxy/header mangling, cookie non-round-trip).
+- Knip 6.20.0 (unused exports/files, framework-aware) supersedes `ts-prune`; jscpd 5.0.12 (cross-language TS+Python duplication, Rust engine); vulture 2.16 + deptry 0.25.1 (Python whole-project dead-code and dependency-graph checks ruff cannot do). All run once as one-shot audit tools, triaged into the registry, not wired into CI as blocking gates until a clean baseline exists — this repo's dynamic-import lazy routes, Protocol-slot composition-root wiring, and intentional per-domain schema repetition would otherwise produce enough false positives that the tooling gets ignored.
+- `@playwright/test` 1.62.0 for a deterministic, re-runnable route-sweep script (`e2e/route-sweep.spec.ts`) reading the real route/nav sources of truth — the mechanically re-runnable proof layer that an interactive `agent-browser` session cannot cheaply provide on repeat. Manual/on-demand only, never a PR-blocking gate.
+- `trivy config` (the project's existing trivy install, already used for image scanning) extended to IaC misconfiguration scanning — the one genuinely new, zero-new-dependency infra addition. `kubeconform` and the CNPG restore-verify script are already in place and sufficient; do not add `chart-testing`, `kuttl`, `tflint`, Velero, or policy-as-code engines (all solve multi-team/multi-cluster problems this solo-maintainer single-cluster project doesn't have).
 
-### Expected Features
+**Explicitly rejected** (would be scope growth, not convergence): `orval`/`openapi-zod-client`/`zodios` (wholesale Zod-from-OpenAPI codegen — would rewrite 17 hand-tuned schema files mid-hardening-milestone and lose Russian-locale form-validation rules the spec doesn't encode); Pact (solves a multi-service coordination problem this monolith doesn't have); Prism (backend has been live since v2.0); MSW-as-drift-detector (mocks cannot detect their own drift by construction).
 
-See `.planning/research/FEATURES.md` for full tables.
+### Expected "Features" (audit/fix activities, not product features)
 
 **Must have (table stakes):**
-- Production-hardened multi-stage Dockerfiles: non-root user, slim base, no dev deps, `.dockerignore`, healthcheck, pinned digests.
-- Separate images for all 6 components (backend, telegram-bot, arq-worker, migrate, admin-app nginx, client-pwa nginx).
-- Alembic migrate as Helm `pre-install,pre-upgrade` hook Job — single execution per deploy.
-- All Deployments: `resources.requests` + `resources.limits` + `startupProbe` + `livenessProbe` + `readinessProbe`.
-- `strategy: Recreate` + `replicas: 1` on telegram-bot and arq-worker — architectural invariant, not a tuning parameter.
-- Ingress for three hostnames (API, admin-app, client-pwa) with TLS and HTTP→HTTPS redirect via Traefik middleware.
-- NetworkPolicies: default-deny + explicit allow including CoreDNS egress (UDP/TCP 53) for every pod.
-- Secrets out-of-repo via sealed-secrets; `TZ=UTC` in all ConfigMaps.
-- kube-prometheus-stack + Loki + Alertmanager → Telegram receiver; 5-7 critical alert rules.
-- FastAPI `/metrics` via `prometheus-fastapi-instrumentator==7.1.0,<8` + ServiceMonitor CRD.
-- CNPG WAL archiving to SeaweedFS S3 as the Postgres backup mechanism.
-- Redis AOF persistence (`appendonly yes`, `appendfsync everysec`) + PVC + `maxmemory` + `maxmemory-policy: allkeys-lru`.
-- Root-level Makefile: `build`, `scan`, `push`, `tf-validate`, `tf-plan`, `helm-lint`, `helm-validate`, `deploy`, `smoke`, `rollback`, `logs`, `psql`, `backup`, `up`, `down`.
-- Terraform local backend; module split: `infra/terraform/host/` + `infra/terraform/cluster/`.
+- Reachability manifest (route × nav × real-screen three-way join) — cheapest static check, catches the FND-04 defect class
+- Static hygiene sweep (TODO/FIXME/HACK grep, import-linter/ESLint boundary check, dead-code + duplication scan)
+- Live-backend schema/wire-shape divergence hunt via a manifest-driven capture-and-diff harness — the single highest-yield defect class per this project's own history
+- Browser UAT walk of every reachable screen against the real backend
+- 23-item v4.0 operator-pending triage (doable-locally vs genuinely hardware-gated)
+- One consolidated DEFECT registry
+- Fix phases grouped by category, each closing with contract-test-proof
+- Full-gate re-verification after every fix batch
 
-**Defer (v2+):**
-HPA, PodDisruptionBudgets, MetalLB, service mesh, ArgoCD/FluxCD, Vault, OPA/Gatekeeper, distributed tracing, image signing, multi-region backup, blue/green deployments, semantic-release automation.
+**Should have (differentiators, cut if time-boxed):** promoting the schema-diff harness and reachability check to permanent CI artifacts; root-cause tagging on registry rows; a severity-weighted burndown view; a scripted (not just manual) k3d backup/restore round-trip.
+
+**Anti-features (loud boundary, must not happen):** blanket coverage targets, mass reformatting bundled with logic fixes, speculative rearchitecting beyond restoring `import-linter` conformance, dependency bumps "while we're in there," iterate-until-dry auditing, fixing bugs inline during the audit pass without a registry row, screen-by-screen manual drift-chasing, and treating hardware-gated items as "must fix this milestone."
 
 ### Architecture Approach
 
-The topology maps one-for-one from docker-compose to Kubernetes primitives. Key structural decisions: one Helm umbrella chart (`helm/clubcore/`) with `values.yaml` (k3d defaults) and `values.prod.yaml` (production overrides); Terraform in two independent layers applied sequentially; observability in a dedicated `monitoring` namespace; backup CronJobs in the app namespace. See `.planning/research/ARCHITECTURE.md` for full component map, Terraform module tree, and Helm chart directory structure.
+The audit phase is a pure fan-in: three read-only sub-passes (browser-UAT functional audit, static hygiene audit, infra local-verify triage) write only to the registry, never to app code, so they are trivially parallel with zero collision surface. The registry is the hand-off contract — a single git-diffable Markdown table (not a database; over-engineered for dozens-of-findings scale), with mandatory fields `id, category, severity, anchor, repro, evidence, disposition, owning_phase, blocks/blocked_by, locked_invariant_risk`. Fix phases fan back out, gated by risk (fix `locked_invariant_risk` rows first) and by file-overlap (`blocked_by` sequences a hygiene fix after a functional fix touching the same file; unrelated files run in parallel).
 
-**Major components:**
+**Major components (all existing, only the registry and a few thin sweep scripts are new):**
+1. Capture-then-contract-test pattern (`apps/backend/tests/integration/<domain>/test_*_capture.py` → `apps/admin/src/features/<domain>/capture/*.json` → `*.contract.test.ts`) — already exists for ~5 of ~25 domains (promoCodes, payments-refund, messages, users-role-change, reports-load-now); the audit's job is to enumerate the ~20 domains lacking it, not invent the pattern.
+2. Composition-root Protocol slots (`app/main.py`) — the one legitimate seam for any new cross-module wiring hygiene work might need; never a direct `app.modules.x → app.modules.y` import.
+3. DEFECT-REGISTRY artifact (`.planning/audits/v4.1-DEFECT-REGISTRY.md`) — new, single source of truth.
+4. Locked safety rails (RBAC byte-parity, `LOCKED_AUDIT_EVENTS`/`LOCKED_EMAIL_TEMPLATES` AST gates, OpenAPI/`schema.d.ts` drift gate, 3 import-linter contracts, admin ESLint boundaries) — unchanged, but every fix phase touching adjacent code must re-run the specific gate + its negative-test fixture as an explicit phase-exit criterion, not defer to "the milestone's final gate run."
 
-1. **Helm umbrella chart** (`helm/clubcore/`) — Deployments for backend (replicas=1), telegram-bot (Recreate/replicas=1), arq-worker (Recreate/replicas=1), admin-app nginx, client-pwa nginx; Redis StatefulSet; CNPG Cluster CR; SeaweedFS Helm chart; migrate Job (pre-install hook); ConfigMaps + Secret refs.
-2. **Terraform IaC** — `host/` provisions k3s on the bare-metal node via `null_resource` + `remote-exec`; `cluster/` manages Helm releases and namespaces via kubernetes/helm providers authenticated via kubeconfig from `host/` output.
-3. **Observability stack** (`monitoring` namespace) — kube-prometheus-stack + Loki monolithic + Grafana Alloy. Alertmanager routes to Telegram.
-4. **Secrets layer** — sealed-secrets controller; `kubeseal` on dev machine; SealedSecret YAMLs committed to repo; controller RSA key backed up off-node.
-5. **Makefile automation** — only CI/CD layer; no git remote, no external runner; wraps k3d (local) and kubectl/helm/terraform (prod); local image registry via `k3d --registry-create`.
+### Critical Pitfalls (top 5 of 9, all project-specific, not generic)
 
-### Critical Pitfalls
+1. The audit phase never closes — mitigate with a hard freeze: registry is produced once; anything found during a fix phase is appended with a `discovered-during-fix` tag, never triggers a new audit sweep; no dependency bumps unless the bump IS the registered fix.
+2. Deleting code that only looks dead — this codebase has architecture-specific false positives (ARQ cron string-dispatch, Protocol slots registered only at `app/main.py`, migration-referenced helpers in `alembic/versions/*`, AST literal-string gates, lazy-loaded routes, python-telegram-bot string dispatch). Require full-repo STRING-literal grep (not just import-graph) plus explicit composition-root/ARQ-registration checks before any deletion; never delete based on one tool's confidence score alone.
+3. The pre-existing broken pytest suite (fixture-ordering deadlock + carried flakes) is the verification tool being partly broken. Fix ONLY the deadlock, time-boxed, early — every later fix phase depends on this to prove anything. The other pre-existing flakes (F821, `test_alembic_clean`) are logged as their own registry rows and may legitimately end `deferred` — but the deadlock itself is not optional and not a rabbit-hole target either (time-box it; fall back to per-module fixture-scoped isolation if root-causing exceeds budget).
+4. Regressing a LOCKED invariant while "just cleaning up" — any touch to RBAC enums/`can.ts`/`registry.ts`/`LOCKED_AUDIT_EVENTS`/`LOCKED_EMAIL_TEMPLATES`/OpenAPI/`.importlinter`/ESLint restricted-paths must update its parity mirror in the SAME commit and re-run the specific negative-test fixture to prove the gate still catches bad input, not just that it currently passes.
+5. Verification-honesty erosion — merge PITFALLS' three-state model with FEATURES' explicit-reason requirement into one registry contract (see Merged Registry Contract below); mandate re-checkable evidence (command + output/artifact path, never prose); run a milestone-close spot-audit re-running a sample of cited evidence.
 
-Full details in `.planning/research/PITFALLS.md`.
+Plus two domain-specific deep dives that sharpen the headline finding: Pitfall 7 (edge-case seed data must be authored BEFORE the live-backend UAT hunt, or clean seeded data hides the exact null/empty/pagination/error-shape/DST-money edges that caused the original v3.0/v3.1 bugs) and Pitfall 9 (k3d cannot prove node-failure, off-node secret custody, real network topology, or storage durability — any k3d-derived registry item must carry an explicit `(k3d-scope)` qualifier and the original v4.0 items stay open, unedited).
 
-1. **ARQ cron double-fire + Telegram duplicate polling** — `RollingUpdate` strategy creates a pod overlap window where two instances run simultaneously. Fix: `strategy: Recreate` + `replicas: 1` on arq-worker AND telegram-bot. Encode as a helm lint / kubeconform assertion so it cannot regress.
-2. **Postgres PVC node-affinity data loss** — `local-path-provisioner` PVs are node-bound; pod reschedule to another node mounts a blank volume. Fix: `nodeSelector` pinning Postgres to the storage node + `reclaimPolicy: Retain` on the StorageClass. CNPG operator manages this more gracefully via its WAL archive restore path.
-3. **Migrate Job races API boot** — without Helm hook ordering, both Job and Deployment are created simultaneously; API hits `column does not exist`. Fix: `helm.sh/hook: pre-install,pre-upgrade` + `helm.sh/hook-weight: "-5"` on migrate Job; optionally add `alembic check` initContainer to backend as belt-and-suspenders.
-4. **NetworkPolicy silently breaks DNS** — default-deny without an explicit egress rule to CoreDNS (kube-system, UDP/TCP 53) causes all outbound connections to timeout with no obvious error. Fix: standard DNS egress rule in every pod's NetworkPolicy; test with `nslookup postgres-svc` from each pod.
-5. **Sealed-secrets controller key loss** — no git remote means the RSA key lives only on the node. Fix: export key YAML immediately after install; back up to off-node PC alongside the repo.
-6. **Redis data loss on pod restart** — sessions, ARQ queue, WS pub/sub lost if only RDB snapshots enabled. Fix: `appendonly yes` + `appendfsync everysec` + `maxmemory` + PVC.
-7. **TZ=UTC invariant violated** — copying compose env files can carry `TZ=Europe/Moscow`, causing ARQ crons to fire 3 hours late and corrupting `gym_date STORED` column values. Fix: all containers MUST have `TZ=UTC`; verify with `kubectl exec <pod> -- env | grep TZ`.
+## The Layered Zod-vs-Wire Recommendation (reconciled, one coherent order)
 
----
+The four researchers describe the same fix from different angles (root cause, existing pattern, procedure, failure-mode prevention). Reconciled into one ordered recommendation:
+
+1. Generalize the existing capture-then-contract-test pattern to every domain lacking it (~20 of ~25). This is the architecturally correct, already-proven seam (`apps/backend/tests/integration/<domain>/test_*_capture.py` → real JSON fixture → `apps/admin/src/features/<domain>/*.contract.test.ts` parsing it with the REAL production Zod schema). Do this FIRST — it is empirical (real response bytes), not another layer of trust-the-spec, and it is the literal fix that closed the v3.0/v3.1 bugs, just not applied everywhere yet.
+2. Add the compile-time `AssertEqual<z.infer<Schema>, GeneratedType>` structural guard per domain, extending the repo's own `AssertNonNever` pattern in `packages/api-client/src/schema.contract.test.ts`. Zero new dependencies, rides the existing `tsc -b --noEmit` step. This is belt-and-suspenders on top of (1): it catches drift the OpenAPI spec already documents correctly but a hand-written Zod schema missed — a class of bug (1) alone would catch only if the seed data happens to exercise the diverging field.
+3. Add Schemathesis (new backend dev-dependency, GET-only scope first) as the layer that catches what neither (1) nor (2) can see: the backend's actual runtime response violating its own declared OpenAPI spec — i.e., spec-vs-runtime drift, not spec-vs-Zod drift.
+4. Do NOT derive Zod schemas mechanically from `schema.d.ts` (orval/openapi-zod-client/zodios) as a wholesale replacement. It doesn't address the actual failure mode (spec-vs-runtime, not spec-vs-Zod), would touch `packages/api-client`'s byte-stability drift gate (a locked invariant), would lose hand-tuned Russian-locale form-validation rules, and is exactly the kind of "architecturally cleaner" rewrite this hardening milestone must not do mid-flight.
+
+Method, not just fix (headline finding): both this hunt and the reachability audit converge on the same discipline — build a complete manifest first (every API-call-site × Zod-schema pair; every route × nav-entry × real-screen-component triple), then check the whole manifest mechanically, once. Never screen-by-screen. Completeness becomes a property of the manifest's coverage, not of tester diligence — this is the literal antidote to the failure mode that let 6+ divergence bugs and multiple recurrences of the FND-04 reachability bug through prior milestones' unit tests and manual click-throughs.
+
+The mandatory precondition for the hunt to work at all: an edge-case seed dataset must be authored BEFORE live-backend UAT begins — nullable fields actually null, empty-history entities, pagination past page 1, every error-family response (422/403/404/409/429/anti-oracle), and money/date DST-boundary values. Re-running the existing clean demo seed is not new evidence; it already passed with the same blind spots.
+
+## Merged Registry Contract (one schema, all constraints reconciled)
+
+A registry row is: `id, category, severity, anchor, repro, evidence, disposition, owning_phase, blocks/blocked_by, locked_invariant_risk, reason (if deferred)`.
+
+Disposition is a three-state model, merging PITFALLS' and FEATURES' requirements:
+- `fixed+verified` — evidence field names a re-checkable artifact (command + actual output, log path, screenshot path, or contract-test name) — never prose alone.
+- `fixed+unverified` — code changed but proof is incomplete/missing. Not a legitimate final state for anything not explicitly deferred — this is a transient/flagged state that must resolve to `fixed+verified` or be re-tagged `deferred` before milestone close.
+- `deferred` — final, valid, and expected for some rows. Requires an explicit reason: `operator-pending` (needs real hardware/credentials per D-V40-LOCAL-VALIDATE), `out-of-scope` (belongs to a different milestone/domain), or `accepted-risk` (understood, deliberately not worth fixing now). A `deferred` row is not revisited within this milestone once dispositioned.
+
+Category (3, matching the milestone's own three directions): FUNC (functional bugs on real data — schema drift, crashing/unreachable screens), HYGIENE (code hygiene + architecture — dead code, duplication, layer-boundary violations, TODO/FIXME/HACK closure), INFRA (locally-provable production readiness — k3d apply, backup/restore round-trip, sealed-secrets key backup).
+
+Severity (3-tier, compact for a solo-dev+AI-agent team): Blocker (crash / unusable / unreachable), Major (misbehaves without crashing), Minor (cosmetic / zero-behavioral-impact hygiene).
+
+Milestone exit criterion: every registry row has a terminal disposition (`fixed+verified` or `deferred`+reason — no bare `open`, no lingering `fixed+unverified`) AND all existing CI gates are green. Checkable by a literal grep for undispositioned rows — a scriptable zero-count check, not a vibe. An all-`fixed+verified` result with zero `deferred` rows is itself a red flag given 23 known pre-existing operator-pending items.
 
 ## Implications for Roadmap
 
-The build order follows hard dependency chains: images before manifests; stateful services before app Deployments; Helm before Terraform; networking/security/observability after the app stack is stable.
+### Phase 1: Audit (single phase, three parallel read-only sub-passes)
+Rationale: All four researchers agree this must be one phase, strictly before any fix work, because it is the only mechanism that makes "audit-once-then-fix" verifiable. The three sub-passes share zero files/gates and are genuinely parallel:
+- 1a. Static hygiene sweep — no infra needed: TODO/FIXME/HACK grep, import-linter contract review, Knip/jscpd/vulture/deptry one-shot runs, the feature-to-feature ESLint boundary gap check (see Named Gap below), reachability three-way join (`router.tsx` × `nav-items.ts` × real screen components).
+- 1b. Live-backend hunt — requires a running seeded backend (docker-compose/k3d): edge-case seed authoring FIRST (mandatory precondition), then the manifest-driven Zod-vs-wire capture-and-diff harness generalized across all ~25 domains, then browser UAT confirmation walk of every reachable screen.
+- 1c. Infra triage — desk review of the 23 v4.0 operator-pending items against "provable locally with k3d" vs. "genuinely hardware/credential-gated," entirely independent of 1a/1b.
+Delivers: One frozen `.planning/audits/v4.1-DEFECT-REGISTRY.md` snapshot.
+Avoids: Pitfalls 1 (scope creep), 7 (well-formed-data blind spot), 8 (reachability misses).
 
-### Phase 1: Docker Image Hardening
+### Phase 2: Test-infra unblock (early, time-boxed, narrow)
+Rationale: Every later fix phase's `fixed+verified` disposition depends on being able to run tests at all. Fix ONLY the autouse-fixture deadlock, time-boxed; fall back to per-module isolation if root-causing exceeds budget. Do not let this phase expand into full test-suite archaeology.
+Delivers: A pytest suite that either runs to completion or has a documented, scoped isolation workaround.
+Avoids: Pitfall 4 (rabbit-holing vs. unverified shipping).
 
-**Rationale:** Everything else is blocked on correct, production-grade container images. Backend Dockerfile exists but needs hardening; frontend Dockerfiles do not exist yet.
-**Delivers:** Production Dockerfiles for all 6 components; `.dockerignore` files; non-root users; pinned base digests; `tzdata` verified; `TZ=UTC` smoke tests; trivy scan green; git-SHA image tagging established.
-**Avoids:** Pitfalls P9 (non-root + tzdata + venv PATH + :latest), P10 (nginx SPA fallback + SW caching).
+### Phase 3: FUNC fix phase(s) — risk-first ordering within
+Rationale: Highest-yield category per project history; verified by contract-test-proof per divergence type (extending Phase 1's harness output into permanent fixtures) + reachability re-check.
+Ordering within phase: fix `locked_invariant_risk`-flagged rows first (smallest blast radius, highest-value safety-rail verification while attention is fresh), then remaining Zod/router/nav fixes.
+Addresses: FUNC category rows from the registry.
+Avoids: Pitfall 5 (LOCKED invariant regression) via same-commit parity-mirror updates + negative-fixture re-runs.
 
-### Phase 2: Helm Chart — Stateful Services (CNPG + Redis + SeaweedFS)
+### Phase 4: HYGIENE fix phase
+Rationale: Verified by re-running the full existing static gate suite (ruff, mypy --strict, import-linter, ESLint, tsc) rather than new tests — hygiene work should almost never need new test files; if it does, that's a sign scope silently expanded into FUNC territory.
+Sequencing: Rows on files with zero FUNC overlap can run in full parallel with Phase 3; rows on files WITH overlap must serialize after the corresponding FUNC fix lands (`blocked_by` in the registry) to avoid concurrent-edit ambiguity.
+Includes: closing TODO/FIXME/HACK markers (fix or convert to a dispositioned `deferred` row, never left silent), dead-code removal per the false-positive-safe procedure, adding the missing `features/x → features/y` ESLint zone — added LAST, after violations are fixed, so the gate doesn't fail on pre-existing debt mid-milestone.
+Avoids: Pitfalls 2 (mass reformatting — isolated commits only), 3 (false-positive dead-code deletion).
 
-**Rationale:** Stateful services are the dependency foundation for all app Deployments. Validating them in isolation is simpler than debugging alongside app startup issues.
-**Delivers:** CNPG operator Helm install + `Cluster` CR (`instances: 1`, WAL archiving to SeaweedFS S3); Redis StatefulSet + ConfigMap (AOF enabled, maxmemory set) + PVC; SeaweedFS Helm chart (standalone S3 mode); `reclaimPolicy: Retain` on StorageClass; PVC binding smoke test in k3d.
-**Avoids:** Pitfalls P1 (Postgres PVC node-affinity), P5 (Redis AOF). Bitnami images entirely absent.
-**Research flag:** CNPG `Cluster.spec.backup.barmanObjectStore` fields for SeaweedFS S3 endpoint need verification against CNPG v1 API docs during planning.
+### Phase 5: INFRA fix phase — fully parallel track
+Rationale: Zero file/gate overlap with FUNC/HYGIENE (Terraform/Helm/k3d vs. Python/TS toolchains) — can and should run concurrently with Phases 3–4 to shorten wall-clock time, gated only by k3d/toolchain availability.
+Delivers: Execution + evidence capture against the ALREADY-EXISTING v4.0 scripts (`make up`, `make smoke`, `make backup`, `restore-verify.sh`) plus the new `trivy config` IaC scan — this is execution, not new tool-building.
+Must record: every finding with an explicit `(k3d-scope)` qualifier; the original v4.0 HARD GATE items (SEC-02, BAK-03) remain open and unedited in the registry, referenced alongside the new narrower k3d findings, never replaced by them.
+Avoids: Pitfall 9 (k3d mistaken for production-equivalent proof).
 
-### Phase 3: Helm Chart — App Workloads + Migration Ordering
-
-**Rationale:** Solve the migrate-before-API ordering problem here; it is the hardest correctness constraint and should be proven before adding workers.
-**Delivers:** Migrate Job (`helm.sh/hook: pre-install,pre-upgrade`; `backoffLimit=0`; `activeDeadlineSeconds: 300`; `alembic check` initContainer on backend); backend Deployment (replicas=1, all probes, resource limits); arq-worker Deployment (`strategy: Recreate`, replicas=1, `TZ=UTC`); telegram-bot Deployment (`strategy: Recreate`, replicas=1); ConfigMap/Secret separation.
-**Avoids:** Pitfalls P2 (ARQ double-fire), P3 (Telegram duplicate-consume), P4 (migrate race), P11 (OOMKill + liveness), P12 (TZ drift).
-
-### Phase 4: Helm Chart — Frontends, Ingress, TLS
-
-**Rationale:** Networking is the biggest source of iteration debugging. Tackle as a dedicated phase after the app tier is stable.
-**Delivers:** admin-app nginx Deployment + Ingress; client-pwa nginx Deployment + Ingress (correct `try_files` SPA fallback + nginx SW cache headers); backend Ingress with WebSocket annotation and `FORWARDED_ALLOW_IPS` set; cert-manager v1.20.2 with `selfSigned` + `letsencrypt-staging` ClusterIssuers; HTTP→HTTPS Traefik middleware.
-**Avoids:** Pitfalls P7 (Traefik WS + LE rate limits + redirect loop), P10 (SPA fallback + SW).
-**Research flag:** Traefik v3 WebSocket sticky session annotation syntax — verify exact key during planning.
-
-### Phase 5: Secrets Management + Security Hardening
-
-**Rationale:** Finalise secrets workflow before any real credentials are applied. NetworkPolicies come after topology is stable to avoid DNS debugging noise during development.
-**Delivers:** sealed-secrets v0.37.0 controller; `kubeseal` workflow; all production secrets sealed + committed; controller RSA key backed up + documented; pod `securityContext` (runAsNonRoot, readOnlyRootFilesystem, allowPrivilegeEscalation: false, drop ALL capabilities); NetworkPolicy default-deny + explicit allow rules including CoreDNS DNS egress; `make scan` Trivy gate; `NAME-01` CSRF cookie rename verified.
-**Avoids:** Pitfalls P6 (sealed-secrets key loss), P8 (DNS breakage from missing CoreDNS rule).
-
-### Phase 6: Terraform IaC
-
-**Rationale:** Write Terraform AFTER the Helm chart works. Terraform wraps tested Helm releases; writing TF for untested resources multiplies iteration cost.
-**Delivers:** `infra/terraform/host/` module (k3s install via `null_resource` + `remote-exec`; `terraform.tfvars.example`; local state); `infra/terraform/cluster/` module (namespaces; `helm_release` resources using provider v3.2 list syntax; `terraform.tfvars.example`; local state); `make tf-validate` + `make tf-plan` green against k3d.
-**Avoids:** Remote state, Terragrunt, Terraform Cloud, multiple workspaces.
-
-### Phase 7: Observability
-
-**Rationale:** Observability is isolated in `monitoring` namespace and does not block the app. Adding after the app stack is stable means ServiceMonitors immediately have live targets to scrape.
-**Delivers:** kube-prometheus-stack v86.2.3 (single-node resource tuning: Prometheus 256Mi/512Mi, Grafana 128Mi, Alertmanager 64Mi; 7d retention); Loki community chart v17.3.1 (monolithic mode + Grafana Alloy, 30d retention); `prometheus-fastapi-instrumentator==7.1.0,<8` + `/metrics` endpoint + ServiceMonitor; Grafana dashboards (FastAPI, node-exporter, CNPG Postgres, Redis); 5-7 Alertmanager rules; Alertmanager → Telegram receiver.
-**Avoids:** Distributed tracing, Fluentd/Logstash, promtail (use Alloy), instrumentator v8.
-**Research flag:** Loki v17.x community chart Alloy sub-chart values schema changed from v6.x — review migration guide during planning.
-
-### Phase 8: Backup + Runbooks
-
-**Rationale:** CNPG WAL archiving is already configured in Phase 2; this phase adds the restore runbook, Redis and SeaweedFS backup CronJobs, and documents the operator-pending boundary.
-**Delivers:** CNPG `Cluster.spec.backup` stanza (WAL archiving + daily base backup to SeaweedFS S3); Redis RDB CronJob (weekly copy to SeaweedFS); SeaweedFS mirror CronJob (daily sync to second PVC); 7-daily/4-weekly retention; restore runbook (`infra/runbooks/restore.md`); production runbook (`infra/runbooks/production.md`).
-**Avoids:** Velero, PITR/pgBackRest, multi-region replication, backup encryption at this stage.
-
-### Phase 9: Makefile CI/CD + Full Local Smoke
-
-**Rationale:** The Makefile is the glue layer. Write it last when all individual pieces work independently.
-**Delivers:** Root-level `Makefile` with all targets; `make up` pipeline (build → scan → push → tf-validate → helm-lint → deploy → smoke) green against k3d; `make smoke` verifying: `/healthz` 200, migrate Job completed, Redis AOF on, `TZ=UTC` on all pods, DNS resolution from each pod, WebSocket upgrade through ingress, SPA fallback routing 200, PWA SW Cache Storage clean; operator-pending list finalised in production runbook.
-**Acceptance criteria:** Use the "Looks Done But Isn't" checklist from PITFALLS.md as the complete smoke definition.
+### Phase 6: Registry consolidation + milestone close (short closing step, not a full phase)
+Rationale: Mechanically cheap but must be an explicit checkpoint — re-open the registry, confirm every row is `fixed+verified` or `deferred`+reason (no bare `open`, no lingering `fixed+unverified`), run a milestone-close spot-audit re-running a sample of cited evidence, confirm all CI gates green, confirm the D-V40-LOCAL-VALIDATE boundary is honored (no fabricated evidence on anything still genuinely operator-pending).
+Avoids: Pitfall 6 (verification-honesty erosion).
 
 ### Phase Ordering Rationale
 
-- Images before manifests: k8s resources reference image tags that must exist and be trivy-clean first.
-- Stateful services before app Deployments: Postgres and Redis must be running before migrate Job; SeaweedFS must be running before backend lifespan `ensure_bucket` call.
-- App workloads before networking: debugging Ingress annotations is easier when pods are confirmed healthy.
-- Helm before Terraform: Terraform wraps working Helm releases — not the reverse.
-- Secrets + NetworkPolicies after topology is stable: default-deny policies during active development create DNS noise that obscures real bugs.
-- Observability after app stack: ServiceMonitors need live targets; Alertmanager Telegram token is a sealed secret finalised in Phase 5.
-- Backup after observability: the "no backup log in 25h" alert depends on Alertmanager.
-- Makefile last: `make up` is only meaningful when every underlying piece works independently.
+- Audit strictly precedes all fix work — enforced as a phase-boundary rule (read-only, no Edit/Write to app code during audit), not just a convention, per the Architecture research's identified "first failure mode."
+- Test-infra unblock comes early because it's the verification tool every later phase depends on — but is deliberately narrow and time-boxed to avoid becoming its own uncontrolled sub-project.
+- FUNC before HYGIENE within any shared file, but the two remain separate phases at the roadmap level since most files aren't touched by both — this avoids the "second failure mode" (concurrent edits on the same file making a later revert ambiguous).
+- INFRA is fully parallel to FUNC/HYGIENE the entire time — no reason to serialize a subsystem that shares no files or CI gates.
+- Registry consolidation and final close are checklist passes, not new work, mirroring this project's own gsd-audit-milestone precedent used at every prior milestone close.
 
 ### Research Flags
 
-Needs research during planning:
-- **Phase 2 (CNPG backup stanza):** Verify exact `barmanObjectStore` fields for SeaweedFS S3 endpoint against CNPG v1 API docs.
-- **Phase 4 (Traefik v3 WS sticky):** WebSocket sticky session annotation key may differ between Traefik v2 and v3. Verify before writing the Ingress template.
-- **Phase 7 (Loki v17.x Alloy):** Community chart v17.x has a new values schema for the Alloy sub-chart. Review migration guide before writing values files.
+Phases likely needing deeper research during planning:
+- Phase 1 (audit), sub-pass 1b specifically: the exact shape of the edge-case seed-data authoring task (which entities/lifecycle states/error families) may need a short planning-time research pass per domain, since PITFALLS' matrix is a starting checklist, not a domain-by-domain enumeration.
+- Phase 4 (HYGIENE): the open decision of whether dead-code tooling stays one-shot-forever or graduates to a CI gate needs an explicit planning-time decision (see Open Decisions below) — this affects whether Phase 4 includes a "wire Knip/jscpd/deptry into CI" sub-task.
 
-Standard patterns (no research phase needed):
-- **Phase 1 (Docker):** Multi-stage Dockerfile for Python/nginx is well-documented. No research phase.
-- **Phase 3 (Helm hooks):** Helm pre-install hook for Jobs is canonical and stable.
-- **Phase 5 (sealed-secrets):** `kubeseal` workflow is well-documented.
-- **Phase 6 (Terraform):** `null_resource` + `helm_release` patterns are standard. Verify `hashicorp/helm` v3.x list syntax during writing only.
-- **Phase 8 (Backup):** pg_dump CronJob is well-established.
-- **Phase 9 (Makefile):** No research phase — use PITFALLS.md "Looks Done But Isn't" as the acceptance checklist.
+Phases with standard patterns (skip research-phase, well-documented in this research already):
+- Phase 2 (test-infra unblock): root cause and fallback are already fully specified (fixture-ordering deadlock, per-module isolation workaround).
+- Phase 3 (FUNC fixes): the capture-then-contract-test + AssertEqual + Schemathesis layering is fully specified with a concrete code example.
+- Phase 5 (INFRA): pure execution of already-existing v4.0 scripts plus one new trivy config wrapper script mirroring an existing pattern — no new research needed.
 
----
+### Open Decisions Left for Planning (deliberately not resolved by research)
+
+1. One-shot vs. CI-gated dead-code/duplication tooling (Knip, jscpd, vulture, deptry). All four researchers agree: run once during audit, triage into the registry, and wire into CI only after a clean baseline — but whether that graduation actually happens in v4.1 (a P2 differentiator per FEATURES) or is deferred to v4.2 is an explicit roadmap decision, not a research conclusion. `deptry` is called out as safe to wire immediately (low false-positive rate); Knip/jscpd should stay manual/local longer given this repo's dynamic-import lazy routes and intentional per-domain repetition.
+2. Whether `apps/client` gets the same Zod/contract-test treatment as `apps/admin`, or is accepted as out of scope. STACK confirms `apps/client` has zero `zod` dependency today — its `client_auth`/`client_portal` consumers have no runtime response validation at all. Introducing `zod` there is a bigger lift (new dependency + net-new schema authoring, not "extend an existing pattern") than generalizing `apps/admin`'s existing 5-of-25 coverage. The roadmap must explicitly decide: (a) in-scope for v4.1 with its own fix-phase allocation, (b) logged as a `deferred:out-of-scope` registry row for a future milestone, or (c) partial — e.g., only the highest-risk `client_auth` endpoints. Research does not pick one; it flags the asymmetry.
+3. Exact severity taxonomy and DEFECT-id scheme beyond the merged 3×3×3 contract above — the researchers converge on the shape (3-tier severity, 3-category, sequential DEFECT-NNN ids never renumbered) but the roadmapper/planner should confirm this against actual registry volume once the audit phase produces real numbers (dozens expected, not hundreds — if hundreds materialize, split the registry per-category, but do not pre-optimize for that).
+4. Whether the `trivy config` IaC scan and the Playwright route-sweep graduate to CI-gated checks or stay permanently manual/on-demand — both are recommended as manual/`workflow_dispatch`-only for v4.1 explicitly to avoid becoming the next flaky/ignored gate; a future milestone can revisit.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All versions verified via GitHub releases and ArtifactHub on 2026-06-16. Archive/retirement events confirmed via official sources. |
-| Features | HIGH | Derived from the actual docker-compose topology (read live) + locked milestone decisions from PROJECT.md. No inference needed. |
-| Architecture | HIGH | Component mapping derived from live codebase (docker-compose.yml, WorkerSettings, Dockerfile). Single reconciliation (MinIO→SeaweedFS) resolved by STACK.md archive finding. |
-| Pitfalls | HIGH | 12 pitfalls derived from live code (ARQ unique=True implementation, Dockerfile USER/chown, TZ comments in workers). All have concrete verification commands. |
+| Stack | HIGH | All tool versions verified live (npm/PyPI/GitHub releases, 2026-07-26); all "already have it" claims verified by reading actual repo files (Makefile, scripts, package.json), not assumed from the brief |
+| Features | HIGH (process/practice claims), MEDIUM (procedures (c)/(d) step-by-step, which are synthesized/adapted rather than verbatim-cited — no single external source describes clubcore's exact stack) | Cross-checked against multiple independent industry sources (defect taxonomy, contract testing, feature-flag-cleanup audit practice) and against the project's own PROJECT.md lessons |
+| Architecture | HIGH | Grounded entirely in direct repo inspection — file paths, existing test patterns, CI gate config, .importlinter contracts, actual ESLint config content (not just documented conventions) |
+| Pitfalls | HIGH | Grounded directly in this repo's locked invariants, documented decisions (D-V40-LOCAL-VALIDATE, D-71-09, D-20-MODULE, D-62-09), and its own two-time-repeated defect class — not generic advice |
 
-**Overall confidence: HIGH**
+**Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **CNPG SeaweedFS backup stanza:** Exact `barmanObjectStore` fields for non-AWS S3 need verification against live CNPG API docs. Documentation lookup during Phase 2 planning.
-- **Traefik v3 WebSocket sticky session annotation:** Key may have changed between Traefik v2 and v3. Verify during Phase 4 planning before writing the Ingress template.
-- **Loki v17.x Alloy configuration schema:** New community chart sub-chart values keys need to be read during Phase 7 planning.
-- **Sealed-secrets key backup as acceptance criterion:** The key backup step must be an explicit Phase 5 acceptance criterion, not a post-hoc action. PITFALLS.md P6 calls this out as a high-risk operator-pending item.
-- **prometheus-fastapi-instrumentator v8 upgrade path:** Schedule as a follow-on task with its own regression gate against the 729-test auth stack. Do not couple to any infra phase.
-
----
-
-## What Local Validation Cannot Catch (Operator-Pending Boundary)
-
-| Item | What Is Missing |
-|------|-----------------|
-| Let's Encrypt TLS (production ACME) | Switch ClusterIssuer from `letsencrypt-staging` to `letsencrypt-prod` on live server |
-| Postgres disk durability on real hardware | Actual bare-metal disk failure is not simulatable in k3d |
-| Redis AOF on real power loss | Verify `aof-use-rdb-preamble yes` on live server after deployment |
-| YooKassa webhook reachability | Register real webhook URL; send sandbox test payment |
-| RU email deliverability (Yandex Postbox) | SPF/DKIM/DMARC verification — pre-existing operator-pending from v1.6 |
-| Telegram bot token in production | Set real `TELEGRAM_BOT_TOKEN` in sealed secret before live apply |
-| `terraform apply` on real VM | Requires real SSH credentials to the bare-metal server |
-| Prometheus alert delivery to Telegram | Alertmanager has no real Telegram bot token in local validation |
-
----
+- Real registry volume is unknown until the audit phase runs. All sequencing/parallelism guidance assumes "dozens, not hundreds" of findings; if volume is much higher, the single-Markdown-file registry format and the phase structure above should be revisited (split per category) rather than forced.
+- Exact list of domains lacking the capture-then-contract-test pattern is enumerated qualitatively (~20 of ~25) but not exhaustively named in research — Phase 1's static sweep must produce the definitive list.
+- The precise current TODO/FIXME/HACK count (research cites "32" from PROJECT.md context and "19" from a direct grep at research time — these may have drifted since) must be re-derived fresh at audit time, not assumed from either research document.
+- `apps/client` Zod-adoption decision (Open Decision #2 above) has real cost implications for phase sizing and is unresolved by design — must be settled during roadmap/phase-planning, not silently defaulted either way.
 
 ## Sources
 
-### Primary (HIGH confidence)
+### Primary (HIGH confidence — direct repo inspection)
+- `apps/admin/package.json`, `apps/client/package.json` — actual dependency versions (React 18.3.1/Vite 5.4 vs. documented React 19/Vite 6)
+- `apps/admin/src/api/client.ts`, `apps/admin/src/features/*/schemas.ts` (17 files), `packages/api-client/src/schema.d.ts`, `schema.contract.test.ts` — the AssertNonNever pattern and the Zod-vs-generated-type gap
+- `apps/backend/tests/integration/promo_codes/test_promo_capture.py`, `apps/admin/src/features/promoCodes/promo.contract.test.ts` — the existing capture-then-contract-test worked example
+- `apps/backend/.importlinter`, `apps/backend/app/main.py`, `apps/backend/tests/integration/test_rbac_parity.py`, `test_route_introspection.py`, `apps/backend/tests/unit/test_service_commit_gate.py`, `test_audit_taxonomy.py` — locked invariant mechanics
+- `apps/admin/eslint.config.js` — confirmed the feature-to-feature import boundary is convention-only, not machine-enforced
+- `Makefile`, `infra/scripts/{restore-verify,smoke,scan-images}.sh` — already-implemented infra verification (kubeconform, CNPG restore round-trip, 8-check smoke)
+- `.planning/PROJECT.md` — v3.0/v3.1 schema-drift lesson, D-71-09/FND-04 reachability lesson, D-V40-LOCAL-VALIDATE, 23-item v4.0 operator-pending boundary with 2 HARD GATES
+- `.github/workflows/ci.yml` — full existing CI gate inventory
 
-- `apps/backend/docker-compose.yml` — live topology (read 2026-06-16)
-- `apps/backend/app/workers/__init__.py` (WorkerSettings) — ARQ cron unique=True, TZ=UTC, MSK offsets confirmed
-- `apps/backend/Dockerfile` — non-root user, venv PATH, chown coverage
-- `.planning/PROJECT.md` — v4.0 milestone scope, locked decisions
-- https://github.com/k3s-io/k3s/releases — k3s stable channel v1.33.x (verified 2026-06-16)
-- https://github.com/k3d-io/k3d/releases/tag/v5.9.0 — k3d v5.9.0 (2026-06-02)
-- https://github.com/helm/helm/releases — Helm v3.21.1 latest v3 (2026-05-14)
-- https://developer.hashicorp.com/terraform/install — Terraform v1.15.6 (verified 2026-06-16)
-- https://github.com/hashicorp/terraform-provider-helm/releases — v3.2.0; breaking schema change from 2.x confirmed
-- https://kubernetes.io/blog/2025/11/11/ingress-nginx-retirement/ — ingress-nginx retirement official
-- https://github.com/minio/minio — archived April 25, 2026 (confirmed)
-- https://artifacthub.io/packages/helm/prometheus-community/kube-prometheus-stack — v86.2.3 (2026-06-13)
-- https://github.com/grafana-community/helm-charts/releases/tag/loki-17.3.1 — Loki community chart v17.3.1 (2026-06-10)
-- https://grafana.com/docs/loki/latest/setup/upgrade/upgrade-to-community/ — Loki repo migration official
-- https://github.com/bitnami-labs/sealed-secrets/releases/tag/v0.37.0 — v0.37.0 (2026-05-21)
-- https://artifacthub.io/packages/helm/seaweedfs/seaweedfs — SeaweedFS Helm v4.33.0 (2026-06-11)
-- https://github.com/trallnag/prometheus-fastapi-instrumentator/releases — v8.0.0 breaking; v7.1.0 for FastAPI >=0.115
-- https://cert-manager.io/docs/releases/ — v1.20.2 latest stable (2026-04-11)
-- https://github.com/aquasecurity/trivy/releases/tag/v0.71.0 — Trivy v0.71.0 (2026-06-01)
-- https://newreleases.io/project/github/yannh/kubeconform/release/v0.8.0 — kubeconform v0.8.0 (2026-06-04)
-
-### Secondary (MEDIUM confidence)
-
-- https://www.youngju.dev/blog/database/2026-04-11-kubernetes-database-operators-guide.en — Bitnami paywall + CNPG recommendation
-- https://itnext.io/minio-alternative-seaweedfs-41fe42c3f7be — SeaweedFS as MinIO replacement (2026-01-30)
-- ARQ 0.28 codebase — `unique=True` cron lock implementation (`arq/cron.py`)
-- k3s documentation — local-path-provisioner node affinity behaviour
+### Secondary (verified live, current as of 2026-07-26)
+- npm registry: `@playwright/test@1.62.0`, `knip@6.20.0`, `jscpd@5.0.12`
+- PyPI: `schemathesis@4.22.4`, `vulture@2.16`, `deptry@0.25.1`
+- GitHub Releases: `helm/chart-testing@v3.14.0`, `kudobuilder/kuttl@v0.26.0` (both evaluated and rejected)
+- Industry practice sources on defect taxonomy, hardening-sprint anti-patterns, contract testing, feature-flag-cleanup audits, Chesterton's Fence / scope-creep-in-refactoring (see FEATURES.md Sources for full list)
 
 ---
-
-*Research completed: 2026-06-16*
+*Research completed: 2026-07-26*
 *Ready for roadmap: yes*

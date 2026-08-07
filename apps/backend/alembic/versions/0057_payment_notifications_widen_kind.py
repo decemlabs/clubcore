@@ -59,9 +59,7 @@ _OLD_KIND_PREDICATE = (
 
 def upgrade() -> None:
     # D-84-01: raw DDL for locked tables — avoids NAMING_CONVENTION double-prefix.
-    op.execute(
-        f"ALTER TABLE payment_notifications DROP CONSTRAINT {_KIND_CHECK_NAME}"
-    )
+    op.execute(f"ALTER TABLE payment_notifications DROP CONSTRAINT {_KIND_CHECK_NAME}")
     op.execute(
         f"ALTER TABLE payment_notifications ADD CONSTRAINT {_KIND_CHECK_NAME}"
         f" CHECK ({_NEW_KIND_PREDICATE})"
@@ -70,9 +68,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Restore the narrower CHECK (without 'autopay_charge_succeeded').
-    op.execute(
-        f"ALTER TABLE payment_notifications DROP CONSTRAINT {_KIND_CHECK_NAME}"
-    )
+    op.execute(f"ALTER TABLE payment_notifications DROP CONSTRAINT {_KIND_CHECK_NAME}")
     op.execute(
         f"ALTER TABLE payment_notifications ADD CONSTRAINT {_KIND_CHECK_NAME}"
         f" CHECK ({_OLD_KIND_PREDICATE})"

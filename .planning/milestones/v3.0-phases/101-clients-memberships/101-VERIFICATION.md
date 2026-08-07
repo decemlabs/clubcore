@@ -1,10 +1,15 @@
 ---
 phase: 101-clients-memberships
 verified: 2026-06-13T15:12:00Z
-status: human_needed
+status: passed
 score: 5/5 must-haves verified
 overrides_applied: 0
-human_verification:
+# The deferred live-browser UAT for P101 was run on 2026-06-14; this frontmatter
+# lagged behind it until the 2026-07-26 cross-phase UAT audit (quick 260726-hou).
+# That run found 8 real bugs across v3.0 (FE Zod schemas vs live wire shapes) —
+# all fixed (260614-hux / 5e3b41f1) and re-verified before the pass was recorded.
+human_uat_closed_by: .planning/v3.0-UAT-BROWSER-AUDIT.md + .planning/v3.0-UAT-VERIFICATION-PASS.md (all 6 P101 items ✅ live, owner + reception)
+human_verification_closed:
   - test: "Open Clients list → search for a client by name (min 2 chars, 300ms debounce) → confirm server-side results change with real data from GET /api/v1/clients"
     expected: "Results filter in real time after 300ms; fewer than 2 chars typed → list unchanged; pagination controls driven by {total,page,pageSize}"
     why_human: "Requires live backend (docker compose) — cannot verify real network round-trip, debounce timing, or server-side search results programmatically"

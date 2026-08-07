@@ -1,0 +1,1430 @@
+=== START: 2026-07-26T15:50:52Z ===
+============================= test session starts ==============================
+platform darwin -- Python 3.12.12, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/andre/Workspace/Development/clubcore/apps/backend
+configfile: pyproject.toml
+testpaths: tests
+plugins: timeout-2.4.0, asyncio-1.3.0, respx-0.23.1, anyio-4.13.0
+timeout: 180.0s
+timeout method: signal
+timeout func_only: False
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 3071 items
+
+tests/integration/alembic/test_migration_0027_cleanup.py ..              [  0%]
+tests/integration/alembic/test_migration_0033_clients_email.py ....      [  0%]
+tests/integration/auth/test_change_password.py .......                   [  0%]
+tests/integration/auth/test_invalid_session.py ..                        [  0%]
+tests/integration/auth/test_invitation_accept.py .........               [  0%]
+tests/integration/auth/test_invitation_accept_insert_only.py .           [  0%]
+tests/integration/auth/test_login.py ........                            [  1%]
+tests/integration/auth/test_login_argon2_hygiene.py ..                   [  1%]
+tests/integration/auth/test_login_deactivated_user.py ....               [  1%]
+tests/integration/auth/test_logout.py .......                            [  1%]
+tests/integration/auth/test_otp_email_anti_oracle.py .                   [  1%]
+tests/integration/auth/test_password_reset_confirm.py ....               [  1%]
+tests/integration/auth/test_password_reset_no_oracle.py .                [  1%]
+tests/integration/auth/test_password_reset_rate_limit.py ...             [  1%]
+tests/integration/auth/test_profile_update.py ........                   [  2%]
+tests/integration/auth/test_refresh.py .....                             [  2%]
+tests/integration/auth/test_request_otp_inactive_user.py ...             [  2%]
+tests/integration/auth/test_sessions_endpoints.py .............          [  2%]
+tests/integration/auth/test_telegram_start.py ..                         [  2%]
+tests/integration/auth/test_telegram_verify_errors.py .....              [  2%]
+tests/integration/auth/test_telegram_verify_happy.py .                   [  2%]
+tests/integration/autopay_charges/test_autopay_charges_migration.py .... [  3%]
+...                                                                      [  3%]
+tests/integration/autopay_charges/test_autopay_idempotency.py ....       [  3%]
+tests/integration/autopay_charges/test_autopay_notifications.py ...      [  3%]
+tests/integration/autopay_charges/test_autopay_skip_matrix.py ......     [  3%]
+tests/integration/autopay_charges/test_charge_expiring_autopay.py .....  [  3%]
+tests/integration/bookings/test_booking_race.py .                        [  3%]
+tests/integration/bookings/test_booking_settings_enforcement.py ........ [  4%]
+...                                                                      [  4%]
+tests/integration/bookings/test_bookings_cancel.py ........              [  4%]
+tests/integration/bookings/test_bookings_create.py ......F.....          [  4%]
+tests/integration/bookings/test_bookings_list.py ...........             [  5%]
+tests/integration/bookings/test_bookings_router_smoke.py .......         [  5%]
+tests/integration/bookings/test_cancel_booking_for_client.py .....       [  5%]
+tests/integration/bookings/test_cancel_sends_dm.py .....                 [  5%]
+tests/integration/bookings/test_create_booking_for_client.py .........   [  6%]
+tests/integration/bookings/test_create_booking_via_bot.py ..........     [  6%]
+tests/integration/bookings/test_create_booking_via_bot_nullable_actor.py . [  6%]
+....                                                                     [  6%]
+tests/integration/bookings/test_create_sends_dm.py ...                   [  6%]
+tests/integration/bookings/test_idempotency_hardening.py ......          [  6%]
+tests/integration/bookings/test_new_enforcement_guards.py ...            [  6%]
+tests/integration/bookings/test_no_show_cron.py ...                      [  7%]
+tests/integration/bookings/test_p102_booking_lifecycle.py ...            [  7%]
+tests/integration/bookings/test_reminder_cron.py .....                   [  7%]
+tests/integration/bookings/test_reschedule_booking_for_client.py ....... [  7%]
+...                                                                      [  7%]
+tests/integration/client_auth/test_byte_parity.py ...                    [  7%]
+tests/integration/client_auth/test_idor.py ..                            [  7%]
+tests/integration/client_auth/test_otp_isolation.py .......              [  8%]
+tests/integration/client_auth/test_profile_update.py ..                  [  8%]
+tests/integration/client_auth/test_session_lifecycle.py ....             [  8%]
+tests/integration/client_portal/test_checkout.py ..............          [  8%]
+tests/integration/client_portal/test_client_booking.py ......            [  8%]
+tests/integration/client_portal/test_client_booking_idor.py ...          [  8%]
+tests/integration/client_portal/test_client_booking_race.py .            [  8%]
+tests/integration/client_portal/test_client_me_route.py ...              [  9%]
+tests/integration/client_portal/test_client_reschedule.py .              [  9%]
+tests/integration/client_portal/test_client_trainer_detail.py .......    [  9%]
+tests/integration/client_portal/test_fit15_seed.py ...                   [  9%]
+tests/integration/client_portal/test_idor_sweep.py ...............       [  9%]
+tests/integration/client_portal/test_notif_prefs_route.py ....           [ 10%]
+tests/integration/client_portal/test_payment_method_endpoints.py ....... [ 10%]
+.                                                                        [ 10%]
+tests/integration/client_portal/test_payment_method_webhook_save.py .... [ 10%]
+.                                                                        [ 10%]
+tests/integration/client_portal/test_qr_checkin.py ......                [ 10%]
+tests/integration/client_portal/test_qr_token_issue.py .....             [ 10%]
+tests/integration/client_portal/test_read_endpoints.py ............      [ 11%]
+tests/integration/client_portal/test_weekly_activity.py ........         [ 11%]
+tests/integration/clients/test_audit_writes.py .....                     [ 11%]
+tests/integration/clients/test_clients_crud.py ..........                [ 11%]
+tests/integration/clients/test_clients_list.py ..........                [ 12%]
+tests/integration/clients/test_clients_rbac.py .....                     [ 12%]
+tests/integration/clients/test_persistence.py ....                       [ 12%]
+tests/integration/clients/test_search.py .....                           [ 12%]
+tests/integration/email/test_dispatch_email_audit_integration.py ..      [ 12%]
+tests/integration/email_webhook/test_webhook_hmac_and_routing.py ....... [ 13%]
+.....                                                                    [ 13%]
+tests/integration/fiscal_receipts/test_alembic_0049_customer_phone.py .. [ 13%]
+....                                                                     [ 13%]
+tests/integration/fiscal_receipts/test_circuit_breaker_open_state_parity.py . [ 13%]
+.                                                                        [ 13%]
+tests/integration/fiscal_receipts/test_dispatch_fiscal_receipt.py ...... [ 13%]
+........                                                                 [ 13%]
+tests/integration/fiscal_receipts/test_e2e_fiscal_receipt_full_cycle.py . [ 13%]
+...                                                                      [ 14%]
+tests/integration/fiscal_receipts/test_monitor_stale_cron.py .....s      [ 14%]
+tests/integration/memberships/test_audit_writes.py .....                 [ 14%]
+tests/integration/memberships/test_cancel_during_freeze.py ..            [ 14%]
+tests/integration/memberships/test_expire_due_memberships_service.py ... [ 14%]
+.                                                                        [ 14%]
+tests/integration/memberships/test_expire_due_rows.py .....              [ 14%]
+tests/integration/memberships/test_freeze_cycle.py .                     [ 14%]
+tests/integration/memberships/test_freeze_endpoints.py ............      [ 15%]
+tests/integration/memberships/test_freeze_helpers.py ..                  [ 15%]
+tests/integration/memberships/test_freeze_limit.py ...                   [ 15%]
+tests/integration/memberships/test_freeze_race.py F                      [ 15%]
+tests/integration/memberships/test_freeze_resolver.py ...                [ 15%]
+tests/integration/memberships/test_idempotency_hardening.py ............ [ 15%]
+...                                                                      [ 15%]
+tests/integration/memberships/test_list_expiring.py .........            [ 16%]
+tests/integration/memberships/test_memberships_audit.py ......           [ 16%]
+tests/integration/memberships/test_memberships_crud.py ................. [ 17%]
+.                                                                        [ 17%]
+tests/integration/memberships/test_memberships_list.py ..........        [ 17%]
+tests/integration/memberships/test_memberships_rbac.py ........          [ 17%]
+tests/integration/memberships/test_plan_in_use.py ......                 [ 17%]
+tests/integration/memberships/test_plans_crud.py ................        [ 18%]
+tests/integration/memberships/test_plans_list.py .........               [ 18%]
+tests/integration/memberships/test_plans_rbac.py .......                 [ 18%]
+tests/integration/memberships/test_renewal_active.py ..                  [ 18%]
+tests/integration/memberships/test_renewal_archived_plan.py ..           [ 19%]
+tests/integration/memberships/test_renewal_endpoint.py ................  [ 19%]
+tests/integration/memberships/test_renewal_expired_source.py ..          [ 19%]
+tests/integration/memberships/test_renewal_from_frozen.py .              [ 19%]
+tests/integration/memberships/test_renewal_price_change.py .             [ 19%]
+tests/integration/memberships/test_renewal_repository.py .....           [ 19%]
+tests/integration/memberships/test_renewal_resolver_tiebreak.py ....     [ 19%]
+tests/integration/memberships/test_resolver.py ...........               [ 20%]
+tests/integration/messaging/test_staff_messaging.py .............        [ 20%]
+tests/integration/migrations/test_visits_channel_client_qr.py ..ss.      [ 20%]
+tests/integration/notifications/test_expiring_7d_happy_path.py .         [ 20%]
+tests/integration/notifications/test_frozen_skipped.py .                 [ 20%]
+tests/integration/notifications/test_idempotency_constraint.py .         [ 21%]
+tests/integration/notifications/test_select_exclusions.py ....           [ 21%]
+tests/integration/notifications/test_send_403_retry.py .                 [ 21%]
+tests/integration/notifications/test_three_kinds_one_run.py .            [ 21%]
+tests/integration/online_payments/test_activate_from_webhook.py .....    [ 21%]
+tests/integration/online_payments/test_concurrent_refund_arbitration_race.py . [ 21%]
+                                                                         [ 21%]
+tests/integration/online_payments/test_e2e_audit_chain.py ...            [ 21%]
+tests/integration/online_payments/test_e2e_sell_flow.py ..........       [ 21%]
+tests/integration/online_payments/test_idempotency_hardening.py ........ [ 22%]
+....                                                                     [ 22%]
+tests/integration/online_payments/test_kopecks_rubles_precision_race.py . [ 22%]
+..........                                                               [ 22%]
+tests/integration/online_payments/test_notify05_cancellation_regression.py . [ 22%]
+.                                                                        [ 22%]
+tests/integration/online_payments/test_payment_notifications_e2e.py .... [ 22%]
+..                                                                       [ 22%]
+tests/integration/online_payments/test_payment_succeeded_double_delivery_race.py . [ 22%]
+                                                                         [ 22%]
+tests/integration/online_payments/test_record_payment_handles_none.py .. [ 22%]
+.                                                                        [ 22%]
+tests/integration/online_payments/test_webhook_after_redis_restart_race.py . [ 22%]
+                                                                         [ 22%]
+tests/integration/online_refunds/test_e2e_refund_full_cycle.py ....      [ 23%]
+tests/integration/online_refunds/test_initiate_membership_refund.py .... [ 23%]
+.                                                                        [ 23%]
+tests/integration/online_refunds/test_initiate_pt_package_refund.py .    [ 23%]
+tests/integration/online_refunds/test_poll_pending_refunds_cron.py s.... [ 23%]
+.sss                                                                     [ 23%]
+tests/integration/payments/test_idempotency.py .....                     [ 23%]
+tests/integration/payments/test_payments_arbitrary_refund.py .........   [ 24%]
+tests/integration/payments/test_payments_audit_chain.py ....             [ 24%]
+tests/integration/payments/test_payments_list.py .........               [ 24%]
+tests/integration/payments/test_payments_refund.py ...............       [ 24%]
+tests/integration/payments/test_payments_refund_audit_chain.py ...       [ 25%]
+tests/integration/payments/test_payments_refund_race.py .                [ 25%]
+tests/integration/payments/test_payments_sale.py ....                    [ 25%]
+tests/integration/payments/test_refund_capture.py .                      [ 25%]
+tests/integration/payroll/test_p102_payroll_lifecycle.py ..              [ 25%]
+tests/integration/payroll/test_payroll_accruals.py ............          [ 25%]
+tests/integration/payroll/test_payroll_clawback.py .....                 [ 25%]
+tests/integration/payroll/test_payroll_comp_config.py .........          [ 26%]
+tests/integration/payroll/test_payroll_list.py ........                  [ 26%]
+tests/integration/payroll/test_payroll_preview.py ........               [ 26%]
+tests/integration/promo_codes/test_promo_capture.py .                    [ 26%]
+tests/integration/promo_codes/test_promo_codes_crud.py ..............    [ 27%]
+tests/integration/promo_codes/test_promo_codes_rbac.py ......            [ 27%]
+tests/integration/pt_packages/test_expire_pt_packages_cron.py ....       [ 27%]
+tests/integration/pt_packages/test_idempotency_hardening.py .........    [ 27%]
+tests/integration/pt_packages/test_pt_package_cancel.py ...........      [ 28%]
+tests/integration/pt_packages/test_pt_package_plans_crud.py ............ [ 28%]
+.............                                                            [ 28%]
+tests/integration/pt_packages/test_pt_package_read_apis.py ........      [ 29%]
+tests/integration/pt_packages/test_pt_package_refund.py .............    [ 29%]
+tests/integration/pt_packages/test_pt_package_refund_race.py .           [ 29%]
+tests/integration/pt_packages/test_pt_package_sale.py ..........         [ 30%]
+tests/integration/pt_packages/test_pt_packages_refund_guard.py ......    [ 30%]
+tests/integration/pt_packages/test_pt_packages_trainer_id.py ....        [ 30%]
+tests/integration/pt_sessions/test_idempotency_hardening.py ......       [ 30%]
+tests/integration/pt_sessions/test_pt_session_cancel.py ........         [ 30%]
+tests/integration/pt_sessions/test_pt_session_read.py .....              [ 30%]
+tests/integration/pt_sessions/test_pt_session_record.py ............     [ 31%]
+tests/integration/pt_sessions/test_pt_session_record_race.py .           [ 31%]
+tests/integration/pt_sessions/test_pt_sessions_booking_completion.py ... [ 31%]
+.......                                                                  [ 31%]
+tests/integration/rbac/test_owner_only.py .............................. [ 32%]
+........................................................................ [ 35%]
+.....................................                                    [ 36%]
+tests/integration/reports/test_audit_log.py ...............              [ 36%]
+tests/integration/reports/test_csv_export.py ........................... [ 37%]
+..                                                                       [ 37%]
+tests/integration/reports/test_load_now_capture.py .                     [ 37%]
+tests/integration/reports/test_payments_csv.py ...                       [ 37%]
+tests/integration/reports/test_reports_advanced.py ................      [ 38%]
+tests/integration/reports/test_reports_clients.py ..........             [ 38%]
+tests/integration/reports/test_reports_dst.py ...                        [ 38%]
+tests/integration/reports/test_reports_revenue.py .........              [ 39%]
+tests/integration/reports/test_reports_trainers.py ....................  [ 39%]
+tests/integration/reports/test_reports_visits.py ........                [ 39%]
+tests/integration/schedule/test_generate_recurring_slots.py .....        [ 40%]
+tests/integration/schedule/test_recurring_templates.py ........          [ 40%]
+tests/integration/schedule/test_schedule_router_smoke.py ......          [ 40%]
+tests/integration/schedule/test_schedule_service.py ..................   [ 41%]
+tests/integration/schedule/test_slot_cancel_cascade.py .........         [ 41%]
+tests/integration/schedule/test_time_off.py ..........                   [ 41%]
+tests/integration/telegram/test_handler_start.py ...                     [ 41%]
+tests/integration/telegram_bot/test_book_callback.py ...............     [ 42%]
+tests/integration/telegram_bot/test_book_command.py .......              [ 42%]
+tests/integration/telegram_bot/test_checkin_dm_days_remaining.py ...     [ 42%]
+tests/integration/telegram_bot/test_checkin_handler.py .......           [ 42%]
+tests/integration/telegram_bot/test_dedupe_helper.py ...                 [ 43%]
+tests/integration/telegram_bot/test_forward_to_staff.py ...............  [ 43%]
+tests/integration/telegram_bot/test_handler_context_shape.py .......     [ 43%]
+tests/integration/telegram_bot/test_staff_reply_handler.py ...........   [ 44%]
+tests/integration/telegram_bot/test_worker_handlers_registered.py .      [ 44%]
+tests/integration/test_alembic_0034_online_payments.py .....             [ 44%]
+tests/integration/test_alembic_0035_fiscal_receipts.py .......           [ 44%]
+tests/integration/test_alembic_0053_booking_notif_rescheduled.py ...     [ 44%]
+tests/integration/test_alembic_0067_referral.py ....                     [ 44%]
+tests/integration/test_alembic_clean.py ..                               [ 44%]
+tests/integration/test_app_wiring.py ....                                [ 44%]
+tests/integration/test_booking_email_fallback.py .....                   [ 45%]
+tests/integration/test_bounce_webhook_active_send_race.py .              [ 45%]
+tests/integration/test_concurrent_expiring_cron_double_pings_race.py .   [ 45%]
+tests/integration/test_db_session_savepoint.py ..                        [ 45%]
+tests/integration/test_deactivate_refresh_race.py .                      [ 45%]
+tests/integration/test_expiring_email_fallback.py ...                    [ 45%]
+tests/integration/test_gym_info.py .....                                 [ 45%]
+tests/integration/test_healthz.py ..                                     [ 45%]
+tests/integration/test_loyalty_accrual.py ...                            [ 45%]
+tests/integration/test_loyalty_grant.py .......                          [ 45%]
+tests/integration/test_loyalty_read.py ..........                        [ 46%]
+tests/integration/test_loyalty_redemption.py .....                       [ 46%]
+tests/integration/test_password_reset_token_replay_race.py .             [ 46%]
+tests/integration/test_payment_receipt_email.py ...                      [ 46%]
+tests/integration/test_payment_receipt_email_pt.py ...                   [ 46%]
+tests/integration/test_payment_receipt_race.py .                         [ 46%]
+tests/integration/test_phase51_audit_chain_invariants.py F......         [ 46%]
+tests/integration/test_phase51_route_introspection.py ......             [ 47%]
+tests/integration/test_rbac_parity.py ....                               [ 47%]
+tests/integration/test_referral_capture.py ......                        [ 47%]
+tests/integration/test_referral_code.py .....                            [ 47%]
+tests/integration/test_referral_config.py ......                         [ 47%]
+tests/integration/test_referral_crediting.py ........                    [ 48%]
+tests/integration/test_referral_resolve.py .....                         [ 48%]
+tests/integration/test_referral_summary.py .......                       [ 48%]
+tests/integration/test_rfc2047_cyrillic_subject_roundtrip.py ..          [ 48%]
+tests/integration/test_route_introspection.py F..                        [ 48%]
+tests/integration/test_settings_endpoints.py ........................... [ 49%]
+.                                                                        [ 49%]
+tests/integration/test_soft_delete_reinvite_race.py .                    [ 49%]
+tests/integration/test_v17_protocol_slot_parity.py ..                    [ 49%]
+tests/integration/test_visits_meta.py .....                              [ 49%]
+tests/integration/trainers/test_trainers_audit.py .......                [ 49%]
+tests/integration/trainers/test_trainers_bio_patch.py .....              [ 50%]
+tests/integration/trainers/test_trainers_crud.py ................        [ 50%]
+tests/integration/trainers/test_trainers_rbac.py ........                [ 50%]
+tests/integration/users/test_concurrent_owner_deactivate.py ..           [ 50%]
+tests/integration/users/test_deactivate_atomic_uow.py ..                 [ 51%]
+tests/integration/users/test_deactivate_owner_real_postgres.py .         [ 51%]
+tests/integration/users/test_family_count_db_authoritative.py .          [ 51%]
+tests/integration/users/test_invitation_email_envelope.py ..             [ 51%]
+tests/integration/users/test_refresh_account_inactive.py .               [ 51%]
+tests/integration/users/test_reinvite_overrides_pending_user_data.py .   [ 51%]
+tests/integration/users/test_revoke_expired_invitation.py ..             [ 51%]
+tests/integration/users/test_role_change_capture.py .                    [ 51%]
+tests/integration/users/test_session_revoked_all_actor_attribution.py .  [ 51%]
+tests/integration/users/test_soft_delete_records_actor.py ..             [ 51%]
+tests/integration/users/test_users_crud.py ......                        [ 51%]
+tests/integration/users/test_users_guards.py ......                      [ 51%]
+tests/integration/users/test_users_invitation_flow.py ......             [ 52%]
+tests/integration/users/test_users_role_change.py ..........             [ 52%]
+tests/integration/users/test_users_session_invalidation.py ..            [ 52%]
+tests/integration/visits/test_alembic_visits.py .                        [ 52%]
+tests/integration/visits/test_visits_audit.py .....                      [ 52%]
+tests/integration/visits/test_visits_concurrent.py .                     [ 52%]
+tests/integration/visits/test_visits_create_reception.py .......         [ 52%]
+tests/integration/visits/test_visits_list_get.py ......                  [ 53%]
+tests/integration/visits/test_visits_rbac.py .........                   [ 53%]
+tests/integration/visits/test_visits_self_checkin.py E....               [ 53%]
+tests/integration/webhook_yookassa/test_audit_chain.py .....             [ 53%]
+tests/integration/webhook_yookassa/test_handle_receipt_canceled.py ..... [ 53%]
+                                                                         [ 53%]
+tests/integration/webhook_yookassa/test_handle_receipt_succeeded.py .... [ 53%]
+.                                                                        [ 54%]
+tests/integration/webhook_yookassa/test_handle_refund_succeeded.py ..... [ 54%]
+....                                                                     [ 54%]
+tests/integration/webhook_yookassa/test_post_commit_seam.py ......       [ 54%]
+tests/integration/webhook_yookassa/test_wh01_ip_gate.py ..               [ 54%]
+tests/integration/webhook_yookassa/test_wh02_refetch_before_write.py ... [ 54%]
+                                                                         [ 54%]
+tests/integration/webhook_yookassa/test_wh03_redis_dedup.py ..           [ 54%]
+tests/integration/webhook_yookassa/test_wh04_fsm_transitions.py ....     [ 54%]
+tests/integration/webhook_yookassa/test_wh05_succeeded_atomic_uow.py ... [ 54%]
+..                                                                       [ 55%]
+tests/integration/webhook_yookassa/test_wh06_canceled_records_details.py . [ 55%]
+..                                                                       [ 55%]
+tests/integration/webhook_yookassa/test_wh07_phone_only_succeeded.py ... [ 55%]
+.                                                                        [ 55%]
+tests/integration/webhook_yookassa/test_wh08_autopay_discriminator.py .. [ 55%]
+                                                                         [ 55%]
+tests/integration/workers/test_cleanup_password_reset_tokens.py ..       [ 55%]
+tests/integration/workers/test_expire_memberships.py .                   [ 55%]
+tests/integration/workers/test_expire_memberships_idempotent.py .        [ 55%]
+tests/integration/yookassa/test_create_payment_off_session.py .....      [ 55%]
+tests/integrations/yookassa/test_client.py ..............                [ 56%]
+tests/integrations/yookassa/test_client_create_payment.py ...........    [ 56%]
+tests/integrations/yookassa/test_create_receipt.py ...............       [ 56%]
+tests/integrations/yookassa/test_factory.py .......                      [ 57%]
+tests/integrations/yookassa/test_receipt.py ..........                   [ 57%]
+tests/integrations/yookassa/test_receipt_customer_phone.py ....          [ 57%]
+tests/integrations/yookassa/test_types.py .........                      [ 57%]
+tests/integrations/yookassa/test_webhook_verifier.py .......             [ 58%]
+tests/messaging/test_attachment_idor.py ......                           [ 58%]
+tests/messaging/test_attachment_mime.py .........                        [ 58%]
+tests/messaging/test_attachment_service.py .....                         [ 58%]
+tests/messaging/test_attachments_serve.py .......                        [ 59%]
+tests/messaging/test_messaging_cursor.py .....                           [ 59%]
+tests/messaging/test_messaging_rest.py ...........                       [ 59%]
+tests/messaging/test_messaging_schema_camelcase.py ..................... [ 60%]
+...................                                                      [ 60%]
+tests/messaging/test_models_schema.py ......                             [ 61%]
+tests/messaging/test_reply_as_read.py .....                              [ 61%]
+tests/messaging/test_threads_capture.py .                                [ 61%]
+tests/messaging/test_ws_auth_idor.py ....                                [ 61%]
+tests/messaging/test_ws_fanout.py ..                                     [ 61%]
+tests/messaging/test_ws_receipts_typing.py .....                         [ 61%]
+tests/messaging/test_ws_smoke.py .                                       [ 61%]
+tests/modules/client_portal/test_client_me_service.py .................. [ 62%]
+                                                                         [ 62%]
+tests/modules/client_portal/test_notif_prefs_service.py .....            [ 62%]
+tests/modules/online_payments/test_idempotency_key_collision_retry.py .. [ 62%]
+...                                                                      [ 62%]
+tests/modules/online_payments/test_receipt_contact_gate.py .....         [ 62%]
+tests/modules/online_payments/test_return_screen.py ......               [ 62%]
+tests/modules/online_payments/test_router_path_registration.py ...       [ 62%]
+tests/modules/online_payments/test_router_sell_endpoints.py s            [ 63%]
+tests/modules/online_payments/test_service_sell_membership.py .......... [ 63%]
+.                                                                        [ 63%]
+tests/modules/online_payments/test_service_sell_pt_package.py .......    [ 63%]
+tests/notifications/test_notifications_endpoints.py .................    [ 64%]
+tests/notifications/test_notifications_event_hooks.py ...........        [ 64%]
+tests/notifications/test_notifications_service.py ...........            [ 64%]
+tests/test_client_checkout_promo.py .........                            [ 65%]
+tests/test_client_promo_validate.py ................                     [ 65%]
+tests/unit/auth/test_password_reset_email_render.py ...                  [ 65%]
+tests/unit/autopay_charges/test_autopay_audit_events.py .........        [ 66%]
+tests/unit/bookings/test_booking_fsm.py ....                             [ 66%]
+tests/unit/client_portal/test_weekly_activity_tz.py ...................  [ 66%]
+tests/unit/clients/test_repository_escape.py ......                      [ 67%]
+tests/unit/core/test_qr_token.py .......                                 [ 67%]
+tests/unit/fiscal_receipts/test_module_skeleton.py ..................... [ 67%]
+...                                                                      [ 68%]
+tests/unit/integrations/email/test_circuit_breaker.py .........          [ 68%]
+tests/unit/integrations/email/test_client.py .........                   [ 68%]
+tests/unit/integrations/email/test_dispatch_email_task.py ..........     [ 68%]
+tests/unit/integrations/email/test_dispatcher.py ................        [ 69%]
+tests/unit/integrations/email/test_factory.py ...                        [ 69%]
+tests/unit/integrations/telegram/test_copy_render.py .......             [ 69%]
+tests/unit/integrations/telegram/test_copy_variant_selection.py ....     [ 69%]
+tests/unit/integrations/telegram/test_sender.py ..                       [ 69%]
+tests/unit/integrations/yookassa/test_money.py ......................    [ 70%]
+tests/unit/integrations/yookassa/test_settings.py .....                  [ 70%]
+tests/unit/memberships/test_freeze_days_computation.py ............      [ 71%]
+tests/unit/memberships/test_renewal_constants.py ..........              [ 71%]
+tests/unit/memberships/test_renewal_schema_foundation.py ........        [ 71%]
+tests/unit/memberships/test_schemas.py ................................. [ 72%]
+...                                                                      [ 73%]
+tests/unit/memberships/test_state_machine.py ...................         [ 73%]
+tests/unit/pt_packages/test_active_pt_package_resolver.py .....          [ 73%]
+tests/unit/pt_packages/test_plan_immutability.py .............           [ 74%]
+tests/unit/pt_packages/test_state_machine.py ........................... [ 75%]
+..                                                                       [ 75%]
+tests/unit/pt_sessions/test_backdating_window.py .....                   [ 75%]
+tests/unit/pt_sessions/test_cancel_window.py .....                       [ 75%]
+tests/unit/pt_sessions/test_revert_predicate.py ..                       [ 75%]
+tests/unit/schedule/test_slot_fsm.py ...                                 [ 75%]
+tests/unit/telegram_bot/test_format_gym_hours.py ...                     [ 75%]
+tests/unit/telegram_bot/test_hash_telegram_user_id.py ...                [ 75%]
+tests/unit/test_activator_protocol_kwargs.py .....                       [ 76%]
+tests/unit/test_actor_context.py .......                                 [ 76%]
+tests/unit/test_actor_display_format.py .......                          [ 76%]
+tests/unit/test_audit_hash.py ...............                            [ 76%]
+tests/unit/test_audit_payloads.py ...................................... [ 78%]
+...................                                                      [ 78%]
+tests/unit/test_audit_taxonomy.py ........                               [ 79%]
+tests/unit/test_booking_email_fallback_helper.py .....                   [ 79%]
+tests/unit/test_booking_email_templates.py ...............               [ 79%]
+tests/unit/test_booking_notifications_copy.py .........                  [ 80%]
+tests/unit/test_config.py ........                                       [ 80%]
+tests/unit/test_core_sql.py ......                                       [ 80%]
+tests/unit/test_dependencies_require_authenticated.py .......            [ 80%]
+tests/unit/test_dependencies_slots_v15.py .........                      [ 80%]
+tests/unit/test_dependencies_verify_csrf.py ............                 [ 81%]
+tests/unit/test_exceptions_csrf.py .....                                 [ 81%]
+tests/unit/test_formatters.py .............                              [ 81%]
+tests/unit/test_idempotency.py ............                              [ 82%]
+tests/unit/test_idempotency_orchestrator.py ...............              [ 82%]
+tests/unit/test_importlinter_negative_fixture.py ..                      [ 82%]
+tests/unit/test_locked_audit_events.py ...........                       [ 83%]
+tests/unit/test_locked_email_templates_ast.py ..........                 [ 83%]
+tests/unit/test_locked_email_templates_phase45.py .........              [ 83%]
+tests/unit/test_locked_yookassa_constants_ast.py .........               [ 84%]
+tests/unit/test_loyalty_audit_events.py ..........                       [ 84%]
+tests/unit/test_notification_matrix_gate.py ............                 [ 84%]
+tests/unit/test_online_payment_status_transitions.py ......              [ 85%]
+tests/unit/test_online_refund_fsm.py ........                            [ 85%]
+tests/unit/test_otp_request_body.py .....                                [ 85%]
+tests/unit/test_pagination.py .........                                  [ 85%]
+tests/unit/test_payment_recorder_widened.py .....                        [ 85%]
+tests/unit/test_payments_appendonly.py .......                           [ 86%]
+tests/unit/test_permissions.py ......................................... [ 87%]
+........................................................................ [ 89%]
+........................................................................ [ 92%]
+........................................................................ [ 94%]
+.........................................                                [ 95%]
+tests/unit/test_referral_audit_events.py ........                        [ 96%]
+tests/unit/test_referral_bonus_accrual.py .............                  [ 96%]
+tests/unit/test_request_otp_email_constants.py .....                     [ 96%]
+tests/unit/test_schemas.py ...............                               [ 97%]
+tests/unit/test_security.py .................                            [ 97%]
+tests/unit/test_select_expiring_variant.py ....                          [ 97%]
+tests/unit/test_service_commit_gate.py .......                           [ 98%]
+tests/unit/test_webhook_router_smoke.py ..                               [ 98%]
+tests/unit/test_worker_cron_resolution.py ....                           [ 98%]
+tests/unit/test_workers_eager_import.py ......                           [ 98%]
+tests/unit/test_yookassa_circuit_breaker.py ........                     [ 98%]
+tests/unit/test_yookassa_protocol_slot_parity.py ....                    [ 98%]
+tests/unit/users/test_email_template_render.py ..                        [ 98%]
+tests/unit/users/test_format_expires_ru.py ...                           [ 99%]
+tests/unit/visits/test_anti_fraud_helpers.py ......                      [ 99%]
+tests/unit/visits/test_schemas.py ..........                             [ 99%]
+tests/unit/workers/test_arq_contextvars.py ....                          [ 99%]
+tests/unit/workers/test_worker_settings.py ........                      [100%]
+
+==================================== ERRORS ====================================
+________________ ERROR at setup of test_self_checkin_happy_path ________________
+
+fut = <coroutine object AsyncioEvent.wait at 0x45e8cd840>, timeout = 5
+
+    async def wait_for(fut, timeout):
+        """Wait for the single Future or coroutine to complete, with timeout.
+    
+        Coroutine will be wrapped in Task.
+    
+        Returns result of the Future or coroutine.  When a timeout occurs,
+        it cancels the task and raises TimeoutError.  To avoid the task
+        cancellation, wrap it in shield().
+    
+        If the wait is cancelled, the task is also cancelled.
+    
+        If the task suppresses the cancellation and returns a value instead,
+        that value is returned.
+    
+        This function is a coroutine.
+        """
+        # The special case for timeout <= 0 is for the following case:
+        #
+        # async def test_waitfor():
+        #     func_started = False
+        #
+        #     async def func():
+        #         nonlocal func_started
+        #         func_started = True
+        #
+        #     try:
+        #         await asyncio.wait_for(func(), 0)
+        #     except asyncio.TimeoutError:
+        #         assert not func_started
+        #     else:
+        #         assert False
+        #
+        # asyncio.run(test_waitfor())
+    
+    
+        if timeout is not None and timeout <= 0:
+            fut = ensure_future(fut)
+    
+            if fut.done():
+                return fut.result()
+    
+            await _cancel_and_wait(fut)
+            try:
+                return fut.result()
+            except exceptions.CancelledError as exc:
+                raise TimeoutError from exc
+    
+        async with timeouts.timeout(timeout):
+>           return await fut
+                   ^^^^^^^^^
+
+/Users/andre/.local/share/uv/python/cpython-3.12.12-macos-x86_64-none/lib/python3.12/asyncio/tasks.py:520: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/asgi_lifespan/_concurrency/asyncio.py:17: in wait
+    await self._event.wait()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <asyncio.locks.Event object at 0x45eef7e00 [set]>
+
+    async def wait(self):
+        """Block until the internal flag is true.
+    
+        If the internal flag is true on entry, return True
+        immediately.  Otherwise, block until another coroutine calls
+        set() to set the flag to true, then return True.
+        """
+        if self._value:
+            return True
+    
+        fut = self._get_loop().create_future()
+        self._waiters.append(fut)
+        try:
+>           await fut
+E           asyncio.exceptions.CancelledError
+
+/Users/andre/.local/share/uv/python/cpython-3.12.12-macos-x86_64-none/lib/python3.12/asyncio/locks.py:212: CancelledError
+
+The above exception was the direct cause of the following exception:
+
+self = <asgi_lifespan._concurrency.asyncio.AsyncioBackend object at 0x45eef7bc0>
+seconds = 5
+coroutine = <bound method AsyncioEvent.wait of <asgi_lifespan._concurrency.asyncio.AsyncioEvent object at 0x45eef7ef0>>
+
+    async def run_and_fail_after(
+        self,
+        seconds: typing.Optional[float],
+        coroutine: typing.Callable[[], typing.Awaitable[None]],
+    ) -> None:
+        try:
+>           await asyncio.wait_for(coroutine(), timeout=seconds)
+
+.venv/lib/python3.12/site-packages/asgi_lifespan/_concurrency/asyncio.py:44: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/Users/andre/.local/share/uv/python/cpython-3.12.12-macos-x86_64-none/lib/python3.12/asyncio/tasks.py:519: in wait_for
+    async with timeouts.timeout(timeout):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <Timeout [expired]>
+exc_type = <class 'asyncio.exceptions.CancelledError'>
+exc_val = CancelledError(), exc_tb = <traceback object at 0x3e934ad40>
+
+    async def __aexit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> Optional[bool]:
+        assert self._state in (_State.ENTERED, _State.EXPIRING)
+    
+        if self._timeout_handler is not None:
+            self._timeout_handler.cancel()
+            self._timeout_handler = None
+    
+        if self._state is _State.EXPIRING:
+            self._state = _State.EXPIRED
+    
+            if self._task.uncancel() <= self._cancelling and exc_type is exceptions.CancelledError:
+                # Since there are no new cancel requests, we're
+                # handling this.
+>               raise TimeoutError from exc_val
+E               TimeoutError
+
+/Users/andre/.local/share/uv/python/cpython-3.12.12-macos-x86_64-none/lib/python3.12/asyncio/timeouts.py:115: TimeoutError
+
+During handling of the above exception, another exception occurred:
+
+self = <Coroutine test_self_checkin_happy_path>
+
+    def setup(self) -> None:
+        runner_fixture_id = f"_{self._loop_scope}_scoped_runner"
+        if runner_fixture_id not in self.fixturenames:
+            self.fixturenames.append(runner_fixture_id)
+>       return super().setup()
+               ^^^^^^^^^^^^^^^
+
+.venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py:458: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+.venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py:743: in pytest_fixture_setup
+    hook_result = yield
+                  ^^^^^
+.venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py:313: in _asyncgen_fixture_wrapper
+    result = runner.run(setup(), context=context)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Users/andre/.local/share/uv/python/cpython-3.12.12-macos-x86_64-none/lib/python3.12/asyncio/runners.py:118: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Users/andre/.local/share/uv/python/cpython-3.12.12-macos-x86_64-none/lib/python3.12/asyncio/base_events.py:691: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py:309: in setup
+    res = await gen_obj.__anext__()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/conftest.py:53: in app
+    async with LifespanManager(_app):
+               ^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.12/site-packages/asgi_lifespan/_manager.py:99: in __aenter__
+    await self.startup()
+.venv/lib/python3.12/site-packages/asgi_lifespan/_manager.py:40: in startup
+    await self._concurrency_backend.run_and_fail_after(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <asgi_lifespan._concurrency.asyncio.AsyncioBackend object at 0x45eef7bc0>
+seconds = 5
+coroutine = <bound method AsyncioEvent.wait of <asgi_lifespan._concurrency.asyncio.AsyncioEvent object at 0x45eef7ef0>>
+
+    async def run_and_fail_after(
+        self,
+        seconds: typing.Optional[float],
+        coroutine: typing.Callable[[], typing.Awaitable[None]],
+    ) -> None:
+        try:
+            await asyncio.wait_for(coroutine(), timeout=seconds)
+        except asyncio.TimeoutError:
+>           raise TimeoutError
+E           TimeoutError
+
+.venv/lib/python3.12/site-packages/asgi_lifespan/_concurrency/asyncio.py:46: TimeoutError
+---------------------------- Captured stdout setup -----------------------------
+[2m2026-07-26T16:03:29.123393Z[0m [[32m[1minfo     [0m] [1myookassa_boot_probe           [0m [36mok[0m=[35mNone[0m [36mreason[0m=[35msandbox_skip[0m
+=================================== FAILURES ===================================
+_________ test_create_booking_pt_package_expired_before_slot_moscow_tz _________
+
+db_session = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x2d8ee0950>
+seeded_owner = <app.core.models.User object at 0x2d8ee2300>
+make_trainer = <function make_trainer.<locals>._make at 0x2ea3ee340>
+make_client = <function make_client.<locals>._make at 0x2ea3ef1a0>
+make_pt_package_plan = <function make_pt_package_plan.<locals>._make at 0x2ea3ee160>
+make_pt_package = <function make_pt_package.<locals>._make at 0x2ea3ee200>
+make_slot = <function make_slot.<locals>._make at 0x2ea3ef560>
+
+    @pytest.mark.asyncio
+    async def test_create_booking_pt_package_expired_before_slot_moscow_tz(
+        db_session: AsyncSession,
+        seeded_owner: User,
+        make_trainer,
+        make_client,
+        make_pt_package_plan,
+        make_pt_package,
+        make_slot,
+    ) -> None:
+        """PtPackageExpiredBeforeSlot (D-38-12 / Pitfall 18 / BOOK-04).
+    
+        Crucial assertion: the comparison happens in Moscow TZ. A slot at
+        2026-07-01 01:00 Moscow is 2026-06-30 22:00 UTC. A package with
+        end_date=2026-06-30 (Moscow business date) MUST reject the slot —
+        naive .date() on the UTC datetime would mis-classify the slot as
+        belonging to 2026-06-30 and incorrectly accept it.
+        """
+        from datetime import date
+        from zoneinfo import ZoneInfo
+    
+        moscow_tz = ZoneInfo("Europe/Moscow")
+        trainer = await make_trainer()
+        client = await make_client()
+        plan = await make_pt_package_plan()
+    
+        # Slot at 2026-07-01 01:00 Moscow → 2026-06-30 22:00 UTC.
+        slot_start_moscow = datetime(2026, 7, 1, 1, 0, tzinfo=moscow_tz)
+        slot_end_moscow = slot_start_moscow + timedelta(hours=1)
+        slot = await make_slot(
+            trainer_id=trainer.id,
+            start_time=slot_start_moscow.astimezone(UTC),
+            end_time=slot_end_moscow.astimezone(UTC),
+        )
+        pkg = await make_pt_package(
+            client_id=client.id,
+            plan=plan,
+            end_date=date(2026, 6, 30),  # Moscow business date — strictly before slot.
+        )
+    
+        with pytest.raises(service.PtPackageExpiredBeforeSlotError) as exc_info:
+>           await service.create_booking(
+                db_session,
+                seeded_owner,
+                BookingCreateRequest(
+                    slot_id=slot.id,
+                    client_id=client.id,
+                    pt_package_id=pkg.id,
+                ),
+            )
+
+tests/integration/bookings/test_bookings_create.py:305: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+session = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x2d8ee0950>
+actor = <app.core.models.User object at 0x2d8ee2300>
+data = BookingCreateRequest(slot_id=UUID('3901a002-5342-40e0-9898-f087b6a83972'), client_id=UUID('f7761178-bffc-4da7-a193-81d580ae8ae2'), pt_package_id=UUID('fd4b0034-e0d3-4c8d-a49c-76aeaa8972c8'))
+
+    async def create_booking(
+        session: AsyncSession,
+        actor: CurrentUser,
+        data: BookingCreateRequest,
+    ) -> BookingResponse:
+        """Create a confirmed booking (Phase 38 BOOK-02).
+    
+        Owns the UoW — `await session.commit()` at end (SVC001 gate).
+    
+        10-step recipe (mirror pt_sessions.record_pt_session shape):
+          1. Resolve slot via SlotById Protocol slot (D-37-06) — 404
+             slot_not_found / 409 slot_not_available if status != 'active'.
+          2. Resolve client's active pt_package via the existing Phase 33
+             ActivePtPackageResolver slot — 409 pt_package_not_active when
+             silent-None, when the id doesn't match (defensive against
+             id-spoofing), or when sessions_remaining <= 0 (then 409
+             pt_package_exhausted).
+          3. Trainer-mismatch guard (PKG-02 / C-08): if
+             `pt_package.trainer_id is not None` and != `slot.trainer_id`,
+             raise TrainerMismatchError. NULL trainer_id means "any".
+          4. Moscow-TZ validity-window guard (Pitfall 18 / D-38-12 /
+             BOOK-04): if `pt_package.end_date < slot.start_time.astimezone(
+             MOSCOW_TZ).date()`, raise PtPackageExpiredBeforeSlotError. NULL
+             end_date (бессрочный package) skips this check.
+          5. Flip slot active→booked via the cross-module raw UPDATE
+             (bookings.repository — modules-independent contract preserved
+             via raw sa.text() with TABLE_REF noqa). 0 rows updated → 409
+             slot_not_available (concurrent winner already took it pre-INSERT).
+          6. Insert booking row via bookings.repository.insert_booking.
+          7. session.flush() — surfaces the partial UNIQUE
+             uq_bookings_slot_confirmed IntegrityError when a concurrent
+             winner already INSERTed a confirmed row for the same slot in
+             the gap between our active→booked UPDATE and our INSERT (the
+             load-bearing race guard per BOOK-10). Translate via
+             _is_slot_confirmed_conflict → 409 slot_already_booked.
+          8. audit.emit('booking_created', ...) — payload matches
+             BookingCreatedPayload (extra='forbid') verbatim; UUIDs
+             stringified at callsite per Pitfall 13 / D-38-17.
+          9. session.commit() (SVC001 gate).
+         10. Narrow refresh on created_at/updated_at + return BookingResponse.
+        """
+        # Defensive request-time pin (Pitfall 7 / D-38-16 — datetime.now(UTC)
+        # idiom; never datetime.utcnow which is deprecated in 3.12). Used by
+        # the Moscow-TZ validity-window guard below and by the slot-not-available
+        # defensive freshness check (if the slot's start_time has slipped into
+        # the past since publish, surface as slot_not_available — the schedule
+        # service guarantees future-only at publish time but time drifts).
+        now_utc = datetime.now(UTC)
+    
+        # Step 1 — slot resolve + status guard.
+        slot = await resolve_slot_by_id(session, data.slot_id)
+        if slot is None:
+            raise SlotNotFoundError("slot_not_found")
+        if slot.status != "active":
+            raise SlotNotAvailableError("slot_not_available")
+        if slot.start_time <= now_utc:
+            # Defensive freshness — the schedule-service publish-time guard
+            # (D-38-16) means a newly-published slot can never start in the
+            # past, but between publish and booking the clock advances. We
+            # surface as slot_not_available to match the unified error code
+            # set (no separate slot_in_past code at the booking layer; the
+            # slot is simply not bookable).
+>           raise SlotNotAvailableError("slot_not_available")
+E           app.modules.bookings.service.SlotNotAvailableError: slot_not_available
+
+app/modules/bookings/service.py:1252: SlotNotAvailableError
+---------------------------- Captured stdout setup -----------------------------
+[2m2026-07-26T15:52:14.024984Z[0m [[32m[1minfo     [0m] [1myookassa_boot_probe           [0m [36mok[0m=[35mNone[0m [36mreason[0m=[35msandbox_skip[0m
+[2m2026-07-26T15:52:14.069198Z[0m [[32m[1mdebug    [0m] [1ms3_bucket_exists              [0m [36mbucket[0m=[35mclubcore-local[0m
+2026-07-26 18:52:14,087 INFO sqlalchemy.engine.Engine select pg_catalog.version()
+2026-07-26 18:52:14,088 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-07-26 18:52:14,089 INFO sqlalchemy.engine.Engine select current_schema()
+2026-07-26 18:52:14,089 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-07-26 18:52:14,090 INFO sqlalchemy.engine.Engine show standard_conforming_strings
+2026-07-26 18:52:14,090 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-07-26 18:52:14,091 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-07-26 18:52:14,091 INFO sqlalchemy.engine.Engine select 1
+2026-07-26 18:52:14,091 INFO sqlalchemy.engine.Engine [generated in 0.00006s] ()
+2026-07-26 18:52:14,092 INFO sqlalchemy.engine.Engine SAVEPOINT sa_savepoint_1
+2026-07-26 18:52:14,092 INFO sqlalchemy.engine.Engine [no key 0.00008s] ()
+2026-07-26 18:52:14,093 INFO sqlalchemy.engine.Engine UPDATE booking_config SET booking_ahead_days = $1, cutoff_minutes = $2,     cancel_window_hours = $3 WHERE id = CAST($4 AS uuid)
+2026-07-26 18:52:14,093 INFO sqlalchemy.engine.Engine [generated in 0.00008s] (365, 0, 24, '00000000-0000-0000-0000-000000000003')
+2026-07-26 18:52:14,094 INFO sqlalchemy.engine.Engine UPDATE working_hours_config SET schedule = CAST($1 AS jsonb), closures = CAST($2 AS jsonb) WHERE id = CAST($3 AS uuid)
+2026-07-26 18:52:14,094 INFO sqlalchemy.engine.Engine [generated in 0.00008s] ('[{"day_of_week": 0, "open_time": "00:00", "close_time": "23:59"}, {"day_of_week": 1, "open_time": "00:00", "close_time": "23:59"}, {"day_of_week": 2, ... (157 characters truncated) ... se_time": "23:59"}, {"day_of_week": 5, "open_time": "00:00", "close_time": "23:59"}, {"day_of_week": 6, "open_time": "00:00", "close_time": "23:59"}]', '[]', '00000000-0000-0000-0000-000000000004')
+2026-07-26 18:52:14,121 INFO sqlalchemy.engine.Engine INSERT INTO users (email, password_hash, role, full_name, telegram_chat_id, telegram_username, deleted_at, deactivated_at, deactivated_by_user_id) VALUES ($1::VARCHAR, $2::VARCHAR, $3, $4::VARCHAR, $5::BIGINT, $6::VARCHAR, $7::TIMESTAMP WITH TIME ZONE, $8::TIMESTAMP WITH TIME ZONE, $9::UUID) RETURNING users.email_verified, users.is_active, users.status, users.id, users.created_at, users.updated_at
+2026-07-26 18:52:14,121 INFO sqlalchemy.engine.Engine [generated in 0.00016s] ('book-owner@example.com', '$argon2id$v=19$m=65536,t=3,p=4$/PV01ZDx4qMpkRCeqS7H9Q$koZVSEZydVuvq9IBXEMgo8b0hcQzE9BpOgAciTvJg2Y', 'owner', 'Bookings Owner', None, None, None, None, None)
+2026-07-26 18:52:14,123 INFO sqlalchemy.engine.Engine RELEASE SAVEPOINT sa_savepoint_1
+2026-07-26 18:52:14,123 INFO sqlalchemy.engine.Engine [no key 0.00011s] ()
+------------------------------ Captured log setup ------------------------------
+INFO     sqlalchemy.engine.Engine:base.py:1846 select pg_catalog.version()
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 select current_schema()
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 show standard_conforming_strings
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:2710 BEGIN (implicit)
+INFO     sqlalchemy.engine.Engine:base.py:1846 select 1
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00006s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 SAVEPOINT sa_savepoint_1
+INFO     sqlalchemy.engine.Engine:base.py:1846 [no key 0.00008s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 UPDATE booking_config SET booking_ahead_days = $1, cutoff_minutes = $2,     cancel_window_hours = $3 WHERE id = CAST($4 AS uuid)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00008s] (365, 0, 24, '00000000-0000-0000-0000-000000000003')
+INFO     sqlalchemy.engine.Engine:base.py:1846 UPDATE working_hours_config SET schedule = CAST($1 AS jsonb), closures = CAST($2 AS jsonb) WHERE id = CAST($3 AS uuid)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00008s] ('[{"day_of_week": 0, "open_time": "00:00", "close_time": "23:59"}, {"day_of_week": 1, "open_time": "00:00", "close_time": "23:59"}, {"day_of_week": 2, ... (157 characters truncated) ... se_time": "23:59"}, {"day_of_week": 5, "open_time": "00:00", "close_time": "23:59"}, {"day_of_week": 6, "open_time": "00:00", "close_time": "23:59"}]', '[]', '00000000-0000-0000-0000-000000000004')
+INFO     sqlalchemy.engine.Engine:base.py:1846 INSERT INTO users (email, password_hash, role, full_name, telegram_chat_id, telegram_username, deleted_at, deactivated_at, deactivated_by_user_id) VALUES ($1::VARCHAR, $2::VARCHAR, $3, $4::VARCHAR, $5::BIGINT, $6::VARCHAR, $7::TIMESTAMP WITH TIME ZONE, $8::TIMESTAMP WITH TIME ZONE, $9::UUID) RETURNING users.email_verified, users.is_active, users.status, users.id, users.created_at, users.updated_at
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00016s] ('book-owner@example.com', '$argon2id$v=19$m=65536,t=3,p=4$/PV01ZDx4qMpkRCeqS7H9Q$koZVSEZydVuvq9IBXEMgo8b0hcQzE9BpOgAciTvJg2Y', 'owner', 'Bookings Owner', None, None, None, None, None)
+INFO     sqlalchemy.engine.Engine:base.py:1846 RELEASE SAVEPOINT sa_savepoint_1
+INFO     sqlalchemy.engine.Engine:base.py:1846 [no key 0.00011s] ()
+----------------------------- Captured stdout call -----------------------------
+2026-07-26 18:52:14,125 INFO sqlalchemy.engine.Engine SAVEPOINT sa_savepoint_2
+2026-07-26 18:52:14,125 INFO sqlalchemy.engine.Engine [no key 0.00008s] ()
+2026-07-26 18:52:14,126 INFO sqlalchemy.engine.Engine INSERT INTO trainers (full_name, phone, is_active, bio, specialization, photo_url, deleted_at) VALUES ($1::VARCHAR, $2::VARCHAR, $3::BOOLEAN, $4::VARCHAR, $5::VARCHAR, $6::VARCHAR, $7::TIMESTAMP WITH TIME ZONE) RETURNING trainers.id, trainers.created_at, trainers.updated_at
+2026-07-26 18:52:14,126 INFO sqlalchemy.engine.Engine [generated in 0.00011s] ('BookTrainer-1-b9ca', None, True, None, None, None, None)
+2026-07-26 18:52:14,127 INFO sqlalchemy.engine.Engine RELEASE SAVEPOINT sa_savepoint_2
+2026-07-26 18:52:14,127 INFO sqlalchemy.engine.Engine [no key 0.00009s] ()
+2026-07-26 18:52:14,127 INFO sqlalchemy.engine.Engine SAVEPOINT sa_savepoint_3
+2026-07-26 18:52:14,128 INFO sqlalchemy.engine.Engine [no key 0.00007s] ()
+2026-07-26 18:52:14,128 INFO sqlalchemy.engine.Engine SELECT trainers.full_name, trainers.phone, trainers.is_active, trainers.bio, trainers.specialization, trainers.photo_url, trainers.id, trainers.created_at, trainers.updated_at, trainers.deleted_at 
+FROM trainers 
+WHERE trainers.id = $1::UUID
+2026-07-26 18:52:14,128 INFO sqlalchemy.engine.Engine [generated in 0.00009s] (UUID('783b2e1c-40e5-4494-a206-0581cbad080d'),)
+2026-07-26 18:52:14,130 INFO sqlalchemy.engine.Engine INSERT INTO clients (last_name, first_name, middle_name, phone, email, birthday, gender, notes, telegram_user_id, created_by_user_id, goal, height_cm, weight_kg, onboarding_completed_at, deleted_at) VALUES ($1::VARCHAR, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::VARCHAR, $6::DATE, $7, $8::VARCHAR, $9::BIGINT, $10::UUID, $11, $12::SMALLINT, $13::SMALLINT, $14::TIMESTAMP WITH TIME ZONE, $15::TIMESTAMP WITH TIME ZONE) RETURNING clients.tags, clients.id, clients.created_at, clients.updated_at
+2026-07-26 18:52:14,130 INFO sqlalchemy.engine.Engine [generated in 0.00011s] ('Петров', 'Пётр', None, '+79059000001', None, None, None, None, None, UUID('6c1b9103-7a6c-4158-8e30-d0f5c2ed6a40'), None, None, None, None, None)
+2026-07-26 18:52:14,132 INFO sqlalchemy.engine.Engine RELEASE SAVEPOINT sa_savepoint_3
+2026-07-26 18:52:14,132 INFO sqlalchemy.engine.Engine [no key 0.00007s] ()
+2026-07-26 18:52:14,132 INFO sqlalchemy.engine.Engine SAVEPOINT sa_savepoint_4
+2026-07-26 18:52:14,132 INFO sqlalchemy.engine.Engine [no key 0.00008s] ()
+2026-07-26 18:52:14,133 INFO sqlalchemy.engine.Engine SELECT clients.last_name, clients.first_name, clients.middle_name, clients.phone, clients.email, clients.birthday, clients.gender, clients.tags, clients.notes, clients.emergency_contact, clients.telegram_user_id, clients.created_by_user_id, clients.goal, clients.height_cm, clients.weight_kg, clients.onboarding_completed_at, clients.notif_prefs, clients.id, clients.created_at, clients.updated_at, clients.deleted_at 
+FROM clients 
+WHERE clients.id = $1::UUID
+2026-07-26 18:52:14,133 INFO sqlalchemy.engine.Engine [generated in 0.00009s] (UUID('f7761178-bffc-4da7-a193-81d580ae8ae2'),)
+2026-07-26 18:52:14,135 INFO sqlalchemy.engine.Engine INSERT INTO pt_package_plans (name, session_count, price_kopecks, validity_days, deleted_at) VALUES ($1::VARCHAR, $2::INTEGER, $3::BIGINT, $4::INTEGER, $5::TIMESTAMP WITH TIME ZONE) RETURNING pt_package_plans.id, pt_package_plans.created_at, pt_package_plans.updated_at
+2026-07-26 18:52:14,135 INFO sqlalchemy.engine.Engine [generated in 0.00009s] ('BookPlan-1-1862', 10, 500000, 90, None)
+2026-07-26 18:52:14,136 INFO sqlalchemy.engine.Engine RELEASE SAVEPOINT sa_savepoint_4
+2026-07-26 18:52:14,136 INFO sqlalchemy.engine.Engine [no key 0.00007s] ()
+2026-07-26 18:52:14,136 INFO sqlalchemy.engine.Engine SAVEPOINT sa_savepoint_5
+2026-07-26 18:52:14,137 INFO sqlalchemy.engine.Engine [no key 0.00007s] ()
+2026-07-26 18:52:14,137 INFO sqlalchemy.engine.Engine SELECT pt_package_plans.name, pt_package_plans.session_count, pt_package_plans.price_kopecks, pt_package_plans.validity_days, pt_package_plans.id, pt_package_plans.created_at, pt_package_plans.updated_at, pt_package_plans.deleted_at 
+FROM pt_package_plans 
+WHERE pt_package_plans.id = $1::UUID
+2026-07-26 18:52:14,137 INFO sqlalchemy.engine.Engine [generated in 0.00010s] (UUID('9ebccf36-f7b3-497c-ab41-c19d95f98772'),)
+2026-07-26 18:52:14,138 INFO sqlalchemy.engine.Engine INSERT INTO trainer_availability_slots (trainer_id, start_time, end_time, status, created_by_user_id, cancelled_at, cancel_reason) VALUES ($1::UUID, $2::TIMESTAMP WITH TIME ZONE, $3::TIMESTAMP WITH TIME ZONE, $4::VARCHAR, $5::UUID, $6::TIMESTAMP WITH TIME ZONE, $7::VARCHAR) RETURNING trainer_availability_slots.id, trainer_availability_slots.created_at, trainer_availability_slots.updated_at
+2026-07-26 18:52:14,139 INFO sqlalchemy.engine.Engine [generated in 0.00009s] (UUID('783b2e1c-40e5-4494-a206-0581cbad080d'), datetime.datetime(2026, 6, 30, 22, 0, tzinfo=datetime.timezone.utc), datetime.datetime(2026, 6, 30, 23, 0, tzinfo=datetime.timezone.utc), 'active', UUID('6c1b9103-7a6c-4158-8e30-d0f5c2ed6a40'), None, None)
+2026-07-26 18:52:14,140 INFO sqlalchemy.engine.Engine RELEASE SAVEPOINT sa_savepoint_5
+2026-07-26 18:52:14,140 INFO sqlalchemy.engine.Engine [no key 0.00007s] ()
+2026-07-26 18:52:14,140 INFO sqlalchemy.engine.Engine SAVEPOINT sa_savepoint_6
+2026-07-26 18:52:14,141 INFO sqlalchemy.engine.Engine [no key 0.00007s] ()
+2026-07-26 18:52:14,141 INFO sqlalchemy.engine.Engine SELECT trainer_availability_slots.trainer_id, trainer_availability_slots.start_time, trainer_availability_slots.end_time, trainer_availability_slots.status, trainer_availability_slots.created_by_user_id, trainer_availability_slots.cancelled_at, trainer_availability_slots.cancel_reason, trainer_availability_slots.id, trainer_availability_slots.created_at, trainer_availability_slots.updated_at 
+FROM trainer_availability_slots 
+WHERE trainer_availability_slots.id = $1::UUID
+2026-07-26 18:52:14,141 INFO sqlalchemy.engine.Engine [generated in 0.00008s] (UUID('3901a002-5342-40e0-9898-f087b6a83972'),)
+2026-07-26 18:52:14,143 INFO sqlalchemy.engine.Engine INSERT INTO pt_packages (client_id, plan_id, trainer_id, plan_name_snapshot, session_count_snapshot, price_kopecks_snapshot, validity_days_snapshot, sessions_remaining, status, start_date, end_date, cancellation_reason) VALUES ($1::UUID, $2::UUID, $3::UUID, $4::VARCHAR, $5::INTEGER, $6::BIGINT, $7::INTEGER, $8::INTEGER, $9::VARCHAR, $10::DATE, $11::DATE, $12::VARCHAR) RETURNING pt_packages.id, pt_packages.created_at, pt_packages.updated_at
+2026-07-26 18:52:14,143 INFO sqlalchemy.engine.Engine [generated in 0.00011s] (UUID('f7761178-bffc-4da7-a193-81d580ae8ae2'), UUID('9ebccf36-f7b3-497c-ab41-c19d95f98772'), None, 'BookPlan-1-1862', 10, 500000, 90, 10, 'active', datetime.date(2026, 7, 26), datetime.date(2026, 6, 30), None)
+2026-07-26 18:52:14,144 INFO sqlalchemy.engine.Engine RELEASE SAVEPOINT sa_savepoint_6
+2026-07-26 18:52:14,144 INFO sqlalchemy.engine.Engine [no key 0.00007s] ()
+2026-07-26 18:52:14,145 INFO sqlalchemy.engine.Engine SAVEPOINT sa_savepoint_7
+2026-07-26 18:52:14,145 INFO sqlalchemy.engine.Engine [no key 0.00007s] ()
+2026-07-26 18:52:14,145 INFO sqlalchemy.engine.Engine SELECT pt_packages.client_id, pt_packages.plan_id, pt_packages.trainer_id, pt_packages.plan_name_snapshot, pt_packages.session_count_snapshot, pt_packages.price_kopecks_snapshot, pt_packages.validity_days_snapshot, pt_packages.sessions_remaining, pt_packages.status, pt_packages.start_date, pt_packages.end_date, pt_packages.cancellation_reason, pt_packages.id, pt_packages.created_at, pt_packages.updated_at 
+FROM pt_packages 
+WHERE pt_packages.id = $1::UUID
+2026-07-26 18:52:14,145 INFO sqlalchemy.engine.Engine [generated in 0.00009s] (UUID('fd4b0034-e0d3-4c8d-a49c-76aeaa8972c8'),)
+2026-07-26 18:52:14,147 INFO sqlalchemy.engine.Engine SELECT trainer_availability_slots.trainer_id, trainer_availability_slots.start_time, trainer_availability_slots.end_time, trainer_availability_slots.status, trainer_availability_slots.created_by_user_id, trainer_availability_slots.cancelled_at, trainer_availability_slots.cancel_reason, trainer_availability_slots.id, trainer_availability_slots.created_at, trainer_availability_slots.updated_at, trainers_1.full_name, trainers_1.phone, trainers_1.is_active, trainers_1.bio, trainers_1.specialization, trainers_1.photo_url, trainers_1.id AS id_1, trainers_1.created_at AS created_at_1, trainers_1.updated_at AS updated_at_1, trainers_1.deleted_at 
+FROM trainer_availability_slots LEFT OUTER JOIN trainers AS trainers_1 ON trainers_1.id = trainer_availability_slots.trainer_id 
+WHERE trainer_availability_slots.id = $1::UUID
+2026-07-26 18:52:14,147 INFO sqlalchemy.engine.Engine [generated in 0.00010s] (UUID('3901a002-5342-40e0-9898-f087b6a83972'),)
+------------------------------ Captured log call -------------------------------
+INFO     sqlalchemy.engine.Engine:base.py:1846 SAVEPOINT sa_savepoint_2
+INFO     sqlalchemy.engine.Engine:base.py:1846 [no key 0.00008s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 INSERT INTO trainers (full_name, phone, is_active, bio, specialization, photo_url, deleted_at) VALUES ($1::VARCHAR, $2::VARCHAR, $3::BOOLEAN, $4::VARCHAR, $5::VARCHAR, $6::VARCHAR, $7::TIMESTAMP WITH TIME ZONE) RETURNING trainers.id, trainers.created_at, trainers.updated_at
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00011s] ('BookTrainer-1-b9ca', None, True, None, None, None, None)
+INFO     sqlalchemy.engine.Engine:base.py:1846 RELEASE SAVEPOINT sa_savepoint_2
+INFO     sqlalchemy.engine.Engine:base.py:1846 [no key 0.00009s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 SAVEPOINT sa_savepoint_3
+INFO     sqlalchemy.engine.Engine:base.py:1846 [no key 0.00007s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT trainers.full_name, trainers.phone, trainers.is_active, trainers.bio, trainers.specialization, trainers.photo_url, trainers.id, trainers.created_at, trainers.updated_at, trainers.deleted_at 
+FROM trainers 
+WHERE trainers.id = $1::UUID
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00009s] (UUID('783b2e1c-40e5-4494-a206-0581cbad080d'),)
+INFO     sqlalchemy.engine.Engine:base.py:1846 INSERT INTO clients (last_name, first_name, middle_name, phone, email, birthday, gender, notes, telegram_user_id, created_by_user_id, goal, height_cm, weight_kg, onboarding_completed_at, deleted_at) VALUES ($1::VARCHAR, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::VARCHAR, $6::DATE, $7, $8::VARCHAR, $9::BIGINT, $10::UUID, $11, $12::SMALLINT, $13::SMALLINT, $14::TIMESTAMP WITH TIME ZONE, $15::TIMESTAMP WITH TIME ZONE) RETURNING clients.tags, clients.id, clients.created_at, clients.updated_at
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00011s] ('Петров', 'Пётр', None, '+79059000001', None, None, None, None, None, UUID('6c1b9103-7a6c-4158-8e30-d0f5c2ed6a40'), None, None, None, None, None)
+INFO     sqlalchemy.engine.Engine:base.py:1846 RELEASE SAVEPOINT sa_savepoint_3
+INFO     sqlalchemy.engine.Engine:base.py:1846 [no key 0.00007s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 SAVEPOINT sa_savepoint_4
+INFO     sqlalchemy.engine.Engine:base.py:1846 [no key 0.00008s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT clients.last_name, clients.first_name, clients.middle_name, clients.phone, clients.email, clients.birthday, clients.gender, clients.tags, clients.notes, clients.emergency_contact, clients.telegram_user_id, clients.created_by_user_id, clients.goal, clients.height_cm, clients.weight_kg, clients.onboarding_completed_at, clients.notif_prefs, clients.id, clients.created_at, clients.updated_at, clients.deleted_at 
+FROM clients 
+WHERE clients.id = $1::UUID
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00009s] (UUID('f7761178-bffc-4da7-a193-81d580ae8ae2'),)
+INFO     sqlalchemy.engine.Engine:base.py:1846 INSERT INTO pt_package_plans (name, session_count, price_kopecks, validity_days, deleted_at) VALUES ($1::VARCHAR, $2::INTEGER, $3::BIGINT, $4::INTEGER, $5::TIMESTAMP WITH TIME ZONE) RETURNING pt_package_plans.id, pt_package_plans.created_at, pt_package_plans.updated_at
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00009s] ('BookPlan-1-1862', 10, 500000, 90, None)
+INFO     sqlalchemy.engine.Engine:base.py:1846 RELEASE SAVEPOINT sa_savepoint_4
+INFO     sqlalchemy.engine.Engine:base.py:1846 [no key 0.00007s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 SAVEPOINT sa_savepoint_5
+INFO     sqlalchemy.engine.Engine:base.py:1846 [no key 0.00007s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT pt_package_plans.name, pt_package_plans.session_count, pt_package_plans.price_kopecks, pt_package_plans.validity_days, pt_package_plans.id, pt_package_plans.created_at, pt_package_plans.updated_at, pt_package_plans.deleted_at 
+FROM pt_package_plans 
+WHERE pt_package_plans.id = $1::UUID
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00010s] (UUID('9ebccf36-f7b3-497c-ab41-c19d95f98772'),)
+INFO     sqlalchemy.engine.Engine:base.py:1846 INSERT INTO trainer_availability_slots (trainer_id, start_time, end_time, status, created_by_user_id, cancelled_at, cancel_reason) VALUES ($1::UUID, $2::TIMESTAMP WITH TIME ZONE, $3::TIMESTAMP WITH TIME ZONE, $4::VARCHAR, $5::UUID, $6::TIMESTAMP WITH TIME ZONE, $7::VARCHAR) RETURNING trainer_availability_slots.id, trainer_availability_slots.created_at, trainer_availability_slots.updated_at
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00009s] (UUID('783b2e1c-40e5-4494-a206-0581cbad080d'), datetime.datetime(2026, 6, 30, 22, 0, tzinfo=datetime.timezone.utc), datetime.datetime(2026, 6, 30, 23, 0, tzinfo=datetime.timezone.utc), 'active', UUID('6c1b9103-7a6c-4158-8e30-d0f5c2ed6a40'), None, None)
+INFO     sqlalchemy.engine.Engine:base.py:1846 RELEASE SAVEPOINT sa_savepoint_5
+INFO     sqlalchemy.engine.Engine:base.py:1846 [no key 0.00007s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 SAVEPOINT sa_savepoint_6
+INFO     sqlalchemy.engine.Engine:base.py:1846 [no key 0.00007s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT trainer_availability_slots.trainer_id, trainer_availability_slots.start_time, trainer_availability_slots.end_time, trainer_availability_slots.status, trainer_availability_slots.created_by_user_id, trainer_availability_slots.cancelled_at, trainer_availability_slots.cancel_reason, trainer_availability_slots.id, trainer_availability_slots.created_at, trainer_availability_slots.updated_at 
+FROM trainer_availability_slots 
+WHERE trainer_availability_slots.id = $1::UUID
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00008s] (UUID('3901a002-5342-40e0-9898-f087b6a83972'),)
+INFO     sqlalchemy.engine.Engine:base.py:1846 INSERT INTO pt_packages (client_id, plan_id, trainer_id, plan_name_snapshot, session_count_snapshot, price_kopecks_snapshot, validity_days_snapshot, sessions_remaining, status, start_date, end_date, cancellation_reason) VALUES ($1::UUID, $2::UUID, $3::UUID, $4::VARCHAR, $5::INTEGER, $6::BIGINT, $7::INTEGER, $8::INTEGER, $9::VARCHAR, $10::DATE, $11::DATE, $12::VARCHAR) RETURNING pt_packages.id, pt_packages.created_at, pt_packages.updated_at
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00011s] (UUID('f7761178-bffc-4da7-a193-81d580ae8ae2'), UUID('9ebccf36-f7b3-497c-ab41-c19d95f98772'), None, 'BookPlan-1-1862', 10, 500000, 90, 10, 'active', datetime.date(2026, 7, 26), datetime.date(2026, 6, 30), None)
+INFO     sqlalchemy.engine.Engine:base.py:1846 RELEASE SAVEPOINT sa_savepoint_6
+INFO     sqlalchemy.engine.Engine:base.py:1846 [no key 0.00007s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 SAVEPOINT sa_savepoint_7
+INFO     sqlalchemy.engine.Engine:base.py:1846 [no key 0.00007s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT pt_packages.client_id, pt_packages.plan_id, pt_packages.trainer_id, pt_packages.plan_name_snapshot, pt_packages.session_count_snapshot, pt_packages.price_kopecks_snapshot, pt_packages.validity_days_snapshot, pt_packages.sessions_remaining, pt_packages.status, pt_packages.start_date, pt_packages.end_date, pt_packages.cancellation_reason, pt_packages.id, pt_packages.created_at, pt_packages.updated_at 
+FROM pt_packages 
+WHERE pt_packages.id = $1::UUID
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00009s] (UUID('fd4b0034-e0d3-4c8d-a49c-76aeaa8972c8'),)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT trainer_availability_slots.trainer_id, trainer_availability_slots.start_time, trainer_availability_slots.end_time, trainer_availability_slots.status, trainer_availability_slots.created_by_user_id, trainer_availability_slots.cancelled_at, trainer_availability_slots.cancel_reason, trainer_availability_slots.id, trainer_availability_slots.created_at, trainer_availability_slots.updated_at, trainers_1.full_name, trainers_1.phone, trainers_1.is_active, trainers_1.bio, trainers_1.specialization, trainers_1.photo_url, trainers_1.id AS id_1, trainers_1.created_at AS created_at_1, trainers_1.updated_at AS updated_at_1, trainers_1.deleted_at 
+FROM trainer_availability_slots LEFT OUTER JOIN trainers AS trainers_1 ON trainers_1.id = trainer_availability_slots.trainer_id 
+WHERE trainer_availability_slots.id = $1::UUID
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00010s] (UUID('3901a002-5342-40e0-9898-f087b6a83972'),)
+--------------------------- Captured stdout teardown ---------------------------
+2026-07-26 18:52:14,236 INFO sqlalchemy.engine.Engine ROLLBACK
+---------------------------- Captured log teardown -----------------------------
+INFO     sqlalchemy.engine.Engine:base.py:2713 ROLLBACK
+________ test_concurrent_freeze_race_serialised_by_partial_unique_index ________
+
+db_session_real_commit = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x30dc327b0>
+app = <fastapi.applications.FastAPI object at 0x30429df40>
+
+    @pytest.mark.asyncio
+    async def test_concurrent_freeze_race_serialised_by_partial_unique_index(
+        db_session_real_commit: AsyncSession,
+        app: FastAPI,
+    ) -> None:
+        """MEM-FRZ-TEST-03: 5 parallel POST /freeze on same membership.
+    
+        Expected outcome: exactly 1x200 + 4x409 already_frozen.
+    
+        Asserts the partial unique index `uq_membership_freeze_periods_active_per_membership`
+        is the source-of-truth race winner. App-layer days_used precondition cannot
+        be the gate for the race because it reads-then-writes (TOCTOU); only the
+        DB-level UNIQUE serialises concurrent INSERTs.
+        """
+        # Seed owner + client + plan + active membership via real-commit session
+        hashed = await hash_password(_RACE_OWNER_PASSWORD)
+        owner = User(
+            email=_RACE_OWNER_EMAIL,
+            password_hash=hashed,
+            role=Role.OWNER,
+            full_name="Freeze Race Owner",
+        )
+        db_session_real_commit.add(owner)
+        await db_session_real_commit.commit()
+        await db_session_real_commit.refresh(owner)
+        owner_id = owner.id
+    
+        plan = MembershipPlan(
+            name=f"RacePlan-{uuid4().hex[:6]}",
+            duration_days=30,
+            price_kopecks=250000,
+            freeze_days_limit=14,
+            active=True,
+        )
+        db_session_real_commit.add(plan)
+        await db_session_real_commit.commit()
+    
+        phone_suffix = uuid4().int % 10**7
+        client_obj = Client(
+            last_name=f"RaceClient-{uuid4().hex[:6]}",
+            first_name="Test",
+            phone=f"+7905{phone_suffix:07d}",
+            created_by_user_id=owner_id,
+        )
+        db_session_real_commit.add(client_obj)
+        await db_session_real_commit.commit()
+    
+        today = datetime.now(tz=UTC).date()
+        membership = Membership(
+            client_id=client_obj.id,
+            plan_id=plan.id,
+            plan_name_snapshot=plan.name,
+            duration_days_snapshot=plan.duration_days,
+            price_kopecks_snapshot=plan.price_kopecks,
+            freeze_days_limit_snapshot=plan.freeze_days_limit,
+            start_date=today - timedelta(days=1),
+            end_date=today + timedelta(days=29),
+            status="active",
+            activation_policy="purchase_date",
+        )
+        db_session_real_commit.add(membership)
+        await db_session_real_commit.commit()
+        await db_session_real_commit.refresh(membership)
+        membership_id = membership.id
+    
+        # Flush Redis so rate-limit keys don't bleed
+        await app.state.redis.flushdb()
+    
+        authed = await _build_authed_client(app)
+        csrf_token = authed.cookies.get("clubcore_csrf") or ""
+    
+        async def _post() -> Any:
+            # Phase 66 IDM-07: freeze_membership now requires Idempotency-Key.
+            # Each concurrent request uses a UNIQUE key so all 5 pass the idempotency
+            # guard and race to the DB UNIQUE index — exactly the serialisation we test.
+            headers = {
+                "X-CSRF-Token": csrf_token,
+                "Idempotency-Key": uuid4().hex,
+            }
+            return await authed.post(
+                f"/api/v1/memberships/{membership_id}/freeze",
+                headers=headers,
+            )
+    
+        # 5 parallel POST requests
+        n_concurrent = 5
+        responses = await asyncio.gather(*[_post() for _ in range(n_concurrent)])
+        await authed.aclose()
+    
+        statuses = sorted(r.status_code for r in responses)
+        assert statuses == [200] + [409] * (n_concurrent - 1), (
+            f"MEM-FRZ-TEST-03 failed: expected [200] + [409]*{n_concurrent - 1}, got {statuses}"
+        )
+    
+        bodies_409 = [r.json() for r in responses if r.status_code == 409]
+        codes = [b.get("code") for b in bodies_409]
+>       assert all(c == "already_frozen" for c in codes), f"Unexpected 409 codes: {codes}"
+E       AssertionError: Unexpected 409 codes: ['already_frozen', 'already_frozen', 'invalid_transition', 'invalid_transition']
+E       assert False
+E        +  where False = all(<generator object test_concurrent_freeze_race_serialised_by_partial_unique_index.<locals>.<genexpr> at 0x30dc598a0>)
+
+tests/integration/memberships/test_freeze_race.py:148: AssertionError
+---------------------------- Captured stdout setup -----------------------------
+[2m2026-07-26T15:54:59.507987Z[0m [[32m[1minfo     [0m] [1myookassa_boot_probe           [0m [36mok[0m=[35mNone[0m [36mreason[0m=[35msandbox_skip[0m
+[2m2026-07-26T15:54:59.550666Z[0m [[32m[1mdebug    [0m] [1ms3_bucket_exists              [0m [36mbucket[0m=[35mclubcore-local[0m
+2026-07-26 18:54:59,569 INFO sqlalchemy.engine.Engine select pg_catalog.version()
+2026-07-26 18:54:59,569 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-07-26 18:54:59,570 INFO sqlalchemy.engine.Engine select current_schema()
+2026-07-26 18:54:59,570 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-07-26 18:54:59,571 INFO sqlalchemy.engine.Engine show standard_conforming_strings
+2026-07-26 18:54:59,571 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-07-26 18:54:59,572 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-07-26 18:54:59,572 INFO sqlalchemy.engine.Engine select 1
+2026-07-26 18:54:59,572 INFO sqlalchemy.engine.Engine [generated in 0.00006s] ()
+2026-07-26 18:54:59,573 INFO sqlalchemy.engine.Engine SAVEPOINT sa_savepoint_1
+2026-07-26 18:54:59,573 INFO sqlalchemy.engine.Engine [no key 0.00008s] ()
+2026-07-26 18:54:59,574 INFO sqlalchemy.engine.Engine UPDATE booking_config SET booking_ahead_days = $1, cutoff_minutes = $2,     cancel_window_hours = $3 WHERE id = CAST($4 AS uuid)
+2026-07-26 18:54:59,574 INFO sqlalchemy.engine.Engine [generated in 0.00012s] (365, 0, 24, '00000000-0000-0000-0000-000000000003')
+2026-07-26 18:54:59,575 INFO sqlalchemy.engine.Engine UPDATE working_hours_config SET schedule = CAST($1 AS jsonb), closures = CAST($2 AS jsonb) WHERE id = CAST($3 AS uuid)
+2026-07-26 18:54:59,576 INFO sqlalchemy.engine.Engine [generated in 0.00008s] ('[{"day_of_week": 0, "open_time": "00:00", "close_time": "23:59"}, {"day_of_week": 1, "open_time": "00:00", "close_time": "23:59"}, {"day_of_week": 2, ... (157 characters truncated) ... se_time": "23:59"}, {"day_of_week": 5, "open_time": "00:00", "close_time": "23:59"}, {"day_of_week": 6, "open_time": "00:00", "close_time": "23:59"}]', '[]', '00000000-0000-0000-0000-000000000004')
+------------------------------ Captured log setup ------------------------------
+INFO     sqlalchemy.engine.Engine:base.py:1846 select pg_catalog.version()
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 select current_schema()
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 show standard_conforming_strings
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:2710 BEGIN (implicit)
+INFO     sqlalchemy.engine.Engine:base.py:1846 select 1
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00006s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 SAVEPOINT sa_savepoint_1
+INFO     sqlalchemy.engine.Engine:base.py:1846 [no key 0.00008s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 UPDATE booking_config SET booking_ahead_days = $1, cutoff_minutes = $2,     cancel_window_hours = $3 WHERE id = CAST($4 AS uuid)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00012s] (365, 0, 24, '00000000-0000-0000-0000-000000000003')
+INFO     sqlalchemy.engine.Engine:base.py:1846 UPDATE working_hours_config SET schedule = CAST($1 AS jsonb), closures = CAST($2 AS jsonb) WHERE id = CAST($3 AS uuid)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00008s] ('[{"day_of_week": 0, "open_time": "00:00", "close_time": "23:59"}, {"day_of_week": 1, "open_time": "00:00", "close_time": "23:59"}, {"day_of_week": 2, ... (157 characters truncated) ... se_time": "23:59"}, {"day_of_week": 5, "open_time": "00:00", "close_time": "23:59"}, {"day_of_week": 6, "open_time": "00:00", "close_time": "23:59"}]', '[]', '00000000-0000-0000-0000-000000000004')
+----------------------------- Captured stdout call -----------------------------
+2026-07-26 18:54:59,658 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-07-26 18:54:59,659 INFO sqlalchemy.engine.Engine SELECT users.email, users.email_verified, users.password_hash, users.role, users.full_name, users.telegram_chat_id, users.telegram_username, users.deleted_at, users.is_active, users.status, users.deactivated_at, users.deactivated_by_user_id, users.id, users.created_at, users.updated_at 
+FROM users 
+WHERE users.email = $1::VARCHAR AND users.password_hash IS NOT NULL AND users.is_active IS true AND users.deleted_at IS NULL
+2026-07-26 18:54:59,659 INFO sqlalchemy.engine.Engine [generated in 0.00009s] ('freeze-race-owner@example.com',)
+[2m2026-07-26T15:54:59.684200Z[0m [[32m[1minfo     [0m] [1mlogin_success                 [0m [36mchannel[0m=[35memail_password[0m [36memail[0m=[35mfreeze-race-owner@example.com[0m [36mip[0m=[35m127.0.0.1[0m [36mmethod[0m=[35mPOST[0m [36mpath[0m=[35m/api/v1/auth/login[0m [36mrequest_id[0m=[35m7c9f812b-6447-4b46-9e1c-78bacef49194[0m
+2026-07-26 18:54:59,684 INFO sqlalchemy.engine.Engine INSERT INTO audit_log (actor_user_id, actor_email_snapshot, action, resource_type, resource_id, payload) VALUES ($1::UUID, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::UUID, $6::JSONB) RETURNING audit_log.created_at, audit_log.id
+2026-07-26 18:54:59,685 INFO sqlalchemy.engine.Engine [generated in 0.00016s] (UUID('10e93ca3-3c2b-495c-af1b-9d81dc496cdf'), None, 'login_success', 'session', None, '{"email": "freeze-race-owner@example.com", "ip": "127.0.0.1", "channel": "email_password"}')
+2026-07-26 18:54:59,686 INFO sqlalchemy.engine.Engine COMMIT
+2026-07-26 18:54:59,688 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-07-26 18:54:59,689 INFO sqlalchemy.engine.Engine INSERT INTO refresh_tokens (user_id, family_id, token_hash, expires_at, revoked_at, replaced_by_id, replaced_at) VALUES ($1::UUID, $2::UUID, $3::VARCHAR, $4::TIMESTAMP WITH TIME ZONE, $5::TIMESTAMP WITH TIME ZONE, $6::UUID, $7::TIMESTAMP WITH TIME ZONE) RETURNING refresh_tokens.id, refresh_tokens.created_at, refresh_tokens.updated_at
+2026-07-26 18:54:59,689 INFO sqlalchemy.engine.Engine [generated in 0.00009s] (UUID('10e93ca3-3c2b-495c-af1b-9d81dc496cdf'), UUID('e74227c8-0ac3-42d7-bf38-8830830023c0'), '2fc6cc0bf17d6acdfc54140a53596f51873a8b617ba19fb53e566d72cf396fd3', datetime.datetime(2026, 8, 25, 15, 54, 59, 687682, tzinfo=datetime.timezone.utc), None, None, None)
+2026-07-26 18:54:59,690 INFO sqlalchemy.engine.Engine COMMIT
+[2m2026-07-26T15:54:59.691562Z[0m [[32m[1minfo     [0m] [1mrequest_complete              [0m [36mduration_ms[0m=[35m51.97[0m [36mmethod[0m=[35mPOST[0m [36mpath[0m=[35m/api/v1/auth/login[0m [36mrequest_id[0m=[35m7c9f812b-6447-4b46-9e1c-78bacef49194[0m [36mstatus_code[0m=[35m200[0m
+2026-07-26 18:54:59,697 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-07-26 18:54:59,698 INFO sqlalchemy.engine.Engine SELECT users.email AS users_email, users.email_verified AS users_email_verified, users.password_hash AS users_password_hash, users.role AS users_role, users.full_name AS users_full_name, users.telegram_chat_id AS users_telegram_chat_id, users.telegram_username AS users_telegram_username, users.deleted_at AS users_deleted_at, users.is_active AS users_is_active, users.status AS users_status, users.deactivated_at AS users_deactivated_at, users.deactivated_by_user_id AS users_deactivated_by_user_id, users.id AS users_id, users.created_at AS users_created_at, users.updated_at AS users_updated_at 
+FROM users 
+WHERE users.id = $1::UUID
+2026-07-26 18:54:59,698 INFO sqlalchemy.engine.Engine [generated in 0.00009s] (UUID('10e93ca3-3c2b-495c-af1b-9d81dc496cdf'),)
+2026-07-26 18:54:59,754 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-07-26 18:54:59,755 INFO sqlalchemy.engine.Engine SELECT users.email AS users_email, users.email_verified AS users_email_verified, users.password_hash AS users_password_hash, users.role AS users_role, users.full_name AS users_full_name, users.telegram_chat_id AS users_telegram_chat_id, users.telegram_username AS users_telegram_username, users.deleted_at AS users_deleted_at, users.is_active AS users_is_active, users.status AS users_status, users.deactivated_at AS users_deactivated_at, users.deactivated_by_user_id AS users_deactivated_by_user_id, users.id AS users_id, users.created_at AS users_created_at, users.updated_at AS users_updated_at 
+FROM users 
+WHERE users.id = $1::UUID
+2026-07-26 18:54:59,755 INFO sqlalchemy.engine.Engine [cached since 0.05726s ago] (UUID('10e93ca3-3c2b-495c-af1b-9d81dc496cdf'),)
+2026-07-26 18:54:59,755 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-07-26 18:54:59,755 INFO sqlalchemy.engine.Engine SELECT users.email AS users_email, users.email_verified AS users_email_verified, users.password_hash AS users_password_hash, users.role AS users_role, users.full_name AS users_full_name, users.telegram_chat_id AS users_telegram_chat_id, users.telegram_username AS users_telegram_username, users.deleted_at AS users_deleted_at, users.is_active AS users_is_active, users.status AS users_status, users.deactivated_at AS users_deactivated_at, users.deactivated_by_user_id AS users_deactivated_by_user_id, users.id AS users_id, users.created_at AS users_created_at, users.updated_at AS users_updated_at 
+FROM users 
+WHERE users.id = $1::UUID
+2026-07-26 18:54:59,755 INFO sqlalchemy.engine.Engine [cached since 0.05767s ago] (UUID('10e93ca3-3c2b-495c-af1b-9d81dc496cdf'),)
+2026-07-26 18:54:59,755 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-07-26 18:54:59,755 INFO sqlalchemy.engine.Engine SELECT users.email AS users_email, users.email_verified AS users_email_verified, users.password_hash AS users_password_hash, users.role AS users_role, users.full_name AS users_full_name, users.telegram_chat_id AS users_telegram_chat_id, users.telegram_username AS users_telegram_username, users.deleted_at AS users_deleted_at, users.is_active AS users_is_active, users.status AS users_status, users.deactivated_at AS users_deactivated_at, users.deactivated_by_user_id AS users_deactivated_by_user_id, users.id AS users_id, users.created_at AS users_created_at, users.updated_at AS users_updated_at 
+FROM users 
+WHERE users.id = $1::UUID
+2026-07-26 18:54:59,755 INFO sqlalchemy.engine.Engine [cached since 0.05792s ago] (UUID('10e93ca3-3c2b-495c-af1b-9d81dc496cdf'),)
+2026-07-26 18:54:59,756 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-07-26 18:54:59,756 INFO sqlalchemy.engine.Engine SELECT users.email AS users_email, users.email_verified AS users_email_verified, users.password_hash AS users_password_hash, users.role AS users_role, users.full_name AS users_full_name, users.telegram_chat_id AS users_telegram_chat_id, users.telegram_username AS users_telegram_username, users.deleted_at AS users_deleted_at, users.is_active AS users_is_active, users.status AS users_status, users.deactivated_at AS users_deactivated_at, users.deactivated_by_user_id AS users_deactivated_by_user_id, users.id AS users_id, users.created_at AS users_created_at, users.updated_at AS users_updated_at 
+FROM users 
+WHERE users.id = $1::UUID
+2026-07-26 18:54:59,756 INFO sqlalchemy.engine.Engine [cached since 0.0585s ago] (UUID('10e93ca3-3c2b-495c-af1b-9d81dc496cdf'),)
+2026-07-26 18:54:59,758 INFO sqlalchemy.engine.Engine SELECT memberships.client_id, memberships.plan_id, memberships.plan_name_snapshot, memberships.duration_days_snapshot, memberships.price_kopecks_snapshot, memberships.freeze_days_limit_snapshot, memberships.start_date, memberships.end_date, memberships.status, memberships.cancelled_at, memberships.cancel_reason, memberships.cancellation_reason, memberships.paid_at, memberships.notes, memberships.activation_policy, memberships.previous_membership_id, memberships.id, memberships.created_at, memberships.updated_at 
+FROM memberships 
+WHERE memberships.id = $1::UUID
+2026-07-26 18:54:59,758 INFO sqlalchemy.engine.Engine [generated in 0.00010s] (UUID('bfd461e6-40db-45b2-b66b-cac9742832c3'),)
+2026-07-26 18:54:59,761 INFO sqlalchemy.engine.Engine SELECT COALESCE(SUM(  CEIL(EXTRACT(EPOCH FROM (COALESCE(ended_at, now()) - started_at)) / 86400)), 0)::int FROM membership_freeze_periods WHERE membership_id = $1
+2026-07-26 18:54:59,761 INFO sqlalchemy.engine.Engine [generated in 0.00009s] (UUID('bfd461e6-40db-45b2-b66b-cac9742832c3'),)
+2026-07-26 18:54:59,762 INFO sqlalchemy.engine.Engine INSERT INTO membership_freeze_periods (membership_id, started_at, ended_at, started_by, ended_by) VALUES ($1::UUID, $2::TIMESTAMP WITH TIME ZONE, $3::TIMESTAMP WITH TIME ZONE, $4::UUID, $5::UUID) RETURNING membership_freeze_periods.id, membership_freeze_periods.created_at, membership_freeze_periods.updated_at
+2026-07-26 18:54:59,762 INFO sqlalchemy.engine.Engine [generated in 0.00009s] (UUID('bfd461e6-40db-45b2-b66b-cac9742832c3'), datetime.datetime(2026, 7, 26, 15, 54, 59, 762269, tzinfo=datetime.timezone.utc), None, UUID('10e93ca3-3c2b-495c-af1b-9d81dc496cdf'), None)
+2026-07-26 18:54:59,763 INFO sqlalchemy.engine.Engine UPDATE memberships SET status=$1::VARCHAR, updated_at=now() WHERE memberships.id = $2::UUID
+2026-07-26 18:54:59,764 INFO sqlalchemy.engine.Engine [generated in 0.00011s] ('frozen', UUID('bfd461e6-40db-45b2-b66b-cac9742832c3'))
+2026-07-26 18:54:59,764 INFO sqlalchemy.engine.Engine SELECT memberships.client_id, memberships.plan_id, memberships.plan_name_snapshot, memberships.duration_days_snapshot, memberships.price_kopecks_snapshot, memberships.freeze_days_limit_snapshot, memberships.start_date, memberships.end_date, memberships.status, memberships.cancelled_at, memberships.cancel_reason, memberships.cancellation_reason, memberships.paid_at, memberships.notes, memberships.activation_policy, memberships.previous_membership_id, memberships.id, memberships.created_at, memberships.updated_at 
+FROM memberships 
+WHERE memberships.id = $1::UUID
+2026-07-26 18:54:59,764 INFO sqlalchemy.engine.Engine [cached since 0.006323s ago] (UUID('bfd461e6-40db-45b2-b66b-cac9742832c3'),)
+2026-07-26 18:54:59,765 INFO sqlalchemy.engine.Engine SELECT memberships.client_id, memberships.plan_id, memberships.plan_name_snapshot, memberships.duration_days_snapshot, memberships.price_kopecks_snapshot, memberships.freeze_days_limit_snapshot, memberships.start_date, memberships.end_date, memberships.status, memberships.cancelled_at, memberships.cancel_reason, memberships.cancellation_reason, memberships.paid_at, memberships.notes, memberships.activation_policy, memberships.previous_membership_id, memberships.id, memberships.created_at, memberships.updated_at 
+FROM memberships 
+WHERE memberships.id = $1::UUID
+2026-07-26 18:54:59,765 INFO sqlalchemy.engine.Engine [cached since 0.006598s ago] (UUID('bfd461e6-40db-45b2-b66b-cac9742832c3'),)
+[2m2026-07-26T15:54:59.765383Z[0m [[32m[1minfo     [0m] [1mmembership_frozen             [0m [36mclient_id[0m=[35m21a10351-5a35-4a14-9217-2778a7a6d58c[0m [36mfreeze_period_id[0m=[35mbc280b13-4790-49f7-80e4-0b9cde84a175[0m [36mmethod[0m=[35mPOST[0m [36mpath[0m=[35m/api/v1/memberships/bfd461e6-40db-45b2-b66b-cac9742832c3/freeze[0m [36mrequest_id[0m=[35md59808ca-cee7-4d7c-b31e-12da3734c02f[0m [36mstarted_at[0m=[35m2026-07-26T15:54:59.762269+00:00[0m
+2026-07-26 18:54:59,765 INFO sqlalchemy.engine.Engine INSERT INTO audit_log (actor_user_id, actor_email_snapshot, action, resource_type, resource_id, payload) VALUES ($1::UUID, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::UUID, $6::JSONB) RETURNING audit_log.created_at, audit_log.id
+2026-07-26 18:54:59,765 INFO sqlalchemy.engine.Engine [cached since 0.08073s ago] (UUID('10e93ca3-3c2b-495c-af1b-9d81dc496cdf'), 'freeze-race-owner@example.com', 'membership_frozen', 'membership', UUID('bfd461e6-40db-45b2-b66b-cac9742832c3'), '{"client_id": "21a10351-5a35-4a14-9217-2778a7a6d58c", "freeze_period_id": "bc280b13-4790-49f7-80e4-0b9cde84a175", "started_at": "2026-07-26T15:54:59.762269+00:00"}')
+2026-07-26 18:54:59,766 INFO sqlalchemy.engine.Engine SELECT memberships.updated_at 
+FROM memberships 
+WHERE memberships.id = $1::UUID
+2026-07-26 18:54:59,766 INFO sqlalchemy.engine.Engine [generated in 0.00008s] (UUID('bfd461e6-40db-45b2-b66b-cac9742832c3'),)
+2026-07-26 18:54:59,766 INFO sqlalchemy.engine.Engine SELECT COALESCE(SUM(  CEIL(EXTRACT(EPOCH FROM (COALESCE(ended_at, now()) - started_at)) / 86400)), 0)::int FROM membership_freeze_periods WHERE membership_id = $1
+2026-07-26 18:54:59,766 INFO sqlalchemy.engine.Engine [cached since 0.005882s ago] (UUID('bfd461e6-40db-45b2-b66b-cac9742832c3'),)
+2026-07-26 18:54:59,767 INFO sqlalchemy.engine.Engine SELECT COALESCE(SUM(  CEIL(EXTRACT(EPOCH FROM (COALESCE(ended_at, now()) - started_at)) / 86400)), 0)::int FROM membership_freeze_periods WHERE membership_id = $1
+2026-07-26 18:54:59,767 INFO sqlalchemy.engine.Engine [cached since 0.006174s ago] (UUID('bfd461e6-40db-45b2-b66b-cac9742832c3'),)
+2026-07-26 18:54:59,767 INFO sqlalchemy.engine.Engine SELECT memberships.client_id, memberships.plan_id, memberships.plan_name_snapshot, memberships.duration_days_snapshot, memberships.price_kopecks_snapshot, memberships.freeze_days_limit_snapshot, memberships.start_date, memberships.end_date, memberships.status, memberships.cancelled_at, memberships.cancel_reason, memberships.cancellation_reason, memberships.paid_at, memberships.notes, memberships.activation_policy, memberships.previous_membership_id, memberships.id, memberships.created_at, memberships.updated_at 
+FROM memberships 
+WHERE memberships.id = $1::UUID
+2026-07-26 18:54:59,767 INFO sqlalchemy.engine.Engine [cached since 0.009372s ago] (UUID('bfd461e6-40db-45b2-b66b-cac9742832c3'),)
+2026-07-26 18:54:59,768 INFO sqlalchemy.engine.Engine COMMIT
+2026-07-26 18:54:59,768 INFO sqlalchemy.engine.Engine SELECT memberships.client_id, memberships.plan_id, memberships.plan_name_snapshot, memberships.duration_days_snapshot, memberships.price_kopecks_snapshot, memberships.freeze_days_limit_snapshot, memberships.start_date, memberships.end_date, memberships.status, memberships.cancelled_at, memberships.cancel_reason, memberships.cancellation_reason, memberships.paid_at, memberships.notes, memberships.activation_policy, memberships.previous_membership_id, memberships.id, memberships.created_at, memberships.updated_at 
+FROM memberships 
+WHERE memberships.id = $1::UUID
+2026-07-26 18:54:59,768 INFO sqlalchemy.engine.Engine [cached since 0.00986s ago] (UUID('bfd461e6-40db-45b2-b66b-cac9742832c3'),)
+2026-07-26 18:54:59,768 INFO sqlalchemy.engine.Engine INSERT INTO membership_freeze_periods (membership_id, started_at, ended_at, started_by, ended_by) VALUES ($1::UUID, $2::TIMESTAMP WITH TIME ZONE, $3::TIMESTAMP WITH TIME ZONE, $4::UUID, $5::UUID) RETURNING membership_freeze_periods.id, membership_freeze_periods.created_at, membership_freeze_periods.updated_at
+2026-07-26 18:54:59,768 INFO sqlalchemy.engine.Engine [cached since 0.006086s ago] (UUID('bfd461e6-40db-45b2-b66b-cac9742832c3'), datetime.datetime(2026, 7, 26, 15, 54, 59, 768509, tzinfo=datetime.timezone.utc), None, UUID('10e93ca3-3c2b-495c-af1b-9d81dc496cdf'), None)
+2026-07-26 18:54:59,769 INFO sqlalchemy.engine.Engine INSERT INTO membership_freeze_periods (membership_id, started_at, ended_at, started_by, ended_by) VALUES ($1::UUID, $2::TIMESTAMP WITH TIME ZONE, $3::TIMESTAMP WITH TIME ZONE, $4::UUID, $5::UUID) RETURNING membership_freeze_periods.id, membership_freeze_periods.created_at, membership_freeze_periods.updated_at
+2026-07-26 18:54:59,769 INFO sqlalchemy.engine.Engine [cached since 0.006713s ago] (UUID('bfd461e6-40db-45b2-b66b-cac9742832c3'), datetime.datetime(2026, 7, 26, 15, 54, 59, 769124, tzinfo=datetime.timezone.utc), None, UUID('10e93ca3-3c2b-495c-af1b-9d81dc496cdf'), None)
+2026-07-26 18:54:59,770 INFO sqlalchemy.engine.Engine ROLLBACK
+2026-07-26 18:54:59,770 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-07-26 18:54:59,770 INFO sqlalchemy.engine.Engine SELECT COALESCE(SUM(  CEIL(EXTRACT(EPOCH FROM (COALESCE(ended_at, now()) - started_at)) / 86400)), 0)::int FROM membership_freeze_periods WHERE membership_id = $1
+2026-07-26 18:54:59,770 INFO sqlalchemy.engine.Engine [cached since 0.009279s ago] (UUID('bfd461e6-40db-45b2-b66b-cac9742832c3'),)
+2026-07-26 18:54:59,770 INFO sqlalchemy.engine.Engine ROLLBACK
+2026-07-26 18:54:59,770 INFO sqlalchemy.engine.Engine ROLLBACK
+2026-07-26 18:54:59,770 INFO sqlalchemy.engine.Engine ROLLBACK
+2026-07-26 18:54:59,771 INFO sqlalchemy.engine.Engine SELECT membership_freeze_periods.membership_id, membership_freeze_periods.started_at, membership_freeze_periods.ended_at, membership_freeze_periods.started_by, membership_freeze_periods.ended_by, membership_freeze_periods.id, membership_freeze_periods.created_at, membership_freeze_periods.updated_at 
+FROM membership_freeze_periods 
+WHERE membership_freeze_periods.membership_id = $1::UUID AND membership_freeze_periods.ended_at IS NULL 
+ LIMIT $2::INTEGER
+2026-07-26 18:54:59,771 INFO sqlalchemy.engine.Engine [generated in 0.00009s] (UUID('bfd461e6-40db-45b2-b66b-cac9742832c3'), 1)
+[2m2026-07-26T15:54:59.772090Z[0m [[32m[1minfo     [0m] [1mrequest_complete              [0m [36mduration_ms[0m=[35m78.21[0m [36mmethod[0m=[35mPOST[0m [36mpath[0m=[35m/api/v1/memberships/bfd461e6-40db-45b2-b66b-cac9742832c3/freeze[0m [36mrequest_id[0m=[35mf9dd6067-064e-43ee-b6d6-9df1f6881ff3[0m [36mstatus_code[0m=[35m409[0m
+[2m2026-07-26T15:54:59.772240Z[0m [[32m[1minfo     [0m] [1mrequest_complete              [0m [36mduration_ms[0m=[35m78.42[0m [36mmethod[0m=[35mPOST[0m [36mpath[0m=[35m/api/v1/memberships/bfd461e6-40db-45b2-b66b-cac9742832c3/freeze[0m [36mrequest_id[0m=[35m4fa5dc68-4444-47f1-b5bd-d50419de6268[0m [36mstatus_code[0m=[35m409[0m
+[2m2026-07-26T15:54:59.772604Z[0m [[32m[1minfo     [0m] [1mrequest_complete              [0m [36mduration_ms[0m=[35m78.81[0m [36mmethod[0m=[35mPOST[0m [36mpath[0m=[35m/api/v1/memberships/bfd461e6-40db-45b2-b66b-cac9742832c3/freeze[0m [36mrequest_id[0m=[35ma54aa2e8-d33b-4531-9e8d-baebc7435583[0m [36mstatus_code[0m=[35m409[0m
+[2m2026-07-26T15:54:59.772821Z[0m [[32m[1minfo     [0m] [1mrequest_complete              [0m [36mduration_ms[0m=[35m79.05[0m [36mmethod[0m=[35mPOST[0m [36mpath[0m=[35m/api/v1/memberships/bfd461e6-40db-45b2-b66b-cac9742832c3/freeze[0m [36mrequest_id[0m=[35m1791466a-6ac5-4145-b1e6-510ea6ae2680[0m [36mstatus_code[0m=[35m409[0m
+[2m2026-07-26T15:54:59.773965Z[0m [[32m[1minfo     [0m] [1mrequest_complete              [0m [36mduration_ms[0m=[35m80.21[0m [36mmethod[0m=[35mPOST[0m [36mpath[0m=[35m/api/v1/memberships/bfd461e6-40db-45b2-b66b-cac9742832c3/freeze[0m [36mrequest_id[0m=[35md59808ca-cee7-4d7c-b31e-12da3734c02f[0m [36mstatus_code[0m=[35m200[0m
+2026-07-26 18:54:59,774 INFO sqlalchemy.engine.Engine ROLLBACK
+------------------------------ Captured log call -------------------------------
+INFO     sqlalchemy.engine.Engine:base.py:2710 BEGIN (implicit)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT users.email, users.email_verified, users.password_hash, users.role, users.full_name, users.telegram_chat_id, users.telegram_username, users.deleted_at, users.is_active, users.status, users.deactivated_at, users.deactivated_by_user_id, users.id, users.created_at, users.updated_at 
+FROM users 
+WHERE users.email = $1::VARCHAR AND users.password_hash IS NOT NULL AND users.is_active IS true AND users.deleted_at IS NULL
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00009s] ('freeze-race-owner@example.com',)
+INFO     sqlalchemy.engine.Engine:base.py:1846 INSERT INTO audit_log (actor_user_id, actor_email_snapshot, action, resource_type, resource_id, payload) VALUES ($1::UUID, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::UUID, $6::JSONB) RETURNING audit_log.created_at, audit_log.id
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00016s] (UUID('10e93ca3-3c2b-495c-af1b-9d81dc496cdf'), None, 'login_success', 'session', None, '{"email": "freeze-race-owner@example.com", "ip": "127.0.0.1", "channel": "email_password"}')
+INFO     sqlalchemy.engine.Engine:base.py:2716 COMMIT
+INFO     sqlalchemy.engine.Engine:base.py:2710 BEGIN (implicit)
+INFO     sqlalchemy.engine.Engine:base.py:1846 INSERT INTO refresh_tokens (user_id, family_id, token_hash, expires_at, revoked_at, replaced_by_id, replaced_at) VALUES ($1::UUID, $2::UUID, $3::VARCHAR, $4::TIMESTAMP WITH TIME ZONE, $5::TIMESTAMP WITH TIME ZONE, $6::UUID, $7::TIMESTAMP WITH TIME ZONE) RETURNING refresh_tokens.id, refresh_tokens.created_at, refresh_tokens.updated_at
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00009s] (UUID('10e93ca3-3c2b-495c-af1b-9d81dc496cdf'), UUID('e74227c8-0ac3-42d7-bf38-8830830023c0'), '2fc6cc0bf17d6acdfc54140a53596f51873a8b617ba19fb53e566d72cf396fd3', datetime.datetime(2026, 8, 25, 15, 54, 59, 687682, tzinfo=datetime.timezone.utc), None, None, None)
+INFO     sqlalchemy.engine.Engine:base.py:2716 COMMIT
+INFO     sqlalchemy.engine.Engine:base.py:2710 BEGIN (implicit)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT users.email AS users_email, users.email_verified AS users_email_verified, users.password_hash AS users_password_hash, users.role AS users_role, users.full_name AS users_full_name, users.telegram_chat_id AS users_telegram_chat_id, users.telegram_username AS users_telegram_username, users.deleted_at AS users_deleted_at, users.is_active AS users_is_active, users.status AS users_status, users.deactivated_at AS users_deactivated_at, users.deactivated_by_user_id AS users_deactivated_by_user_id, users.id AS users_id, users.created_at AS users_created_at, users.updated_at AS users_updated_at 
+FROM users 
+WHERE users.id = $1::UUID
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00009s] (UUID('10e93ca3-3c2b-495c-af1b-9d81dc496cdf'),)
+INFO     sqlalchemy.engine.Engine:base.py:2710 BEGIN (implicit)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT users.email AS users_email, users.email_verified AS users_email_verified, users.password_hash AS users_password_hash, users.role AS users_role, users.full_name AS users_full_name, users.telegram_chat_id AS users_telegram_chat_id, users.telegram_username AS users_telegram_username, users.deleted_at AS users_deleted_at, users.is_active AS users_is_active, users.status AS users_status, users.deactivated_at AS users_deactivated_at, users.deactivated_by_user_id AS users_deactivated_by_user_id, users.id AS users_id, users.created_at AS users_created_at, users.updated_at AS users_updated_at 
+FROM users 
+WHERE users.id = $1::UUID
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.05726s ago] (UUID('10e93ca3-3c2b-495c-af1b-9d81dc496cdf'),)
+INFO     sqlalchemy.engine.Engine:base.py:2710 BEGIN (implicit)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT users.email AS users_email, users.email_verified AS users_email_verified, users.password_hash AS users_password_hash, users.role AS users_role, users.full_name AS users_full_name, users.telegram_chat_id AS users_telegram_chat_id, users.telegram_username AS users_telegram_username, users.deleted_at AS users_deleted_at, users.is_active AS users_is_active, users.status AS users_status, users.deactivated_at AS users_deactivated_at, users.deactivated_by_user_id AS users_deactivated_by_user_id, users.id AS users_id, users.created_at AS users_created_at, users.updated_at AS users_updated_at 
+FROM users 
+WHERE users.id = $1::UUID
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.05767s ago] (UUID('10e93ca3-3c2b-495c-af1b-9d81dc496cdf'),)
+INFO     sqlalchemy.engine.Engine:base.py:2710 BEGIN (implicit)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT users.email AS users_email, users.email_verified AS users_email_verified, users.password_hash AS users_password_hash, users.role AS users_role, users.full_name AS users_full_name, users.telegram_chat_id AS users_telegram_chat_id, users.telegram_username AS users_telegram_username, users.deleted_at AS users_deleted_at, users.is_active AS users_is_active, users.status AS users_status, users.deactivated_at AS users_deactivated_at, users.deactivated_by_user_id AS users_deactivated_by_user_id, users.id AS users_id, users.created_at AS users_created_at, users.updated_at AS users_updated_at 
+FROM users 
+WHERE users.id = $1::UUID
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.05792s ago] (UUID('10e93ca3-3c2b-495c-af1b-9d81dc496cdf'),)
+INFO     sqlalchemy.engine.Engine:base.py:2710 BEGIN (implicit)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT users.email AS users_email, users.email_verified AS users_email_verified, users.password_hash AS users_password_hash, users.role AS users_role, users.full_name AS users_full_name, users.telegram_chat_id AS users_telegram_chat_id, users.telegram_username AS users_telegram_username, users.deleted_at AS users_deleted_at, users.is_active AS users_is_active, users.status AS users_status, users.deactivated_at AS users_deactivated_at, users.deactivated_by_user_id AS users_deactivated_by_user_id, users.id AS users_id, users.created_at AS users_created_at, users.updated_at AS users_updated_at 
+FROM users 
+WHERE users.id = $1::UUID
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.0585s ago] (UUID('10e93ca3-3c2b-495c-af1b-9d81dc496cdf'),)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT memberships.client_id, memberships.plan_id, memberships.plan_name_snapshot, memberships.duration_days_snapshot, memberships.price_kopecks_snapshot, memberships.freeze_days_limit_snapshot, memberships.start_date, memberships.end_date, memberships.status, memberships.cancelled_at, memberships.cancel_reason, memberships.cancellation_reason, memberships.paid_at, memberships.notes, memberships.activation_policy, memberships.previous_membership_id, memberships.id, memberships.created_at, memberships.updated_at 
+FROM memberships 
+WHERE memberships.id = $1::UUID
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00010s] (UUID('bfd461e6-40db-45b2-b66b-cac9742832c3'),)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT COALESCE(SUM(  CEIL(EXTRACT(EPOCH FROM (COALESCE(ended_at, now()) - started_at)) / 86400)), 0)::int FROM membership_freeze_periods WHERE membership_id = $1
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00009s] (UUID('bfd461e6-40db-45b2-b66b-cac9742832c3'),)
+INFO     sqlalchemy.engine.Engine:base.py:1846 INSERT INTO membership_freeze_periods (membership_id, started_at, ended_at, started_by, ended_by) VALUES ($1::UUID, $2::TIMESTAMP WITH TIME ZONE, $3::TIMESTAMP WITH TIME ZONE, $4::UUID, $5::UUID) RETURNING membership_freeze_periods.id, membership_freeze_periods.created_at, membership_freeze_periods.updated_at
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00009s] (UUID('bfd461e6-40db-45b2-b66b-cac9742832c3'), datetime.datetime(2026, 7, 26, 15, 54, 59, 762269, tzinfo=datetime.timezone.utc), None, UUID('10e93ca3-3c2b-495c-af1b-9d81dc496cdf'), None)
+INFO     sqlalchemy.engine.Engine:base.py:1846 UPDATE memberships SET status=$1::VARCHAR, updated_at=now() WHERE memberships.id = $2::UUID
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00011s] ('frozen', UUID('bfd461e6-40db-45b2-b66b-cac9742832c3'))
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT memberships.client_id, memberships.plan_id, memberships.plan_name_snapshot, memberships.duration_days_snapshot, memberships.price_kopecks_snapshot, memberships.freeze_days_limit_snapshot, memberships.start_date, memberships.end_date, memberships.status, memberships.cancelled_at, memberships.cancel_reason, memberships.cancellation_reason, memberships.paid_at, memberships.notes, memberships.activation_policy, memberships.previous_membership_id, memberships.id, memberships.created_at, memberships.updated_at 
+FROM memberships 
+WHERE memberships.id = $1::UUID
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.006323s ago] (UUID('bfd461e6-40db-45b2-b66b-cac9742832c3'),)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT memberships.client_id, memberships.plan_id, memberships.plan_name_snapshot, memberships.duration_days_snapshot, memberships.price_kopecks_snapshot, memberships.freeze_days_limit_snapshot, memberships.start_date, memberships.end_date, memberships.status, memberships.cancelled_at, memberships.cancel_reason, memberships.cancellation_reason, memberships.paid_at, memberships.notes, memberships.activation_policy, memberships.previous_membership_id, memberships.id, memberships.created_at, memberships.updated_at 
+FROM memberships 
+WHERE memberships.id = $1::UUID
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.006598s ago] (UUID('bfd461e6-40db-45b2-b66b-cac9742832c3'),)
+INFO     sqlalchemy.engine.Engine:base.py:1846 INSERT INTO audit_log (actor_user_id, actor_email_snapshot, action, resource_type, resource_id, payload) VALUES ($1::UUID, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::UUID, $6::JSONB) RETURNING audit_log.created_at, audit_log.id
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.08073s ago] (UUID('10e93ca3-3c2b-495c-af1b-9d81dc496cdf'), 'freeze-race-owner@example.com', 'membership_frozen', 'membership', UUID('bfd461e6-40db-45b2-b66b-cac9742832c3'), '{"client_id": "21a10351-5a35-4a14-9217-2778a7a6d58c", "freeze_period_id": "bc280b13-4790-49f7-80e4-0b9cde84a175", "started_at": "2026-07-26T15:54:59.762269+00:00"}')
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT memberships.updated_at 
+FROM memberships 
+WHERE memberships.id = $1::UUID
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00008s] (UUID('bfd461e6-40db-45b2-b66b-cac9742832c3'),)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT COALESCE(SUM(  CEIL(EXTRACT(EPOCH FROM (COALESCE(ended_at, now()) - started_at)) / 86400)), 0)::int FROM membership_freeze_periods WHERE membership_id = $1
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.005882s ago] (UUID('bfd461e6-40db-45b2-b66b-cac9742832c3'),)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT COALESCE(SUM(  CEIL(EXTRACT(EPOCH FROM (COALESCE(ended_at, now()) - started_at)) / 86400)), 0)::int FROM membership_freeze_periods WHERE membership_id = $1
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.006174s ago] (UUID('bfd461e6-40db-45b2-b66b-cac9742832c3'),)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT memberships.client_id, memberships.plan_id, memberships.plan_name_snapshot, memberships.duration_days_snapshot, memberships.price_kopecks_snapshot, memberships.freeze_days_limit_snapshot, memberships.start_date, memberships.end_date, memberships.status, memberships.cancelled_at, memberships.cancel_reason, memberships.cancellation_reason, memberships.paid_at, memberships.notes, memberships.activation_policy, memberships.previous_membership_id, memberships.id, memberships.created_at, memberships.updated_at 
+FROM memberships 
+WHERE memberships.id = $1::UUID
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.009372s ago] (UUID('bfd461e6-40db-45b2-b66b-cac9742832c3'),)
+INFO     sqlalchemy.engine.Engine:base.py:2716 COMMIT
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT memberships.client_id, memberships.plan_id, memberships.plan_name_snapshot, memberships.duration_days_snapshot, memberships.price_kopecks_snapshot, memberships.freeze_days_limit_snapshot, memberships.start_date, memberships.end_date, memberships.status, memberships.cancelled_at, memberships.cancel_reason, memberships.cancellation_reason, memberships.paid_at, memberships.notes, memberships.activation_policy, memberships.previous_membership_id, memberships.id, memberships.created_at, memberships.updated_at 
+FROM memberships 
+WHERE memberships.id = $1::UUID
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.00986s ago] (UUID('bfd461e6-40db-45b2-b66b-cac9742832c3'),)
+INFO     sqlalchemy.engine.Engine:base.py:1846 INSERT INTO membership_freeze_periods (membership_id, started_at, ended_at, started_by, ended_by) VALUES ($1::UUID, $2::TIMESTAMP WITH TIME ZONE, $3::TIMESTAMP WITH TIME ZONE, $4::UUID, $5::UUID) RETURNING membership_freeze_periods.id, membership_freeze_periods.created_at, membership_freeze_periods.updated_at
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.006086s ago] (UUID('bfd461e6-40db-45b2-b66b-cac9742832c3'), datetime.datetime(2026, 7, 26, 15, 54, 59, 768509, tzinfo=datetime.timezone.utc), None, UUID('10e93ca3-3c2b-495c-af1b-9d81dc496cdf'), None)
+INFO     sqlalchemy.engine.Engine:base.py:1846 INSERT INTO membership_freeze_periods (membership_id, started_at, ended_at, started_by, ended_by) VALUES ($1::UUID, $2::TIMESTAMP WITH TIME ZONE, $3::TIMESTAMP WITH TIME ZONE, $4::UUID, $5::UUID) RETURNING membership_freeze_periods.id, membership_freeze_periods.created_at, membership_freeze_periods.updated_at
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.006713s ago] (UUID('bfd461e6-40db-45b2-b66b-cac9742832c3'), datetime.datetime(2026, 7, 26, 15, 54, 59, 769124, tzinfo=datetime.timezone.utc), None, UUID('10e93ca3-3c2b-495c-af1b-9d81dc496cdf'), None)
+INFO     sqlalchemy.engine.Engine:base.py:2713 ROLLBACK
+INFO     sqlalchemy.engine.Engine:base.py:2710 BEGIN (implicit)
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT COALESCE(SUM(  CEIL(EXTRACT(EPOCH FROM (COALESCE(ended_at, now()) - started_at)) / 86400)), 0)::int FROM membership_freeze_periods WHERE membership_id = $1
+INFO     sqlalchemy.engine.Engine:base.py:1846 [cached since 0.009279s ago] (UUID('bfd461e6-40db-45b2-b66b-cac9742832c3'),)
+INFO     sqlalchemy.engine.Engine:base.py:2713 ROLLBACK
+INFO     sqlalchemy.engine.Engine:base.py:2713 ROLLBACK
+INFO     sqlalchemy.engine.Engine:base.py:2713 ROLLBACK
+INFO     sqlalchemy.engine.Engine:base.py:1846 SELECT membership_freeze_periods.membership_id, membership_freeze_periods.started_at, membership_freeze_periods.ended_at, membership_freeze_periods.started_by, membership_freeze_periods.ended_by, membership_freeze_periods.id, membership_freeze_periods.created_at, membership_freeze_periods.updated_at 
+FROM membership_freeze_periods 
+WHERE membership_freeze_periods.membership_id = $1::UUID AND membership_freeze_periods.ended_at IS NULL 
+ LIMIT $2::INTEGER
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00009s] (UUID('bfd461e6-40db-45b2-b66b-cac9742832c3'), 1)
+INFO     sqlalchemy.engine.Engine:base.py:2713 ROLLBACK
+--------------------------- Captured stdout teardown ---------------------------
+2026-07-26 18:54:59,876 INFO sqlalchemy.engine.Engine ROLLBACK
+---------------------------- Captured log teardown -----------------------------
+INFO     sqlalchemy.engine.Engine:base.py:2713 ROLLBACK
+_____________ test_locked_audit_events_count_after_phase_51_is_85 ______________
+
+    def test_locked_audit_events_count_after_phase_51_is_85() -> None:
+        """LOCKED_AUDIT_EVENTS baseline — 100 after Phase 68.
+    
+        History (the diff IS the review gate — bump on every audit-event addition):
+          - 85 after Phase 51 (79 pre-51 + 3 refund + 3 fiscal)
+          - 89 after Phase 58 (+4 payroll: comp-config set, accrual created/paid, clawback)
+          - 93 after Phase 59 (+4 schedule: recurring_slot_template_created/cancelled,
+            trainer_time_off_created/cancelled)
+          - 100 after Phase 68 (+6 client auth: otp_requested/consumed, refresh_failed,
+            family_reuse_detected, session_revoked, me_updated; +1 pre-P68 unaccounted)
+          - 101 after Phase 80 / v2.2 (+1 booking_rescheduled — client booking reschedule
+            atomic cancel+create audit event)
+        If this fails with a higher count a new audit event was added without
+        updating this test (intended behaviour). Update this assertion to lock the
+        new baseline.
+        """
+>       assert len(LOCKED_AUDIT_EVENTS) == 117, (
+            f"Expected 117 LOCKED_AUDIT_EVENTS after Phase 109 (v3.1), got {len(LOCKED_AUDIT_EVENTS)}. "
+            "Either a new event was added without updating this test, or an event was removed. "
+            "Update this assertion to lock the new baseline. "
+            "+1 v2.3/P82: loyalty_accrued (ACCR-01 welcome + ACCR-02 owner_grant, INFRA-15). "
+            "+1 v2.3/P83: loyalty_redeemed (REDM-02 redemption debit, INFRA-15). "
+            "+2 v2.3/P84: autopay_charge_initiated + autopay_charge_failed (APAY-01/APAY-03, INFRA-15). "
+            "+4 v2.5/P90: message_sent + message_read + attachment_uploaded + chat_staff_reply_sent (INFRA-15). "
+            "+3 v2.6/P96: referral_code_generated + referral_captured + referral_bonus_accrued (INFRA-15). "
+            "+4 v2.7/P108: gym_card_updated + working_hours_updated + booking_config_updated + notification_prefs_updated (INFRA-15). "
+            "+1 v3.1/P109: profile_updated (INFRA-15)."
+        )
+E       AssertionError: Expected 117 LOCKED_AUDIT_EVENTS after Phase 109 (v3.1), got 118. Either a new event was added without updating this test, or an event was removed. Update this assertion to lock the new baseline. +1 v2.3/P82: loyalty_accrued (ACCR-01 welcome + ACCR-02 owner_grant, INFRA-15). +1 v2.3/P83: loyalty_redeemed (REDM-02 redemption debit, INFRA-15). +2 v2.3/P84: autopay_charge_initiated + autopay_charge_failed (APAY-01/APAY-03, INFRA-15). +4 v2.5/P90: message_sent + message_read + attachment_uploaded + chat_staff_reply_sent (INFRA-15). +3 v2.6/P96: referral_code_generated + referral_captured + referral_bonus_accrued (INFRA-15). +4 v2.7/P108: gym_card_updated + working_hours_updated + booking_config_updated + notification_prefs_updated (INFRA-15). +1 v3.1/P109: profile_updated (INFRA-15).
+E       assert 118 == 117
+E        +  where 118 = len(frozenset({('attachment_uploaded', 'message'), ('autopay_charge_failed', 'autopay'), ('autopay_charge_initiated', 'autopay'), ('booking_cancelled', 'booking'), ('booking_config_updated', 'settings'), ('booking_created', 'booking'), ...}))
+
+tests/integration/test_phase51_audit_chain_invariants.py:57: AssertionError
+---------------------------- Captured stdout setup -----------------------------
+[2m2026-07-26T16:02:04.544408Z[0m [[32m[1minfo     [0m] [1myookassa_boot_probe           [0m [36mok[0m=[35mNone[0m [36mreason[0m=[35msandbox_skip[0m
+[2m2026-07-26T16:02:04.585191Z[0m [[32m[1mdebug    [0m] [1ms3_bucket_exists              [0m [36mbucket[0m=[35mclubcore-local[0m
+2026-07-26 19:02:04,603 INFO sqlalchemy.engine.Engine select pg_catalog.version()
+2026-07-26 19:02:04,603 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-07-26 19:02:04,604 INFO sqlalchemy.engine.Engine select current_schema()
+2026-07-26 19:02:04,604 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-07-26 19:02:04,605 INFO sqlalchemy.engine.Engine show standard_conforming_strings
+2026-07-26 19:02:04,606 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-07-26 19:02:04,606 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-07-26 19:02:04,607 INFO sqlalchemy.engine.Engine select 1
+2026-07-26 19:02:04,607 INFO sqlalchemy.engine.Engine [generated in 0.00006s] ()
+2026-07-26 19:02:04,608 INFO sqlalchemy.engine.Engine SAVEPOINT sa_savepoint_1
+2026-07-26 19:02:04,608 INFO sqlalchemy.engine.Engine [no key 0.00008s] ()
+2026-07-26 19:02:04,608 INFO sqlalchemy.engine.Engine UPDATE booking_config SET booking_ahead_days = $1, cutoff_minutes = $2,     cancel_window_hours = $3 WHERE id = CAST($4 AS uuid)
+2026-07-26 19:02:04,609 INFO sqlalchemy.engine.Engine [generated in 0.00009s] (365, 0, 24, '00000000-0000-0000-0000-000000000003')
+2026-07-26 19:02:04,610 INFO sqlalchemy.engine.Engine UPDATE working_hours_config SET schedule = CAST($1 AS jsonb), closures = CAST($2 AS jsonb) WHERE id = CAST($3 AS uuid)
+2026-07-26 19:02:04,610 INFO sqlalchemy.engine.Engine [generated in 0.00008s] ('[{"day_of_week": 0, "open_time": "00:00", "close_time": "23:59"}, {"day_of_week": 1, "open_time": "00:00", "close_time": "23:59"}, {"day_of_week": 2, ... (157 characters truncated) ... se_time": "23:59"}, {"day_of_week": 5, "open_time": "00:00", "close_time": "23:59"}, {"day_of_week": 6, "open_time": "00:00", "close_time": "23:59"}]', '[]', '00000000-0000-0000-0000-000000000004')
+------------------------------ Captured log setup ------------------------------
+INFO     sqlalchemy.engine.Engine:base.py:1846 select pg_catalog.version()
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 select current_schema()
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 show standard_conforming_strings
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:2710 BEGIN (implicit)
+INFO     sqlalchemy.engine.Engine:base.py:1846 select 1
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00006s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 SAVEPOINT sa_savepoint_1
+INFO     sqlalchemy.engine.Engine:base.py:1846 [no key 0.00008s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 UPDATE booking_config SET booking_ahead_days = $1, cutoff_minutes = $2,     cancel_window_hours = $3 WHERE id = CAST($4 AS uuid)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00009s] (365, 0, 24, '00000000-0000-0000-0000-000000000003')
+INFO     sqlalchemy.engine.Engine:base.py:1846 UPDATE working_hours_config SET schedule = CAST($1 AS jsonb), closures = CAST($2 AS jsonb) WHERE id = CAST($3 AS uuid)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00008s] ('[{"day_of_week": 0, "open_time": "00:00", "close_time": "23:59"}, {"day_of_week": 1, "open_time": "00:00", "close_time": "23:59"}, {"day_of_week": 2, ... (157 characters truncated) ... se_time": "23:59"}, {"day_of_week": 5, "open_time": "00:00", "close_time": "23:59"}, {"day_of_week": 6, "open_time": "00:00", "close_time": "23:59"}]', '[]', '00000000-0000-0000-0000-000000000004')
+--------------------------- Captured stdout teardown ---------------------------
+2026-07-26 19:02:04,617 INFO sqlalchemy.engine.Engine ROLLBACK
+---------------------------- Captured log teardown -----------------------------
+INFO     sqlalchemy.engine.Engine:base.py:2713 ROLLBACK
+__________________ test_every_protected_route_declares_a_gate __________________
+
+    def test_every_protected_route_declares_a_gate() -> None:
+        """Architectural enforcement: every non-excluded APIRoute carries a gate.
+    
+        Failure message includes the exclusion list so the developer can immediately
+        verify whether the missing-gate route was meant to be excluded (D-19).
+        """
+        app = create_app()
+        failures: list[str] = []
+        for route in app.routes:
+            if not isinstance(route, APIRoute):
+                continue  # Mount, WebSocketRoute — not in scope
+            path = route.path
+            if path in EXCLUDED_PATHS:
+                continue
+            if any(path.startswith(p) for p in EXCLUDED_PREFIXES):
+                continue
+            if not _route_has_gate(route):
+                failures.append(path)
+    
+>       assert not failures, (
+            f"Routes missing require_permission/require_authenticated gate: {failures}\n"
+            f"\n"
+            f"If a route should be exempt (e.g., a new auth bootstrap endpoint), add it to\n"
+            f"EXCLUDED_PATHS in this file. The diff is the audit trail (D-19).\n"
+            f"\n"
+            f"Current EXCLUDED_PATHS: {sorted(EXCLUDED_PATHS)}\n"
+            f"Current EXCLUDED_PREFIXES: {EXCLUDED_PREFIXES}\n"
+        )
+E       AssertionError: Routes missing require_permission/require_authenticated gate: ['/metrics']
+E         
+E         If a route should be exempt (e.g., a new auth bootstrap endpoint), add it to
+E         EXCLUDED_PATHS in this file. The diff is the audit trail (D-19).
+E         
+E         Current EXCLUDED_PATHS: ['/api/v1/_internal/yookassa/webhook', '/api/v1/auth/login', '/api/v1/auth/otp/request', '/api/v1/auth/password-reset/confirm', '/api/v1/auth/password-reset/request', '/api/v1/auth/refresh', '/api/v1/auth/telegram/start', '/api/v1/auth/telegram/status', '/api/v1/auth/telegram/verify', '/api/v1/client/check-in', '/api/v1/client/otp/request', '/api/v1/client/otp/verify', '/api/v1/client/session/refresh', '/api/v1/i/{code}', '/api/v1/online-payments/return', '/api/v1/users/invitations/accept', '/docs', '/docs/oauth2-redirect', '/healthz', '/openapi.json', '/redoc']
+E         Current EXCLUDED_PREFIXES: ('/api/v1/auth/telegram/', '/api/v1/_internal/')
+E         
+E       assert not ['/metrics']
+
+tests/integration/test_route_introspection.py:172: AssertionError
+---------------------------- Captured stdout setup -----------------------------
+[2m2026-07-26T16:02:37.766261Z[0m [[32m[1minfo     [0m] [1myookassa_boot_probe           [0m [36mok[0m=[35mNone[0m [36mreason[0m=[35msandbox_skip[0m
+[2m2026-07-26T16:02:37.808998Z[0m [[32m[1mdebug    [0m] [1ms3_bucket_exists              [0m [36mbucket[0m=[35mclubcore-local[0m
+2026-07-26 19:02:37,827 INFO sqlalchemy.engine.Engine select pg_catalog.version()
+2026-07-26 19:02:37,827 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-07-26 19:02:37,828 INFO sqlalchemy.engine.Engine select current_schema()
+2026-07-26 19:02:37,828 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-07-26 19:02:37,829 INFO sqlalchemy.engine.Engine show standard_conforming_strings
+2026-07-26 19:02:37,829 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-07-26 19:02:37,830 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-07-26 19:02:37,830 INFO sqlalchemy.engine.Engine select 1
+2026-07-26 19:02:37,830 INFO sqlalchemy.engine.Engine [generated in 0.00006s] ()
+2026-07-26 19:02:37,831 INFO sqlalchemy.engine.Engine SAVEPOINT sa_savepoint_1
+2026-07-26 19:02:37,831 INFO sqlalchemy.engine.Engine [no key 0.00007s] ()
+2026-07-26 19:02:37,832 INFO sqlalchemy.engine.Engine UPDATE booking_config SET booking_ahead_days = $1, cutoff_minutes = $2,     cancel_window_hours = $3 WHERE id = CAST($4 AS uuid)
+2026-07-26 19:02:37,832 INFO sqlalchemy.engine.Engine [generated in 0.00009s] (365, 0, 24, '00000000-0000-0000-0000-000000000003')
+2026-07-26 19:02:37,833 INFO sqlalchemy.engine.Engine UPDATE working_hours_config SET schedule = CAST($1 AS jsonb), closures = CAST($2 AS jsonb) WHERE id = CAST($3 AS uuid)
+2026-07-26 19:02:37,833 INFO sqlalchemy.engine.Engine [generated in 0.00008s] ('[{"day_of_week": 0, "open_time": "00:00", "close_time": "23:59"}, {"day_of_week": 1, "open_time": "00:00", "close_time": "23:59"}, {"day_of_week": 2, ... (157 characters truncated) ... se_time": "23:59"}, {"day_of_week": 5, "open_time": "00:00", "close_time": "23:59"}, {"day_of_week": 6, "open_time": "00:00", "close_time": "23:59"}]', '[]', '00000000-0000-0000-0000-000000000004')
+------------------------------ Captured log setup ------------------------------
+INFO     sqlalchemy.engine.Engine:base.py:1846 select pg_catalog.version()
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 select current_schema()
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 show standard_conforming_strings
+INFO     sqlalchemy.engine.Engine:base.py:1846 [raw sql] ()
+INFO     sqlalchemy.engine.Engine:base.py:2710 BEGIN (implicit)
+INFO     sqlalchemy.engine.Engine:base.py:1846 select 1
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00006s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 SAVEPOINT sa_savepoint_1
+INFO     sqlalchemy.engine.Engine:base.py:1846 [no key 0.00007s] ()
+INFO     sqlalchemy.engine.Engine:base.py:1846 UPDATE booking_config SET booking_ahead_days = $1, cutoff_minutes = $2,     cancel_window_hours = $3 WHERE id = CAST($4 AS uuid)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00009s] (365, 0, 24, '00000000-0000-0000-0000-000000000003')
+INFO     sqlalchemy.engine.Engine:base.py:1846 UPDATE working_hours_config SET schedule = CAST($1 AS jsonb), closures = CAST($2 AS jsonb) WHERE id = CAST($3 AS uuid)
+INFO     sqlalchemy.engine.Engine:base.py:1846 [generated in 0.00008s] ('[{"day_of_week": 0, "open_time": "00:00", "close_time": "23:59"}, {"day_of_week": 1, "open_time": "00:00", "close_time": "23:59"}, {"day_of_week": 2, ... (157 characters truncated) ... se_time": "23:59"}, {"day_of_week": 5, "open_time": "00:00", "close_time": "23:59"}, {"day_of_week": 6, "open_time": "00:00", "close_time": "23:59"}]', '[]', '00000000-0000-0000-0000-000000000004')
+--------------------------- Captured stdout teardown ---------------------------
+2026-07-26 19:02:37,967 INFO sqlalchemy.engine.Engine ROLLBACK
+---------------------------- Captured log teardown -----------------------------
+INFO     sqlalchemy.engine.Engine:base.py:2713 ROLLBACK
+=========================== short test summary info ============================
+FAILED tests/integration/bookings/test_bookings_create.py::test_create_booking_pt_package_expired_before_slot_moscow_tz
+FAILED tests/integration/memberships/test_freeze_race.py::test_concurrent_freeze_race_serialised_by_partial_unique_index
+FAILED tests/integration/test_phase51_audit_chain_invariants.py::test_locked_audit_events_count_after_phase_51_is_85
+FAILED tests/integration/test_route_introspection.py::test_every_protected_route_declares_a_gate
+ERROR tests/integration/visits/test_visits_self_checkin.py::test_self_checkin_happy_path
+======== 4 failed, 3058 passed, 8 skipped, 1 error in 894.00s (0:14:53) ========
+=== END: 2026-07-26T16:07:10Z ===

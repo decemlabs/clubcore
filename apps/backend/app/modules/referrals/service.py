@@ -183,9 +183,7 @@ async def get_or_create_referral_code(
             attempt=_attempt + 1,
         )
     if row is None:
-        raise RuntimeError(
-            "referral code minting exhausted retries on code-string collisions"
-        )
+        raise RuntimeError("referral code minting exhausted retries on code-string collisions")
 
     code_row_id: UUID = row[0]
     code_row_code: str = row[1]
@@ -247,14 +245,15 @@ async def resolve_public_code(
     # WR-02: filter deleted_at IS NULL; missing row means referrer is soft-deleted
     # → treat code as invalid (anti-oracle: still 200, valid=False).
     row = (
-        await session.execute(
-            text(
-                "SELECT first_name FROM clients "
-                "WHERE id = :cid AND deleted_at IS NULL"
-            ),
-            {"cid": str(code_row.client_id)},
+        (
+            await session.execute(
+                text("SELECT first_name FROM clients WHERE id = :cid AND deleted_at IS NULL"),
+                {"cid": str(code_row.client_id)},
+            )
         )
-    ).mappings().one_or_none()
+        .mappings()
+        .one_or_none()
+    )
 
     if row is None:
         # Referrer is soft-deleted — code is no longer valid.
@@ -313,15 +312,19 @@ async def get_referral_summary(
     # Step 2: accruedKopecks — SUM of this client's own referral_accrual rows.
     # Mirrors loyalty/service.py _sum_balance fold, filtered to referral entries.
     accrual_row = (
-        await session.execute(
-            text(
-                "SELECT COALESCE(SUM(amount_kopecks), 0) AS accrued "
-                "FROM loyalty_ledger "
-                "WHERE client_id = :cid AND entry_type = 'referral_accrual'"
-            ),
-            {"cid": str(client_id)},
+        (
+            await session.execute(
+                text(
+                    "SELECT COALESCE(SUM(amount_kopecks), 0) AS accrued "
+                    "FROM loyalty_ledger "
+                    "WHERE client_id = :cid AND entry_type = 'referral_accrual'"
+                ),
+                {"cid": str(client_id)},
+            )
         )
-    ).mappings().one()
+        .mappings()
+        .one()
+    )
     accrued_kopecks = int(accrual_row["accrued"])
 
     # Step 3: invitees — cross-module raw-SQL join (D-54-08).
@@ -331,24 +334,28 @@ async def get_referral_summary(
     # status = 'joined' when the accrual row exists (ll.id IS NOT NULL).
     # bonusKopecks = accrual amount (0 while pending).
     rows = (
-        await session.execute(
-            text(
-                "SELECT c.first_name AS first_name, "
-                "       rc.created_at AS joined_at, "
-                "       COALESCE(ll.amount_kopecks, 0) AS bonus_kopecks, "
-                "       (ll.id IS NOT NULL) AS joined "
-                "FROM referral_captures rc "
-                "JOIN clients c ON c.id = rc.referee_client_id AND c.deleted_at IS NULL "
-                "LEFT JOIN loyalty_ledger ll "
-                "  ON ll.referral_capture_id = rc.id "
-                "  AND ll.client_id = :cid "
-                "  AND ll.entry_type = 'referral_accrual' "
-                "WHERE rc.referrer_client_id = :cid "
-                "ORDER BY rc.created_at DESC"
-            ),
-            {"cid": str(client_id)},
+        (
+            await session.execute(
+                text(
+                    "SELECT c.first_name AS first_name, "
+                    "       rc.created_at AS joined_at, "
+                    "       COALESCE(ll.amount_kopecks, 0) AS bonus_kopecks, "
+                    "       (ll.id IS NOT NULL) AS joined "
+                    "FROM referral_captures rc "
+                    "JOIN clients c ON c.id = rc.referee_client_id AND c.deleted_at IS NULL "
+                    "LEFT JOIN loyalty_ledger ll "
+                    "  ON ll.referral_capture_id = rc.id "
+                    "  AND ll.client_id = :cid "
+                    "  AND ll.entry_type = 'referral_accrual' "
+                    "WHERE rc.referrer_client_id = :cid "
+                    "ORDER BY rc.created_at DESC"
+                ),
+                {"cid": str(client_id)},
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
 
     invitees = [
         ReferralInviteeItem(

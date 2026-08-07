@@ -1,0 +1,1539 @@
+{
+  "generated_at": "2026-07-26T14:30:16.839Z",
+  "generated_by": "tools/audit/zod-wire-manifest.mjs",
+  "scope": "STATIC ONLY — no live backend hit this run (122-05 modified scope; see SUMMARY)",
+  "domain_count": 29,
+  "domains_with_capture_and_contract_test": [
+    "messages",
+    "payments",
+    "promoCodes",
+    "reports",
+    "users"
+  ],
+  "domains_missing_pattern": [
+    "attendance",
+    "audit",
+    "auth",
+    "bookings",
+    "branches",
+    "cashbox",
+    "clients",
+    "dashboard",
+    "finance",
+    "import-export",
+    "load",
+    "memberships",
+    "notifications",
+    "payroll",
+    "plans",
+    "pt-packages",
+    "roles",
+    "schedule",
+    "search",
+    "settings",
+    "system-settings",
+    "trainers",
+    "trash",
+    "visits"
+  ],
+  "rows": [
+    {
+      "domain": "attendance",
+      "call_site": "(none — delegates-to:visits)",
+      "method": null,
+      "endpoint": null,
+      "zod_schema": "(no schemas.ts)",
+      "backend_endpoint_ref": null,
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "delegates-to:visits"
+    },
+    {
+      "domain": "audit",
+      "call_site": "apps/admin/src/features/audit/api.ts:43",
+      "method": "GET",
+      "endpoint": "/api/v1/audit-log",
+      "zod_schema": "(no .parse() paired within window)",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/audit-log (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "auth",
+      "call_site": "apps/admin/src/features/auth/api.ts:58",
+      "method": "GET",
+      "endpoint": "/api/v1/auth/me",
+      "zod_schema": "MeResponseSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/auth/me (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "auth",
+      "call_site": "apps/admin/src/features/auth/api.ts:73",
+      "method": "POST",
+      "endpoint": "/api/v1/auth/login",
+      "zod_schema": "LoginResponseSchema",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/auth/login (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "auth",
+      "call_site": "apps/admin/src/features/auth/api.ts:92",
+      "method": "POST",
+      "endpoint": "/api/v1/auth/logout",
+      "zod_schema": "(no .parse() paired within window)",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/auth/logout (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "auth",
+      "call_site": "apps/admin/src/features/auth/api.ts:106",
+      "method": "POST",
+      "endpoint": "/api/v1/auth/password-reset/request",
+      "zod_schema": "(no .parse() paired within window)",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/auth/password-reset/request (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "auth",
+      "call_site": "apps/admin/src/features/auth/api.ts:118",
+      "method": "POST",
+      "endpoint": "/api/v1/auth/password-reset/confirm",
+      "zod_schema": "(no .parse() paired within window)",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/auth/password-reset/confirm (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "auth",
+      "call_site": "apps/admin/src/features/auth/api.ts:143",
+      "method": "PATCH",
+      "endpoint": "/api/v1/auth/me",
+      "zod_schema": "MeResponseSchema",
+      "backend_endpoint_ref": "openapi.json: PATCH /api/v1/auth/me (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "auth",
+      "call_site": "apps/admin/src/features/auth/api.ts:176",
+      "method": "POST",
+      "endpoint": "/api/v1/auth/change-password",
+      "zod_schema": "(no .parse() paired within window)",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/auth/change-password (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "bookings",
+      "call_site": "apps/admin/src/features/bookings/api.ts:58",
+      "method": "GET",
+      "endpoint": "/api/v1/bookings",
+      "zod_schema": "BookingsListResponseSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/bookings (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "bookings",
+      "call_site": "apps/admin/src/features/bookings/api.ts:83",
+      "method": "GET",
+      "endpoint": "/api/v1/bookings",
+      "zod_schema": "BookingsListResponseSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/bookings (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "bookings",
+      "call_site": "apps/admin/src/features/bookings/api.ts:96",
+      "method": "GET",
+      "endpoint": "/api/v1/bookings/{booking_id}",
+      "zod_schema": "BookingSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/bookings/{booking_id} (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "bookings",
+      "call_site": "apps/admin/src/features/bookings/api.ts:128",
+      "method": "POST",
+      "endpoint": "/api/v1/bookings",
+      "zod_schema": "BookingSchema",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/bookings (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "bookings",
+      "call_site": "apps/admin/src/features/bookings/api.ts:156",
+      "method": "POST",
+      "endpoint": "/api/v1/bookings/{booking_id}/cancel",
+      "zod_schema": "(no .parse() paired within window)",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/bookings/{booking_id}/cancel (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "bookings",
+      "call_site": "apps/admin/src/features/bookings/api.ts:214",
+      "method": "POST",
+      "endpoint": "/api/v1/pt-sessions",
+      "zod_schema": "(no .parse() paired within window)",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/pt-sessions (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "branches",
+      "call_site": "(none — mock-only)",
+      "method": null,
+      "endpoint": null,
+      "zod_schema": "(no schemas.ts)",
+      "backend_endpoint_ref": null,
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "mock-only"
+    },
+    {
+      "domain": "cashbox",
+      "call_site": "(none — delegates-to:auth,payments)",
+      "method": null,
+      "endpoint": null,
+      "zod_schema": "(no schemas.ts)",
+      "backend_endpoint_ref": null,
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "delegates-to:auth,payments"
+    },
+    {
+      "domain": "clients",
+      "call_site": "apps/admin/src/features/clients/api.ts:53",
+      "method": "GET",
+      "endpoint": "/api/v1/clients",
+      "zod_schema": "ClientsListResponseSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/clients (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "clients",
+      "call_site": "apps/admin/src/features/clients/api.ts:64",
+      "method": "GET",
+      "endpoint": "/api/v1/clients/{client_id}",
+      "zod_schema": "ClientSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/clients/{client_id} (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "clients",
+      "call_site": "apps/admin/src/features/clients/api.ts:82",
+      "method": "POST",
+      "endpoint": "/api/v1/clients",
+      "zod_schema": "ClientSchema",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/clients (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "clients",
+      "call_site": "apps/admin/src/features/clients/api.ts:101",
+      "method": "PATCH",
+      "endpoint": "/api/v1/clients/{client_id}",
+      "zod_schema": "ClientSchema",
+      "backend_endpoint_ref": "openapi.json: PATCH /api/v1/clients/{client_id} (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "clients",
+      "call_site": "apps/admin/src/features/clients/api.ts:118",
+      "method": "DELETE",
+      "endpoint": "/api/v1/clients/{client_id}",
+      "zod_schema": "(no .parse() paired within window)",
+      "backend_endpoint_ref": "openapi.json: DELETE /api/v1/clients/{client_id} (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "dashboard",
+      "call_site": "apps/admin/src/features/dashboard/api.ts:52",
+      "method": "GET",
+      "endpoint": "/api/v1/bookings",
+      "zod_schema": "BookingsListResponseSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/bookings (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "dashboard",
+      "call_site": "apps/admin/src/features/dashboard/api.ts:69",
+      "method": "GET",
+      "endpoint": "/api/v1/memberships",
+      "zod_schema": "MembershipsListResponseSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/memberships (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "dashboard",
+      "call_site": "apps/admin/src/features/dashboard/api.ts:95",
+      "method": "GET",
+      "endpoint": "/api/v1/audit-log",
+      "zod_schema": "AuditLogResponseSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/audit-log (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "finance",
+      "call_site": "(none — delegates-to:reports,payments)",
+      "method": null,
+      "endpoint": null,
+      "zod_schema": "(no schemas.ts)",
+      "backend_endpoint_ref": null,
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "delegates-to:reports,payments"
+    },
+    {
+      "domain": "import-export",
+      "call_site": "(none — mock-only)",
+      "method": null,
+      "endpoint": null,
+      "zod_schema": "(no schemas.ts)",
+      "backend_endpoint_ref": null,
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "mock-only"
+    },
+    {
+      "domain": "load",
+      "call_site": "(none — delegates-to:reports)",
+      "method": null,
+      "endpoint": null,
+      "zod_schema": "(no schemas.ts)",
+      "backend_endpoint_ref": null,
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "delegates-to:reports"
+    },
+    {
+      "domain": "memberships",
+      "call_site": "apps/admin/src/features/memberships/api.ts:46",
+      "method": "GET",
+      "endpoint": "/api/v1/memberships",
+      "zod_schema": "MembershipsListResponseSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/memberships (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "memberships",
+      "call_site": "apps/admin/src/features/memberships/api.ts:61",
+      "method": "GET",
+      "endpoint": "/api/v1/memberships/{membership_id}",
+      "zod_schema": "MembershipSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/memberships/{membership_id} (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "memberships",
+      "call_site": "apps/admin/src/features/memberships/api.ts:84",
+      "method": "POST",
+      "endpoint": "/api/v1/memberships",
+      "zod_schema": "MembershipSchema",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/memberships (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "memberships",
+      "call_site": "apps/admin/src/features/memberships/api.ts:124",
+      "method": "POST",
+      "endpoint": "/api/v1/memberships/{membership_id}/freeze",
+      "zod_schema": "(no .parse() paired within window)",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/memberships/{membership_id}/freeze (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "memberships",
+      "call_site": "apps/admin/src/features/memberships/api.ts:204",
+      "method": "POST",
+      "endpoint": "/api/v1/memberships/{membership_id}/unfreeze",
+      "zod_schema": "(no .parse() paired within window)",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/memberships/{membership_id}/unfreeze (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "memberships",
+      "call_site": "apps/admin/src/features/memberships/api.ts:271",
+      "method": "POST",
+      "endpoint": "/api/v1/memberships/{membership_id}/renew",
+      "zod_schema": "MembershipSchema",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/memberships/{membership_id}/renew (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "memberships",
+      "call_site": "apps/admin/src/features/memberships/api.ts:313",
+      "method": "POST",
+      "endpoint": "/api/v1/memberships/{membership_id}/cancel",
+      "zod_schema": "MembershipSchema",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/memberships/{membership_id}/cancel (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "memberships",
+      "call_site": "apps/admin/src/features/memberships/api.ts:361",
+      "method": "POST",
+      "endpoint": "/api/v1/memberships/{membership_id}/refund",
+      "zod_schema": "MembershipSchema",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/memberships/{membership_id}/refund (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "messages",
+      "call_site": "apps/admin/src/features/messages/api.ts:80",
+      "method": "GET",
+      "endpoint": "/api/v1/messages/threads",
+      "zod_schema": "StaffInboxSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/messages/threads (present, reference-only)",
+      "capture_fixture_present": "y",
+      "contract_test_present": "y",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "messages",
+      "call_site": "apps/admin/src/features/messages/api.ts:100",
+      "method": "GET",
+      "endpoint": "/api/v1/messages/threads/{thread_id}",
+      "zod_schema": "StaffThreadSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/messages/threads/{thread_id} (present, reference-only)",
+      "capture_fixture_present": "y",
+      "contract_test_present": "y",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "messages",
+      "call_site": "apps/admin/src/features/messages/api.ts:124",
+      "method": "POST",
+      "endpoint": "/api/v1/messages/threads/{thread_id}/reply",
+      "zod_schema": "(no schemas.ts)",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/messages/threads/{thread_id}/reply (present, reference-only)",
+      "capture_fixture_present": "y",
+      "contract_test_present": "y",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "messages",
+      "call_site": "apps/admin/src/features/messages/api.ts:152",
+      "method": "POST",
+      "endpoint": "/api/v1/messages/threads/{thread_id}/read",
+      "zod_schema": "(no schemas.ts)",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/messages/threads/{thread_id}/read (present, reference-only)",
+      "capture_fixture_present": "y",
+      "contract_test_present": "y",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "notifications",
+      "call_site": "(none — mock-only)",
+      "method": null,
+      "endpoint": null,
+      "zod_schema": "(no schemas.ts)",
+      "backend_endpoint_ref": null,
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "mock-only"
+    },
+    {
+      "domain": "payments",
+      "call_site": "apps/admin/src/features/payments/api.ts:51",
+      "method": "GET",
+      "endpoint": "/api/v1/payments/by-client/{client_id}",
+      "zod_schema": "PaymentsListResponseSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/payments/by-client/{client_id} (present, reference-only)",
+      "capture_fixture_present": "y",
+      "contract_test_present": "y",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "payments",
+      "call_site": "apps/admin/src/features/payments/api.ts:78",
+      "method": "GET",
+      "endpoint": "/api/v1/payments",
+      "zod_schema": "PaymentsListResponseSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/payments (present, reference-only)",
+      "capture_fixture_present": "y",
+      "contract_test_present": "y",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "payments",
+      "call_site": "apps/admin/src/features/payments/api.ts:112",
+      "method": "POST",
+      "endpoint": "/api/v1/payments/{payment_id}/refund",
+      "zod_schema": "(no .parse() paired within window)",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/payments/{payment_id}/refund (present, reference-only)",
+      "capture_fixture_present": "y",
+      "contract_test_present": "y",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "payroll",
+      "call_site": "apps/admin/src/features/payroll/api.ts:47",
+      "method": "GET",
+      "endpoint": "/api/v1/payroll/trainer-configs/{trainer_id}",
+      "zod_schema": "PayrollConfigSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/payroll/trainer-configs/{trainer_id} (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "payroll",
+      "call_site": "apps/admin/src/features/payroll/api.ts:77",
+      "method": "GET",
+      "endpoint": "/api/v1/payroll/preview",
+      "zod_schema": "AccrualPreviewSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/payroll/preview (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "payroll",
+      "call_site": "apps/admin/src/features/payroll/api.ts:103",
+      "method": "GET",
+      "endpoint": "/api/v1/payroll/accruals",
+      "zod_schema": "AccrualsListResponseSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/payroll/accruals (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "payroll",
+      "call_site": "apps/admin/src/features/payroll/api.ts:131",
+      "method": "PUT",
+      "endpoint": "/api/v1/payroll/trainer-configs/{trainer_id}",
+      "zod_schema": "PayrollConfigSchema",
+      "backend_endpoint_ref": "openapi.json: PUT /api/v1/payroll/trainer-configs/{trainer_id} (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "payroll",
+      "call_site": "apps/admin/src/features/payroll/api.ts:163",
+      "method": "POST",
+      "endpoint": "/api/v1/payroll/accruals",
+      "zod_schema": "AccrualSchema",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/payroll/accruals (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "payroll",
+      "call_site": "apps/admin/src/features/payroll/api.ts:198",
+      "method": "POST",
+      "endpoint": "/api/v1/payroll/accruals/{accrual_id}/mark-paid",
+      "zod_schema": "(no .parse() paired within window)",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/payroll/accruals/{accrual_id}/mark-paid (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "plans",
+      "call_site": "apps/admin/src/features/plans/api.ts:54",
+      "method": "GET",
+      "endpoint": "/api/v1/membership-plans",
+      "zod_schema": "PlansListResponseSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/membership-plans (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "plans",
+      "call_site": "apps/admin/src/features/plans/api.ts:69",
+      "method": "POST",
+      "endpoint": "/api/v1/membership-plans",
+      "zod_schema": "MembershipPlanSchema",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/membership-plans (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "plans",
+      "call_site": "apps/admin/src/features/plans/api.ts:88",
+      "method": "PATCH",
+      "endpoint": "/api/v1/membership-plans/{plan_id}",
+      "zod_schema": "MembershipPlanSchema",
+      "backend_endpoint_ref": "openapi.json: PATCH /api/v1/membership-plans/{plan_id} (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "plans",
+      "call_site": "apps/admin/src/features/plans/api.ts:106",
+      "method": "DELETE",
+      "endpoint": "/api/v1/membership-plans/{plan_id}",
+      "zod_schema": "(no .parse() paired within window)",
+      "backend_endpoint_ref": "openapi.json: DELETE /api/v1/membership-plans/{plan_id} (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "promoCodes",
+      "call_site": "apps/admin/src/features/promoCodes/api.ts:54",
+      "method": "GET",
+      "endpoint": "/api/v1/promo-codes",
+      "zod_schema": "PromoCodesListResponseSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/promo-codes (present, reference-only)",
+      "capture_fixture_present": "y",
+      "contract_test_present": "y",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "promoCodes",
+      "call_site": "apps/admin/src/features/promoCodes/api.ts:80",
+      "method": "POST",
+      "endpoint": "/api/v1/promo-codes",
+      "zod_schema": "PromoCodeWriteResponseSchema",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/promo-codes (present, reference-only)",
+      "capture_fixture_present": "y",
+      "contract_test_present": "y",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "promoCodes",
+      "call_site": "apps/admin/src/features/promoCodes/api.ts:103",
+      "method": "PATCH",
+      "endpoint": "/api/v1/promo-codes/{promo_id}",
+      "zod_schema": "PromoCodeWriteResponseSchema",
+      "backend_endpoint_ref": "openapi.json: PATCH /api/v1/promo-codes/{promo_id} (present, reference-only)",
+      "capture_fixture_present": "y",
+      "contract_test_present": "y",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "promoCodes",
+      "call_site": "apps/admin/src/features/promoCodes/api.ts:125",
+      "method": "PATCH",
+      "endpoint": "/api/v1/promo-codes/{promo_id}/deactivate",
+      "zod_schema": "(no .parse() paired within window)",
+      "backend_endpoint_ref": "openapi.json: PATCH /api/v1/promo-codes/{promo_id}/deactivate (present, reference-only)",
+      "capture_fixture_present": "y",
+      "contract_test_present": "y",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "pt-packages",
+      "call_site": "apps/admin/src/features/pt-packages/api.ts:67",
+      "method": "GET",
+      "endpoint": "/api/v1/pt-package-plans",
+      "zod_schema": "PtPackagePlansListResponseSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/pt-package-plans (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "pt-packages",
+      "call_site": "apps/admin/src/features/pt-packages/api.ts:84",
+      "method": "POST",
+      "endpoint": "/api/v1/pt-package-plans",
+      "zod_schema": "PtPackagePlanSchema",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/pt-package-plans (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "pt-packages",
+      "call_site": "apps/admin/src/features/pt-packages/api.ts:104",
+      "method": "PATCH",
+      "endpoint": "/api/v1/pt-package-plans/{plan_id}",
+      "zod_schema": "PtPackagePlanSchema",
+      "backend_endpoint_ref": "openapi.json: PATCH /api/v1/pt-package-plans/{plan_id} (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "pt-packages",
+      "call_site": "apps/admin/src/features/pt-packages/api.ts:122",
+      "method": "DELETE",
+      "endpoint": "/api/v1/pt-package-plans/{plan_id}",
+      "zod_schema": "(no .parse() paired within window)",
+      "backend_endpoint_ref": "openapi.json: DELETE /api/v1/pt-package-plans/{plan_id} (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "pt-packages",
+      "call_site": "apps/admin/src/features/pt-packages/api.ts:143",
+      "method": "GET",
+      "endpoint": "/api/v1/pt-packages",
+      "zod_schema": "PtPackagesListResponseSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/pt-packages (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "pt-packages",
+      "call_site": "apps/admin/src/features/pt-packages/api.ts:167",
+      "method": "POST",
+      "endpoint": "/api/v1/pt-packages",
+      "zod_schema": "PtPackageSchema",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/pt-packages (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "pt-packages",
+      "call_site": "apps/admin/src/features/pt-packages/api.ts:198",
+      "method": "POST",
+      "endpoint": "/api/v1/pt-packages/{pt_package_id}/cancel",
+      "zod_schema": "PtPackageSchema",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/pt-packages/{pt_package_id}/cancel (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "pt-packages",
+      "call_site": "apps/admin/src/features/pt-packages/api.ts:236",
+      "method": "POST",
+      "endpoint": "/api/v1/pt-packages/{pt_package_id}/refund",
+      "zod_schema": "PtPackageSchema",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/pt-packages/{pt_package_id}/refund (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "reports",
+      "call_site": "apps/admin/src/features/reports/api.ts:56",
+      "method": "GET",
+      "endpoint": "/api/v1/reports/visits",
+      "zod_schema": "VisitsReportSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/reports/visits (present, reference-only)",
+      "capture_fixture_present": "y",
+      "contract_test_present": "y",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "reports",
+      "call_site": "apps/admin/src/features/reports/api.ts:77",
+      "method": "GET",
+      "endpoint": "/api/v1/reports/revenue",
+      "zod_schema": "RevenueReportSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/reports/revenue (present, reference-only)",
+      "capture_fixture_present": "y",
+      "contract_test_present": "y",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "reports",
+      "call_site": "apps/admin/src/features/reports/api.ts:97",
+      "method": "GET",
+      "endpoint": "/api/v1/reports/clients",
+      "zod_schema": "ClientsReportSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/reports/clients (present, reference-only)",
+      "capture_fixture_present": "y",
+      "contract_test_present": "y",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "reports",
+      "call_site": "apps/admin/src/features/reports/api.ts:117",
+      "method": "GET",
+      "endpoint": "/api/v1/reports/trainers",
+      "zod_schema": "TrainersReportSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/reports/trainers (present, reference-only)",
+      "capture_fixture_present": "y",
+      "contract_test_present": "y",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "reports",
+      "call_site": "apps/admin/src/features/reports/api.ts:142",
+      "method": "GET",
+      "endpoint": "/api/v1/reports/cohort",
+      "zod_schema": "CohortRetentionSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/reports/cohort (present, reference-only)",
+      "capture_fixture_present": "y",
+      "contract_test_present": "y",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "reports",
+      "call_site": "apps/admin/src/features/reports/api.ts:166",
+      "method": "GET",
+      "endpoint": "/api/v1/reports/anomaly",
+      "zod_schema": "VisitAnomalySchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/reports/anomaly (present, reference-only)",
+      "capture_fixture_present": "y",
+      "contract_test_present": "y",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "reports",
+      "call_site": "apps/admin/src/features/reports/api.ts:187",
+      "method": "GET",
+      "endpoint": "/api/v1/reports/at-risk",
+      "zod_schema": "AtRiskSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/reports/at-risk (present, reference-only)",
+      "capture_fixture_present": "y",
+      "contract_test_present": "y",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "reports",
+      "call_site": "apps/admin/src/features/reports/api.ts:207",
+      "method": "GET",
+      "endpoint": "/api/v1/reports/load/now",
+      "zod_schema": "LoadNowSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/reports/load/now (present, reference-only)",
+      "capture_fixture_present": "y",
+      "contract_test_present": "y",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "roles",
+      "call_site": "(none — mock-only)",
+      "method": null,
+      "endpoint": null,
+      "zod_schema": "(no schemas.ts)",
+      "backend_endpoint_ref": null,
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "mock-only"
+    },
+    {
+      "domain": "schedule",
+      "call_site": "apps/admin/src/features/schedule/api.ts:50",
+      "method": "GET",
+      "endpoint": "/api/v1/trainer-slots",
+      "zod_schema": "TrainerSlotListResponseSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/trainer-slots (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "schedule",
+      "call_site": "apps/admin/src/features/schedule/api.ts:67",
+      "method": "GET",
+      "endpoint": "/api/v1/recurring-templates",
+      "zod_schema": "RecurringTemplateListResponseSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/recurring-templates (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "schedule",
+      "call_site": "apps/admin/src/features/schedule/api.ts:82",
+      "method": "GET",
+      "endpoint": "/api/v1/time-off",
+      "zod_schema": "TimeOffListResponseSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/time-off (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "schedule",
+      "call_site": "apps/admin/src/features/schedule/api.ts:104",
+      "method": "POST",
+      "endpoint": "/api/v1/trainer-slots",
+      "zod_schema": "TrainerSlotSchema",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/trainer-slots (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "schedule",
+      "call_site": "apps/admin/src/features/schedule/api.ts:131",
+      "method": "PATCH",
+      "endpoint": "/api/v1/trainer-slots/{slot_id}/cancel",
+      "zod_schema": "(no .parse() paired within window)",
+      "backend_endpoint_ref": "openapi.json: PATCH /api/v1/trainer-slots/{slot_id}/cancel (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "schedule",
+      "call_site": "apps/admin/src/features/schedule/api.ts:162",
+      "method": "POST",
+      "endpoint": "/api/v1/recurring-templates",
+      "zod_schema": "RecurringTemplateSchema",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/recurring-templates (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "schedule",
+      "call_site": "apps/admin/src/features/schedule/api.ts:189",
+      "method": "POST",
+      "endpoint": "/api/v1/recurring-templates/{template_id}/deactivate",
+      "zod_schema": "(no .parse() paired within window)",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/recurring-templates/{template_id}/deactivate (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "schedule",
+      "call_site": "apps/admin/src/features/schedule/api.ts:225",
+      "method": "POST",
+      "endpoint": "/api/v1/time-off",
+      "zod_schema": "TimeOffSchema",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/time-off (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "schedule",
+      "call_site": "apps/admin/src/features/schedule/api.ts:260",
+      "method": "DELETE",
+      "endpoint": "/api/v1/time-off/{time_off_id}",
+      "zod_schema": "(no .parse() paired within window)",
+      "backend_endpoint_ref": "openapi.json: DELETE /api/v1/time-off/{time_off_id} (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "search",
+      "call_site": "(none — static-no-query)",
+      "method": null,
+      "endpoint": null,
+      "zod_schema": "(no schemas.ts)",
+      "backend_endpoint_ref": null,
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "static-no-query"
+    },
+    {
+      "domain": "settings",
+      "call_site": "apps/admin/src/features/settings/api.ts:88",
+      "method": "GET",
+      "endpoint": "/api/v1/auth/sessions",
+      "zod_schema": "SessionsListResponseSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/auth/sessions (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "settings",
+      "call_site": "apps/admin/src/features/settings/api.ts:108",
+      "method": "POST",
+      "endpoint": "/api/v1/auth/sessions/{family_id}/revoke",
+      "zod_schema": "(no .parse() paired within window)",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/auth/sessions/{family_id}/revoke (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "settings",
+      "call_site": "apps/admin/src/features/settings/api.ts:132",
+      "method": "POST",
+      "endpoint": "/api/v1/auth/sessions/{family_id}/revoke",
+      "zod_schema": "(no .parse() paired within window)",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/auth/sessions/{family_id}/revoke (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "settings",
+      "call_site": "apps/admin/src/features/settings/api.ts:156",
+      "method": "GET",
+      "endpoint": "/api/v1/gym",
+      "zod_schema": "GymInfoResponseSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/gym (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "settings",
+      "call_site": "apps/admin/src/features/settings/api.ts:177",
+      "method": "PUT",
+      "endpoint": "/api/v1/gym",
+      "zod_schema": "GymInfoSchema",
+      "backend_endpoint_ref": "openapi.json: PUT /api/v1/gym (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "settings",
+      "call_site": "apps/admin/src/features/settings/api.ts:204",
+      "method": "GET",
+      "endpoint": "/api/v1/settings/hours",
+      "zod_schema": "WorkingHoursResponseSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/settings/hours (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "settings",
+      "call_site": "apps/admin/src/features/settings/api.ts:225",
+      "method": "PUT",
+      "endpoint": "/api/v1/settings/hours",
+      "zod_schema": "WorkingHoursSchema",
+      "backend_endpoint_ref": "openapi.json: PUT /api/v1/settings/hours (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "settings",
+      "call_site": "apps/admin/src/features/settings/api.ts:252",
+      "method": "GET",
+      "endpoint": "/api/v1/settings/booking",
+      "zod_schema": "BookingConfigResponseSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/settings/booking (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "settings",
+      "call_site": "apps/admin/src/features/settings/api.ts:274",
+      "method": "PUT",
+      "endpoint": "/api/v1/settings/booking",
+      "zod_schema": "BookingConfigSchema",
+      "backend_endpoint_ref": "openapi.json: PUT /api/v1/settings/booking (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "settings",
+      "call_site": "apps/admin/src/features/settings/api.ts:301",
+      "method": "GET",
+      "endpoint": "/api/v1/settings/notifications",
+      "zod_schema": "NotificationPrefsResponseSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/settings/notifications (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "settings",
+      "call_site": "apps/admin/src/features/settings/api.ts:322",
+      "method": "PUT",
+      "endpoint": "/api/v1/settings/notifications",
+      "zod_schema": "NotificationPrefsSchema",
+      "backend_endpoint_ref": "openapi.json: PUT /api/v1/settings/notifications (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "system-settings",
+      "call_site": "(none — mock-only)",
+      "method": null,
+      "endpoint": null,
+      "zod_schema": "(no schemas.ts)",
+      "backend_endpoint_ref": null,
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "mock-only"
+    },
+    {
+      "domain": "trainers",
+      "call_site": "apps/admin/src/features/trainers/api.ts:47",
+      "method": "GET",
+      "endpoint": "/api/v1/trainers",
+      "zod_schema": "TrainersListResponseSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/trainers (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "trainers",
+      "call_site": "apps/admin/src/features/trainers/api.ts:58",
+      "method": "GET",
+      "endpoint": "/api/v1/trainers/{trainer_id}",
+      "zod_schema": "TrainerSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/trainers/{trainer_id} (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "trainers",
+      "call_site": "apps/admin/src/features/trainers/api.ts:76",
+      "method": "POST",
+      "endpoint": "/api/v1/trainers",
+      "zod_schema": "TrainerSchema",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/trainers (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "trainers",
+      "call_site": "apps/admin/src/features/trainers/api.ts:105",
+      "method": "PATCH",
+      "endpoint": "/api/v1/trainers/{trainer_id}",
+      "zod_schema": "TrainerSchema",
+      "backend_endpoint_ref": "openapi.json: PATCH /api/v1/trainers/{trainer_id} (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "trainers",
+      "call_site": "apps/admin/src/features/trainers/api.ts:133",
+      "method": "DELETE",
+      "endpoint": "/api/v1/trainers/{trainer_id}",
+      "zod_schema": "(no .parse() paired within window)",
+      "backend_endpoint_ref": "openapi.json: DELETE /api/v1/trainers/{trainer_id} (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "trash",
+      "call_site": "(none — mock-only)",
+      "method": null,
+      "endpoint": null,
+      "zod_schema": "(no schemas.ts)",
+      "backend_endpoint_ref": null,
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "mock-only"
+    },
+    {
+      "domain": "users",
+      "call_site": "apps/admin/src/features/users/api.ts:56",
+      "method": "GET",
+      "endpoint": "/api/v1/users",
+      "zod_schema": "UsersListResponseSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/users (present, reference-only)",
+      "capture_fixture_present": "y",
+      "contract_test_present": "y",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "users",
+      "call_site": "apps/admin/src/features/users/api.ts:79",
+      "method": "POST",
+      "endpoint": "/api/v1/users",
+      "zod_schema": "UserInviteResponseSchema",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/users (present, reference-only)",
+      "capture_fixture_present": "y",
+      "contract_test_present": "y",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "users",
+      "call_site": "apps/admin/src/features/users/api.ts:100",
+      "method": "PATCH",
+      "endpoint": "/api/v1/users/{user_id}/deactivate",
+      "zod_schema": "(no .parse() paired within window)",
+      "backend_endpoint_ref": "openapi.json: PATCH /api/v1/users/{user_id}/deactivate (present, reference-only)",
+      "capture_fixture_present": "y",
+      "contract_test_present": "y",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "users",
+      "call_site": "apps/admin/src/features/users/api.ts:115",
+      "method": "PATCH",
+      "endpoint": "/api/v1/users/{user_id}/reactivate",
+      "zod_schema": "(no .parse() paired within window)",
+      "backend_endpoint_ref": "openapi.json: PATCH /api/v1/users/{user_id}/reactivate (present, reference-only)",
+      "capture_fixture_present": "y",
+      "contract_test_present": "y",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "users",
+      "call_site": "apps/admin/src/features/users/api.ts:130",
+      "method": "DELETE",
+      "endpoint": "/api/v1/users/{user_id}",
+      "zod_schema": "(no .parse() paired within window)",
+      "backend_endpoint_ref": "openapi.json: DELETE /api/v1/users/{user_id} (present, reference-only)",
+      "capture_fixture_present": "y",
+      "contract_test_present": "y",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "users",
+      "call_site": "apps/admin/src/features/users/api.ts:150",
+      "method": "PATCH",
+      "endpoint": "/api/v1/users/{user_id}/role",
+      "zod_schema": "(no .parse() paired within window)",
+      "backend_endpoint_ref": "openapi.json: PATCH /api/v1/users/{user_id}/role (present, reference-only)",
+      "capture_fixture_present": "y",
+      "contract_test_present": "y",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "users",
+      "call_site": "apps/admin/src/features/users/api.ts:173",
+      "method": "POST",
+      "endpoint": "/api/v1/users/invitations/{token_id}/revoke",
+      "zod_schema": "(no .parse() paired within window)",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/users/invitations/{token_id}/revoke (present, reference-only)",
+      "capture_fixture_present": "y",
+      "contract_test_present": "y",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "visits",
+      "call_site": "apps/admin/src/features/visits/api.ts:48",
+      "method": "GET",
+      "endpoint": "/api/v1/visits",
+      "zod_schema": "VisitsListResponseSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/visits (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "visits",
+      "call_site": "apps/admin/src/features/visits/api.ts:72",
+      "method": "GET",
+      "endpoint": "/api/v1/visits",
+      "zod_schema": "VisitsListResponseSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/visits (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "visits",
+      "call_site": "apps/admin/src/features/visits/api.ts:87",
+      "method": "GET",
+      "endpoint": "/api/v1/visits/_meta",
+      "zod_schema": "GymMetaSchema",
+      "backend_endpoint_ref": "openapi.json: GET /api/v1/visits/_meta (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "visits",
+      "call_site": "apps/admin/src/features/visits/api.ts:123",
+      "method": "POST",
+      "endpoint": "/api/v1/visits",
+      "zod_schema": "VisitSchema",
+      "backend_endpoint_ref": "openapi.json: POST /api/v1/visits (present, reference-only)",
+      "capture_fixture_present": "n",
+      "contract_test_present": "n",
+      "wiring": "real-backend"
+    }
+  ],
+  "domain_summaries": [
+    {
+      "domain": "attendance",
+      "call_site_count": 0,
+      "capture_fixture_present": false,
+      "contract_test_present": false,
+      "contract_test_files": [],
+      "wiring": "delegates-to:visits"
+    },
+    {
+      "domain": "audit",
+      "call_site_count": 1,
+      "capture_fixture_present": false,
+      "contract_test_present": false,
+      "contract_test_files": [],
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "auth",
+      "call_site_count": 7,
+      "capture_fixture_present": false,
+      "contract_test_present": false,
+      "contract_test_files": [],
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "bookings",
+      "call_site_count": 6,
+      "capture_fixture_present": false,
+      "contract_test_present": false,
+      "contract_test_files": [],
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "branches",
+      "call_site_count": 0,
+      "capture_fixture_present": false,
+      "contract_test_present": false,
+      "contract_test_files": [],
+      "wiring": "mock-only"
+    },
+    {
+      "domain": "cashbox",
+      "call_site_count": 0,
+      "capture_fixture_present": false,
+      "contract_test_present": false,
+      "contract_test_files": [],
+      "wiring": "delegates-to:auth,payments"
+    },
+    {
+      "domain": "clients",
+      "call_site_count": 5,
+      "capture_fixture_present": false,
+      "contract_test_present": false,
+      "contract_test_files": [],
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "dashboard",
+      "call_site_count": 3,
+      "capture_fixture_present": false,
+      "contract_test_present": false,
+      "contract_test_files": [],
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "finance",
+      "call_site_count": 0,
+      "capture_fixture_present": false,
+      "contract_test_present": false,
+      "contract_test_files": [],
+      "wiring": "delegates-to:reports,payments"
+    },
+    {
+      "domain": "import-export",
+      "call_site_count": 0,
+      "capture_fixture_present": false,
+      "contract_test_present": false,
+      "contract_test_files": [],
+      "wiring": "mock-only"
+    },
+    {
+      "domain": "load",
+      "call_site_count": 0,
+      "capture_fixture_present": false,
+      "contract_test_present": false,
+      "contract_test_files": [],
+      "wiring": "delegates-to:reports"
+    },
+    {
+      "domain": "memberships",
+      "call_site_count": 8,
+      "capture_fixture_present": false,
+      "contract_test_present": false,
+      "contract_test_files": [],
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "messages",
+      "call_site_count": 4,
+      "capture_fixture_present": true,
+      "contract_test_present": true,
+      "contract_test_files": [
+        "apps/admin/src/features/messages/messages.contract.test.ts"
+      ],
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "notifications",
+      "call_site_count": 0,
+      "capture_fixture_present": false,
+      "contract_test_present": false,
+      "contract_test_files": [],
+      "wiring": "mock-only"
+    },
+    {
+      "domain": "payments",
+      "call_site_count": 3,
+      "capture_fixture_present": true,
+      "contract_test_present": true,
+      "contract_test_files": [
+        "apps/admin/src/features/payments/refund.contract.test.ts"
+      ],
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "payroll",
+      "call_site_count": 6,
+      "capture_fixture_present": false,
+      "contract_test_present": false,
+      "contract_test_files": [],
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "plans",
+      "call_site_count": 4,
+      "capture_fixture_present": false,
+      "contract_test_present": false,
+      "contract_test_files": [],
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "promoCodes",
+      "call_site_count": 4,
+      "capture_fixture_present": true,
+      "contract_test_present": true,
+      "contract_test_files": [
+        "apps/admin/src/features/promoCodes/promo.contract.test.ts"
+      ],
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "pt-packages",
+      "call_site_count": 8,
+      "capture_fixture_present": false,
+      "contract_test_present": false,
+      "contract_test_files": [],
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "reports",
+      "call_site_count": 8,
+      "capture_fixture_present": true,
+      "contract_test_present": true,
+      "contract_test_files": [
+        "apps/admin/src/features/reports/load-now.contract.test.ts"
+      ],
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "roles",
+      "call_site_count": 0,
+      "capture_fixture_present": false,
+      "contract_test_present": false,
+      "contract_test_files": [],
+      "wiring": "mock-only"
+    },
+    {
+      "domain": "schedule",
+      "call_site_count": 9,
+      "capture_fixture_present": false,
+      "contract_test_present": false,
+      "contract_test_files": [],
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "search",
+      "call_site_count": 0,
+      "capture_fixture_present": false,
+      "contract_test_present": false,
+      "contract_test_files": [],
+      "wiring": "static-no-query"
+    },
+    {
+      "domain": "settings",
+      "call_site_count": 11,
+      "capture_fixture_present": false,
+      "contract_test_present": false,
+      "contract_test_files": [],
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "system-settings",
+      "call_site_count": 0,
+      "capture_fixture_present": false,
+      "contract_test_present": false,
+      "contract_test_files": [],
+      "wiring": "mock-only"
+    },
+    {
+      "domain": "trainers",
+      "call_site_count": 5,
+      "capture_fixture_present": false,
+      "contract_test_present": false,
+      "contract_test_files": [],
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "trash",
+      "call_site_count": 0,
+      "capture_fixture_present": false,
+      "contract_test_present": false,
+      "contract_test_files": [],
+      "wiring": "mock-only"
+    },
+    {
+      "domain": "users",
+      "call_site_count": 7,
+      "capture_fixture_present": true,
+      "contract_test_present": true,
+      "contract_test_files": [
+        "apps/admin/src/features/users/role-change.contract.test.ts"
+      ],
+      "wiring": "real-backend"
+    },
+    {
+      "domain": "visits",
+      "call_site_count": 4,
+      "capture_fixture_present": false,
+      "contract_test_present": false,
+      "contract_test_files": [],
+      "wiring": "real-backend"
+    }
+  ]
+}

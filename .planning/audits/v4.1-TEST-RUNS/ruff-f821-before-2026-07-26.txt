@@ -1,0 +1,6 @@
+tests/messaging/test_attachment_idor.py:42:71: F821 Undefined name `Any`
+tests/messaging/test_attachment_idor.py:58:58: F821 Undefined name `Any`
+tests/messaging/test_attachment_idor.py:58:80: F821 Undefined name `Any`
+tests/modules/client_portal/test_client_me_service.py:282:16: F821 Undefined name `UUID`
+tests/modules/client_portal/test_client_me_service.py:284:6: F821 Undefined name `UUID`
+Found 5 errors.

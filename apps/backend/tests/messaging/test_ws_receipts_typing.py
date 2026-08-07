@@ -169,6 +169,7 @@ def test_ws_typing_fanout(ws_tc: TestClient) -> None:
             "/api/v1/client/ws/messages",
             headers={"origin": WS_ALLOWED_ORIGIN},
         ) as ws:
+
             async def _publish() -> None:
                 await messaging_service.publish_typing(
                     ws_tc.app.state.redis,
@@ -183,12 +184,8 @@ def test_ws_typing_fanout(ws_tc: TestClient) -> None:
             )
 
             frame = json.loads(raw)
-            assert frame.get("type") == "typing", (
-                f"Expected type='typing', got: {frame!r}"
-            )
-            assert frame.get("actor") == "staff", (
-                f"Expected actor='staff', got: {frame!r}"
-            )
+            assert frame.get("type") == "typing", f"Expected type='typing', got: {frame!r}"
+            assert frame.get("actor") == "staff", f"Expected actor='staff', got: {frame!r}"
 
             # T-91-LEAK: typing frame MUST NOT carry message content.
             for forbidden_key in ("body", "preview", "messageId", "message_id"):
@@ -391,19 +388,17 @@ def test_ws_reply_as_read_e2e(ws_tc: TestClient) -> None:
                 f"reply_read_at captured: {reply_read_at!r}"
             )
             read_at_wire = receipt_frame.get("readAt")
-            assert read_at_wire is not None, (
-                f"read_receipt frame missing readAt: {receipt_frame!r}"
-            )
+            assert read_at_wire is not None, f"read_receipt frame missing readAt: {receipt_frame!r}"
             received_read_at = datetime.fromisoformat(read_at_wire)
             assert reply_read_at is not None, (
                 "reply_read_at was None — record_staff_message found no unread client messages"
             )
             # The WS readAt must match (or be >= first client msg sent_at).
-            assert received_read_at >= reply_read_at.replace(tzinfo=UTC) if (
-                reply_read_at.tzinfo is None
-            ) else received_read_at >= reply_read_at, (
-                f"WS readAt={received_read_at!r} is before reply_read_at={reply_read_at!r}"
-            )
+            assert (
+                received_read_at >= reply_read_at.replace(tzinfo=UTC)
+                if (reply_read_at.tzinfo is None)
+                else received_read_at >= reply_read_at
+            ), f"WS readAt={received_read_at!r} is before reply_read_at={reply_read_at!r}"
 
         # Step 5: confirm persistence via REST GET (RCPT-01 ✓✓ persisted).
         get_resp = ws_tc.get("/api/v1/client/messages")

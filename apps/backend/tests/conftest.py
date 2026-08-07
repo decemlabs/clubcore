@@ -27,10 +27,6 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.core.database import get_db
-from app.core.redis import get_redis
-from app.main import create_app
-
 # Phase 2 D-15 Settings requires DATABASE_URL/REDIS_URL/SECRET_KEY from env or .env.
 # CI / fresh checkouts run without `.env`; load `.env.example` defaults at import
 # time so Settings() in `create_app()` does not fail before any test executes.
@@ -45,12 +41,37 @@ if _ENV_EXAMPLE.is_file():
         _key, _, _value = _stripped.partition("=")
         os.environ.setdefault(_key.strip(), _value.strip())
 
+# Local application imports must happen after the test environment fallback:
+# several integration settings objects are constructed at module import time.
+from app.core.database import get_db  # noqa: E402
+from app.core.redis import get_redis  # noqa: E402
+from app.integrations.storage.s3 import S3Storage  # noqa: E402
+from app.main import create_app  # noqa: E402
+
+_storage_bucket_bootstrapped = False
+
 
 @pytest_asyncio.fixture
-async def app() -> AsyncIterator[FastAPI]:
+async def app(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[FastAPI]:
     """Per-test FastAPI instance with lifespan fired (engine + sessionmaker bound)."""
+    global _storage_bucket_bootstrapped
+
+    if _storage_bucket_bootstrapped:
+
+        async def _bucket_already_bootstrapped(_storage: S3Storage) -> None:
+            """Avoid repeating a process-startup probe for every test app."""
+
+        monkeypatch.setattr(S3Storage, "ensure_bucket", _bucket_already_bootstrapped)
+
     _app = create_app()
-    async with LifespanManager(_app):
+    # Keep a finite startup budget that tolerates shared CI service load while
+    # still surfacing genuine lifespan regressions promptly.
+    async with LifespanManager(_app, startup_timeout=15):
+        # Production creates one application per process.  The suite creates a
+        # fresh app per test for isolation, so probing the same live S3 bucket
+        # thousands of times only overloads the test service.  Keep the first
+        # real probe and skip duplicates within this pytest process.
+        _storage_bucket_bootstrapped = True
         yield _app
 
 

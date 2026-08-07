@@ -18,6 +18,22 @@ clubcore — CRM для тренажёрного зала (переименов�
 
 Соло backend-разработчик с AI-агентами должен уметь поэтапно наращивать бизнес-фичи зала на стабильном, архитектурно ограниченном каркасе — без переписывания структуры по мере роста.
 
+## Current Milestone: v4.1 Codebase Hardening — приведение кодовой базы к идеалу
+
+**Goal:** Закрыть все обнаруживаемые дефекты существующей кодовой базы на достижимом без боевого железа bar'е — сначала сплошной аудит с реестром находок, затем фиксы по категориям, пока реестр не пуст (или пункт осознанно отложен с зафиксированной причиной). Новых продуктовых фич нет.
+
+**Target features (направления):**
+- **Сплошной аудит → единый DEFECT-реестр** (входная фаза, артефакт для всех последующих) — browser-UAT по всем доменам `apps/admin` + `apps/client` на РЕАЛЬНОМ backend; систематический diff FE Zod-схем против живых wire-форм; reachability sweep (`router.tsx` ComingSoon→lazy + `nav-items.ts`); статический аудит (32 TODO/FIXME/HACK, import-linter/границы слоёв, мёртвый код, дубли, лишние абстракции); triage 23 operator-pending пунктов v4.0 на «доказуемо локально» vs «требует железа». Каждая находка — id + severity + категория + файл/экран.
+- **Фиксы функциональных багов на живых данных** — Zod↔wire расхождения, падающие экраны, недостижимые страницы. К каждому фиксу — contract-тест против РЕАЛЬНОГО ответа backend как доказательство.
+- **Код-гигиена и архитектура** — закрытие TODO/FIXME, удаление мёртвого кода, устранение дублей, восстановление границ слоёв, упрощение абстракций.
+- **Локально-доказуемая prod-готовность** — k3d apply, BAK-03 verified restore round-trip в k3d, SEC-02 off-node key backup на тестовом хранилище; чисто операторские пункты остаются отложенными с явным реестром.
+
+**Done-bar:** каждый пункт DEFECT-реестра — `fixed+verified` либо `deferred` с причиной; все гейты зелёные (ruff / mypy strict / import-linter / eslint / tsc / pytest / vitest / OpenAPI drift). Наследует **D-V40-LOCAL-VALIDATE**: боевое железо и продакшн-креды за границей milestone — никаких сфабрикованных доказательств.
+
+**Key context:** урок v3.0/v3.1 — юнит-тесты на моках дважды пропустили mock↔real schema-дрейф, пойман только браузерным UAT; поэтому аудит идёт через браузер на живом backend, а не через чтение кода. Урок FND-04 — экран может быть полностью подключён и при этом недостижим, reachability проверяется отдельно. Тесты — не кампания за покрытие, а инструмент доказательства фиксов. Версия v4.1 (не v5.0): новой продуктовой поверхности нет, это hardening предыдущего.
+
+**Out of scope:** новые бизнес-фичи; боевой apply на реальное железо; живой ЮKassa credentialed leg; RU email/SMS deliverability; мультифилиальность / multi-tenancy; Notifications Hub; persisted-RBAC / Roles-editor; отложенные trainer reviews + модерация.
+
 ## Last Shipped Milestone: v4.0 Production Infrastructure — Self-Hosted k3s
 
 **✅ SHIPPED 2026-06-16** (Phases 118–121; tag `v4.0`; audit `passed` — 39/39 requirements at the local-validation bar, cross-phase wiring sound). Containerized the full stack + Terraform IaC (on-prem k3s) + observability (kube-prometheus-stack/Loki/Alloy) + backups (CNPG barman / Redis / SeaweedFS + restore-verify CronJob) + network security (Traefik v3 ingress, cert-manager, sealed-secrets, NetworkPolicies, ASVS-hardened securityContext) + a Makefile CD layer with an 8-check smoke and a production runbook. **Done-bar = local validation** (k3d / `helm lint` / `terraform validate` / `make -n` / `bash -n`); the live legs (k3d/terraform apply, `make up`/`make smoke`, TLS, alert delivery) are **operator-pending by design** (D-V40-LOCAL-VALIDATE — no fabricated evidence). **Two HARD GATES block production cutover:** SEC-02 (sealed-secrets controller RSA-key off-node backup) and BAK-03 (verified restore round-trip). Full operator-pending boundary (23 items) in `infra/runbooks/production.md` + per-phase `*-UAT.md`. Original milestone scope below for reference.
@@ -39,7 +55,7 @@ clubcore — CRM для тренажёрного зала (переименов�
 
 **Out of scope:** managed-cloud (Yandex/AWS — выбран on-prem k3s); боевой cloud/VM-apply; живой ЮKassa credentialed leg + RU email/SMS deliverability (operator-pending); новые бизнес-фичи; мультифилиальность / multi-tenancy; Notifications Hub / рассылки; persisted-RBAC / Roles-editor.
 
-## Last Shipped Milestone: v3.2 Admin — Wire the Rest
+## Prior Milestone: v3.2 Admin — Wire the Rest
 
 **✅ SHIPPED 2026-06-15/16** (Phases 112–117, 18 plans; tag `v3.2`; audit `tech_debt`, 13/13 requirements). Исходный scope milestone — ниже для контекста.
 
@@ -59,7 +75,7 @@ clubcore — CRM для тренажёрного зала (переименов�
 
 **Out of scope → backlog:** мультифилиальность (XL, отдельный v4 при появлении 2-го зала), Notifications Hub / рассылки (XL), persisted-RBAC / Roles-editor (XL, ломает CISO-01 byte-parity), import wizard (L), корзина/restore (L), глобальный поиск (M), расширенный settings-security 2FA/API-keys/webhooks (L), client notes-таб.
 
-## Last Shipped Milestone: v3.1 Admin — Fill the Gaps
+## Prior Milestone: v3.1 Admin — Fill the Gaps
 
 **✅ SHIPPED 2026-06-15** (Phases 107–111, 17 plans, 23 tasks; tag `v3.1`; audit passed, 13/13 requirements). Каждый оставшийся admin-gap (toast-заглушки тарифов/PT-пакетов, client-delete, редактируемые Настройки зал/график/запись/уведомления, профиль/безопасность) стал реальным backend-действием; отложенный P102 (брони create/cancel/complete + payroll) live-verified; additive OpenAPI regenerated + `_v31Checks` forward-guard; full gate green. **Browser-UAT закрытие** (chrome-devtools-mcp, 33 теста, 2026-06-15): найдено + починено + перепроверено вживую **6 FE↔backend schema-divergence багов** (4 блокирующих) — все FE-only. Full audit: `.planning/milestones/v3.1-MILESTONE-AUDIT.md` + `.planning/v3.1-UAT-BROWSER-AUDIT.md`.
 
@@ -138,7 +154,7 @@ Phase 40 milestone verification (legacy note) — see v1.5 archive for detail.
 
 </details>
 
-## Last Shipped Milestone: v2.6 Referral System («Приведи друга»)
+## Prior Milestone: v2.6 Referral System («Приведи друга»)
 
 **✅ SHIPPED 2026-06-08** (Phases 96–99, 11 plans, 21 tasks; tag `v2.6`; audit `tech_debt`, 0 blockers, 8/8 requirements satisfied, full E2E referral flow wired, milestone gate green). The last client-PWA placeholder (`ReferralSheet`) is graduated from D-71-09 and live. **Backend:** new `app/modules/referrals/` — idempotent 8-char Crockford referral codes + shareable `…/i/<code>`, IDOR-safe capture (self-referral 422, one-bonus-per-referee via DB partial-UNIQUE), public deep-link resolver (PII-minimal), owner-only bonus config + seed (50000/30000 kopecks). **Reward crediting** server-authoritative inside the `payment.succeeded` webhook: on a referee's FIRST membership purchase both sides get a `loyalty_ledger` `entry_type='referral_accrual'` row co-transactionally, idempotent on `(referral_capture_id, client_id)`, amounts only from config, referrer-soft-deleted voids the accrual; `referral_bonus_accrued` LOCKED audit event. **PWA:** pixel-perfect ReferralSheet port (scoped `.referral-root`, chrome stripped) wired via `useClientReferralSummary` `@/data` hook over `GET /client/referral/summary` (real invitees + statuses + «Уже накоплено» referral-only sum); `/i/:code` landing + post-auth idempotent capture; tier tracker hidden-for-future. **Handoff:** byte-stable `openapi.json`/`schema.d.ts`, `_v26Checks` AssertNonNever[8], staff drift gate green (CISO-01), full gate green (mypy --strict + lint-imports + pytest + vitest + Redocly), `alembic check` green. **Deferred at close (acknowledged tech_debt):** WARN-1 zeroed-referrer-bonus → permanent "pending" invitee (latent; never at seeded default); 98-HUMAN-UAT browser-only items; dev-DB clean re-migrate before live manual checks; cosmetic landing bonus-preview stub. Full audit: `.planning/milestones/v2.6-MILESTONE-AUDIT.md`.
 
@@ -187,7 +203,7 @@ Phase 40 milestone verification (legacy note) — see v1.5 archive for detail.
 
 **Status:** ◆ In progress (opened 2026-06-06). Phase numbering continues from v2.4 (last phase 89) → v2.5 starts at Phase 90. `REQUIREMENTS.md` recreated fresh; v2.4 snapshot archived to `.planning/milestones/v2.4-REQUIREMENTS.md`.
 
-## Last Shipped Milestone: v2.4 Content & Communication — Client-First
+## Prior Milestone: v2.4 Content & Communication — Client-First
 
 **✅ SHIPPED 2026-06-06** (Phases 86-89, 11 plans, 13/13 requirements; tag `v2.4`; audit `tech_debt`, 0 blockers, 7/7 E2E flows wired, integration 0 open findings). The first Group-B content/communication slice — all client-first under `require_client()` (IDOR-safe), owner-only write-API + seeds (no admin-web UI), staff contract byte-identical to `contract-freeze-v1.11.0`:
 - **Phase 86 Gym-Info / CMS** — `gym` module singleton (scalar + JSONB list cols), `GET /client/gym` + owner-only `PUT /gym` (reception 403), seed migration 0059, GymInfoSheet graduated from the D-71-09 placeholder zone and wired via the `@/data` swap seam (GYM-01..03).
@@ -246,7 +262,7 @@ Recurring lesson reinforced: graduating a net-new placeholder PWA sheet requires
 
 **Status:** ✅ Shipped 2026-06-03 (Phases 79-81 + 81.1; tag `v2.2`; audit `passed`). REQUIREMENTS.md archived to `.planning/milestones/v2.2-REQUIREMENTS.md`, recreated fresh at next `/gsd:new-milestone`. Next candidate: v2.3 (loyalty/bonuses + `charge_expiring_autopay` ARQ cron — the real recurring-charge leg deferred from v2.2) or the staged v2.4-v2.6 PWA-to-mockup sequence (gym-info/CMS, notification inbox, trainer reviews, chat, referrals), with production deploy (v3.0) last.
 
-## Last Shipped Milestone: v2.1 Client PWA — Fill the Gaps
+## Prior Milestone: v2.1 Client PWA — Fill the Gaps
 
 **✅ SHIPPED 2026-06-02** (Phases 75-78, 10 plans; tag `v2.1`; audit `tech_debt`, 0 blockers, 10/10 requirements delivered). Turned on the already-built-but-hidden client-PWA functionality: backend field additions (membership `priceKopecks`/`autoRenew`, `notif_prefs` JSONB, seeded FIT15) → newbie-Home live trainers/plan-chip + PersonalDataSheet read/save + chat-badge cleanup → two v2.0 debt closures (cancel-booking E2E wiring, receipt-destination reconciliation) → frontend surfacing of the membership price/auto-renew on Profile, server-backed Settings notif toggles, and the FIT15 checkout chip (Phase 78, added mid-milestone to close the audit's frontend-surfacing debt). **Deferred at close (acknowledged):** Phase 76 PDATA-02 + Phase 78 live human-verify checks; pre-existing `router.py` ruff I001; WR-75-02 receipt heuristic — see STATE.md `## Deferred Items`. Original scope below for reference.
 
@@ -740,6 +756,9 @@ This document evolves at phase transitions and milestone boundaries.
 2. Core Value check — still the right priority?
 3. Audit Out of Scope — reasons still valid?
 4. Update Context with current state
+
+---
+*Last updated: 2026-07-26 — **started milestone v4.1 Codebase Hardening — приведение кодовой базы к идеалу.** Quality/tech-debt milestone: новых продуктовых фич нет. Направления, выбранные пользователем: (1) функциональные баги на живых данных — Zod↔wire расхождения, падающие экраны, reachability (`router.tsx` + `nav-items.ts`); (2) код-гигиена и архитектура — 32 TODO/FIXME/HACK, мёртвый код, дубли, границы слоёв/import-linter, упрощение абстракций; (3) локально-доказуемая часть prod-готовности — k3d apply, BAK-03 restore round-trip в k3d, SEC-02 off-node key backup на тестовом хранилище. **Done-bar = сначала сплошной аудит с единым DEFECT-реестром (входная фаза), затем фиксы по категориям, пока каждый пункт не `fixed+verified` либо `deferred` с причиной.** Тесты — не кампания за покрытие: contract-тесты пишутся только как доказательство фиксов Zod↔wire (урок v3.0/v3.1 — mock-based юниты дважды пропустили schema-дрейф, поймал только browser-UAT, поэтому аудит идёт через браузер на живом backend). Наследует D-V40-LOCAL-VALIDATE: боевое железо и продакшн-креды за границей milestone (пользователь подтвердил «только локально/k3d, железа нет»), чисто операторские пункты v4.0 остаются отложенными с явным реестром. Версия v4.1 (не v5.0) — новой продуктовой поверхности нет, это hardening предыдущего. Также нормализованы 5 наслоившихся заголовков `## Last Shipped Milestone` → `## Prior Milestone` (остался ровно один Current + один Last Shipped). Phase numbering continues from 121.*
 
 ---
 *Last updated: 2026-06-16 — **started milestone v4.0 Production Infrastructure — Self-Hosted k3s.** Чисто инфра/DevOps milestone: контейнеризация всего стека, Terraform (on-prem/bare-metal k3s), K8s/Helm-манифесты, Networking (ingress/TLS/NetworkPolicies), Security (секреты вне репы + trivy + NAME-01 CSRF-rename + ретро `/gsd:secure-phase 70`), Prometheus/Grafana/Loki, Backup&Recovery (Postgres/Redis/object-storage + проверенный restore-runbook), Makefile-driven CI/CD (no-remote реальность), production runbook. **Bar = локальная валидация** (kind/k3s deploy + terraform validate/plan + helm lint + smoke); боевой cloud/VM-apply + живой ЮKassa-leg + RU email/SMS deliverability остаются operator-pending (D-72-06/D-67-03 precedent). Бизнес-фичи не трогаем; OpenAPI-контракт не меняется (кроме additive NAME-01). Major-bump (productionization pillar, симметрично v2.0/v3.0). Phase numbering continues from 117 → starts at **Phase 118**. REQUIREMENTS.md recreated fresh; v3.2 snapshot archived to `.planning/milestones/v3.2-REQUIREMENTS.md`.*

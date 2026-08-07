@@ -30,7 +30,7 @@ Creates two new tables:
 Also widens online_payments.ck_online_payments_confirmation_type from
 IN ('redirect','qr') to IN ('redirect','qr','autopay') — required for the
 Plan 02 off-session insert that sets confirmation_type='autopay'.
-"""
+"""  # noqa: E501
 
 from __future__ import annotations
 
@@ -62,16 +62,12 @@ def upgrade() -> None:
         ),
         sa.Column("membership_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("period_end", sa.Date(), nullable=False),
-        sa.Column(
-            "status", sa.Text(), nullable=False, server_default=sa.text("'pending'")
-        ),
+        sa.Column("status", sa.Text(), nullable=False, server_default=sa.text("'pending'")),
         sa.Column("amount_kopecks", sa.Integer(), nullable=False),
         sa.Column("yookassa_payment_id", sa.Text(), nullable=True),
         # online_payment_id: links off-session online_payments row (Plan 02 UPDATE).
         # NO FK to keep modules-independent (D-54-08 / cross-module discipline).
-        sa.Column(
-            "online_payment_id", postgresql.UUID(as_uuid=True), nullable=True
-        ),
+        sa.Column("online_payment_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("failure_reason", sa.Text(), nullable=True),
         sa.Column("charged_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
@@ -123,9 +119,7 @@ def upgrade() -> None:
             nullable=False,
             server_default=sa.text("gen_random_uuid()"),
         ),
-        sa.Column(
-            "autopay_charge_id", postgresql.UUID(as_uuid=True), nullable=False
-        ),
+        sa.Column("autopay_charge_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("kind", sa.Text(), nullable=False),
         sa.Column("channel", sa.Text(), nullable=False),
         sa.Column(
@@ -150,9 +144,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["autopay_charge_id"],
             ["autopay_charges.id"],
-            name=op.f(
-                "fk_autopay_charge_notifications_autopay_charge_id_autopay_charges"
-            ),
+            name=op.f("fk_autopay_charge_notifications_autopay_charge_id_autopay_charges"),
             ondelete="RESTRICT",
         ),
         sa.CheckConstraint(
@@ -189,9 +181,7 @@ def upgrade() -> None:
     #    name like "ck_online_payments_confirmation_type" — raw DDL is the safe path
     #    for modifying constraints on existing locked tables (D-25-05 lineage).
     # ------------------------------------------------------------------
-    op.execute(
-        "ALTER TABLE online_payments DROP CONSTRAINT ck_online_payments_confirmation_type"
-    )
+    op.execute("ALTER TABLE online_payments DROP CONSTRAINT ck_online_payments_confirmation_type")
     op.execute(
         "ALTER TABLE online_payments ADD CONSTRAINT ck_online_payments_confirmation_type "
         "CHECK (confirmation_type IN ('redirect','qr','autopay'))"
@@ -204,9 +194,7 @@ def downgrade() -> None:
     # ------------------------------------------------------------------
 
     # 3. Restore original 2-value CHECK on online_payments (raw DDL — see upgrade comment)
-    op.execute(
-        "ALTER TABLE online_payments DROP CONSTRAINT ck_online_payments_confirmation_type"
-    )
+    op.execute("ALTER TABLE online_payments DROP CONSTRAINT ck_online_payments_confirmation_type")
     op.execute(
         "ALTER TABLE online_payments ADD CONSTRAINT ck_online_payments_confirmation_type "
         "CHECK (confirmation_type IN ('redirect','qr'))"

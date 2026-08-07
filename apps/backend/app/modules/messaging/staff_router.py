@@ -50,9 +50,7 @@ router = APIRouter(tags=["Messaging"])
     "/threads",
     response_model=ResponseEnvelope[StaffInboxResponse],
     operation_id="staff_list_threads",
-    summary=(
-        "Staff inbox: all client threads with unread counts (LIST, MESSAGES; both roles)"
-    ),
+    summary=("Staff inbox: all client threads with unread counts (LIST, MESSAGES; both roles)"),
 )
 async def staff_list_threads(
     _actor: Annotated[CurrentUser, Depends(require_permission(Action.LIST, Resource.MESSAGES))],
@@ -73,9 +71,7 @@ async def staff_list_threads(
     "/threads/{thread_id}",
     response_model=ResponseEnvelope[StaffThreadHistoryResponse],
     operation_id="staff_get_thread",
-    summary=(
-        "Staff thread history: full message list for one thread (VIEW, MESSAGES; both roles)"
-    ),
+    summary=("Staff thread history: full message list for one thread (VIEW, MESSAGES; both roles)"),
 )
 async def staff_get_thread(
     thread_id: UUID,
@@ -97,9 +93,7 @@ async def staff_get_thread(
     "/threads/{thread_id}/reply",
     response_model=ResponseEnvelope[StaffMessageItem],
     operation_id="staff_send_reply",
-    summary=(
-        "Staff send reply to client thread (CREATE, MESSAGES; owner-only)"
-    ),
+    summary=("Staff send reply to client thread (CREATE, MESSAGES; owner-only)"),
 )
 async def staff_send_reply(
     thread_id: UUID,
@@ -159,9 +153,7 @@ async def staff_send_reply(
     "/threads/{thread_id}/read",
     status_code=status.HTTP_204_NO_CONTENT,
     operation_id="staff_mark_thread_read",
-    summary=(
-        "Reset staff-side unread watermark for thread (VIEW, MESSAGES; both roles)"
-    ),
+    summary=("Reset staff-side unread watermark for thread (VIEW, MESSAGES; both roles)"),
 )
 async def staff_mark_thread_read(
     thread_id: UUID,

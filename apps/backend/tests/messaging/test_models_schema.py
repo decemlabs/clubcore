@@ -10,8 +10,6 @@ Test 4: Message check constraint contains the role values
 
 from __future__ import annotations
 
-import pytest
-
 from app.modules.messaging.models import Message, MessageThread
 
 
@@ -50,6 +48,6 @@ class TestCheckConstraint:
         for arg in table_args:
             if hasattr(arg, "sqltext"):
                 check_expressions.append(str(arg.sqltext))
-        assert any(
-            "role IN ('client','staff')" in expr for expr in check_expressions
-        ), f"Expected role check constraint not found. Constraints: {check_expressions}"
+        assert any("role IN ('client','staff')" in expr for expr in check_expressions), (
+            f"Expected role check constraint not found. Constraints: {check_expressions}"
+        )

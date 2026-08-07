@@ -1,0 +1,504 @@
+ WARN  GET https://registry.npmjs.org/jscpd error (ECONNRESET). Will retry in 10 seconds. 2 retries left.
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Progress: resolved 4, reused 0, downloaded 1, added 0
+Packages: +2
+++
+Progress: resolved 7, reused 0, downloaded 1, added 1
+Progress: resolved 7, reused 0, downloaded 2, added 1
+Progress: resolved 7, reused 0, downloaded 2, added 2, done
+[1mClone found (typescript)[22m
+ - [1m[32madmin/src/api/client.ts[39m[22m [57:38 - 68:4] (12 lines, 51 tokens)
+   client/src/lib/clientFetcher.ts [53:39 - 64:4]
+[1mClone found (typescript)[22m
+ - [1m[32madmin/src/api/client.ts[39m[22m [87:8 - 109:17] (23 lines, 143 tokens)
+   client/src/lib/clientFetcher.ts [83:1 - 105:17]
+[1mClone found (typescript)[22m
+ - [1m[32madmin/src/api/client.ts[39m[22m [109:35 - 124:2] (16 lines, 128 tokens)
+   client/src/lib/clientFetcher.ts [105:36 - 120:2]
+[1mClone found (typescript)[22m
+ - [1m[32madmin/src/api/client.ts[39m[22m [126:8 - 133:7] (8 lines, 55 tokens)
+   client/src/lib/clientFetcher.ts [122:1 - 126:7]
+[1mClone found (typescript)[22m
+ - [1m[32madmin/src/api/client.ts[39m[22m [134:5 - 174:22] (41 lines, 186 tokens)
+   client/src/lib/clientFetcher.ts [126:5 - 163:22]
+[1mClone found (typescript)[22m
+ - [1m[32madmin/src/api/client.ts[39m[22m [177:46 - 206:17] (30 lines, 148 tokens)
+   client/src/lib/clientFetcher.ts [166:47 - 194:17]
+[1mClone found (typescript)[22m
+ - [1m[32madmin/src/api/client.ts[39m[22m [206:37 - 238:28] (33 lines, 126 tokens)
+   client/src/lib/clientFetcher.ts [194:38 - 226:28]
+[1mClone found (typescript)[22m
+ - [1m[32madmin/src/api/client.ts[39m[22m [245:40 - 261:17] (17 lines, 62 tokens)
+   client/src/lib/clientFetcher.ts [233:41 - 249:17]
+[1mClone found (typescript)[22m
+ - [1m[32madmin/src/api/client.ts[39m[22m [261:37 - 276:2] (16 lines, 98 tokens)
+   client/src/lib/clientFetcher.ts [249:38 - 264:2]
+[1mClone found (typescript)[22m
+ - [1m[32madmin/src/api/query-client.ts[39m[22m [19:1 - 50:3] (32 lines, 123 tokens)
+   client/src/lib/queryClient.ts [20:1 - 52:3]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/BookingModal.tsx[39m[22m [82:51 - 96:35] (15 lines, 76 tokens)
+   admin/src/components/modals/CheckInModal.tsx [101:54 - 115:35]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/BookingModal.tsx[39m[22m [202:38 - 213:43] (12 lines, 55 tokens)
+   admin/src/components/modals/CheckInModal.tsx [195:40 - 206:43]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/BookingModal.tsx[39m[22m [214:37 - 228:19] (15 lines, 54 tokens)
+   admin/src/components/modals/CheckInModal.tsx [207:26 - 221:19]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/BookingModal.tsx[39m[22m [240:41 - 259:23] (20 lines, 104 tokens)
+   admin/src/components/modals/CheckInModal.tsx [233:30 - 252:23]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/CashModal.tsx[39m[22m [202:57 - 216:22] (15 lines, 67 tokens)
+   admin/src/components/modals/CashModal.tsx [283:91 - 297:22]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/EditClientModal.tsx[39m[22m [87:15 - 96:8] (10 lines, 67 tokens)
+   admin/src/components/modals/EditClientModal.tsx [102:12 - 111:6]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/EditClientModal.tsx[39m[22m [133:37 - 150:24] (18 lines, 120 tokens)
+   admin/src/components/modals/NewClientModal.tsx [72:24 - 89:24]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/EditClientModal.tsx[39m[22m [163:15 - 174:39] (12 lines, 70 tokens)
+   admin/src/components/modals/NewClientModal.tsx [106:113 - 118:37]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/PlanFormModal.tsx[39m[22m [58:1 - 71:2] (14 lines, 71 tokens)
+   admin/src/components/modals/PtPackageActionDialogs.tsx [31:1 - 44:2]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/PlanFormModal.tsx[39m[22m [59:13 - 77:20] (19 lines, 53 tokens)
+   admin/src/components/modals/PtPackageSellModal.tsx [26:68 - 44:16]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/PlanFormModal.tsx[39m[22m [200:52 - 212:8] (13 lines, 98 tokens)
+   admin/src/components/modals/PlanFormModal.tsx [230:56 - 242:8]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/PlanFormModal.tsx[39m[22m [200:52 - 217:16] (18 lines, 106 tokens)
+   admin/src/components/modals/PlanFormModal.tsx [261:56 - 275:28]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/PlanFormModal.tsx[39m[22m [200:52 - 212:13] (13 lines, 99 tokens)
+   admin/src/components/modals/PlanFormModal.tsx [286:60 - 299:6]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/PlanFormModal.tsx[39m[22m [369:11 - 386:8] (18 lines, 59 tokens)
+   admin/src/components/modals/PromoCodeModal.tsx [238:11 - 255:8]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/PtPackageActionDialogs.tsx[39m[22m [50:38 - 63:8] (14 lines, 58 tokens)
+   admin/src/components/modals/PtPackageActionDialogs.tsx [159:38 - 172:8]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/PtPackageActionDialogs.tsx[39m[22m [79:19 - 93:43] (15 lines, 69 tokens)
+   admin/src/components/modals/PtPackageActionDialogs.tsx [188:19 - 202:43]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/PtPackageActionDialogs.tsx[39m[22m [95:7 - 100:97] (6 lines, 51 tokens)
+   admin/src/components/modals/PtPackageActionDialogs.tsx [204:7 - 209:97]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/PtPackageActionDialogs.tsx[39m[22m [133:13 - 140:57] (8 lines, 63 tokens)
+   admin/src/components/modals/PtPackageActionDialogs.tsx [244:13 - 251:57]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/PtPackageActionDialogs.tsx[39m[22m [140:94 - 150:28] (11 lines, 52 tokens)
+   admin/src/components/modals/PtPackageActionDialogs.tsx [251:118 - 261:28]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/PtPackageActionDialogs.tsx[39m[22m [239:82 - 263:4] (25 lines, 141 tokens)
+   admin/src/components/modals/SubscriptionModal.tsx [609:171 - 633:4]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/PtPackageSellModal.tsx[39m[22m [124:32 - 134:30] (11 lines, 57 tokens)
+   admin/src/components/modals/SubscriptionModal.tsx [160:32 - 170:30]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/PtPackageSellModal.tsx[39m[22m [134:60 - 155:7] (22 lines, 147 tokens)
+   admin/src/components/modals/SubscriptionModal.tsx [170:60 - 191:7]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/ScheduleManagementModal.tsx[39m[22m [158:43 - 174:16] (17 lines, 116 tokens)
+   admin/src/components/modals/ScheduleManagementModal.tsx [292:46 - 308:16]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/ScheduleManagementModal.tsx[39m[22m [160:3 - 174:16] (15 lines, 113 tokens)
+   admin/src/components/modals/ScheduleManagementModal.tsx [499:3 - 513:16]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/ScheduleManagementModal.tsx[39m[22m [181:10 - 196:7] (16 lines, 98 tokens)
+   admin/src/components/modals/ScheduleManagementModal.tsx [317:22 - 332:7]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/ScheduleManagementModal.tsx[39m[22m [192:78 - 207:7] (16 lines, 75 tokens)
+   admin/src/components/modals/ScheduleManagementModal.tsx [346:43 - 362:7]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/ScheduleManagementModal.tsx[39m[22m [358:20 - 368:73] (11 lines, 55 tokens)
+   admin/src/components/modals/ScheduleManagementModal.tsx [542:27 - 552:73]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/SubscriptionModal.tsx[39m[22m [218:18 - 232:22] (15 lines, 55 tokens)
+   admin/src/components/modals/SubscriptionModal.tsx [296:19 - 310:22]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/SubscriptionModal.tsx[39m[22m [218:18 - 232:29] (15 lines, 58 tokens)
+   admin/src/components/modals/SubscriptionModal.tsx [375:21 - 389:29]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/SubscriptionModal.tsx[39m[22m [234:7 - 250:18] (17 lines, 93 tokens)
+   admin/src/components/modals/SubscriptionModal.tsx [391:7 - 407:18]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/SubscriptionModal.tsx[39m[22m [234:7 - 244:23] (11 lines, 57 tokens)
+   admin/src/components/modals/SubscriptionModal.tsx [566:7 - 576:23]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/SubscriptionModal.tsx[39m[22m [238:7 - 250:18] (13 lines, 73 tokens)
+   admin/src/components/modals/SubscriptionModal.tsx [316:7 - 328:18]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/SubscriptionModal.tsx[39m[22m [297:32 - 310:28] (14 lines, 50 tokens)
+   admin/src/components/modals/SubscriptionModal.tsx [466:76 - 479:28]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/SubscriptionModal.tsx[39m[22m [466:74 - 479:43] (14 lines, 55 tokens)
+   admin/src/components/modals/SubscriptionModal.tsx [551:53 - 564:43]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/components/modals/fields.tsx[39m[22m [412:29 - 430:21] (19 lines, 71 tokens)
+   admin/src/components/settings/controls.tsx [268:23 - 286:21]
+[1mClone found (typescript)[22m
+ - [1m[32madmin/src/features/bookings/api.ts[39m[22m [163:64 - 168:50] (6 lines, 51 tokens)
+   admin/src/features/bookings/api.ts [221:52 - 226:50]
+[1mClone found (typescript)[22m
+ - [1m[32madmin/src/features/memberships/api.ts[39m[22m [92:80 - 109:5] (18 lines, 77 tokens)
+   admin/src/features/memberships/api.ts [370:77 - 387:7]
+[1mClone found (typescript)[22m
+ - [1m[32madmin/src/features/memberships/api.ts[39m[22m [93:67 - 103:2] (11 lines, 61 tokens)
+   admin/src/features/memberships/api.ts [282:75 - 292:2]
+[1mClone found (typescript)[22m
+ - [1m[32madmin/src/features/memberships/api.ts[39m[22m [129:50 - 136:100] (8 lines, 82 tokens)
+   admin/src/features/memberships/api.ts [209:52 - 216:100]
+[1mClone found (typescript)[22m
+ - [1m[32madmin/src/features/memberships/api.ts[39m[22m [144:8 - 153:32] (10 lines, 54 tokens)
+   admin/src/features/memberships/api.ts [216:99 - 224:52]
+[1mClone found (typescript)[22m
+ - [1m[32madmin/src/features/memberships/api.ts[39m[22m [169:60 - 187:2] (19 lines, 157 tokens)
+   admin/src/features/memberships/api.ts [239:62 - 257:2]
+[1mClone found (typescript)[22m
+ - [1m[32madmin/src/features/memberships/api.ts[39m[22m [280:79 - 285:24] (6 lines, 65 tokens)
+   admin/src/features/memberships/api.ts [321:56 - 326:24]
+[1mClone found (typescript)[22m
+ - [1m[32madmin/src/features/promoCodes/api.ts[39m[22m [83:11 - 99:16] (17 lines, 51 tokens)
+   admin/src/features/promoCodes/api.ts [106:37 - 121:16]
+[1mClone found (typescript)[22m
+ - [1m[32madmin/src/features/pt-packages/api.ts[39m[22m [174:120 - 180:24] (7 lines, 51 tokens)
+   admin/src/features/pt-packages/api.ts [206:69 - 212:24]
+[1mClone found (typescript)[22m
+ - [1m[32madmin/src/features/pt-packages/api.ts[39m[22m [174:119 - 194:7] (21 lines, 82 tokens)
+   admin/src/features/pt-packages/api.ts [244:138 - 263:7]
+[1mClone found (typescript)[22m
+ - [1m[32madmin/src/features/pt-packages/api.ts[39m[22m [198:90 - 206:21] (9 lines, 58 tokens)
+   admin/src/features/pt-packages/api.ts [236:90 - 244:21]
+[1mClone found (typescript)[22m
+ - [1m[32madmin/src/features/schedule/api.ts[39m[22m [111:54 - 127:16] (17 lines, 56 tokens)
+   admin/src/features/schedule/api.ts [138:46 - 158:16]
+[1mClone found (typescript)[22m
+ - [1m[32madmin/src/features/schedule/api.ts[39m[22m [111:54 - 127:16] (17 lines, 56 tokens)
+   admin/src/features/schedule/api.ts [169:48 - 185:16]
+[1mClone found (typescript)[22m
+ - [1m[32madmin/src/features/schedule/api.ts[39m[22m [111:54 - 127:16] (17 lines, 56 tokens)
+   admin/src/features/schedule/api.ts [196:62 - 220:16]
+[1mClone found (typescript)[22m
+ - [1m[32madmin/src/features/schedule/api.ts[39m[22m [111:54 - 127:7] (17 lines, 55 tokens)
+   admin/src/features/schedule/api.ts [266:58 - 282:7]
+[1mClone found (typescript)[22m
+ - [1m[32madmin/src/features/trainers/api.ts[39m[22m [80:64 - 95:16] (16 lines, 60 tokens)
+   admin/src/features/trainers/api.ts [114:72 - 129:16]
+[1mClone found (typescript)[22m
+ - [1m[32madmin/src/features/trainers/detail.ts[39m[22m [21:25 - 29:17] (9 lines, 50 tokens)
+   admin/src/features/trainers/types.ts [86:33 - 95:17]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/layouts/AppLayout/CommandPalette.tsx[39m[22m [286:35 - 292:16] (7 lines, 58 tokens)
+   admin/src/layouts/AppLayout/CommandPalette.tsx [294:36 - 300:16]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/layouts/AppLayout/CommandPalette.tsx[39m[22m [286:35 - 292:16] (7 lines, 58 tokens)
+   admin/src/layouts/AppLayout/CommandPalette.tsx [302:35 - 308:16]
+[1mClone found (typescript)[22m
+ - [1m[32madmin/src/lib/authBus.ts[39m[22m [13:1 - 36:2] (24 lines, 71 tokens)
+   client/src/lib/authBus.ts [13:1 - 36:2]
+[1mClone found (typescript)[22m
+ - [1m[32madmin/src/mocks/branches.ts[39m[22m [56:16 - 67:5] (12 lines, 54 tokens)
+   admin/src/mocks/branches.ts [164:43 - 175:5]
+[1mClone found (typescript)[22m
+ - [1m[32madmin/src/mocks/dashboard.ts[39m[22m [323:18 - 333:10] (11 lines, 61 tokens)
+   admin/src/mocks/dashboard.ts [343:19 - 353:10]
+[1mClone found (typescript)[22m
+ - [1m[32madmin/src/mocks/dashboard.ts[39m[22m [323:18 - 333:10] (11 lines, 61 tokens)
+   admin/src/mocks/dashboard.ts [359:20 - 369:10]
+[1mClone found (typescript)[22m
+ - [1m[32madmin/src/mocks/trainers.ts[39m[22m [322:11 - 327:48] (6 lines, 60 tokens)
+   admin/src/mocks/trainers.ts [323:11 - 328:48]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/attendance/AttendancePage.tsx[39m[22m [99:38 - 129:8] (31 lines, 133 tokens)
+   admin/src/pages/cashbox/CashboxPage.tsx [83:54 - 116:8]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/attendance/components/AttendanceKpis.tsx[39m[22m [14:56 - 25:21] (12 lines, 74 tokens)
+   admin/src/pages/reports/components/ReportsKpis.tsx [14:56 - 25:21]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/audit/AuditPage.tsx[39m[22m [72:64 - 110:16] (39 lines, 127 tokens)
+   admin/src/pages/reports/ReportsPage.tsx [76:1 - 114:16]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/audit/AuditPage.tsx[39m[22m [150:31 - 155:39] (6 lines, 67 tokens)
+   admin/src/pages/audit/AuditPage.tsx [205:7 - 210:43]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/branch-settings/BranchSettingsPage.tsx[39m[22m [45:75 - 56:14] (12 lines, 94 tokens)
+   admin/src/pages/system-settings/SystemSettingsPage.tsx [58:67 - 69:14]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/branch-settings/BranchSettingsPage.tsx[39m[22m [48:3 - 53:5] (6 lines, 55 tokens)
+   admin/src/pages/settings/SettingsPage.tsx [56:3 - 61:5]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/branch-settings/BranchSettingsPage.tsx[39m[22m [259:16 - 272:2] (14 lines, 71 tokens)
+   admin/src/pages/system-settings/SystemSettingsPage.tsx [324:20 - 337:2]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/cashbox/components/TransactionsCard.tsx[39m[22m [23:41 - 34:64] (12 lines, 61 tokens)
+   admin/src/pages/finance/components/OnlinePaymentsTable.tsx [18:34 - 29:64]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/cashbox/components/TransactionsCard.tsx[39m[22m [35:26 - 82:8] (48 lines, 202 tokens)
+   admin/src/pages/finance/components/OnlinePaymentsTable.tsx [29:27 - 75:8]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/cashbox/components/TransactionsCard.tsx[39m[22m [79:51 - 96:64] (18 lines, 88 tokens)
+   admin/src/pages/finance/components/OnlinePaymentsTable.tsx [76:52 - 93:64]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/cashbox/components/TransactionsCard.tsx[39m[22m [97:113 - 141:2] (45 lines, 169 tokens)
+   admin/src/pages/finance/components/OnlinePaymentsTable.tsx [94:52 - 138:2]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/cashbox/components/TransactionsCard.tsx[39m[22m [227:13 - 241:2] (15 lines, 56 tokens)
+   admin/src/pages/finance/components/OnlinePaymentsTable.tsx [190:16 - 204:2]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/client/ClientPage.tsx[39m[22m [89:42 - 104:35] (16 lines, 69 tokens)
+   admin/src/pages/client/components/ActivityTab.tsx [63:49 - 78:35]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/client/components/ActivityTab.tsx[39m[22m [58:64 - 85:17] (28 lines, 115 tokens)
+   admin/src/pages/client/components/PaymentsTab.tsx [70:68 - 97:17]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/client/components/ProfileHero.tsx[39m[22m [26:62 - 37:6] (12 lines, 54 tokens)
+   admin/src/pages/client/components/ProfileHeroReal.tsx [37:61 - 48:6]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/client/components/ProfileHero.tsx[39m[22m [54:6 - 68:21] (15 lines, 52 tokens)
+   admin/src/pages/client/components/ProfileHeroReal.tsx [68:99 - 82:21]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/client/components/ProfileHero.tsx[39m[22m [97:19 - 102:12] (6 lines, 53 tokens)
+   admin/src/pages/client/components/ProfileHeroReal.tsx [127:85 - 132:12]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/client/components/ProfileHero.tsx[39m[22m [97:19 - 102:11] (6 lines, 52 tokens)
+   admin/src/pages/trainer/components/TrainerHero.tsx [98:84 - 103:11]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/client/components/ProfileHero.tsx[39m[22m [104:61 - 124:32] (21 lines, 103 tokens)
+   admin/src/pages/client/components/ProfileHeroReal.tsx [130:61 - 150:32]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/client/components/shared.tsx[39m[22m [10:1 - 15:11] (6 lines, 50 tokens)
+   admin/src/pages/trainer/components/shared.tsx [27:1 - 32:11]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/dashboard/components/OccupancyNow.tsx[39m[22m [13:7 - 22:17] (10 lines, 58 tokens)
+   admin/src/pages/load/components/LiveNowCard.tsx [16:7 - 25:17]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/dashboard/components/RevenueChart.tsx[39m[22m [41:38 - 51:38] (11 lines, 71 tokens)
+   admin/src/pages/load/components/VisitAnomalyCard.tsx [50:27 - 60:38]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/finance/FinancePage.tsx[39m[22m [55:28 - 70:11] (16 lines, 59 tokens)
+   admin/src/pages/load/LoadPage.tsx [41:25 - 56:11]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/finance/FinancePage.tsx[39m[22m [55:28 - 70:11] (16 lines, 59 tokens)
+   admin/src/pages/reports/ReportsPage.tsx [114:28 - 130:11]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/finance/FinancePage.tsx[39m[22m [202:73 - 212:8] (11 lines, 51 tokens)
+   admin/src/pages/finance/FinancePage.tsx [273:72 - 283:8]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/finance/FinancePage.tsx[39m[22m [202:73 - 220:7] (19 lines, 101 tokens)
+   admin/src/pages/reports/ReportsPage.tsx [295:66 - 311:7]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/finance/FinancePage.tsx[39m[22m [220:29 - 246:2] (27 lines, 92 tokens)
+   admin/src/pages/reports/ReportsPage.tsx [310:42 - 327:2]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/finance/components/parts.tsx[39m[22m [20:15 - 39:21] (20 lines, 102 tokens)
+   admin/src/pages/notifications/components/parts.tsx [39:13 - 58:21]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/finance/components/parts.tsx[39m[22m [22:15 - 33:24] (12 lines, 67 tokens)
+   admin/src/pages/reports/ReportsPage.tsx [251:17 - 262:24]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/finance/components/parts.tsx[39m[22m [25:162 - 33:27] (9 lines, 53 tokens)
+   admin/src/pages/trash/components/parts.tsx [127:114 - 135:27]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/plans/PlansPage.tsx[39m[22m [268:73 - 275:23] (8 lines, 50 tokens)
+   admin/src/pages/plans/PlansPage.tsx [289:77 - 296:23]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/plans/components/PlansKpis.tsx[39m[22m [19:52 - 36:2] (18 lines, 99 tokens)
+   admin/src/pages/trainers/components/TrainersKpis.tsx [19:58 - 36:2]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/reports/ReportsPage.tsx[39m[22m [288:98 - 303:4] (16 lines, 92 tokens)
+   admin/src/pages/reports/ReportsPage.tsx [337:101 - 351:4]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/reports/ReportsPage.tsx[39m[22m [288:98 - 305:8] (18 lines, 93 tokens)
+   admin/src/pages/reports/ReportsPage.tsx [457:36 - 473:8]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/reports/ReportsPage.tsx[39m[22m [293:4 - 305:8] (13 lines, 69 tokens)
+   admin/src/pages/reports/ReportsPage.tsx [420:17 - 431:8]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/settings/SettingsPage.tsx[39m[22m [103:3 - 109:10] (7 lines, 55 tokens)
+   admin/src/pages/system-settings/SystemSettingsPage.tsx [68:3 - 74:10]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/settings/components/SectionsBottom.tsx[39m[22m [855:13 - 873:14] (19 lines, 81 tokens)
+   admin/src/pages/settings/components/SectionsBottom.tsx [971:9 - 989:10]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/settings/components/SectionsTop.tsx[39m[22m [144:96 - 151:27] (8 lines, 62 tokens)
+   admin/src/pages/settings/components/SectionsTop.tsx [641:54 - 648:27]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/settings/components/SectionsTop.tsx[39m[22m [175:18 - 181:12] (7 lines, 57 tokens)
+   admin/src/pages/settings/components/SectionsTop.tsx [659:11 - 665:12]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/settings/components/SectionsTop.tsx[39m[22m [182:102 - 206:11] (25 lines, 67 tokens)
+   admin/src/pages/settings/components/SectionsTop.tsx [664:32 - 686:11]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/settings/components/SectionsTop.tsx[39m[22m [586:30 - 597:8] (12 lines, 66 tokens)
+   admin/src/pages/settings/components/SectionsTop.tsx [916:29 - 927:8]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/settings/components/SectionsTop.tsx[39m[22m [586:30 - 597:8] (12 lines, 66 tokens)
+   admin/src/pages/settings/components/SectionsTop.tsx [1312:31 - 1323:8]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/settings/components/SectionsTop.tsx[39m[22m [641:39 - 651:20] (11 lines, 70 tokens)
+   admin/src/pages/settings/components/SectionsTop.tsx [1373:45 - 1381:23]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/settings/components/SectionsTop.tsx[39m[22m [653:20 - 686:11] (34 lines, 153 tokens)
+   admin/src/pages/settings/components/SectionsTop.tsx [1385:26 - 1418:11]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/trainers/TrainersPage.tsx[39m[22m [146:105 - 158:13] (13 lines, 73 tokens)
+   admin/src/pages/trainers/TrainersPage.tsx [175:66 - 187:13]
+[1mClone found (tsx)[22m
+ - [1m[32madmin/src/pages/trainers/components/RosterCard.tsx[39m[22m [55:13 - 67:25] (13 lines, 50 tokens)
+   admin/src/pages/trainers/components/columns.tsx [107:13 - 119:25]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/components/FilterChips.jsx[39m[22m [17:13 - 24:52] (8 lines, 54 tokens)
+   client/src/screens/BookScreen.jsx [545:17 - 550:56]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/components/LoadError.jsx[39m[22m [192:14 - 197:15] (6 lines, 51 tokens)
+   client/src/screens/LoginScreen.jsx [207:96 - 211:15]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/components/RowItem.jsx[39m[22m [15:9 - 22:4] (8 lines, 109 tokens)
+   client/src/screens/sheets/GymInfoSheet.jsx [186:13 - 193:4]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/components/SwipeRow.jsx[39m[22m [20:17 - 30:8] (11 lines, 109 tokens)
+   client/src/components/SwipeRow.jsx [45:19 - 55:10]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/components/skeletons.jsx[39m[22m [52:38 - 57:16] (6 lines, 54 tokens)
+   client/src/components/skeletons.jsx [179:33 - 184:14]
+[1mClone found (typescript)[22m
+ - [1m[32mclient/src/lib/clientQueries.ts[39m[22m [239:85 - 263:16] (25 lines, 80 tokens)
+   client/src/lib/clientQueries.ts [269:7 - 289:16]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/routes/PaymentReturnScreen.jsx[39m[22m [293:38 - 299:24] (7 lines, 73 tokens)
+   client/src/routes/PaymentReturnScreen.jsx [301:20 - 307:24]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/routes/PaymentReturnScreen.jsx[39m[22m [301:15 - 307:24] (7 lines, 76 tokens)
+   client/src/routes/PaymentReturnScreen.jsx [309:15 - 315:24]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/BookScreen.jsx[39m[22m [429:18 - 434:28] (6 lines, 64 tokens)
+   client/src/screens/BookScreen.jsx [470:172 - 475:28]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/ChatScreen.jsx[39m[22m [1017:47 - 1024:15] (8 lines, 71 tokens)
+   client/src/screens/ChatScreen.jsx [1055:52 - 1065:15]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/HomeScreen.jsx[39m[22m [147:7 - 152:9] (6 lines, 50 tokens)
+   client/src/screens/HomeScreen.jsx [881:17 - 886:19]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/HomeScreen.jsx[39m[22m [274:29 - 281:11] (8 lines, 61 tokens)
+   client/src/screens/sheets/PlansSheet.jsx [74:30 - 81:11]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/HomeScreen.jsx[39m[22m [1449:10 - 1460:9] (12 lines, 80 tokens)
+   client/src/screens/HomeScreen.jsx [1518:18 - 1529:9]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/OnboardingScreen.jsx[39m[22m [319:8 - 337:8] (19 lines, 57 tokens)
+   client/src/screens/OnboardingScreen.jsx [352:44 - 369:8]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/OnboardingScreen.jsx[39m[22m [490:16 - 499:14] (10 lines, 50 tokens)
+   client/src/screens/OnboardingScreen.jsx [630:34 - 639:14]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/ProfileScreen.jsx[39m[22m [424:14 - 436:4] (13 lines, 59 tokens)
+   client/src/screens/ProfileScreen.jsx [454:25 - 466:4]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/ProfileScreen.jsx[39m[22m [432:11 - 448:41] (17 lines, 89 tokens)
+   client/src/screens/ProfileScreen.jsx [530:11 - 546:41]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/ProfileScreen.jsx[39m[22m [432:11 - 448:41] (17 lines, 89 tokens)
+   client/src/screens/ProfileScreen.jsx [622:11 - 638:41]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/ProfileScreen.jsx[39m[22m [448:95 - 459:26] (12 lines, 69 tokens)
+   client/src/screens/ProfileScreen.jsx [546:103 - 557:26]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/ProfileScreen.jsx[39m[22m [448:95 - 459:26] (12 lines, 69 tokens)
+   client/src/screens/ProfileScreen.jsx [638:97 - 649:26]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/ProfileScreen.jsx[39m[22m [462:11 - 471:68] (10 lines, 61 tokens)
+   client/src/screens/ProfileScreen.jsx [560:11 - 569:68]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/ProfileScreen.jsx[39m[22m [502:18 - 509:12] (8 lines, 75 tokens)
+   client/src/screens/ProfileScreen.jsx [592:55 - 599:12]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/ProfileScreen.jsx[39m[22m [522:14 - 534:4] (13 lines, 59 tokens)
+   client/src/screens/ProfileScreen.jsx [552:25 - 564:4]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/ProfileScreen.jsx[39m[22m [612:14 - 626:4] (15 lines, 67 tokens)
+   client/src/screens/ProfileScreen.jsx [644:25 - 658:4]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/sheets/BookingManageSheet.jsx[39m[22m [155:22 - 182:16] (28 lines, 208 tokens)
+   client/src/screens/sheets/BookingManageSheet.jsx [298:26 - 325:16]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/sheets/BookingManageSheet.jsx[39m[22m [536:22 - 553:2] (18 lines, 171 tokens)
+   client/src/screens/sheets/PlansSheet.jsx [279:21 - 296:2]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/sheets/CheckoutSheet.jsx[39m[22m [238:29 - 244:8] (7 lines, 51 tokens)
+   client/src/screens/sheets/CheckoutSheet.jsx [249:34 - 255:8]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/sheets/CheckoutSheet.jsx[39m[22m [401:100 - 414:80] (14 lines, 71 tokens)
+   client/src/screens/sheets/ReceiptEmailGate.jsx [75:4 - 88:80]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/sheets/CheckoutSheet.jsx[39m[22m [876:9 - 882:77] (7 lines, 50 tokens)
+   client/src/screens/sheets/ProfileExtraSheets.jsx [16:7 - 19:73]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/sheets/HistorySheets.jsx[39m[22m [43:39 - 52:29] (10 lines, 51 tokens)
+   client/src/screens/sheets/HistorySheets.jsx [224:4 - 233:29]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/sheets/HistorySheets.jsx[39m[22m [43:40 - 52:29] (10 lines, 50 tokens)
+   client/src/screens/sheets/ProfileExtraSheets.jsx [129:4 - 138:29]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/sheets/HistorySheets.jsx[39m[22m [43:40 - 52:29] (10 lines, 50 tokens)
+   client/src/screens/sheets/ProfileExtraSheets.jsx [389:24 - 398:29]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/sheets/HistorySheets.jsx[39m[22m [43:39 - 52:29] (10 lines, 51 tokens)
+   client/src/screens/sheets/ProfileExtraSheets.jsx [671:3 - 680:29]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/sheets/HistorySheets.jsx[39m[22m [52:65 - 61:34] (10 lines, 66 tokens)
+   client/src/screens/sheets/HistorySheets.jsx [233:72 - 242:34]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/sheets/HistorySheets.jsx[39m[22m [111:17 - 125:26] (15 lines, 100 tokens)
+   client/src/screens/sheets/HistorySheets.jsx [276:17 - 290:26]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/sheets/HistorySheets.jsx[39m[22m [118:18 - 125:26] (8 lines, 73 tokens)
+   client/src/screens/sheets/LoyaltySheet.jsx [254:59 - 261:26]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/sheets/HistorySheets.jsx[39m[22m [127:92 - 143:10] (17 lines, 118 tokens)
+   client/src/screens/sheets/HistorySheets.jsx [292:100 - 308:10]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/sheets/HistorySheets.jsx[39m[22m [138:48 - 149:29] (12 lines, 99 tokens)
+   client/src/screens/sheets/LoyaltySheet.jsx [266:18 - 277:29]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/sheets/PlansSheet.jsx[39m[22m [113:31 - 126:10] (14 lines, 69 tokens)
+   client/src/screens/sheets/PlansSheet.jsx [134:23 - 147:10]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/sheets/ProfileExtraSheets.jsx[39m[22m [22:42 - 32:66] (11 lines, 82 tokens)
+   client/src/screens/sheets/flows.jsx [35:77 - 42:78]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/sheets/ProfileExtraSheets.jsx[39m[22m [207:20 - 214:94] (8 lines, 52 tokens)
+   client/src/screens/sheets/ProfileExtraSheets.jsx [443:19 - 450:94]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/sheets/ProfileExtraSheets.jsx[39m[22m [497:45 - 504:62] (8 lines, 72 tokens)
+   client/src/screens/sheets/ProfileExtraSheets.jsx [539:50 - 546:62]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/sheets/QRSheet.jsx[39m[22m [45:25 - 58:7] (14 lines, 264 tokens)
+   client/src/screens/sheets/QRSheet.jsx [186:8 - 199:7]
+[1mClone found (jsx)[22m
+ - [1m[32mclient/src/screens/sheets/flows.jsx[39m[22m [167:65 - 173:24] (7 lines, 55 tokens)
+   client/src/screens/sheets/flows.jsx [175:19 - 181:24]
+[90m┌────────────┬────────────────┬─────────────┬──────────────┬──────────────┬──────────────────┬───────────────────┐[39m
+[90m│[39m[31m Format     [39m[90m│[39m[31m Files analyzed [39m[90m│[39m[31m Total lines [39m[90m│[39m[31m Total tokens [39m[90m│[39m[31m Clones found [39m[90m│[39m[31m Duplicated lines [39m[90m│[39m[31m Duplicated tokens [39m[90m│[39m
+[90m├────────────┼────────────────┼─────────────┼──────────────┼──────────────┼──────────────────┼───────────────────┤[39m
+[90m│[39m javascript [90m│[39m 20             [90m│[39m 1035        [90m│[39m 5397         [90m│[39m 0            [90m│[39m 0 (0.00%)        [90m│[39m 0 (0.00%)         [90m│[39m
+[90m├────────────┼────────────────┼─────────────┼──────────────┼──────────────┼──────────────────┼───────────────────┤[39m
+[90m│[39m jsx        [90m│[39m 45             [90m│[39m 17716       [90m│[39m 128420       [90m│[39m 43           [90m│[39m 434 (2.45%)      [90m│[39m 3399 (2.65%)      [90m│[39m
+[90m├────────────┼────────────────┼─────────────┼──────────────┼──────────────┼──────────────────┼───────────────────┤[39m
+[90m│[39m tsx        [90m│[39m 247            [90m│[39m 37451       [90m│[39m 188809       [90m│[39m 83           [90m│[39m 1201 (3.21%)     [90m│[39m 6483 (3.43%)      [90m│[39m
+[90m├────────────┼────────────────┼─────────────┼──────────────┼──────────────┼──────────────────┼───────────────────┤[39m
+[90m│[39m typescript [90m│[39m 133            [90m│[39m 17685       [90m│[39m 77075        [90m│[39m 33           [90m│[39m 509 (2.88%)      [90m│[39m 2629 (3.41%)      [90m│[39m
+[90m├────────────┼────────────────┼─────────────┼──────────────┼──────────────┼──────────────────┼───────────────────┤[39m
+[90m│[39m [1mTotal:[22m     [90m│[39m 445            [90m│[39m 73887       [90m│[39m 399701       [90m│[39m 159          [90m│[39m 2144 (2.90%)     [90m│[39m 12511 (3.13%)     [90m│[39m
+[90m└────────────┴────────────────┴─────────────┴──────────────┴──────────────┴──────────────────┴───────────────────┘[39m
+[90mFound 159 clones.[39m
+[90mtime: 39.779ms[39m
+
+[90m💡 Auto-refactor with AI: [1m[39mnpx skills add https://github.com/kucherenko/jscpd --skill dry-refactoring[90m[22m
+[90m🎩 New: Gangsta Agents — discipline your AI coding → gangsta.page[39m
+[90m💖 Support jscpd project → https://opencollective.com/jscpd[39m

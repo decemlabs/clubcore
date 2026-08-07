@@ -50,21 +50,23 @@ def test_locked_audit_events_count_after_phase_51_is_85() -> None:
         family_reuse_detected, session_revoked, me_updated; +1 pre-P68 unaccounted)
       - 101 after Phase 80 / v2.2 (+1 booking_rescheduled — client booking reschedule
         atomic cancel+create audit event)
+      - 118 after Phase 112 / v3.2 (+1 user_role_changed)
     If this fails with a higher count a new audit event was added without
     updating this test (intended behaviour). Update this assertion to lock the
     new baseline.
     """
-    assert len(LOCKED_AUDIT_EVENTS) == 117, (
-        f"Expected 117 LOCKED_AUDIT_EVENTS after Phase 109 (v3.1), got {len(LOCKED_AUDIT_EVENTS)}. "
+    assert len(LOCKED_AUDIT_EVENTS) == 118, (
+        f"Expected 118 LOCKED_AUDIT_EVENTS after Phase 112 (v3.2), got {len(LOCKED_AUDIT_EVENTS)}. "
         "Either a new event was added without updating this test, or an event was removed. "
         "Update this assertion to lock the new baseline. "
         "+1 v2.3/P82: loyalty_accrued (ACCR-01 welcome + ACCR-02 owner_grant, INFRA-15). "
         "+1 v2.3/P83: loyalty_redeemed (REDM-02 redemption debit, INFRA-15). "
-        "+2 v2.3/P84: autopay_charge_initiated + autopay_charge_failed (APAY-01/APAY-03, INFRA-15). "
-        "+4 v2.5/P90: message_sent + message_read + attachment_uploaded + chat_staff_reply_sent (INFRA-15). "
-        "+3 v2.6/P96: referral_code_generated + referral_captured + referral_bonus_accrued (INFRA-15). "
-        "+4 v2.7/P108: gym_card_updated + working_hours_updated + booking_config_updated + notification_prefs_updated (INFRA-15). "
-        "+1 v3.1/P109: profile_updated (INFRA-15)."
+        "+2 v2.3/P84: autopay_charge_initiated + autopay_charge_failed (APAY-01/APAY-03, INFRA-15). "  # noqa: E501
+        "+4 v2.5/P90: message_sent + message_read + attachment_uploaded + chat_staff_reply_sent (INFRA-15). "  # noqa: E501
+        "+3 v2.6/P96: referral_code_generated + referral_captured + referral_bonus_accrued (INFRA-15). "  # noqa: E501
+        "+4 v2.7/P108: gym_card_updated + working_hours_updated + booking_config_updated + notification_prefs_updated (INFRA-15). "  # noqa: E501
+        "+1 v3.1/P109: profile_updated (INFRA-15). "
+        "+1 v3.2/P112: user_role_changed (INFRA-15)."
     )
 
 

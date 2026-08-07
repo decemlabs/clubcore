@@ -145,8 +145,7 @@ async def test_owned_resource_idor(
         headers={"Cookie": f"cc_client_access={token}"},
     )
     assert resp.status_code == 200, (
-        f"Expected 200 from {resource_path} as {attacker.id}, "
-        f"got {resp.status_code}: {resp.text}"
+        f"Expected 200 from {resource_path} as {attacker.id}, got {resp.status_code}: {resp.text}"
     )
 
     body = resp.json()
@@ -311,10 +310,7 @@ async def _fetch_card_active(
     """Return True if the given payment method row has unlinked_at IS NULL."""
     row = (
         await db_session.execute(
-            text(
-                "SELECT id FROM client_payment_methods "
-                "WHERE id = :id AND unlinked_at IS NULL"
-            ),
+            text("SELECT id FROM client_payment_methods WHERE id = :id AND unlinked_at IS NULL"),
             {"id": str(row_id)},
         )
     ).one_or_none()

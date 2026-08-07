@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [master]
 
 # D-03: cancel stale runs on push-to-PR.
 concurrency:
@@ -20,6 +20,7 @@ jobs:
   backend:
     name: Backend (drift gates + statics)
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     defaults:
       run:
         working-directory: apps/backend
@@ -102,8 +103,40 @@ jobs:
       - name: Migrate schema
         run: uv run alembic upgrade head
 
+      # App startup verifies the object-storage bucket. Match the local
+      # docker-compose dependency instead of letting every app fixture fail
+      # against the .env.example endpoint at localhost:8333.
+      - name: Start SeaweedFS S3
+        working-directory: ${{ github.workspace }}
+        run: |
+          docker run --detach \
+            --name clubcore-ci-s3 \
+            --publish 8333:8333 \
+            --volume "${{ github.workspace }}/apps/backend/docker/seaweedfs-s3.json:/etc/seaweedfs/s3.json:ro" \
+            chrislusf/seaweedfs:3.84 \
+            server -s3 -s3.config=/etc/seaweedfs/s3.json
+
+          for attempt in {1..30}; do
+            # Any HTTP response proves that the S3 listener is ready. Auth and
+            # bucket creation are verified by the application's startup probe.
+            if curl --silent --output /dev/null http://localhost:8333/; then
+              exit 0
+            fi
+            sleep 2
+          done
+
+          docker logs clubcore-ci-s3
+          exit 1
+
       - name: pytest
-        run: uv run pytest
+        # Stop after the first failure so an environment-wide setup problem
+        # produces one actionable traceback instead of hours of cascading E's.
+        run: uv run pytest --maxfail=1
+
+      - name: Stop SeaweedFS S3
+        if: always()
+        working-directory: ${{ github.workspace }}
+        run: docker rm --force clubcore-ci-s3 || true
 
   frontend:
     name: Frontend (drift gates + statics)

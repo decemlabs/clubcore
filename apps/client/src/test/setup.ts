@@ -32,6 +32,18 @@ function installLocalStorageShim() {
 
 installLocalStorageShim()
 
+/**
+ * jsdom does not implement the scrolling methods exposed by real browser
+ * elements. Components schedule smooth scrolling in requestAnimationFrame,
+ * so a busy full-suite run can execute that callback before cleanup and turn
+ * an otherwise passing test into an unhandled TypeError.
+ */
+Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
+  value: () => undefined,
+  writable: true,
+  configurable: true,
+})
+
 beforeEach(() => {
   // Reset persisted state between tests
   try {

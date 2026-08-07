@@ -130,6 +130,4 @@ def test_referral_captured_payload_rejects_extra_fields() -> None:
 
 def test_audit_payload_schemas_registers_referral_captured() -> None:
     """AUDIT_PAYLOAD_SCHEMAS registry maps the referral_captured pair correctly."""
-    assert (
-        AUDIT_PAYLOAD_SCHEMAS[("referral_captured", "referral")] is ReferralCapturedPayload
-    )
+    assert AUDIT_PAYLOAD_SCHEMAS[("referral_captured", "referral")] is ReferralCapturedPayload

@@ -139,7 +139,7 @@ async def test_list_client_notifications_returns_newest_first(
     # Insert row 1 with an earlier timestamp
     await db_session.execute(
         text(
-            "INSERT INTO in_app_notifications (client_id, source_type, source_id, kind, title, body, created_at, updated_at) "
+            "INSERT INTO in_app_notifications (client_id, source_type, source_id, kind, title, body, created_at, updated_at) "  # noqa: E501
             "VALUES (:cid, 'booking', :sid, 'booking_confirmed', 'Первое', '', "
             "now() - interval '10 seconds', now() - interval '10 seconds')"
         ),
@@ -148,7 +148,7 @@ async def test_list_client_notifications_returns_newest_first(
     # Insert row 2 with the current timestamp (newer)
     await db_session.execute(
         text(
-            "INSERT INTO in_app_notifications (client_id, source_type, source_id, kind, title, body) "
+            "INSERT INTO in_app_notifications (client_id, source_type, source_id, kind, title, body) "  # noqa: E501
             "VALUES (:cid, 'booking', :sid, 'booking_rescheduled', 'Второе', '')"
         ),
         {"cid": str(client.id), "sid": str(src2)},
@@ -250,7 +250,7 @@ async def test_mark_notification_read_idor_raises_not_found(
     db_session: AsyncSession,
     make_client: Callable[..., Awaitable[Client]],
 ) -> None:
-    """mark_notification_read on another client's notification → NotFoundError (IDOR 404-collapse, T-87-01)."""
+    """mark_notification_read on another client's notification → NotFoundError (IDOR 404-collapse, T-87-01)."""  # noqa: E501
     owner_client = await make_client()
     other_client = await make_client()
 
@@ -270,7 +270,9 @@ async def test_mark_notification_read_idor_raises_not_found(
     row = (
         (
             await db_session.execute(
-                text("SELECT id FROM in_app_notifications WHERE client_id = :cid AND source_id = :sid"),
+                text(
+                    "SELECT id FROM in_app_notifications WHERE client_id = :cid AND source_id = :sid"  # noqa: E501
+                ),
                 {"cid": str(owner_client.id), "sid": str(src_id)},
             )
         )
@@ -309,7 +311,9 @@ async def test_mark_notification_read_sets_read_at(
     row = (
         (
             await db_session.execute(
-                text("SELECT id FROM in_app_notifications WHERE client_id = :cid AND source_id = :sid"),
+                text(
+                    "SELECT id FROM in_app_notifications WHERE client_id = :cid AND source_id = :sid"  # noqa: E501
+                ),
                 {"cid": str(client.id), "sid": str(src_id)},
             )
         )
@@ -336,7 +340,7 @@ async def test_mark_notification_read_idempotent(
     Previously this raised NotFoundError on the second call (WHERE read_at IS NULL filtered it out),
     breaking the idempotent-retry contract. Now the second call succeeds and returns the item
     with read_at already set.
-    """
+    """  # noqa: E501
     client = await make_client()
     src_id = uuid4()
     await service.create_notification(
@@ -353,7 +357,9 @@ async def test_mark_notification_read_idempotent(
     row = (
         (
             await db_session.execute(
-                text("SELECT id FROM in_app_notifications WHERE client_id = :cid AND source_id = :sid"),
+                text(
+                    "SELECT id FROM in_app_notifications WHERE client_id = :cid AND source_id = :sid"  # noqa: E501
+                ),
                 {"cid": str(client.id), "sid": str(src_id)},
             )
         )
@@ -363,13 +369,17 @@ async def test_mark_notification_read_idempotent(
     notif_id = row["id"]
 
     # First read succeeds and sets read_at.
-    item1 = await service.mark_notification_read(db_session, client_id=client.id, notification_id=notif_id)
+    item1 = await service.mark_notification_read(
+        db_session, client_id=client.id, notification_id=notif_id
+    )
     await db_session.flush()
     assert item1.read_at is not None
 
     # Second read on already-read row → MUST succeed (idempotent, WR-02).
     # read_at is still set on the returned item.
-    item2 = await service.mark_notification_read(db_session, client_id=client.id, notification_id=notif_id)
+    item2 = await service.mark_notification_read(
+        db_session, client_id=client.id, notification_id=notif_id
+    )
     assert item2.read_at is not None, (
         "WR-02: second mark-read on own already-read notification must return item with read_at set"
     )
@@ -432,7 +442,7 @@ async def test_register_push_token_idempotent(
 ) -> None:
     """Registering the same (client_id, token) twice yields exactly one alive row."""
     client = await make_client()
-    token_val = "test-push-token-abc123"
+    token_val = "test-push-token-abc123"  # noqa: S105
     payload = ClientPushTokenRegisterRequest(token=token_val, platform="web")
 
     await service.register_push_token(db_session, client_id=client.id, payload=payload)
@@ -462,7 +472,7 @@ async def test_register_push_token_revives_unregistered(
 ) -> None:
     """Re-registering a previously unregistered token revives it (unregistered_at → NULL)."""
     client = await make_client()
-    token_val = "test-push-token-revive"
+    token_val = "test-push-token-revive"  # noqa: S105
     payload = ClientPushTokenRegisterRequest(token=token_val, platform="android")
 
     # Register once
