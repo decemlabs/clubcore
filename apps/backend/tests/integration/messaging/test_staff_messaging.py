@@ -209,11 +209,15 @@ async def test_owner_reply_200(
 
     # Verify message persists in DB with role='staff'
     row = (
-        await db_session.execute(
-            text("SELECT role, body FROM messages WHERE id = CAST(:mid AS uuid)"),
-            {"mid": data["id"]},
+        (
+            await db_session.execute(
+                text("SELECT role, body FROM messages WHERE id = CAST(:mid AS uuid)"),
+                {"mid": data["id"]},
+            )
         )
-    ).mappings().one_or_none()
+        .mappings()
+        .one_or_none()
+    )
     assert row is not None, "Staff reply message not found in DB"
     assert row["role"] == "staff"
     assert row["body"] == "Привет! Запись возможна."
@@ -276,9 +280,7 @@ async def test_mark_read_resets_staff_unread(
     r_before = await authed_client_owner.get("/api/v1/messages/threads")
     assert r_before.status_code == 200, r_before.text
     items_before = r_before.json()["data"]["items"]
-    target_before = next(
-        (i for i in items_before if i["id"] == thread_id), None
-    )
+    target_before = next((i for i in items_before if i["id"] == thread_id), None)
     assert target_before is not None
     assert target_before["staffUnreadCount"] >= 1
 
@@ -293,9 +295,7 @@ async def test_mark_read_resets_staff_unread(
     r_after = await authed_client_owner.get("/api/v1/messages/threads")
     assert r_after.status_code == 200, r_after.text
     items_after = r_after.json()["data"]["items"]
-    target_after = next(
-        (i for i in items_after if i["id"] == thread_id), None
-    )
+    target_after = next((i for i in items_after if i["id"] == thread_id), None)
     assert target_after is not None
     assert target_after["staffUnreadCount"] == 0
 
@@ -325,16 +325,12 @@ async def test_reply_persists_on_validated_thread_and_marks_client_read(
     # Capture publish_read_receipt calls (post-commit RCPT-03 dispatch).
     receipts: list[tuple[UUID, datetime]] = []
 
-    async def _capture_receipt(
-        redis: Redis, *, client_id: UUID, read_at: datetime
-    ) -> None:
+    async def _capture_receipt(redis: Redis, *, client_id: UUID, read_at: datetime) -> None:
         receipts.append((client_id, read_at))
 
     new_messages: list[tuple[UUID, UUID]] = []
 
-    async def _capture_new_message(
-        redis: Redis, *, client_id: UUID, message_id: UUID
-    ) -> None:
+    async def _capture_new_message(redis: Redis, *, client_id: UUID, message_id: UUID) -> None:
         new_messages.append((client_id, message_id))
 
     monkeypatch.setattr(messaging_service, "publish_read_receipt", _capture_receipt)
@@ -350,13 +346,15 @@ async def test_reply_persists_on_validated_thread_and_marks_client_read(
 
     # The reply persists on the VALIDATED thread (not a re-resolved one).
     reply_row = (
-        await db_session.execute(
-            text(
-                "SELECT thread_id, role FROM messages WHERE id = CAST(:mid AS uuid)"
-            ),
-            {"mid": reply_id},
+        (
+            await db_session.execute(
+                text("SELECT thread_id, role FROM messages WHERE id = CAST(:mid AS uuid)"),
+                {"mid": reply_id},
+            )
         )
-    ).mappings().one()
+        .mappings()
+        .one()
+    )
     assert str(reply_row["thread_id"]) == thread_id
     assert reply_row["role"] == "staff"
 
@@ -425,9 +423,7 @@ async def test_staff_unread_watermark_boundary(
     assert r_read.status_code == 204, r_read.text
 
     r_after = await authed_client_owner.get("/api/v1/messages/threads")
-    target = next(
-        i for i in r_after.json()["data"]["items"] if i["id"] == thread_id
-    )
+    target = next(i for i in r_after.json()["data"]["items"] if i["id"] == thread_id)
     assert target["staffUnreadCount"] == 0, "pre-watermark message must count as read"
 
     # Insert a client message strictly AFTER the watermark → must count as unread.
@@ -441,7 +437,5 @@ async def test_staff_unread_watermark_boundary(
     await db_session.commit()
 
     r_after2 = await authed_client_owner.get("/api/v1/messages/threads")
-    target2 = next(
-        i for i in r_after2.json()["data"]["items"] if i["id"] == thread_id
-    )
+    target2 = next(i for i in r_after2.json()["data"]["items"] if i["id"] == thread_id)
     assert target2["staffUnreadCount"] == 1, "post-watermark message must count as unread"

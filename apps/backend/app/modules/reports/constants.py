@@ -52,12 +52,12 @@ CSV_VISITS_HEADERS: tuple[str, ...] = ("date", "count")
 # ---------------------------------------------------------------------------
 
 CSV_PAYMENTS_HEADERS: tuple[str, ...] = (
-    "date",           # received_at MSK date (YYYY-MM-DD)
-    "clientName",     # client first_name + last_name; empty for non-client payments
-    "amountRubles",   # amount_kopecks / 100 (format_kopecks_as_rubles, D-13)
-    "method",         # 'cash' | 'online'
-    "subjectKind",    # 'membership' | 'pt_package' | 'refund'
-    "refundOf",       # UUID of original payment for refund rows, empty otherwise
+    "date",  # received_at MSK date (YYYY-MM-DD)
+    "clientName",  # client first_name + last_name; empty for non-client payments
+    "amountRubles",  # amount_kopecks / 100 (format_kopecks_as_rubles, D-13)
+    "method",  # 'cash' | 'online'
+    "subjectKind",  # 'membership' | 'pt_package' | 'refund'
+    "refundOf",  # UUID of original payment for refund rows, empty otherwise
     "operatorEmail",  # received_by user email; empty when NULL (online payments)
 )
 

@@ -301,7 +301,7 @@ async def test_reception_put_gym_info_forbidden(
     """
     r = await http_client_reception.put(
         "/api/v1/gym",
-        json={"tagline": "Не должен пройти"},
+        json={"tagline": "Не должен пройти"},  # noqa: RUF001
         headers=_csrf_headers(http_client_reception),
     )
     assert r.status_code == 403, r.text

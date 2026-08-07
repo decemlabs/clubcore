@@ -204,8 +204,8 @@ async def test_concurrent_create_booking_partial_unique_at_db_layer(
     # Use a slot pinned to 10:00 Moscow on the next Monday so it always falls
     # within the seeded Mon-Fri 08:00-22:00 working-hours window, regardless of
     # what time or day the test suite runs.
-    _MOSCOW_TZ = ZoneInfo("Europe/Moscow")
-    _now_msk = datetime.now(_MOSCOW_TZ)
+    _moscow_tz = ZoneInfo("Europe/Moscow")
+    _now_msk = datetime.now(_moscow_tz)
     # days_to_next_monday: 0 on Mon, 7 on Mon (wrap), 1 on Sun, etc.
     _days_ahead = (7 - _now_msk.weekday()) % 7 or 7  # always ≥ 1 day ahead
     _slot_msk = _now_msk.replace(hour=10, minute=0, second=0, microsecond=0) + timedelta(

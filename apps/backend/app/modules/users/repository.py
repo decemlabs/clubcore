@@ -128,9 +128,9 @@ async def list_alive(
         .subquery()
     )
 
-    stmt = select(
-        User, invitation_subq.c.inv_token_id, invitation_subq.c.inv_expires_at
-    ).outerjoin(invitation_subq, invitation_subq.c.u_id == User.id)
+    stmt = select(User, invitation_subq.c.inv_token_id, invitation_subq.c.inv_expires_at).outerjoin(
+        invitation_subq, invitation_subq.c.u_id == User.id
+    )
     if predicates:
         stmt = stmt.where(and_(*predicates))
     stmt = stmt.order_by(User.created_at.desc(), User.id.desc())

@@ -26,6 +26,7 @@ import json
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "0059_seed_gym_info"
@@ -37,39 +38,47 @@ depends_on: str | Sequence[str] | None = None
 _SINGLETON_ID = "00000000-0000-0000-0000-000000000001"
 
 # Baseline content from apps/client/src/data/gym.js (GYM_INFO).
-_HOURS = json.dumps([
-    {"d": "Пн", "open": "07:00", "close": "23:00"},
-    {"d": "Вт", "open": "07:00", "close": "23:00"},
-    {"d": "Ср", "open": "07:00", "close": "23:00"},
-    {"d": "Чт", "open": "07:00", "close": "23:00"},
-    {"d": "Пт", "open": "07:00", "close": "22:00"},
-    {"d": "Сб", "open": "09:00", "close": "22:00"},
-    {"d": "Вс", "open": "09:00", "close": "21:00"},
-])
+_HOURS = json.dumps(
+    [
+        {"d": "Пн", "open": "07:00", "close": "23:00"},
+        {"d": "Вт", "open": "07:00", "close": "23:00"},
+        {"d": "Ср", "open": "07:00", "close": "23:00"},  # noqa: RUF001
+        {"d": "Чт", "open": "07:00", "close": "23:00"},
+        {"d": "Пт", "open": "07:00", "close": "22:00"},
+        {"d": "Сб", "open": "09:00", "close": "22:00"},  # noqa: RUF001
+        {"d": "Вс", "open": "09:00", "close": "21:00"},  # noqa: RUF001
+    ]
+)
 
-_AMENITIES = json.dumps([
-    {"icon": "parking", "label": "Парковка"},
-    {"icon": "wifi", "label": "Wi-Fi"},
-    {"icon": "shower", "label": "Душ"},
-    {"icon": "locker", "label": "Шкафчики"},
-    {"icon": "sauna", "label": "Сауна"},
-    {"icon": "towel", "label": "Полотенца"},
-    {"icon": "water", "label": "Вода"},
-    {"icon": "kids", "label": "Детская зона"},
-])
+_AMENITIES = json.dumps(
+    [
+        {"icon": "parking", "label": "Парковка"},
+        {"icon": "wifi", "label": "Wi-Fi"},
+        {"icon": "shower", "label": "Душ"},
+        {"icon": "locker", "label": "Шкафчики"},
+        {"icon": "sauna", "label": "Сауна"},
+        {"icon": "towel", "label": "Полотенца"},
+        {"icon": "water", "label": "Вода"},
+        {"icon": "kids", "label": "Детская зона"},
+    ]
+)
 
-_RULES = json.dumps([
-    "Спортивная форма и сменная обувь обязательны",
-    "Берите полотенце на тренировку — раскладываем на тренажёре",
-    "Возвращайте инвентарь на место после подхода",
-    "Громкая музыка в наушниках — нет. В колонке — нет",
-    "Зона свободных весов — приоритет у тренирующегося",
-])
+_RULES = json.dumps(
+    [
+        "Спортивная форма и сменная обувь обязательны",
+        "Берите полотенце на тренировку — раскладываем на тренажёре",
+        "Возвращайте инвентарь на место после подхода",
+        "Громкая музыка в наушниках — нет. В колонке — нет",  # noqa: RUF001
+        "Зона свободных весов — приоритет у тренирующегося",  # noqa: RUF001
+    ]
+)
 
-_SOCIAL = json.dumps([
-    {"kind": "tg", "label": "Telegram", "handle": "@mygym_tverskaya"},
-    {"kind": "ig", "label": "Instagram", "handle": "@mygym.club"},
-])
+_SOCIAL = json.dumps(
+    [
+        {"kind": "tg", "label": "Telegram", "handle": "@mygym_tverskaya"},
+        {"kind": "ig", "label": "Instagram", "handle": "@mygym.club"},
+    ]
+)
 
 
 def upgrade() -> None:
@@ -106,7 +115,5 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute(
-        sa.text("DELETE FROM gym_info WHERE id = CAST(:id AS uuid)").bindparams(
-            id=_SINGLETON_ID
-        )
+        sa.text("DELETE FROM gym_info WHERE id = CAST(:id AS uuid)").bindparams(id=_SINGLETON_ID)
     )

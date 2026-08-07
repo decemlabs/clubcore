@@ -779,9 +779,7 @@ async def test_cancel_booked_slot_no_op_when_no_pt_session_consumed(
     )
 
     restore_count = await db_session.scalar(
-        text(
-            "SELECT count(*) FROM audit_log WHERE action = 'pt_session_credit_restored'"
-        ),
+        text("SELECT count(*) FROM audit_log WHERE action = 'pt_session_credit_restored'"),
     )
     assert restore_count == 0, (
         f"Expected 0 pt_session_credit_restored rows for no-session booking; got {restore_count}"
@@ -859,9 +857,7 @@ async def test_cancel_slot_no_double_restore_on_retry(
     assert sessions_after_first == plan.session_count
 
     audit_count_after_first = await db_session.scalar(
-        text(
-            "SELECT count(*) FROM audit_log WHERE action = 'pt_session_credit_restored'"
-        ),
+        text("SELECT count(*) FROM audit_log WHERE action = 'pt_session_credit_restored'"),
     )
     assert audit_count_after_first == 1
 
@@ -884,9 +880,7 @@ async def test_cancel_slot_no_double_restore_on_retry(
     )
 
     audit_count_after_retry = await db_session.scalar(
-        text(
-            "SELECT count(*) FROM audit_log WHERE action = 'pt_session_credit_restored'"
-        ),
+        text("SELECT count(*) FROM audit_log WHERE action = 'pt_session_credit_restored'"),
     )
     assert audit_count_after_retry == 1, (
         "pt_session_credit_restored audit count must stay at 1 after retry"

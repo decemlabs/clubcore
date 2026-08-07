@@ -386,9 +386,7 @@ async def change_password_endpoint(
                 "nil-UUID fallback: ALL sessions (including caller's) will be revoked"
             ),
         )
-    effective_family_id: UUID = (
-        current_family_id if current_family_id is not None else UUID(int=0)
-    )
+    effective_family_id: UUID = current_family_id if current_family_id is not None else UUID(int=0)
 
     await change_password(
         session,

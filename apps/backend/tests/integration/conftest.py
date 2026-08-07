@@ -66,7 +66,7 @@ async def permissive_booking_config(
     mark themselves with ``@pytest.mark.no_permissive_booking_config`` so this fixture
     early-returns and holds no contended lock. They use their own real-commit engine
     session and never read booking/working-hours config, so skipping is safe.
-    """
+    """  # noqa: RUF002
     if request.node.get_closest_marker("no_permissive_booking_config") is not None:
         return
     await db_session.execute(

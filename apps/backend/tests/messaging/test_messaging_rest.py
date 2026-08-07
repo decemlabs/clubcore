@@ -14,14 +14,13 @@ Proves MSG-01..04 + RT-04 HTTP contract:
 Harness: SAVEPOINT db_session + ASGITransport AsyncClient (no real network — per CLAUDE.md).
 Auth: OTP flow via _auth_as_client (cookies persisted on http_client).
 Idempotency-Key: minimum 16 chars, alphanumeric per IDEMPOTENCY_KEY_PATTERN.
-"""
+"""  # noqa: E501
 
 from __future__ import annotations
 
-import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 import pytest_asyncio
@@ -49,7 +48,7 @@ _BASE_PHONE = "+79169000"
 
 
 def _phone(n: int) -> str:
-    """Return a stable E.164 phone for test client n (1–99)."""
+    """Return a stable E.164 phone for test client n (1–99)."""  # noqa: RUF002
     return f"{_BASE_PHONE}{n:04d}"
 
 
@@ -288,7 +287,9 @@ async def test_post_message_empty_body_returns_422(
         json={"body": ""},
         headers={"X-CSRF-Token": csrf_token, "Idempotency-Key": _idem_key(4)},
     )
-    assert resp.status_code == 422, f"Expected 422 for empty body, got {resp.status_code}: {resp.text}"
+    assert resp.status_code == 422, (
+        f"Expected 422 for empty body, got {resp.status_code}: {resp.text}"
+    )
 
 
 async def test_post_message_whitespace_body_returns_422(
@@ -308,7 +309,9 @@ async def test_post_message_whitespace_body_returns_422(
         json={"body": "   "},
         headers={"X-CSRF-Token": csrf_token, "Idempotency-Key": _idem_key(5)},
     )
-    assert resp.status_code == 422, f"Expected 422 for whitespace body, got {resp.status_code}: {resp.text}"
+    assert resp.status_code == 422, (
+        f"Expected 422 for whitespace body, got {resp.status_code}: {resp.text}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -346,7 +349,9 @@ async def test_post_message_without_csrf_returns_403(
         headers={"Idempotency-Key": _idem_key(6)},
         # Intentionally omitting X-CSRF-Token
     )
-    assert resp.status_code == 403, f"Expected 403 CSRF rejection, got {resp.status_code}: {resp.text}"
+    assert resp.status_code == 403, (
+        f"Expected 403 CSRF rejection, got {resp.status_code}: {resp.text}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -369,7 +374,7 @@ async def test_idor_client_b_does_not_see_client_a_messages(
     await messaging_service.record_staff_message(
         db_session,
         client_id=client_a.id,
-        body="Это сообщение для клиента А",
+        body="Это сообщение для клиента А",  # noqa: RUF001
     )
     await db_session.commit()
 
@@ -386,7 +391,7 @@ async def test_idor_client_b_does_not_see_client_a_messages(
     assert data["items"] == [], "IDOR: client B received items belonging to client A"
     # All item ids must belong to client B's thread (empty in this case)
     items_bodies = [item["body"] for item in data["items"]]
-    assert "Это сообщение для клиента А" not in items_bodies
+    assert "Это сообщение для клиента А" not in items_bodies  # noqa: RUF001
 
 
 # ---------------------------------------------------------------------------
@@ -455,7 +460,7 @@ async def test_post_message_idempotency_same_key_different_body_returns_422(
         headers={"X-CSRF-Token": csrf_token, "Idempotency-Key": idem_key},
     )
     assert resp.status_code == 422, (
-        f"Expected 422 idempotency_key_reuse for different body, got {resp.status_code}: {resp.text}"
+        f"Expected 422 idempotency_key_reuse for different body, got {resp.status_code}: {resp.text}"  # noqa: E501
     )
 
 
@@ -566,8 +571,6 @@ async def test_get_messages_after_cursor_returns_only_newer_messages(
     assert len(cursor_items) == 2, (
         f"RT-04: expected 2 items after cursor, got {len(cursor_items)}: {cursor_ids}"
     )
-    assert str(msg1_id) not in cursor_ids, (
-        f"RT-04: cursor message (msg1) must not appear in results"
-    )
-    assert str(msg2_id) in cursor_ids, f"RT-04: msg2 should be in results"
-    assert str(msg3_id) in cursor_ids, f"RT-04: msg3 should be in results"
+    assert str(msg1_id) not in cursor_ids, "RT-04: cursor message (msg1) must not appear in results"
+    assert str(msg2_id) in cursor_ids, "RT-04: msg2 should be in results"
+    assert str(msg3_id) in cursor_ids, "RT-04: msg3 should be in results"

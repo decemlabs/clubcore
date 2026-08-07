@@ -443,9 +443,7 @@ class WorkerSettings:
         from app.integrations.telegram.bot import build_bot
 
         ctx["storage"] = build_storage(settings=StorageSettings())
-        ctx["bot"] = build_bot(
-            token=settings_local.telegram_bot_token.get_secret_value()
-        )
+        ctx["bot"] = build_bot(token=settings_local.telegram_bot_token.get_secret_value())
 
         _log.info("worker_startup_complete", function_count=len(function_names))
 

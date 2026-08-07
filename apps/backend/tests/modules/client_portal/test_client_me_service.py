@@ -13,7 +13,7 @@ Behaviors locked (D-05/D-07/D-08/D-09/D-10):
   - first_name > 24 chars → ValidationAppError.
   - get_client_payment_status on succeeded → receipt_email/receipt_phone populated (D-09/D-10).
   - Anti-oracle: pending/canceled payment exposes no receipt contact.
-"""
+"""  # noqa: RUF002
 
 from __future__ import annotations
 
@@ -234,7 +234,7 @@ async def test_update_client_profile_rejects_first_name_too_long(
         await service.update_client_profile(
             db_session,
             client_id=client.id,
-            payload=_payload(first_name="А" * 25),
+            payload=_payload(first_name="А" * 25),  # noqa: RUF001
         )
 
 
@@ -296,7 +296,7 @@ async def _insert_online_payment(
     # Create a minimal membership_plan row to satisfy FK
     await db_session.execute(
         text(
-            "INSERT INTO membership_plans (id, name, duration_days, price_kopecks, freeze_days_limit) "
+            "INSERT INTO membership_plans (id, name, duration_days, price_kopecks, freeze_days_limit) "  # noqa: E501
             "VALUES (:id, :name, 30, 250000, 14)"
         ),
         {"id": str(plan_id), "name": f"test-plan-{plan_id}"},
@@ -329,9 +329,7 @@ async def test_payment_status_succeeded_populates_receipt_email(
 ) -> None:
     """D-09: succeeded payment with email → receipt_email set, receipt_phone None."""
     client = await make_client(email="receipt@example.com")
-    payment_id = await _insert_online_payment(
-        db_session, client_id=client.id, status="succeeded"
-    )
+    payment_id = await _insert_online_payment(db_session, client_id=client.id, status="succeeded")
     result = await service.get_client_payment_status(db_session, payment_id, client.id)
     assert result.status == "succeeded"
     assert result.receipt_email == "receipt@example.com"
@@ -344,9 +342,7 @@ async def test_payment_status_succeeded_phone_fallback_when_no_email(
 ) -> None:
     """D-10: succeeded payment with email=None → receipt_phone set, receipt_email None."""
     client = await make_client(email=None)
-    payment_id = await _insert_online_payment(
-        db_session, client_id=client.id, status="succeeded"
-    )
+    payment_id = await _insert_online_payment(db_session, client_id=client.id, status="succeeded")
     result = await service.get_client_payment_status(db_session, payment_id, client.id)
     assert result.status == "succeeded"
     assert result.receipt_email is None
@@ -359,9 +355,7 @@ async def test_payment_status_pending_no_receipt_contact(
 ) -> None:
     """Anti-oracle: pending payment → receipt_email and receipt_phone both None."""
     client = await make_client(email="pending@example.com")
-    payment_id = await _insert_online_payment(
-        db_session, client_id=client.id, status="pending"
-    )
+    payment_id = await _insert_online_payment(db_session, client_id=client.id, status="pending")
     result = await service.get_client_payment_status(db_session, payment_id, client.id)
     assert result.status == "pending"
     assert result.receipt_email is None
@@ -374,9 +368,7 @@ async def test_payment_status_canceled_no_receipt_contact(
 ) -> None:
     """Anti-oracle: canceled payment → receipt_email and receipt_phone both None."""
     client = await make_client(email="canceled@example.com")
-    payment_id = await _insert_online_payment(
-        db_session, client_id=client.id, status="canceled"
-    )
+    payment_id = await _insert_online_payment(db_session, client_id=client.id, status="canceled")
     result = await service.get_client_payment_status(db_session, payment_id, client.id)
     assert result.status == "canceled"
     assert result.receipt_email is None

@@ -118,9 +118,7 @@ class S3Storage:
                         _log.info("s3_bucket_created", bucket=self._bucket)
                     except ClientError as create_exc:
                         create_resp = (
-                            create_exc.response
-                            if isinstance(create_exc.response, dict)
-                            else {}
+                            create_exc.response if isinstance(create_exc.response, dict) else {}
                         )
                         create_code = create_resp.get("Error", {}).get("Code", "")
                         if create_code == "BucketAlreadyOwnedByYou":

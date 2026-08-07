@@ -152,9 +152,7 @@ async def test_fit15_row_exists_with_correct_attributes(
     assert row.discount_value == 1500, (
         f"Expected discount_value=1500 (15% x 100), got {row.discount_value}"
     )
-    assert row.per_client_limit == 1, (
-        f"Expected per_client_limit=1, got {row.per_client_limit}"
-    )
+    assert row.per_client_limit == 1, f"Expected per_client_limit=1, got {row.per_client_limit}"
     assert row.is_active is True, f"Expected is_active=True, got {row.is_active}"
     assert row.deleted_at is None, f"Expected deleted_at=None, got {row.deleted_at}"
     assert row.applicable_to is None, (
@@ -183,10 +181,7 @@ async def test_fit15_seed_insert_is_idempotent(
     # WR-75-04: establish the baseline so the post-reinsert count proves ON CONFLICT
     # actually suppressed a duplicate — not merely that no prior row existed.
     baseline = await db_session.scalar(
-        text(
-            "SELECT count(*) FROM promo_codes "
-            "WHERE upper(code) = 'FIT15' AND deleted_at IS NULL"
-        )
+        text("SELECT count(*) FROM promo_codes WHERE upper(code) = 'FIT15' AND deleted_at IS NULL")
     )
     assert baseline == 1, (
         f"Expected exactly 1 alive FIT15 row from migration 0051 before re-run, got {baseline}"
@@ -205,10 +200,7 @@ async def test_fit15_seed_insert_is_idempotent(
     await db_session.commit()
 
     count_result = await db_session.scalar(
-        text(
-            "SELECT count(*) FROM promo_codes "
-            "WHERE upper(code) = 'FIT15' AND deleted_at IS NULL"
-        )
+        text("SELECT count(*) FROM promo_codes WHERE upper(code) = 'FIT15' AND deleted_at IS NULL")
     )
     assert count_result == 1, (
         f"Expected exactly 1 alive FIT15 row after re-run, got {count_result} "
@@ -240,9 +232,7 @@ async def test_fit15_validate_returns_percentage_discount(
         headers=_promo_headers(async_client),
         json={"code": "FIT15", "kind": "sub", "planId": str(plan.id)},
     )
-    assert r.status_code == 200, (
-        f"Expected 200 for FIT15 validate, got {r.status_code}: {r.text}"
-    )
+    assert r.status_code == 200, f"Expected 200 for FIT15 validate, got {r.status_code}: {r.text}"
     data = r.json()["data"]
     assert data["discountType"] == "percentage", (
         f"Expected discountType='percentage', got {data.get('discountType')!r}"

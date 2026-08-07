@@ -271,7 +271,7 @@ def test_locked_audit_events_has_expected_count() -> None:
         "(18 v1.1 + 12 v1.2 + 6 v1.3 + 17 v1.4 + 5 v1.5 + 13 v1.6 + 14 v1.7 "
         "+ 4 v1.9/P58 + 4 v1.9/P59 + 1 pre-P68 + 6 v2.0/P68 + 1 v2.2/P80 booking_rescheduled "
         "+ 1 v2.3/P82 loyalty_accrued + 1 v2.3/P83 loyalty_redeemed "
-        "+ 2 v2.3/P84: autopay_charge_initiated + autopay_charge_failed (APAY-01/APAY-03, INFRA-15) "
+        "+ 2 v2.3/P84: autopay_charge_initiated + autopay_charge_failed (APAY-01/APAY-03, INFRA-15) "  # noqa: E501
         "+ 4 v2.5/P90: message_sent + message_read + attachment_uploaded + chat_staff_reply_sent "
         "+ 3 v2.6/P96: referral_code_generated + referral_captured + referral_bonus_accrued "
         "+ 4 v2.7/P108: gym_card_updated + working_hours_updated + booking_config_updated "

@@ -849,10 +849,10 @@ def create_app() -> FastAPI:
                     "X-CSRF-Token.  No URL token (?token=...) — cookie is the sole "
                     "auth mechanism.\\n\\n"
                     "Server→client frames:\\n"
-                    "- `{\\\"type\\\": \\\"new_message\\\", \\\"messageId\\\": \\\"<uuid>\\\"}` — "
+                    '- `{\\"type\\": \\"new_message\\", \\"messageId\\": \\"<uuid>\\"}` — '
                     "id-only notification; PWA refetches via REST GET /messages?after=<cursor> "
                     "(RT-04).\\n"
-                    "- `{\\\"type\\\": \\\"ping\\\"}` — heartbeat every ~30 s; client may "
+                    '- `{\\"type\\": \\"ping\\"}` — heartbeat every ~30 s; client may '
                     "respond with any text.\\n\\n"
                     "Channel: `cc:messaging:client:{client_id}` (derived from principal only, "
                     "never from path/query/payload — P2 / T-90-12).  "
@@ -861,9 +861,7 @@ def create_app() -> FastAPI:
                 "operationId": "client_ws_messages",
                 "responses": {
                     "101": {
-                        "description": (
-                            "Switching Protocols — WebSocket connection established."
-                        )
+                        "description": ("Switching Protocols — WebSocket connection established.")
                     }
                 },
                 "security": [{"cookieAuth": []}],

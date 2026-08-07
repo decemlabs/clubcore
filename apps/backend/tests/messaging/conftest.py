@@ -309,9 +309,7 @@ def cleanup_client_sync(ws_tc: TestClient, *, phone: str) -> None:
                 # Delete the staff user linked to this client (by email pattern)
                 email_suffix = phone[-6:]
                 await session.execute(
-                    text(
-                        "DELETE FROM users WHERE email LIKE :pattern"
-                    ),
+                    text("DELETE FROM users WHERE email LIKE :pattern"),
                     {"pattern": f"ws-test-staff-{email_suffix}%"},
                 )
                 await session.execute(

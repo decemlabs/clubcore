@@ -27,10 +27,6 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.core.database import get_db
-from app.core.redis import get_redis
-from app.main import create_app
-
 # Phase 2 D-15 Settings requires DATABASE_URL/REDIS_URL/SECRET_KEY from env or .env.
 # CI / fresh checkouts run without `.env`; load `.env.example` defaults at import
 # time so Settings() in `create_app()` does not fail before any test executes.
@@ -45,12 +41,21 @@ if _ENV_EXAMPLE.is_file():
         _key, _, _value = _stripped.partition("=")
         os.environ.setdefault(_key.strip(), _value.strip())
 
+# Local application imports must happen after the test environment fallback:
+# several integration settings objects are constructed at module import time.
+from app.core.database import get_db  # noqa: E402
+from app.core.redis import get_redis  # noqa: E402
+from app.main import create_app  # noqa: E402
+
 
 @pytest_asyncio.fixture
 async def app() -> AsyncIterator[FastAPI]:
     """Per-test FastAPI instance with lifespan fired (engine + sessionmaker bound)."""
     _app = create_app()
-    async with LifespanManager(_app):
+    # The default five-second startup budget is too tight late in the full
+    # integration suite when PostgreSQL and Redis have handled thousands of
+    # fixture lifecycles. Keep a finite limit while avoiding load-only flakes.
+    async with LifespanManager(_app, startup_timeout=15):
         yield _app
 
 

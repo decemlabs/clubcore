@@ -173,6 +173,7 @@ def test_ws_reconnect_catchup_via_rest_cursor(ws_tc: TestClient) -> None:
             headers={"origin": WS_ALLOWED_ORIGIN},
         ) as ws:
             for i in range(2):
+
                 async def _send_msg(body: str = f"msg {i}") -> str:
                     async with session_factory() as session:
                         result = await messaging_service.record_staff_message(

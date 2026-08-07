@@ -113,9 +113,7 @@ async def test_change_password_revokes_others_keeps_current(
     """PROF-02 core: change-password from Client A revokes Client B's family;
     Client A's family stays alive and GET /me still returns 200 for Client A.
     """
-    async with _make_client(app, db_session) as client_a, _make_client(
-        app, db_session
-    ) as client_b:
+    async with _make_client(app, db_session) as client_a, _make_client(app, db_session) as client_b:
         # Login from two independent clients — two distinct refresh families.
         await _login_with_client(client_a)
         await _login_with_client(client_b)
@@ -200,9 +198,7 @@ async def test_change_password_wrong_current_password(
         f"Wrong current password must return 401, got {r.status_code}: {r.text}"
     )
     body = r.json()
-    assert body.get("code") == "invalid_credentials", (
-        f"Expected code='invalid_credentials': {body}"
-    )
+    assert body.get("code") == "invalid_credentials", f"Expected code='invalid_credentials': {body}"
 
     # No families must have been revoked.
     alive_after = (
@@ -301,9 +297,7 @@ async def test_change_password_writes_audit_row(
     Payload must carry family_count = number of OTHER families revoked, and
     must not contain any password or hash values.
     """
-    async with _make_client(app, db_session) as client_a, _make_client(
-        app, db_session
-    ) as client_b:
+    async with _make_client(app, db_session) as client_a, _make_client(app, db_session) as client_b:
         # Two logins → two families so "others" count is 1.
         await _login_with_client(client_a)
         await _login_with_client(client_b)
@@ -344,9 +338,7 @@ async def test_change_password_writes_audit_row(
         assert "password" not in payload_str.lower(), (
             f"Audit payload must not leak password: {payload}"
         )
-        assert "hash" not in payload_str.lower(), (
-            f"Audit payload must not leak hash: {payload}"
-        )
+        assert "hash" not in payload_str.lower(), f"Audit payload must not leak hash: {payload}"
 
 
 # ---------------------------------------------------------------------------

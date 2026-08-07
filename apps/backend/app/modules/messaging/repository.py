@@ -55,9 +55,7 @@ async def get_or_create_thread(
     # Conflict fired — SELECT the existing thread id.
     row = (
         await session.execute(
-            text(
-                "SELECT id FROM message_threads WHERE client_id = :cid"
-            ),
+            text("SELECT id FROM message_threads WHERE client_id = :cid"),
             {"cid": str(client_id)},
         )
     ).scalar_one()
@@ -173,16 +171,20 @@ async def list_thread_history(
 
     # Resolve total + unread_count from the thread row.
     counts = (
-        await session.execute(
-            text(
-                "SELECT "
-                "  (SELECT COUNT(*) FROM messages WHERE thread_id = :tid) AS total, "
-                "  client_unread_count "
-                "FROM message_threads WHERE id = :tid"
-            ),
-            {"tid": str(thread_id)},
+        (
+            await session.execute(
+                text(
+                    "SELECT "
+                    "  (SELECT COUNT(*) FROM messages WHERE thread_id = :tid) AS total, "
+                    "  client_unread_count "
+                    "FROM message_threads WHERE id = :tid"
+                ),
+                {"tid": str(thread_id)},
+            )
         )
-    ).mappings().one()
+        .mappings()
+        .one()
+    )
     total = int(counts["total"])
     unread_count = int(counts["client_unread_count"])
 
@@ -193,47 +195,52 @@ async def list_thread_history(
         "m.id, m.role, m.body, m.sent_at, m.read_at, m.thread_id, "
         "ma.id AS att_id, ma.mime_type AS att_mime, ma.size_bytes AS att_size"
     )
-    from_join = (
-        "FROM messages m "
-        "LEFT JOIN message_attachments ma ON ma.id = m.attachment_id"
-    )
+    from_join = "FROM messages m LEFT JOIN message_attachments ma ON ma.id = m.attachment_id"
     if after is not None:
         # CR-01 / WR-04 catch-up cursor: native (sent_at, id) tuple comparison
         # (not id::text), thread-scoped cursor subquery, chronological-forward
         # order, and NO offset (cursor + offset are mutually exclusive).
         rows = (
-            await session.execute(
-                text(
-                    f"SELECT {select_cols} "  # noqa: S608 — columns are server-defined constants
-                    f"{from_join} "
-                    "WHERE m.thread_id = :tid "
-                    "  AND (m.sent_at, m.id) > "
-                    "      (SELECT sent_at, id FROM messages "
-                    "       WHERE id = :after_id AND thread_id = :tid) "
-                    "ORDER BY m.sent_at ASC, m.id ASC "
-                    "LIMIT :limit"
-                ),
-                {
-                    "tid": str(thread_id),
-                    "after_id": str(after),
-                    "limit": page_size,
-                },
+            (
+                await session.execute(
+                    text(
+                        f"SELECT {select_cols} "  # noqa: S608 — columns are server-defined constants
+                        f"{from_join} "
+                        "WHERE m.thread_id = :tid "
+                        "  AND (m.sent_at, m.id) > "
+                        "      (SELECT sent_at, id FROM messages "
+                        "       WHERE id = :after_id AND thread_id = :tid) "
+                        "ORDER BY m.sent_at ASC, m.id ASC "
+                        "LIMIT :limit"
+                    ),
+                    {
+                        "tid": str(thread_id),
+                        "after_id": str(after),
+                        "limit": page_size,
+                    },
+                )
             )
-        ).mappings().all()
+            .mappings()
+            .all()
+        )
     else:
         offset = (page - 1) * page_size
         rows = (
-            await session.execute(
-                text(
-                    f"SELECT {select_cols} "
-                    f"{from_join} "
-                    "WHERE m.thread_id = :tid "
-                    "ORDER BY m.sent_at DESC, m.id DESC "
-                    "LIMIT :limit OFFSET :offset"
-                ),
-                {"tid": str(thread_id), "limit": page_size, "offset": offset},
+            (
+                await session.execute(
+                    text(
+                        f"SELECT {select_cols} "
+                        f"{from_join} "
+                        "WHERE m.thread_id = :tid "
+                        "ORDER BY m.sent_at DESC, m.id DESC "
+                        "LIMIT :limit OFFSET :offset"
+                    ),
+                    {"tid": str(thread_id), "limit": page_size, "offset": offset},
+                )
             )
-        ).mappings().all()
+            .mappings()
+            .all()
+        )
 
     return [dict(r) for r in rows], total, unread_count
 
@@ -255,15 +262,19 @@ async def get_owned_attachment(
     No session.commit() — caller-owns-txn.
     """
     row = (
-        await session.execute(
-            text(
-                "SELECT id, object_key, mime_type, size_bytes, thread_id "
-                "FROM message_attachments "
-                "WHERE id = :aid AND client_id = :cid"
-            ),
-            {"aid": str(attachment_id), "cid": str(client_id)},
+        (
+            await session.execute(
+                text(
+                    "SELECT id, object_key, mime_type, size_bytes, thread_id "
+                    "FROM message_attachments "
+                    "WHERE id = :aid AND client_id = :cid"
+                ),
+                {"aid": str(attachment_id), "cid": str(client_id)},
+            )
         )
-    ).mappings().one_or_none()
+        .mappings()
+        .one_or_none()
+    )
     if row is None:
         return None
     return dict(row)
@@ -466,30 +477,34 @@ async def list_all_threads_with_unread(
     No session.commit() — caller-owns-txn (D-32-10/D-49-19).
     """
     rows = (
-        await session.execute(
-            text(
-                "SELECT "
-                "  mt.id, mt.client_id, mt.last_message_at, "
-                "  mt.staff_last_read_at, "
-                "  ( SELECT COUNT(*) FROM messages m "
-                "    WHERE m.thread_id = mt.id AND m.role = 'client' "
-                "    AND (mt.staff_last_read_at IS NULL OR m.sent_at > mt.staff_last_read_at) "
-                "  ) AS staff_unread_count, "
-                "  ( SELECT m2.body FROM messages m2 "
-                "    WHERE m2.thread_id = mt.id "
-                "    ORDER BY m2.sent_at DESC LIMIT 1 "
-                "  ) AS last_message_body, "
-                "  ( SELECT m3.role FROM messages m3 "
-                "    WHERE m3.thread_id = mt.id "
-                "    ORDER BY m3.sent_at DESC LIMIT 1 "
-                "  ) AS last_message_role, "
-                "  c.first_name, c.last_name "
-                "FROM message_threads mt "
-                "JOIN clients c ON c.id = mt.client_id AND c.deleted_at IS NULL "
-                "ORDER BY mt.last_message_at DESC NULLS LAST"
+        (
+            await session.execute(
+                text(
+                    "SELECT "
+                    "  mt.id, mt.client_id, mt.last_message_at, "
+                    "  mt.staff_last_read_at, "
+                    "  ( SELECT COUNT(*) FROM messages m "
+                    "    WHERE m.thread_id = mt.id AND m.role = 'client' "
+                    "    AND (mt.staff_last_read_at IS NULL OR m.sent_at > mt.staff_last_read_at) "
+                    "  ) AS staff_unread_count, "
+                    "  ( SELECT m2.body FROM messages m2 "
+                    "    WHERE m2.thread_id = mt.id "
+                    "    ORDER BY m2.sent_at DESC LIMIT 1 "
+                    "  ) AS last_message_body, "
+                    "  ( SELECT m3.role FROM messages m3 "
+                    "    WHERE m3.thread_id = mt.id "
+                    "    ORDER BY m3.sent_at DESC LIMIT 1 "
+                    "  ) AS last_message_role, "
+                    "  c.first_name, c.last_name "
+                    "FROM message_threads mt "
+                    "JOIN clients c ON c.id = mt.client_id AND c.deleted_at IS NULL "
+                    "ORDER BY mt.last_message_at DESC NULLS LAST"
+                )
             )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     return [dict(r) for r in rows]
 
 
@@ -505,11 +520,15 @@ async def get_thread_client_id(
     No session.commit() — caller-owns-txn (D-32-10/D-49-19).
     """
     row = (
-        await session.execute(
-            text("SELECT client_id FROM message_threads WHERE id = :tid"),
-            {"tid": str(thread_id)},
+        (
+            await session.execute(
+                text("SELECT client_id FROM message_threads WHERE id = :tid"),
+                {"tid": str(thread_id)},
+            )
         )
-    ).mappings().one_or_none()
+        .mappings()
+        .one_or_none()
+    )
     if row is None:
         return None
     return UUID(str(row["client_id"]))
@@ -560,16 +579,20 @@ async def list_thread_messages_for_staff(
     No session.commit() — caller-owns-txn.
     """
     rows = (
-        await session.execute(
-            text(
-                "SELECT id, role, body, sent_at "
-                "FROM messages "
-                "WHERE thread_id = :tid "
-                "ORDER BY sent_at ASC, id ASC"
-            ),
-            {"tid": str(thread_id)},
+        (
+            await session.execute(
+                text(
+                    "SELECT id, role, body, sent_at "
+                    "FROM messages "
+                    "WHERE thread_id = :tid "
+                    "ORDER BY sent_at ASC, id ASC"
+                ),
+                {"tid": str(thread_id)},
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     return [dict(r) for r in rows]
 
 
@@ -587,15 +610,19 @@ async def get_client_display(
     No session.commit() — caller-owns-txn.
     """
     row = (
-        await session.execute(
-            text(
-                "SELECT first_name, last_name, phone "
-                "FROM clients "
-                "WHERE id = :cid AND deleted_at IS NULL"
-            ),
-            {"cid": str(client_id)},
+        (
+            await session.execute(
+                text(
+                    "SELECT first_name, last_name, phone "
+                    "FROM clients "
+                    "WHERE id = :cid AND deleted_at IS NULL"
+                ),
+                {"cid": str(client_id)},
+            )
         )
-    ).mappings().one_or_none()
+        .mappings()
+        .one_or_none()
+    )
     if row is None:
         return None
     return {

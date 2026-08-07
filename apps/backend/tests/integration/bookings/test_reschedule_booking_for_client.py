@@ -142,9 +142,7 @@ async def test_reschedule_booking_happy_path(
     assert new_slot.status == "booked"
 
     # New booking row confirmed and linked to the same pt_package.
-    new_booking_row = await db_session.scalar(
-        select(Booking).where(Booking.id == response.id)
-    )
+    new_booking_row = await db_session.scalar(select(Booking).where(Booking.id == response.id))
     assert new_booking_row is not None
     assert new_booking_row.status == "confirmed"
     assert new_booking_row.pt_package_id == booking.pt_package_id  # same linkage
@@ -433,9 +431,7 @@ async def test_reschedule_booking_pt_credit_preserved(
 
     trainer = await make_active_trainer(full_name="Тренер Кредит")
     client = await make_linked_client(telegram_user_id=880_701, first_name="Игорь")
-    pkg = await make_active_pt_package(
-        client=client, trainer=trainer, sessions_remaining=7
-    )
+    pkg = await make_active_pt_package(client=client, trainer=trainer, sessions_remaining=7)
 
     booking, _, _, _, _ = await _seed_confirmed_booking(
         db_session,
@@ -495,9 +491,7 @@ async def test_reschedule_booking_dm_sent(
     trainer_full_name = "Тренер ДМ"
     client_first_name = "Катя"
     trainer = await make_active_trainer(full_name=trainer_full_name)
-    client = await make_linked_client(
-        telegram_user_id=880_801, first_name=client_first_name
-    )
+    client = await make_linked_client(telegram_user_id=880_801, first_name=client_first_name)
     pkg = await make_active_pt_package(client=client, trainer=trainer, sessions_remaining=5)
 
     booking, _, _, _, _ = await _seed_confirmed_booking(
@@ -528,9 +522,9 @@ async def test_reschedule_booking_dm_sent(
     assert call.chat_id == 880_801
 
     # Assert the sent text contains the NEW slot time in Moscow TZ.
-    new_slot_start_msk = new_slot.start_time.astimezone(
-        bookings_service.MOSCOW_TZ
-    ).strftime("%d.%m.%Y %H:%M")
+    new_slot_start_msk = new_slot.start_time.astimezone(bookings_service.MOSCOW_TZ).strftime(
+        "%d.%m.%Y %H:%M"
+    )
     expected_text = render_booking_rescheduled_dm(
         client_name=client_first_name,
         trainer_name=trainer_full_name,
@@ -675,9 +669,7 @@ async def test_reschedule_booking_dm_failure_does_not_fail_reschedule(
     await db_session.refresh(new_slot, attribute_names=["status"])
     assert new_slot.status == "booked"
 
-    new_booking_row = await db_session.scalar(
-        select(Booking).where(Booking.id == response.id)
-    )
+    new_booking_row = await db_session.scalar(select(Booking).where(Booking.id == response.id))
     assert new_booking_row is not None
     assert new_booking_row.status == "confirmed"
 

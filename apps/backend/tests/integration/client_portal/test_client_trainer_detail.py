@@ -225,12 +225,8 @@ async def test_client_get_trainer_inactive_and_unknown_indistinguishable(
     token = await _auth_as_client(async_client, db_session, client_a)
     headers = {"Cookie": f"cc_client_access={token}"}
 
-    resp_inactive = await async_client.get(
-        f"/api/v1/client/trainers/{trainer.id}", headers=headers
-    )
-    resp_unknown = await async_client.get(
-        f"/api/v1/client/trainers/{uuid4()}", headers=headers
-    )
+    resp_inactive = await async_client.get(f"/api/v1/client/trainers/{trainer.id}", headers=headers)
+    resp_unknown = await async_client.get(f"/api/v1/client/trainers/{uuid4()}", headers=headers)
 
     # Both must be 404 with identical code+message — indistinguishable (T-88-02)
     assert resp_inactive.status_code == 404

@@ -18,19 +18,19 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pytest
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
-from zoneinfo import ZoneInfo
 
 from app.modules.auth.models import User
 from app.modules.bookings import service as booking_service
+from app.modules.bookings.schemas import BookingCreateRequest
 from app.modules.bookings.service import (
     BookingAheadWindowError,
     OutsideWorkingHoursError,
 )
-from app.modules.bookings.schemas import BookingCreateRequest
 
 MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 
@@ -39,8 +39,7 @@ _WORKING_HOURS_CONFIG_ID = "00000000-0000-0000-0000-000000000004"
 
 # Permissive all-day schedule (0-based, CR-01 convention).
 _ALL_DAYS_OPEN: list[Any] = [
-    {"day_of_week": dow, "open_time": "00:00", "close_time": "23:59"}
-    for dow in range(0, 7)
+    {"day_of_week": dow, "open_time": "00:00", "close_time": "23:59"} for dow in range(0, 7)
 ]
 
 
@@ -135,9 +134,9 @@ async def test_monday_slot_outside_seeded_monday_hours_is_blocked(
     # the narrow 09:00-10:00 window seeded below).
     _now_msk = datetime.now(UTC).astimezone(MOSCOW_TZ)
     days_to_next_monday = (7 - _now_msk.weekday()) % 7 or 7  # always ≥ 1 day ahead
-    next_monday_msk = _now_msk.replace(
-        hour=23, minute=0, second=0, microsecond=0
-    ) + timedelta(days=days_to_next_monday)
+    next_monday_msk = _now_msk.replace(hour=23, minute=0, second=0, microsecond=0) + timedelta(
+        days=days_to_next_monday
+    )
     slot_start_utc = next_monday_msk.astimezone(UTC)
 
     await _set_working_hours(

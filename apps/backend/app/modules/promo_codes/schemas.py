@@ -50,17 +50,13 @@ class PromoCodeCreateRequest(BackendSchemaBase):
     @classmethod
     def validate_applicable_to(cls, v: str | None) -> str | None:
         if v is not None and v not in _APPLICABLE_TO_VALUES:
-            raise ValueError(
-                f"applicable_to must be one of {sorted(_APPLICABLE_TO_VALUES)}"
-            )
+            raise ValueError(f"applicable_to must be one of {sorted(_APPLICABLE_TO_VALUES)}")
         return v
 
     def model_post_init(self, __context: object) -> None:
         # percentage discount_value must be <= 10000 (100% * 100)
         if self.discount_type == "percentage" and self.discount_value > 10000:
-            raise ValueError(
-                "discount_value for percentage must be <= 10000 (i.e. 100%)"
-            )
+            raise ValueError("discount_value for percentage must be <= 10000 (i.e. 100%)")
 
     @model_validator(mode="after")
     def validate_validity_window(self) -> PromoCodeCreateRequest:
@@ -101,9 +97,7 @@ class PromoCodeUpdateRequest(BackendSchemaBase):
     @classmethod
     def validate_applicable_to(cls, v: str | None) -> str | None:
         if v is not None and v not in _APPLICABLE_TO_VALUES:
-            raise ValueError(
-                f"applicable_to must be one of {sorted(_APPLICABLE_TO_VALUES)}"
-            )
+            raise ValueError(f"applicable_to must be one of {sorted(_APPLICABLE_TO_VALUES)}")
         return v
 
 

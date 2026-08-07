@@ -29,7 +29,13 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.dependencies import ClientPrincipal, CurrentUser, require_client, require_permission, verify_csrf
+from app.core.dependencies import (
+    ClientPrincipal,
+    CurrentUser,
+    require_client,
+    require_permission,
+    verify_csrf,
+)
 from app.core.permissions import Action, Resource
 from app.core.schemas import ResponseEnvelope, envelope
 from app.modules.gym import service

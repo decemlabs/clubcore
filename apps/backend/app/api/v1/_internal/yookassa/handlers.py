@@ -719,11 +719,15 @@ async def handle_payment_succeeded(
             "membership_plans" if subject_kind == SUBJECT_KIND_MEMBERSHIP else "pt_package_plans"
         )
         _notif_plan_row = (
-            await session.execute(
-                text(f"SELECT name FROM {_notif_plan_table} WHERE id = :id"),  # noqa: S608
-                {"id": str(subject_id)},
+            (
+                await session.execute(
+                    text(f"SELECT name FROM {_notif_plan_table} WHERE id = :id"),  # noqa: S608
+                    {"id": str(subject_id)},
+                )
             )
-        ).mappings().one_or_none()
+            .mappings()
+            .one_or_none()
+        )
         _notif_plan_name = str(_notif_plan_row["name"]) if _notif_plan_row else "абонемент"
         if is_autopay:
             await create_notification(

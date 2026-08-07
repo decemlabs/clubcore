@@ -10,16 +10,14 @@ Six behaviours proven with REAL DB rows and two seeded clients A/B:
 
 Harness: SAVEPOINT db_session + ASGITransport not needed (repository/service layer only).
 Two client seeds: client_a (phone _phone(51)), client_b (phone _phone(52)).
-"""
+"""  # noqa: E501
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
-import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError
@@ -40,7 +38,7 @@ def _phone(n: int) -> str:
 # ---------------------------------------------------------------------------
 
 
-async def _seed_staff(db_session: AsyncSession, suffix: str = "") -> "Any":
+async def _seed_staff(db_session: AsyncSession, suffix: str = "") -> Any:
     from app.core.permissions import Role
     from app.core.security import hash_password
     from app.modules.auth.models import User
@@ -56,7 +54,7 @@ async def _seed_staff(db_session: AsyncSession, suffix: str = "") -> "Any":
     return user
 
 
-async def _seed_client(db_session: AsyncSession, staff: "Any", phone: str) -> "Any":
+async def _seed_client(db_session: AsyncSession, staff: Any, phone: str) -> Any:
     from app.modules.clients.models import Client
 
     client = Client(
@@ -166,7 +164,7 @@ async def test_get_owned_attachment_returns_none_for_nonexistent_id(
 async def test_send_client_message_with_own_attachment_persists_and_returns_sub_object(
     db_session: AsyncSession,
 ) -> None:
-    """send_client_message with client's own attachmentId → message.attachment_id set, attachment returned."""
+    """send_client_message with client's own attachmentId → message.attachment_id set, attachment returned."""  # noqa: E501
     staff = await _seed_staff(db_session, "idor-4")
     client = await _seed_client(db_session, staff, _phone(55))
     await db_session.commit()
@@ -198,7 +196,7 @@ async def test_send_client_message_with_own_attachment_persists_and_returns_sub_
 async def test_send_client_message_with_foreign_attachment_raises_not_found(
     db_session: AsyncSession,
 ) -> None:
-    """send_client_message with foreign attachmentId → NotFoundError (404-collapse), no message written."""
+    """send_client_message with foreign attachmentId → NotFoundError (404-collapse), no message written."""  # noqa: E501
     staff = await _seed_staff(db_session, "idor-5")
     client_a = await _seed_client(db_session, staff, _phone(56))
     client_b = await _seed_client(db_session, staff, _phone(57))
@@ -226,7 +224,7 @@ async def test_send_client_message_with_foreign_attachment_raises_not_found(
 async def test_list_thread_history_includes_attachment_sub_object(
     db_session: AsyncSession,
 ) -> None:
-    """list_thread_history returns attachment sub-object for attachment-bearing messages; None otherwise."""
+    """list_thread_history returns attachment sub-object for attachment-bearing messages; None otherwise."""  # noqa: E501
     staff = await _seed_staff(db_session, "idor-6")
     client = await _seed_client(db_session, staff, _phone(58))
     await db_session.commit()

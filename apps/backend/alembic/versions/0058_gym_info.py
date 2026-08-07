@@ -21,8 +21,9 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision: str = "0058_gym_info"
 down_revision: str | None = "0057_payment_notifications_widen_kind"

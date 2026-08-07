@@ -40,7 +40,7 @@ depends_on: str | Sequence[str] | None = None
 _SINGLETON_ID = "00000000-0000-0000-0000-000000000002"
 
 # Default bonus amounts (kopecks = integer minor units, 1 kopeck = 0.01 ₽)
-_REFERRER_BONUS_KOPECKS = 50_000   # 500 ₽ for the referrer
+_REFERRER_BONUS_KOPECKS = 50_000  # 500 ₽ for the referrer
 _REFEREE_WELCOME_KOPECKS = 30_000  # 300 ₽ welcome bonus for the new client
 
 
@@ -63,7 +63,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute(
-        sa.text(
-            "DELETE FROM referral_config WHERE id = CAST(:id AS uuid)"
-        ).bindparams(id=_SINGLETON_ID)
+        sa.text("DELETE FROM referral_config WHERE id = CAST(:id AS uuid)").bindparams(
+            id=_SINGLETON_ID
+        )
     )

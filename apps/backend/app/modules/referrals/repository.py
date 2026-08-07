@@ -51,9 +51,7 @@ async def get_capture_by_referee(
     Used as the idempotency gate in capture_referral: if a row already exists
     the capture call is a no-op (first binding wins).
     """
-    stmt = select(ReferralCapture).where(
-        ReferralCapture.referee_client_id == referee_client_id
-    )
+    stmt = select(ReferralCapture).where(ReferralCapture.referee_client_id == referee_client_id)
     result: ReferralCapture | None = await session.scalar(stmt)
     return result
 

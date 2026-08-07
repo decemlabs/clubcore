@@ -56,7 +56,9 @@ class PromoCode(Base, UUIDPkMixin, TimestampMixin, SoftDeleteMixin):
 
     code: Mapped[str] = mapped_column(String(64), nullable=False)
     discount_type: Mapped[str] = mapped_column(String(16), nullable=False)  # 'percentage' | 'fixed'
-    discount_value: Mapped[int] = mapped_column(BigInteger, nullable=False)  # kopecks or percent*100  # noqa: E501
+    discount_value: Mapped[int] = mapped_column(
+        BigInteger, nullable=False
+    )  # kopecks or percent*100
     max_uses: Mapped[int | None] = mapped_column(Integer, nullable=True)  # None = unlimited
     per_client_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)  # None = unlimited
     valid_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

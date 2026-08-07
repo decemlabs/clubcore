@@ -292,26 +292,27 @@ async def test_successful_role_change_writes_audit_row(
     assert r.status_code == 204, r.text
 
     audit_rows = (
-        await db_session.execute(
-            select(AuditLog).where(
-                AuditLog.action == "user_role_changed",
-                AuditLog.resource_id == target_id,
+        (
+            await db_session.execute(
+                select(AuditLog).where(
+                    AuditLog.action == "user_role_changed",
+                    AuditLog.resource_id == target_id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     assert len(audit_rows) == 1, (
-        f"Expected 1 user_role_changed audit row for target {target_id}, "
-        f"found {len(audit_rows)}"
+        f"Expected 1 user_role_changed audit row for target {target_id}, found {len(audit_rows)}"
     )
 
     row = audit_rows[0]
     assert row.resource_type == "user", f"Unexpected resource_type: {row.resource_type}"
     assert row.payload["old_role"] == "reception", f"old_role wrong: {row.payload}"
     assert row.payload["new_role"] == "owner", f"new_role wrong: {row.payload}"
-    assert row.payload["changed_user_id"] == str(target_id), (
-        f"changed_user_id wrong: {row.payload}"
-    )
+    assert row.payload["changed_user_id"] == str(target_id), f"changed_user_id wrong: {row.payload}"
 
 
 # ---------------------------------------------------------------------------
@@ -382,6 +383,5 @@ async def test_noop_role_change_returns_409_and_writes_no_audit(
         .all()
     )
     assert len(audit_rows) == 0, (
-        f"Expected NO user_role_changed audit row for no-op on {target_id}, "
-        f"found {len(audit_rows)}"
+        f"Expected NO user_role_changed audit row for no-op on {target_id}, found {len(audit_rows)}"
     )

@@ -26,7 +26,6 @@ from app.core.security import hash_password
 from app.modules.auth.models import User
 from app.modules.clients.models import Client
 from app.modules.messaging import repository, service
-from app.modules.messaging.schemas import SendMessageRequest
 
 pytestmark = pytest.mark.asyncio(loop_scope="function")
 
@@ -54,7 +53,7 @@ async def _seed_client(
     phone: str,
 ) -> Client:
     client = Client(
-        first_name="РАР",
+        first_name="РАР",  # noqa: RUF001
         last_name="Тест",
         phone=phone,
         telegram_user_id=abs(hash(phone)) % (10**9),
@@ -107,26 +106,32 @@ async def test_record_staff_message_marks_client_messages_read(
     t1 = datetime.now(tz=UTC) - timedelta(seconds=5)
 
     thread_id = await repository.get_or_create_thread(db_session, client_id)
-    msg1_id, _ = await repository.insert_message(
+    _msg1_id, _ = await repository.insert_message(
         db_session, thread_id=thread_id, role="client", body="Привет", sent_at=t0
     )
-    msg2_id, msg2_sent_at = await repository.insert_message(
+    _msg2_id, _msg2_sent_at = await repository.insert_message(
         db_session, thread_id=thread_id, role="client", body="Вы работаете?", sent_at=t1
     )
     await db_session.flush()
 
     # Confirm both are unread before staff reply.
     rows = (
-        await db_session.execute(
-            text(
-                "SELECT id, read_at FROM messages "
-                "WHERE thread_id = :tid AND role = 'client' "
-                "ORDER BY sent_at"
-            ),
-            {"tid": str(thread_id)},
+        (
+            await db_session.execute(
+                text(
+                    "SELECT id, read_at FROM messages "
+                    "WHERE thread_id = :tid AND role = 'client' "
+                    "ORDER BY sent_at"
+                ),
+                {"tid": str(thread_id)},
+            )
         )
-    ).mappings().all()
-    assert all(r["read_at"] is None for r in rows), "Client messages should be unread before staff reply"
+        .mappings()
+        .all()
+    )
+    assert all(r["read_at"] is None for r in rows), (
+        "Client messages should be unread before staff reply"
+    )
 
     # Record a staff reply — triggers reply-as-read.
     result = await service.record_staff_message(
@@ -142,15 +147,19 @@ async def test_record_staff_message_marks_client_messages_read(
 
     # Assert reply-as-read set read_at on both client messages.
     updated_rows = (
-        await db_session.execute(
-            text(
-                "SELECT id, read_at, sent_at FROM messages "
-                "WHERE thread_id = :tid AND role = 'client' "
-                "ORDER BY sent_at"
-            ),
-            {"tid": str(thread_id)},
+        (
+            await db_session.execute(
+                text(
+                    "SELECT id, read_at, sent_at FROM messages "
+                    "WHERE thread_id = :tid AND role = 'client' "
+                    "ORDER BY sent_at"
+                ),
+                {"tid": str(thread_id)},
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     assert all(r["read_at"] is not None for r in updated_rows), (
         "All prior client messages must have read_at set after staff reply"
     )
@@ -171,7 +180,7 @@ async def test_record_staff_message_marks_client_messages_read(
         if max_client_sent_at.tzinfo is None:
             max_client_sent_at = max_client_sent_at.replace(tzinfo=UTC)
         assert staff_result_read_at >= max_client_sent_at.replace(microsecond=0), (
-            f"reply_read_at {staff_result_read_at} should be >= max client sent_at {max_client_sent_at}"
+            f"reply_read_at {staff_result_read_at} should be >= max client sent_at {max_client_sent_at}"  # noqa: E501
         )
 
 
@@ -211,7 +220,9 @@ async def test_record_staff_message_emits_message_read_audit(
             ),
         )
     ).scalar_one()
-    assert int(count) >= 1, "message_read audit event must be emitted when client messages are marked read"
+    assert int(count) >= 1, (
+        "message_read audit event must be emitted when client messages are marked read"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -238,14 +249,15 @@ async def test_record_staff_message_does_not_remark_already_read_messages(
 
     # Capture read_at values after first reply.
     rows_after_first = (
-        await db_session.execute(
-            text(
-                "SELECT id, read_at FROM messages "
-                "WHERE thread_id = :tid AND role = 'client'"
-            ),
-            {"tid": str(thread_id)},
+        (
+            await db_session.execute(
+                text("SELECT id, read_at FROM messages WHERE thread_id = :tid AND role = 'client'"),
+                {"tid": str(thread_id)},
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     first_read_at_values = {str(r["id"]): r["read_at"] for r in rows_after_first}
 
     # Second staff reply should NOT update read_at on the already-read messages.
@@ -253,14 +265,15 @@ async def test_record_staff_message_does_not_remark_already_read_messages(
     await db_session.flush()
 
     rows_after_second = (
-        await db_session.execute(
-            text(
-                "SELECT id, read_at FROM messages "
-                "WHERE thread_id = :tid AND role = 'client'"
-            ),
-            {"tid": str(thread_id)},
+        (
+            await db_session.execute(
+                text("SELECT id, read_at FROM messages WHERE thread_id = :tid AND role = 'client'"),
+                {"tid": str(thread_id)},
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     second_read_at_values = {str(r["id"]): r["read_at"] for r in rows_after_second}
 
     # read_at values must be unchanged (idempotent).
@@ -328,4 +341,6 @@ async def test_mark_client_messages_read_returns_max_sent_at(
         read_at = read_at.replace(tzinfo=UTC)
     if msg2_sent_at.tzinfo is None:
         msg2_sent_at = msg2_sent_at.replace(tzinfo=UTC)
-    assert read_at >= msg2_sent_at.replace(microsecond=0) or True  # DB uses read_at=now(), verify non-None suffices
+    assert (
+        read_at >= msg2_sent_at.replace(microsecond=0) or True
+    )  # DB uses read_at=now(), verify non-None suffices

@@ -14,7 +14,7 @@ Auth: same _auth_as_client helper pattern as test_checkout.py.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 import pytest_asyncio
@@ -46,6 +46,7 @@ async def redis_clean(app: FastAPI) -> Redis:
     redis: Redis = app.state.redis
     await redis.flushdb()
     return redis
+
 
 # ---------------------------------------------------------------------------
 # Auth helper (mirrors test_checkout.py:_auth_as_client)
@@ -186,7 +187,9 @@ async def test_valid_percentage_discount(
     """Active 10% code on a 1_000_00-kopeck plan → discountKopecks=10000, newAmountKopecks=90000."""
     client = await _seed_client(db_session)
     plan = await _seed_membership_plan(db_session, price_kopecks=100_000)  # 1000 RUB
-    await _seed_promo_code(db_session, code="TEST10PCT", discount_type="percentage", discount_value=1000)
+    await _seed_promo_code(
+        db_session, code="TEST10PCT", discount_type="percentage", discount_value=1000
+    )
 
     await _auth_as_client(async_client, db_session, client)
 
@@ -268,7 +271,9 @@ async def test_percentage_floor_division(
     """10% on a 33_333-kopeck plan → floor(33333 * 1000 / 100 / 100) = 3333 (floor, not 3333.3)."""
     client = await _seed_client(db_session)
     plan = await _seed_membership_plan(db_session, price_kopecks=33_333)
-    await _seed_promo_code(db_session, code="TESTFLOOR10", discount_type="percentage", discount_value=1000)
+    await _seed_promo_code(
+        db_session, code="TESTFLOOR10", discount_type="percentage", discount_value=1000
+    )
 
     await _auth_as_client(async_client, db_session, client)
 
@@ -339,9 +344,7 @@ async def test_promo_expired(
     client = await _seed_client(db_session)
     plan = await _seed_membership_plan(db_session)
     past = datetime.now(UTC) - timedelta(days=1)
-    await _seed_promo_code(
-        db_session, code="TESTEXPIRED", valid_until=past
-    )
+    await _seed_promo_code(db_session, code="TESTEXPIRED", valid_until=past)
     await _auth_as_client(async_client, db_session, client)
 
     r = await async_client.post(
@@ -363,9 +366,7 @@ async def test_promo_not_yet_active(
     client = await _seed_client(db_session)
     plan = await _seed_membership_plan(db_session)
     future = datetime.now(UTC) + timedelta(days=10)
-    await _seed_promo_code(
-        db_session, code="TESTFUTURE", valid_from=future
-    )
+    await _seed_promo_code(db_session, code="TESTFUTURE", valid_from=future)
     await _auth_as_client(async_client, db_session, client)
 
     r = await async_client.post(
@@ -386,9 +387,7 @@ async def test_promo_not_applicable(
     """applicable_to='pt_package' but kind='sub' → error code 'not_applicable'."""
     client = await _seed_client(db_session)
     plan = await _seed_membership_plan(db_session)
-    await _seed_promo_code(
-        db_session, code="TESTPTONLY", applicable_to="pt_package"
-    )
+    await _seed_promo_code(db_session, code="TESTPTONLY", applicable_to="pt_package")
     await _auth_as_client(async_client, db_session, client)
 
     r = await async_client.post(
@@ -409,9 +408,7 @@ async def test_promo_used_up_per_client_limit(
     """per_client_limit=1 with one prior redemption by this client → error code 'used_up'."""
     client = await _seed_client(db_session)
     plan = await _seed_membership_plan(db_session)
-    promo = await _seed_promo_code(
-        db_session, code="TESTUSEDPERCLIENT", per_client_limit=1
-    )
+    promo = await _seed_promo_code(db_session, code="TESTUSEDPERCLIENT", per_client_limit=1)
     await _auth_as_client(async_client, db_session, client)
 
     # Seed an existing redemption for this client
@@ -429,8 +426,8 @@ async def test_promo_used_up_per_client_limit(
     await db_session.execute(
         text(
             "INSERT INTO online_payments (id, client_id, membership_plan_id, amount_kopecks, "
-            "idempotency_key, yookassa_payment_id, status, confirmation_type, audit_correlation_id) "
-            "VALUES (:id, :client_id, :plan_id, :amount, :ikey, :yk_id, 'succeeded', 'redirect', gen_random_uuid())"
+            "idempotency_key, yookassa_payment_id, status, confirmation_type, audit_correlation_id) "  # noqa: E501
+            "VALUES (:id, :client_id, :plan_id, :amount, :ikey, :yk_id, 'succeeded', 'redirect', gen_random_uuid())"  # noqa: E501
         ),
         {
             "id": str(op_id),
@@ -445,7 +442,7 @@ async def test_promo_used_up_per_client_limit(
     # Seed a promo_redemption for this client against the above online_payment
     await db_session.execute(
         text(
-            "INSERT INTO promo_redemptions (id, promo_code_id, client_id, online_payment_id, discount_kopecks) "
+            "INSERT INTO promo_redemptions (id, promo_code_id, client_id, online_payment_id, discount_kopecks) "  # noqa: E501
             "VALUES (:id, :promo_id, :client_id, :op_id, :discount)"
         ),
         {
@@ -477,9 +474,7 @@ async def test_promo_used_up_global(
     client1 = await _seed_client(db_session)
     client2 = await _seed_client(db_session)
     plan = await _seed_membership_plan(db_session)
-    promo = await _seed_promo_code(
-        db_session, code="TESTUSEDGLOBAL", max_uses=1
-    )
+    promo = await _seed_promo_code(db_session, code="TESTUSEDGLOBAL", max_uses=1)
     await _auth_as_client(async_client, db_session, client2)
 
     # Seed one global redemption (from client1)
@@ -487,8 +482,8 @@ async def test_promo_used_up_global(
     await db_session.execute(
         text(
             "INSERT INTO online_payments (id, client_id, membership_plan_id, amount_kopecks, "
-            "idempotency_key, yookassa_payment_id, status, confirmation_type, audit_correlation_id) "
-            "VALUES (:id, :client_id, :plan_id, :amount, :ikey, :yk_id, 'succeeded', 'redirect', gen_random_uuid())"
+            "idempotency_key, yookassa_payment_id, status, confirmation_type, audit_correlation_id) "  # noqa: E501
+            "VALUES (:id, :client_id, :plan_id, :amount, :ikey, :yk_id, 'succeeded', 'redirect', gen_random_uuid())"  # noqa: E501
         ),
         {
             "id": str(op_id),
@@ -501,7 +496,7 @@ async def test_promo_used_up_global(
     )
     await db_session.execute(
         text(
-            "INSERT INTO promo_redemptions (id, promo_code_id, client_id, online_payment_id, discount_kopecks) "
+            "INSERT INTO promo_redemptions (id, promo_code_id, client_id, online_payment_id, discount_kopecks) "  # noqa: E501
             "VALUES (:id, :promo_id, :client_id, :op_id, :discount)"
         ),
         {
@@ -589,8 +584,8 @@ async def test_payment_status_includes_receipt_url_when_succeeded_fiscal_receipt
     await db_session.execute(
         text(
             "INSERT INTO online_payments (id, client_id, membership_plan_id, amount_kopecks, "
-            "idempotency_key, yookassa_payment_id, status, confirmation_type, audit_correlation_id) "
-            "VALUES (:id, :client_id, :plan_id, :amount, :ikey, :yk_id, 'succeeded', 'redirect', gen_random_uuid())"
+            "idempotency_key, yookassa_payment_id, status, confirmation_type, audit_correlation_id) "  # noqa: E501
+            "VALUES (:id, :client_id, :plan_id, :amount, :ikey, :yk_id, 'succeeded', 'redirect', gen_random_uuid())"  # noqa: E501
         ),
         {
             "id": str(op_id),
@@ -643,7 +638,7 @@ async def test_payment_status_includes_receipt_url_when_succeeded_fiscal_receipt
     receipt_id = "test-receipt-" + uuid4().hex[:12]
     await db_session.execute(
         text(
-            "INSERT INTO fiscal_receipts (id, payment_id, kind, status, yookassa_receipt_id, customer_email) "
+            "INSERT INTO fiscal_receipts (id, payment_id, kind, status, yookassa_receipt_id, customer_email) "  # noqa: E501
             "VALUES (:id, :payment_id, 'payment', 'succeeded', :receipt_id, :email)"
         ),
         {
@@ -683,8 +678,8 @@ async def test_payment_status_receipt_url_null_when_no_succeeded_fiscal_receipt(
     await db_session.execute(
         text(
             "INSERT INTO online_payments (id, client_id, membership_plan_id, amount_kopecks, "
-            "idempotency_key, yookassa_payment_id, status, confirmation_type, audit_correlation_id) "
-            "VALUES (:id, :client_id, :plan_id, :amount, :ikey, :yk_id, 'pending', 'redirect', gen_random_uuid())"
+            "idempotency_key, yookassa_payment_id, status, confirmation_type, audit_correlation_id) "  # noqa: E501
+            "VALUES (:id, :client_id, :plan_id, :amount, :ikey, :yk_id, 'pending', 'redirect', gen_random_uuid())"  # noqa: E501
         ),
         {
             "id": str(op_id),
@@ -723,8 +718,8 @@ async def test_payment_status_receipt_url_null_when_fiscal_receipt_pending(
     await db_session.execute(
         text(
             "INSERT INTO online_payments (id, client_id, membership_plan_id, amount_kopecks, "
-            "idempotency_key, yookassa_payment_id, status, confirmation_type, audit_correlation_id) "
-            "VALUES (:id, :client_id, :plan_id, :amount, :ikey, :yk_id, 'succeeded', 'redirect', gen_random_uuid())"
+            "idempotency_key, yookassa_payment_id, status, confirmation_type, audit_correlation_id) "  # noqa: E501
+            "VALUES (:id, :client_id, :plan_id, :amount, :ikey, :yk_id, 'succeeded', 'redirect', gen_random_uuid())"  # noqa: E501
         ),
         {
             "id": str(op_id),

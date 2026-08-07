@@ -59,23 +59,15 @@ def upgrade() -> None:
         # Rescheduling policy
         sa.Column("reschedule_same_day", sa.Boolean(), nullable=False, server_default="true"),
         # No-show penalty (persisted; enforcement deferred per D-108 Context)
-        sa.Column(
-            "no_show_penalty_kopecks", sa.Integer(), nullable=False, server_default="0"
-        ),
-        sa.Column(
-            "no_show_penalty_enabled", sa.Boolean(), nullable=False, server_default="false"
-        ),
+        sa.Column("no_show_penalty_kopecks", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column("no_show_penalty_enabled", sa.Boolean(), nullable=False, server_default="false"),
         # Group class limits
         sa.Column("group_limit", sa.Integer(), nullable=False, server_default="20"),
         sa.Column("waitlist_limit", sa.Integer(), nullable=False, server_default="10"),
-        sa.Column(
-            "waitlist_auto_transfer", sa.Boolean(), nullable=False, server_default="true"
-        ),
+        sa.Column("waitlist_auto_transfer", sa.Boolean(), nullable=False, server_default="true"),
         # Self-booking flags
         sa.Column("client_self_book", sa.Boolean(), nullable=False, server_default="true"),
-        sa.Column(
-            "show_trainer_windows", sa.Boolean(), nullable=False, server_default="true"
-        ),
+        sa.Column("show_trainer_windows", sa.Boolean(), nullable=False, server_default="true"),
         # Timestamps
         sa.Column(
             "created_at",

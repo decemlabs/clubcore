@@ -251,9 +251,7 @@ async def test_revoke_invitation_using_listed_token_id(
 
     r_list = await authed_client_owner.get("/api/v1/users?pageSize=100")
     assert r_list.status_code == 200, r_list.text
-    pending_item = next(
-        i for i in r_list.json()["data"]["items"] if i["id"] == pending_user_id
-    )
+    pending_item = next(i for i in r_list.json()["data"]["items"] if i["id"] == pending_user_id)
     token_id = pending_item["invitationTokenId"]
     assert token_id is not None
 

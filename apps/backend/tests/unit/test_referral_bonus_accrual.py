@@ -19,7 +19,7 @@ Groups:
 from __future__ import annotations
 
 import inspect
-from typing import Literal, get_args, get_type_hints
+from typing import get_args, get_type_hints
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 
@@ -109,8 +109,7 @@ def test_referral_bonus_accrued_payload_rejects_invalid_role() -> None:
 def test_audit_payload_schemas_registers_referral_bonus_accrued() -> None:
     """AUDIT_PAYLOAD_SCHEMAS registry maps the referral_bonus_accrued pair correctly."""
     assert (
-        AUDIT_PAYLOAD_SCHEMAS[("referral_bonus_accrued", "referral")]
-        is ReferralBonusAccruedPayload
+        AUDIT_PAYLOAD_SCHEMAS[("referral_bonus_accrued", "referral")] is ReferralBonusAccruedPayload
     )
 
 
@@ -151,10 +150,15 @@ def test_accrue_referral_bonus_signature() -> None:
     kw_params = [
         name
         for name, p in sig.parameters.items()
-        if name != "session"
-        and p.kind == inspect.Parameter.KEYWORD_ONLY
+        if name != "session" and p.kind == inspect.Parameter.KEYWORD_ONLY
     ]
-    assert set(kw_params) >= {"client_id", "amount_kopecks", "referral_capture_id", "online_payment_id", "role"}
+    assert set(kw_params) >= {
+        "client_id",
+        "amount_kopecks",
+        "referral_capture_id",
+        "online_payment_id",
+        "role",
+    }
 
 
 def test_accrue_referral_bonus_return_type_annotation() -> None:
@@ -172,6 +176,7 @@ def test_accrue_referral_bonus_return_type_annotation() -> None:
 def test_accrue_referral_bonus_no_flush_no_commit() -> None:
     """The function body must not call session.flush() or session.commit()."""
     import inspect
+
     from app.modules.loyalty.service import accrue_referral_bonus
 
     src = inspect.getsource(accrue_referral_bonus)

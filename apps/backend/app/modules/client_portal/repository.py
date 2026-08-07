@@ -72,15 +72,17 @@ async def client_has_any_membership(
       check to derive the ternary 'active' | 'lapsed' | 'newbie' state.
     """
     row = (
-        await session.execute(
-            text(
-                "SELECT EXISTS("
-                "SELECT 1 FROM memberships WHERE client_id = :client_id"
-                ") AS ever"
-            ),
-            {"client_id": str(client_id)},
+        (
+            await session.execute(
+                text(
+                    "SELECT EXISTS(SELECT 1 FROM memberships WHERE client_id = :client_id) AS ever"
+                ),
+                {"client_id": str(client_id)},
+            )
         )
-    ).mappings().one()
+        .mappings()
+        .one()
+    )
     return bool(row["ever"])
 
 
@@ -132,9 +134,7 @@ async def fetch_available_slots(
     # Use CAST(:trainer_id AS UUID) to avoid `:name::type` cast syntax which
     # asyncpg/SQLAlchemy text() parser misinterprets as a double-colon escape.
     trainer_filter = (
-        "AND s.trainer_id = CAST(:trainer_id AS UUID) "
-        if trainer_id is not None
-        else ""
+        "AND s.trainer_id = CAST(:trainer_id AS UUID) " if trainer_id is not None else ""
     )
     count_bind: dict[str, object] = {
         "trainer_id": str(trainer_id) if trainer_id is not None else None
@@ -152,19 +152,17 @@ async def fetch_available_slots(
     )
     _join = "FROM trainer_availability_slots s JOIN trainers t ON s.trainer_id = t.id "
     count_sql = "SELECT COUNT(*) AS cnt " + _join + _base_filter
-    count_row = (
-        await session.execute(text(count_sql), count_bind)
-    ).mappings().one()
+    count_row = (await session.execute(text(count_sql), count_bind)).mappings().one()
     total = int(count_row["cnt"])
 
     list_sql = (
         "SELECT s.id AS slot_id, s.trainer_id, t.full_name AS trainer_name, "
-        "  s.start_time, s.end_time " + _join + _base_filter
+        "  s.start_time, s.end_time "
+        + _join
+        + _base_filter
         + " ORDER BY s.start_time ASC LIMIT :limit OFFSET :offset"
     )
-    rows = (
-        await session.execute(text(list_sql), bind)
-    ).mappings().all()
+    rows = (await session.execute(text(list_sql), bind)).mappings().all()
 
     return [dict(r) for r in rows], total
 
@@ -190,18 +188,22 @@ async def fetch_client_membership(
     Empty state → None (D-69-03: no active membership is 200 with null, not 404).
     """
     row = (
-        await session.execute(
-            text(
-                "SELECT id, plan_name_snapshot, start_date, end_date, status, "
-                "price_kopecks_snapshot, "
-                "(end_date - (now() AT TIME ZONE 'Europe/Moscow')::date) AS days_until_end "
-                "FROM memberships "
-                "WHERE client_id = :client_id AND status = 'active' "
-                "ORDER BY start_date DESC, created_at DESC LIMIT 1"
-            ),
-            {"client_id": str(client_id)},
+        (
+            await session.execute(
+                text(
+                    "SELECT id, plan_name_snapshot, start_date, end_date, status, "
+                    "price_kopecks_snapshot, "
+                    "(end_date - (now() AT TIME ZONE 'Europe/Moscow')::date) AS days_until_end "
+                    "FROM memberships "
+                    "WHERE client_id = :client_id AND status = 'active' "
+                    "ORDER BY start_date DESC, created_at DESC LIMIT 1"
+                ),
+                {"client_id": str(client_id)},
+            )
         )
-    ).mappings().one_or_none()
+        .mappings()
+        .one_or_none()
+    )
     return dict(row) if row else None
 
 
@@ -225,21 +227,25 @@ async def fetch_client_next_booking(
     IDOR: mandatory :client_id bind param. Empty → None (D-69-03, 200 null not 404).
     """
     row = (
-        await session.execute(
-            text(
-                "SELECT b.id, t.full_name AS trainer_name, s.start_time, b.status "
-                "FROM bookings b "
-                "JOIN trainer_availability_slots s ON b.slot_id = s.id "
-                "JOIN trainers t ON s.trainer_id = t.id "
-                "WHERE b.client_id = :client_id "
-                "  AND b.status = 'confirmed' "
-                "  AND s.start_time >= now() "
-                "ORDER BY s.start_time ASC "
-                "LIMIT 1"
-            ),
-            {"client_id": str(client_id)},
+        (
+            await session.execute(
+                text(
+                    "SELECT b.id, t.full_name AS trainer_name, s.start_time, b.status "
+                    "FROM bookings b "
+                    "JOIN trainer_availability_slots s ON b.slot_id = s.id "
+                    "JOIN trainers t ON s.trainer_id = t.id "
+                    "WHERE b.client_id = :client_id "
+                    "  AND b.status = 'confirmed' "
+                    "  AND s.start_time >= now() "
+                    "ORDER BY s.start_time ASC "
+                    "LIMIT 1"
+                ),
+                {"client_id": str(client_id)},
+            )
         )
-    ).mappings().one_or_none()
+        .mappings()
+        .one_or_none()
+    )
     return dict(row) if row else None
 
 
@@ -261,24 +267,32 @@ async def fetch_client_visits_page(
     Empty state → empty items list, total=0 (D-69-03: own-scope empty is 200/[], not 404).
     """
     count_row = (
-        await session.execute(
-            text("SELECT COUNT(*) AS cnt FROM visits WHERE client_id = :client_id"),
-            {"client_id": str(client_id)},
+        (
+            await session.execute(
+                text("SELECT COUNT(*) AS cnt FROM visits WHERE client_id = :client_id"),
+                {"client_id": str(client_id)},
+            )
         )
-    ).mappings().one()
+        .mappings()
+        .one()
+    )
     total = int(count_row["cnt"])
     offset = (page - 1) * page_size
     rows = (
-        await session.execute(
-            text(
-                "SELECT id, gym_date, checked_in_at "
-                "FROM visits WHERE client_id = :client_id "
-                "ORDER BY gym_date DESC, checked_in_at DESC "
-                "LIMIT :limit OFFSET :offset"
-            ),
-            {"client_id": str(client_id), "limit": page_size, "offset": offset},
+        (
+            await session.execute(
+                text(
+                    "SELECT id, gym_date, checked_in_at "
+                    "FROM visits WHERE client_id = :client_id "
+                    "ORDER BY gym_date DESC, checked_in_at DESC "
+                    "LIMIT :limit OFFSET :offset"
+                ),
+                {"client_id": str(client_id), "limit": page_size, "offset": offset},
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     return PaginatedData(
         items=[dict(r) for r in rows],
         total=total,
@@ -311,31 +325,39 @@ async def fetch_client_pt_sessions_page(
     COUNT mirrors the same JOIN+filter.
     """
     count_row = (
-        await session.execute(
-            text(
-                "SELECT COUNT(*) AS cnt "
-                "FROM pt_sessions ps "
-                "JOIN pt_packages pkg ON ps.pt_package_id = pkg.id "
-                "WHERE pkg.client_id = :client_id"
-            ),
-            {"client_id": str(client_id)},
+        (
+            await session.execute(
+                text(
+                    "SELECT COUNT(*) AS cnt "
+                    "FROM pt_sessions ps "
+                    "JOIN pt_packages pkg ON ps.pt_package_id = pkg.id "
+                    "WHERE pkg.client_id = :client_id"
+                ),
+                {"client_id": str(client_id)},
+            )
         )
-    ).mappings().one()
+        .mappings()
+        .one()
+    )
     total = int(count_row["cnt"])
     offset = (page - 1) * page_size
     rows = (
-        await session.execute(
-            text(
-                "SELECT ps.id, ps.trainer_name_snapshot, ps.performed_at, ps.cancelled_at "
-                "FROM pt_sessions ps "
-                "JOIN pt_packages pkg ON ps.pt_package_id = pkg.id "
-                "WHERE pkg.client_id = :client_id "
-                "ORDER BY ps.performed_at DESC "
-                "LIMIT :limit OFFSET :offset"
-            ),
-            {"client_id": str(client_id), "limit": page_size, "offset": offset},
+        (
+            await session.execute(
+                text(
+                    "SELECT ps.id, ps.trainer_name_snapshot, ps.performed_at, ps.cancelled_at "
+                    "FROM pt_sessions ps "
+                    "JOIN pt_packages pkg ON ps.pt_package_id = pkg.id "
+                    "WHERE pkg.client_id = :client_id "
+                    "ORDER BY ps.performed_at DESC "
+                    "LIMIT :limit OFFSET :offset"
+                ),
+                {"client_id": str(client_id), "limit": page_size, "offset": offset},
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     return PaginatedData(
         items=[dict(r) for r in rows],
         total=total,
@@ -415,25 +437,32 @@ async def fetch_client_payments_page(
     """
 
     count_row = (
-        await session.execute(
-            text(owned_sql + "SELECT COUNT(*) AS cnt FROM owned_payments"),  # noqa: S608
-            {"client_id": str(client_id)},
+        (
+            await session.execute(
+                text(owned_sql + "SELECT COUNT(*) AS cnt FROM owned_payments"),  # noqa: S608
+                {"client_id": str(client_id)},
+            )
         )
-    ).mappings().one()
+        .mappings()
+        .one()
+    )
     total = int(count_row["cnt"])
     offset = (page - 1) * page_size
     rows = (
-        await session.execute(
-            text(
-                owned_sql
-                + "SELECT id, subject_kind, amount_kopecks, method, received_at "
-                "FROM owned_payments "
-                "ORDER BY received_at DESC "
-                "LIMIT :limit OFFSET :offset"
-            ),
-            {"client_id": str(client_id), "limit": page_size, "offset": offset},
+        (
+            await session.execute(
+                text(
+                    owned_sql + "SELECT id, subject_kind, amount_kopecks, method, received_at "
+                    "FROM owned_payments "
+                    "ORDER BY received_at DESC "
+                    "LIMIT :limit OFFSET :offset"
+                ),
+                {"client_id": str(client_id), "limit": page_size, "offset": offset},
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     return PaginatedData(
         items=[dict(r) for r in rows],
         total=total,
@@ -461,15 +490,19 @@ async def fetch_membership_plans_catalog(
     No client_id (public-to-authed-client catalog).
     """
     rows = (
-        await session.execute(
-            text(
-                "SELECT id, name, price_kopecks, duration_days "
-                "FROM membership_plans "
-                "WHERE active = true AND deleted_at IS NULL "
-                "ORDER BY price_kopecks ASC"
-            ),
+        (
+            await session.execute(
+                text(
+                    "SELECT id, name, price_kopecks, duration_days "
+                    "FROM membership_plans "
+                    "WHERE active = true AND deleted_at IS NULL "
+                    "ORDER BY price_kopecks ASC"
+                ),
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     return [dict(r) for r in rows]
 
 
@@ -490,15 +523,19 @@ async def fetch_pt_packages_catalog(
     No client_id (public-to-authed-client catalog).
     """
     rows = (
-        await session.execute(
-            text(
-                "SELECT id, name, session_count, price_kopecks "
-                "FROM pt_package_plans "
-                "WHERE deleted_at IS NULL "
-                "ORDER BY price_kopecks ASC"
-            ),
+        (
+            await session.execute(
+                text(
+                    "SELECT id, name, session_count, price_kopecks "
+                    "FROM pt_package_plans "
+                    "WHERE deleted_at IS NULL "
+                    "ORDER BY price_kopecks ASC"
+                ),
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     return [dict(r) for r in rows]
 
 
@@ -519,15 +556,19 @@ async def fetch_trainers_catalog(
     No client_id (public-to-authed-client catalog).
     """
     rows = (
-        await session.execute(
-            text(
-                "SELECT id, full_name "
-                "FROM trainers "
-                "WHERE is_active = true AND deleted_at IS NULL "
-                "ORDER BY full_name ASC"
-            ),
+        (
+            await session.execute(
+                text(
+                    "SELECT id, full_name "
+                    "FROM trainers "
+                    "WHERE is_active = true AND deleted_at IS NULL "
+                    "ORDER BY full_name ASC"
+                ),
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     return [dict(r) for r in rows]
 
 
@@ -544,15 +585,19 @@ async def fetch_trainer_detail(
     fetch_available_slots in this file).
     """
     row = (
-        await session.execute(
-            text(
-                "SELECT id, full_name, photo_url, specialization, bio "
-                "FROM trainers "
-                "WHERE id = CAST(:trainer_id AS UUID) "
-                "AND is_active = true AND deleted_at IS NULL"
-            ).bindparams(trainer_id=str(trainer_id)),
+        (
+            await session.execute(
+                text(
+                    "SELECT id, full_name, photo_url, specialization, bio "
+                    "FROM trainers "
+                    "WHERE id = CAST(:trainer_id AS UUID) "
+                    "AND is_active = true AND deleted_at IS NULL"
+                ).bindparams(trainer_id=str(trainer_id)),
+            )
         )
-    ).mappings().one_or_none()
+        .mappings()
+        .one_or_none()
+    )
     return dict(row) if row is not None else None
 
 
@@ -581,15 +626,19 @@ async def fetch_client_me(
     D-20-IDOR 404-collapse: None (non-existent or soft-deleted) → NotFoundError.
     """
     row = (
-        await session.execute(
-            text(
-                "SELECT id, first_name, last_name, phone, email, goal, "
-                "  height_cm, weight_kg, onboarding_completed_at, notif_prefs "
-                "FROM clients WHERE id = :client_id AND deleted_at IS NULL"
-            ),
-            {"client_id": str(client_id)},
+        (
+            await session.execute(
+                text(
+                    "SELECT id, first_name, last_name, phone, email, goal, "
+                    "  height_cm, weight_kg, onboarding_completed_at, notif_prefs "
+                    "FROM clients WHERE id = :client_id AND deleted_at IS NULL"
+                ),
+                {"client_id": str(client_id)},
+            )
         )
-    ).mappings().one_or_none()
+        .mappings()
+        .one_or_none()
+    )
     if row is None:
         raise NotFoundError("client_not_found")
     return dict(row)
@@ -683,22 +732,26 @@ async def fetch_weekly_activity(
     pt_sessions are NOT joined (user-decision fidelity, CONTEXT overrides REQUIREMENTS).
     """
     rows = (
-        await session.execute(
-            text(
-                "SELECT gym_date, COUNT(*) AS cnt "
-                "FROM visits "
-                "WHERE client_id = :client_id "
-                "  AND gym_date BETWEEN :monday AND :sunday "
-                "GROUP BY gym_date "
-                "ORDER BY gym_date ASC"
-            ),
-            {
-                "client_id": str(client_id),
-                "monday": monday,  # pass date objects directly — asyncpg requires native types
-                "sunday": sunday,
-            },
+        (
+            await session.execute(
+                text(
+                    "SELECT gym_date, COUNT(*) AS cnt "
+                    "FROM visits "
+                    "WHERE client_id = :client_id "
+                    "  AND gym_date BETWEEN :monday AND :sunday "
+                    "GROUP BY gym_date "
+                    "ORDER BY gym_date ASC"
+                ),
+                {
+                    "client_id": str(client_id),
+                    "monday": monday,  # pass date objects directly — asyncpg requires native types
+                    "sunday": sunday,
+                },
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     return {row["gym_date"]: int(row["cnt"]) for row in rows}
 
 
@@ -721,12 +774,16 @@ async def fetch_client_payment_status(
     membership_plan_id, pt_package_plan_id, amount_kopecks, or activation details.
     """
     row = (
-        await session.execute(
-            text(
-                "SELECT id, status FROM online_payments "
-                "WHERE id = :payment_id AND client_id = :client_id"
-            ),
-            {"payment_id": str(payment_id), "client_id": str(client_id)},
+        (
+            await session.execute(
+                text(
+                    "SELECT id, status FROM online_payments "
+                    "WHERE id = :payment_id AND client_id = :client_id"
+                ),
+                {"payment_id": str(payment_id), "client_id": str(client_id)},
+            )
         )
-    ).mappings().one_or_none()
+        .mappings()
+        .one_or_none()
+    )
     return dict(row) if row else None
