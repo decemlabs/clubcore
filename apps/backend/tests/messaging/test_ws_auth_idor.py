@@ -218,8 +218,7 @@ def test_ws_idor_client_a_does_not_receive_client_b_messages(ws_tc: TestClient) 
                 frames_received.append(raw)
                 # If we have A's frame, we can stop early.
                 if any(
-                    json.loads(f).get("messageId") == client_a_message_id
-                    for f in frames_received
+                    json.loads(f).get("messageId") == client_a_message_id for f in frames_received
                 ):
                     break
 

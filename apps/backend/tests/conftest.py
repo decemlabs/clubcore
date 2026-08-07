@@ -50,7 +50,10 @@ if _ENV_EXAMPLE.is_file():
 async def app() -> AsyncIterator[FastAPI]:
     """Per-test FastAPI instance with lifespan fired (engine + sessionmaker bound)."""
     _app = create_app()
-    async with LifespanManager(_app):
+    # The default five-second startup budget is too tight late in the full
+    # integration suite when PostgreSQL and Redis have handled thousands of
+    # fixture lifecycles. Keep a finite limit while avoiding load-only flakes.
+    async with LifespanManager(_app, startup_timeout=15):
         yield _app
 
 

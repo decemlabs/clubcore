@@ -185,9 +185,7 @@ async def test_patch_me_email_taken_returns_409_with_field_error(
         json={"email": PROF_OTHER_EMAIL},
         headers={"X-CSRF-Token": async_client.cookies["clubcore_csrf"]},
     )
-    assert r.status_code == 409, (
-        f"Duplicate email must return 409, got {r.status_code}: {r.text}"
-    )
+    assert r.status_code == 409, f"Duplicate email must return 409, got {r.status_code}: {r.text}"
 
     body = r.json()
     assert body.get("code") == "conflict", f"Expected code='conflict', got: {body}"

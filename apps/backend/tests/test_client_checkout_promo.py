@@ -17,7 +17,6 @@ Auth: same _auth_as_client helper pattern as test_checkout.py.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
@@ -259,7 +258,9 @@ async def test_sell_subject_core_price_override_sends_discounted_amount_to_yooka
     """
     client = await _seed_client(db_session)
     plan = await _seed_membership_plan(db_session, price_kopecks=100_000)
-    await _seed_promo_code(db_session, code="OVERRIDE10", discount_type="percentage", discount_value=1000)
+    await _seed_promo_code(
+        db_session, code="OVERRIDE10", discount_type="percentage", discount_value=1000
+    )
 
     await _auth_as_client(async_client, db_session, client)
 
@@ -268,6 +269,7 @@ async def test_sell_subject_core_price_override_sends_discounted_amount_to_yooka
 
     def _capture_and_respond(request: httpx.Request) -> httpx.Response:
         import json
+
         body = json.loads(request.content)
         # amount.value from ЮKassa is in rubles (string); convert to kopecks
         value_str = body.get("amount", {}).get("value", "0")
@@ -311,7 +313,7 @@ async def test_sell_subject_core_no_override_uses_plan_price(
     db_session: AsyncSession,
     redis_clean: Redis,
 ) -> None:
-    """_sell_subject_core with no promoCode → ЮKassa receives the full plan price (staff-path parity)."""
+    """_sell_subject_core with no promoCode → ЮKassa receives the full plan price (staff-path parity)."""  # noqa: E501
     client = await _seed_client(db_session)
     plan = await _seed_membership_plan(db_session, price_kopecks=100_000)
 
@@ -322,6 +324,7 @@ async def test_sell_subject_core_no_override_uses_plan_price(
 
     def _capture_and_respond(request: httpx.Request) -> httpx.Response:
         import json
+
         body = json.loads(request.content)
         value_str = body.get("amount", {}).get("value", "0")
         captured_amounts.append(round(float(value_str) * 100))
@@ -401,8 +404,7 @@ async def test_record_promo_redemption_idempotent(
 
     Tested indirectly via the succeeded webhook: calling the webhook twice for a promo payment
     must result in exactly 1 promo_redemptions row (not 2).
-    """
-    from tests.integration.webhook_yookassa.conftest import SeededOnlinePayment
+    """  # noqa: E501
 
     client = await _seed_client(db_session)
     plan = await _seed_membership_plan(db_session, price_kopecks=100_000)
@@ -411,9 +413,10 @@ async def test_record_promo_redemption_idempotent(
     )
 
     # Seed an online_payments row with promo_code_id already set (simulating post-checkout state)
-    from app.modules.online_payments import repository as op_repo
-    from app.modules.online_payments.constants import STATUS_PENDING, CONFIRMATION_TYPE_REDIRECT
     from uuid import uuid4 as _uuid4
+
+    from app.modules.online_payments import repository as op_repo
+    from app.modules.online_payments.constants import CONFIRMATION_TYPE_REDIRECT, STATUS_PENDING
 
     correlation_id = _uuid4()
     op_id = _uuid4()
@@ -462,14 +465,17 @@ async def test_record_promo_redemption_idempotent(
     await db_session.commit()
 
     count_row = (
-        await db_session.execute(
-            text(
-                "SELECT COUNT(*) AS cnt FROM promo_redemptions "
-                "WHERE online_payment_id = :op_id"
-            ),
-            {"op_id": str(op_id)},
+        (
+            await db_session.execute(
+                text(
+                    "SELECT COUNT(*) AS cnt FROM promo_redemptions WHERE online_payment_id = :op_id"
+                ),
+                {"op_id": str(op_id)},
+            )
         )
-    ).mappings().one()
+        .mappings()
+        .one()
+    )
     count = int(count_row["cnt"])
     assert count == 1, f"Expected exactly 1 promo_redemptions row (idempotent), got {count}"
 
@@ -502,6 +508,7 @@ async def test_discounted_membership_checkout_both_sub_and_pt(
 
     def _sub_capture(req: httpx.Request) -> httpx.Response:
         import json
+
         body = json.loads(req.content)
         v = round(float(body["amount"]["value"]) * 100)
         sub_captured.append(v)
@@ -511,6 +518,7 @@ async def test_discounted_membership_checkout_both_sub_and_pt(
 
     def _pt_capture(req: httpx.Request) -> httpx.Response:
         import json
+
         body = json.loads(req.content)
         v = round(float(body["amount"]["value"]) * 100)
         pt_captured.append(v)
@@ -581,7 +589,7 @@ async def test_no_promo_checkout_full_price_promo_code_id_null(
     db_session: AsyncSession,
     redis_clean: Redis,
 ) -> None:
-    """No promoCode supplied → full plan price, row.promo_code_id is NULL (today's behavior unchanged)."""
+    """No promoCode supplied → full plan price, row.promo_code_id is NULL (today's behavior unchanged)."""  # noqa: E501
     client = await _seed_client(db_session)
     plan = await _seed_membership_plan(db_session, price_kopecks=100_000)
 
@@ -592,6 +600,7 @@ async def test_no_promo_checkout_full_price_promo_code_id_null(
 
     def _capture_and_respond(req: httpx.Request) -> httpx.Response:
         import json
+
         body = json.loads(req.content)
         v = round(float(body["amount"]["value"]) * 100)
         captured_amounts.append(v)
@@ -640,7 +649,7 @@ async def test_succeeded_webhook_records_redemption_for_promo_payment(
     )
 
     from app.modules.online_payments import repository as op_repo
-    from app.modules.online_payments.constants import STATUS_PENDING, CONFIRMATION_TYPE_REDIRECT
+    from app.modules.online_payments.constants import CONFIRMATION_TYPE_REDIRECT, STATUS_PENDING
     from app.modules.promo_codes.service import record_promo_redemption
 
     correlation_id = uuid4()
@@ -681,14 +690,17 @@ async def test_succeeded_webhook_records_redemption_for_promo_payment(
         )
 
     count_row = (
-        await db_session.execute(
-            text(
-                "SELECT COUNT(*) AS cnt FROM promo_redemptions "
-                "WHERE online_payment_id = :op_id"
-            ),
-            {"op_id": str(op_id)},
+        (
+            await db_session.execute(
+                text(
+                    "SELECT COUNT(*) AS cnt FROM promo_redemptions WHERE online_payment_id = :op_id"
+                ),
+                {"op_id": str(op_id)},
+            )
         )
-    ).mappings().one()
+        .mappings()
+        .one()
+    )
     count = int(count_row["cnt"])
     assert count == 1, f"Expected exactly 1 promo_redemptions row for promo payment, got {count}"
 
@@ -707,7 +719,7 @@ async def test_succeeded_webhook_no_redemption_for_non_promo_payment(
     plan = await _seed_membership_plan(db_session, price_kopecks=100_000)
 
     from app.modules.online_payments import repository as op_repo
-    from app.modules.online_payments.constants import STATUS_PENDING, CONFIRMATION_TYPE_REDIRECT
+    from app.modules.online_payments.constants import CONFIRMATION_TYPE_REDIRECT, STATUS_PENDING
 
     correlation_id = uuid4()
     op_id = uuid4()
@@ -731,17 +743,20 @@ async def test_succeeded_webhook_no_redemption_for_non_promo_payment(
     )
     await db_session.commit()
 
-    # Simulate the webhook guard: since promo_code_id IS None, record_promo_redemption is NOT called.
+    # Simulate the webhook guard: since promo_code_id IS None, record_promo_redemption is NOT called.  # noqa: E501
     # Verify the count is 0 (as the guard `if row.promo_code_id is not None:` ensures).
     count_row = (
-        await db_session.execute(
-            text(
-                "SELECT COUNT(*) AS cnt FROM promo_redemptions "
-                "WHERE online_payment_id = :op_id"
-            ),
-            {"op_id": str(op_id)},
+        (
+            await db_session.execute(
+                text(
+                    "SELECT COUNT(*) AS cnt FROM promo_redemptions WHERE online_payment_id = :op_id"
+                ),
+                {"op_id": str(op_id)},
+            )
         )
-    ).mappings().one()
+        .mappings()
+        .one()
+    )
     count = int(count_row["cnt"])
     assert count == 0, f"Expected 0 promo_redemptions rows for non-promo payment, got {count}"
 

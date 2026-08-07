@@ -528,8 +528,18 @@ async def payments_csv_rows(
 
 # Russian month abbreviations for chart labels (MSK-pinned, no runtime locale switching).
 _RU_MONTH_ABBR: tuple[str, ...] = (
-    "янв", "фев", "мар", "апр", "май", "июн",
-    "июл", "авг", "сен", "окт", "ноя", "дек",
+    "янв",
+    "фев",
+    "мар",
+    "апр",
+    "май",
+    "июн",
+    "июл",
+    "авг",
+    "сен",
+    "окт",
+    "ноя",
+    "дек",
 )
 
 
@@ -698,8 +708,7 @@ async def get_cohort_retention(
     """
     if query.cohort_months < 1 or query.cohort_months > COHORT_MAX_MONTHS:
         raise ValidationAppError(
-            f"cohort_months must be between 1 and {COHORT_MAX_MONTHS}, "
-            f"got {query.cohort_months}"
+            f"cohort_months must be between 1 and {COHORT_MAX_MONTHS}, got {query.cohort_months}"
         )
 
     rows = await repository.fetch_cohort_retention(session, query.cohort_months)
@@ -773,8 +782,10 @@ async def get_visit_anomaly(
     today = _msk_today()
 
     # Resolve date range.
-    from_date: date = query.from_date if query.from_date is not None else (
-        today - timedelta(days=ANOMALY_LOOKBACK_DAYS - 1)
+    from_date: date = (
+        query.from_date
+        if query.from_date is not None
+        else (today - timedelta(days=ANOMALY_LOOKBACK_DAYS - 1))
     )
     to_date: date = query.to_date if query.to_date is not None else today
 

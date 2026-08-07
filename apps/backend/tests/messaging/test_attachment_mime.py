@@ -96,7 +96,7 @@ def test_allowed_mimes_constant() -> None:
     """ALLOWED_MIMES must be exactly the three allowed types."""
     from app.integrations.storage.mime import ALLOWED_MIMES
 
-    assert ALLOWED_MIMES == frozenset({"image/jpeg", "image/png", "image/webp"})
+    assert frozenset({"image/jpeg", "image/png", "image/webp"}) == ALLOWED_MIMES
 
 
 def test_magic_byte_read_len_constant() -> None:

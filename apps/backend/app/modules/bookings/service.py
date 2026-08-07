@@ -41,7 +41,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import UTC, datetime, time, timedelta
 from types import ModuleType
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
@@ -111,8 +111,13 @@ MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 # Working-hours weekday name map (0-based, matches seed/frontend convention).
 # CR-01 / IN-02: hoisted to module level so it is allocated once, not per call.
 _WEEKDAY_NAME_MAP: dict[str, int] = {
-    "monday": 0, "tuesday": 1, "wednesday": 2,
-    "thursday": 3, "friday": 4, "saturday": 5, "sunday": 6,
+    "monday": 0,
+    "tuesday": 1,
+    "wednesday": 2,
+    "thursday": 3,
+    "friday": 4,
+    "saturday": 5,
+    "sunday": 6,
 }
 
 
@@ -319,15 +324,19 @@ async def _read_booking_config(  # noqa: SVC001 caller-owns-txn
     Uses TABLE_REF noqa pattern — raw cross-module SELECT per D-54-08.
     """
     row = (
-        await session.execute(
-            sa.text(  # noqa: TABLE_REF
-                "SELECT booking_ahead_days, cutoff_minutes, cancel_window_hours "
-                "FROM booking_config "
-                "WHERE id = CAST(:id AS uuid)"
-            ),
-            {"id": _BOOKING_CONFIG_ID},
+        (
+            await session.execute(
+                sa.text(  # Raw cross-module SQL per D-54-08.
+                    "SELECT booking_ahead_days, cutoff_minutes, cancel_window_hours "
+                    "FROM booking_config "
+                    "WHERE id = CAST(:id AS uuid)"
+                ),
+                {"id": _BOOKING_CONFIG_ID},
+            )
         )
-    ).mappings().one_or_none()
+        .mappings()
+        .one_or_none()
+    )
     if row is None:
         return None
     return _BookingConfigSnapshot(
@@ -346,15 +355,19 @@ async def _read_working_hours_config(  # noqa: SVC001 caller-owns-txn
     Uses TABLE_REF noqa pattern — raw cross-module SELECT per D-54-08.
     """
     row = (
-        await session.execute(
-            sa.text(  # noqa: TABLE_REF
-                "SELECT schedule, closures "
-                "FROM working_hours_config "
-                "WHERE id = CAST(:id AS uuid)"
-            ),
-            {"id": _WORKING_HOURS_CONFIG_ID},
+        (
+            await session.execute(
+                sa.text(  # Raw cross-module SQL per D-54-08.
+                    "SELECT schedule, closures "
+                    "FROM working_hours_config "
+                    "WHERE id = CAST(:id AS uuid)"
+                ),
+                {"id": _WORKING_HOURS_CONFIG_ID},
+            )
         )
-    ).mappings().one_or_none()
+        .mappings()
+        .one_or_none()
+    )
     if row is None:
         return None
     return _WorkingHoursConfigSnapshot(
@@ -419,9 +432,8 @@ def _is_slot_outside_working_hours(  # noqa: SVC001 caller-owns-txn
             continue
 
         slot_t = slot_msk.time().replace(second=0, microsecond=0)
-        if open_t <= slot_t < close_t:
-            return False  # Within working hours — allow.
-        return True  # Outside the working-hours window — block.
+        # Within working hours: allow. Outside the window: block.
+        return not (open_t <= slot_t < close_t)
 
     # No matching schedule entry for this weekday — fail-open (do not block).
     return False
@@ -554,11 +566,15 @@ async def _fetch_trainer_full_name(session: AsyncSession, trainer_id: UUID) -> s
     with a notification failure).
     """
     row = (
-        await session.execute(
-            sa.text("SELECT full_name FROM trainers WHERE id = :trainer_id"),
-            {"trainer_id": str(trainer_id)},
+        (
+            await session.execute(
+                sa.text("SELECT full_name FROM trainers WHERE id = :trainer_id"),
+                {"trainer_id": str(trainer_id)},
+            )
         )
-    ).mappings().one_or_none()
+        .mappings()
+        .one_or_none()
+    )
     if row is None:
         return ""
     return str(row["full_name"])
@@ -880,7 +896,7 @@ async def _mark_no_show_bookings(  # noqa: SVC001 caller-owns-txn
     # modules-independent import-linter contract green (mirror of Phase 38
     # D-38-11 TABLE_REF discipline; D-34-04a precedent).
     rows = await session.execute(
-        sa.text(  # noqa: TABLE_REF cross-module SQL per D-34-04a / Phase 38 D-38-11
+        sa.text(  # Cross-module SQL per D-34-04a / Phase 38 D-38-11.
             "SELECT b.id, b.slot_id, b.client_id "
             "FROM bookings b "
             "JOIN trainer_availability_slots s ON s.id = b.slot_id "
@@ -990,7 +1006,7 @@ async def _send_booking_reminders(  # noqa: SVC001 caller-owns-txn
     # `uq_booking_notifications_booking_kind_channel` from Migration 0024).
     async with session_factory() as read_session:
         result = await read_session.execute(
-            sa.text(  # noqa: TABLE_REF cross-module SQL per D-34-04a / Phase 38 D-38-11
+            sa.text(  # Cross-module SQL per D-34-04a / Phase 38 D-38-11.
                 "SELECT b.id, b.client_id, b.slot_id, "
                 "       c.telegram_user_id, c.first_name, c.last_name, c.email, "
                 "       t.full_name AS trainer_name, "
@@ -1925,7 +1941,7 @@ async def cancel_booking(
         )
     else:
         # WR-01: log unexpected actor role so it is detectable during development.
-        # Mirrors the else branch at the Step 9.5 DM dispatch path (cancel_booking_dm_unexpected_role).
+        # Mirrors the else branch at the Step 9.5 DM dispatch path (cancel_booking_dm_unexpected_role).  # noqa: E501
         _log.warning(
             "cancel_booking_notification_unexpected_role",
             booking_id=str(booking.id),
@@ -2088,12 +2104,8 @@ async def cancel_booking_for_client(
     # Step 8.5 — Phase 87 INBOX-03 — in-app inbox row (co-transactional, BEFORE commit).
     # Client self-cancel: the only notification side-effect (no DM dispatch in this path).
     # Placed pre-commit so the inbox INSERT is atomic with the booking state mutation.
-    _self_cancel_trainer_name = await _fetch_trainer_full_name(
-        session, booking.slot.trainer_id
-    )
-    _self_cancel_slot_msk = booking.slot.start_time.astimezone(MOSCOW_TZ).strftime(
-        "%d.%m.%Y %H:%M"
-    )
+    _self_cancel_trainer_name = await _fetch_trainer_full_name(session, booking.slot.trainer_id)
+    _self_cancel_slot_msk = booking.slot.start_time.astimezone(MOSCOW_TZ).strftime("%d.%m.%Y %H:%M")
     await create_notification(
         session,
         client_id=booking.client_id,

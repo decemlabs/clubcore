@@ -80,6 +80,7 @@ COMP_CONFIG_ID = uuid.uuid5(_NS, "p102-walkthrough:comp-config")
 PAYMENT_ID = uuid.uuid5(_NS, "p102-walkthrough:payment")
 PT_SESSION_ID = uuid.uuid5(_NS, "p102-walkthrough:pt-session")
 
+
 # Slot anchor: Monday 10:00 MSK → next Monday relative to seed-time (always future).
 # Mirrors test_booking_race.py:207-214 «next Monday» math so the slot is guaranteed
 # inside the Mon-Fri working-hours window the booking service enforces.
@@ -114,15 +115,13 @@ async def _run() -> int:
     password = os.environ.get("SEED_OWNER_PASSWORD")
     if not email or not password:
         print(
-            "ERROR: SEED_OWNER_EMAIL and SEED_OWNER_PASSWORD must be set "
-            "(see .env.example).",
+            "ERROR: SEED_OWNER_EMAIL and SEED_OWNER_PASSWORD must be set (see .env.example).",
             file=sys.stderr,
         )
         return 1
     if len(password) < 12:
         print(
-            "ERROR: SEED_OWNER_PASSWORD must be at least 12 characters "
-            "(NIST 800-63B 2024).",
+            "ERROR: SEED_OWNER_PASSWORD must be at least 12 characters (NIST 800-63B 2024).",
             file=sys.stderr,
         )
         return 1

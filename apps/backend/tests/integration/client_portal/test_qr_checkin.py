@@ -288,8 +288,10 @@ async def test_same_day_double_checkin_collapses_to_duplicate(
 
     # DB: exactly one visit for this client today (SAVEPOINT harness — rollback to outer)
     visits = (
-        await db_session.execute(select(Visit).where(Visit.client_id == client_id))
-    ).scalars().all()
+        (await db_session.execute(select(Visit).where(Visit.client_id == client_id)))
+        .scalars()
+        .all()
+    )
     assert len(visits) == 1
     assert visits[0].channel == "client_qr"
 
@@ -427,8 +429,10 @@ async def test_cross_client_checkin_structurally_impossible(
 
     # Verify the visit row belongs to client B (the token's sub), NOT client A
     visit_rows = (
-        await db_session.execute(select(Visit).where(Visit.channel == "client_qr"))
-    ).scalars().all()
+        (await db_session.execute(select(Visit).where(Visit.channel == "client_qr")))
+        .scalars()
+        .all()
+    )
     assert len(visit_rows) == 1, f"Expected exactly 1 QR visit, got {len(visit_rows)}"
     assert visit_rows[0].client_id == client_b_id, (
         f"Visit client_id={visit_rows[0].client_id} must be client B ({client_b_id}), "
@@ -477,8 +481,10 @@ async def test_no_request_parameter_can_override_checkin_target(
 
     # Visit must be for client B (token sub), not client A (injected field)
     visit_rows = (
-        await db_session.execute(select(Visit).where(Visit.channel == "client_qr"))
-    ).scalars().all()
+        (await db_session.execute(select(Visit).where(Visit.channel == "client_qr")))
+        .scalars()
+        .all()
+    )
     assert len(visit_rows) == 1
     assert visit_rows[0].client_id == client_b_id, (
         f"Injected clientId={client_a_id} must NOT override the token sub. "

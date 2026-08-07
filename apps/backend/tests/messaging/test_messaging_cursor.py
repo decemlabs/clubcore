@@ -170,9 +170,7 @@ async def test_after_cursor_foreign_or_unknown_id_yields_empty_band(
 
     # A has 3 messages; B has 1.
     for i in range(3):
-        await repository.insert_message(
-            db_session, thread_id=thread_a, role="client", body=f"a{i}"
-        )
+        await repository.insert_message(db_session, thread_id=thread_a, role="client", body=f"a{i}")
     b_id, _ = await repository.insert_message(
         db_session, thread_id=thread_b, role="client", body="b0"
     )

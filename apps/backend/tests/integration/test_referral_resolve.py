@@ -144,9 +144,7 @@ async def _auth_and_get_code(
         settings = get_settings()
         raw_code, code_hash = generate_otp_code()
         otp_row.code_hash = code_hash
-        otp_row.expires_at = datetime.now(tz=UTC) + timedelta(
-            seconds=settings.otp_code_ttl_seconds
-        )
+        otp_row.expires_at = datetime.now(tz=UTC) + timedelta(seconds=settings.otp_code_ttl_seconds)
         await db_session.commit()
 
         verify = await c.post(

@@ -239,9 +239,7 @@ async def test_summary_empty_returns_empty_invitees_and_zero_accrued(
     data = resp.json()["data"]
 
     assert data["invitees"] == [], f"Expected empty invitees, got {data['invitees']!r}"
-    assert data["accruedKopecks"] == 0, (
-        f"Expected 0 accruedKopecks, got {data['accruedKopecks']!r}"
-    )
+    assert data["accruedKopecks"] == 0, f"Expected 0 accruedKopecks, got {data['accruedKopecks']!r}"
     assert "code" in data and len(data["code"]) > 0
     assert "shareUrl" in data
 

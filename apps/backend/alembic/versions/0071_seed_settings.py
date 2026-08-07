@@ -23,7 +23,7 @@ Seed values:
                               sender_signature/quiet_hours NULL
 
 Downgrade hard-deletes the three singleton rows.
-"""
+"""  # noqa: RUF002
 
 from __future__ import annotations
 
@@ -47,29 +47,33 @@ _NOTIFICATION_PREFS_CONFIG_ID = "00000000-0000-0000-0000-000000000005"
 
 # Default working hours schedule — Mon-Fri 08:00-22:00, Sat-Sun 09:00-21:00.
 # day_of_week: 0=Monday .. 6=Sunday (ISO weekday - 1)
-_DEFAULT_SCHEDULE = json.dumps([
-    {"day_of_week": 0, "open": "08:00", "close": "22:00"},  # Monday
-    {"day_of_week": 1, "open": "08:00", "close": "22:00"},  # Tuesday
-    {"day_of_week": 2, "open": "08:00", "close": "22:00"},  # Wednesday
-    {"day_of_week": 3, "open": "08:00", "close": "22:00"},  # Thursday
-    {"day_of_week": 4, "open": "08:00", "close": "22:00"},  # Friday
-    {"day_of_week": 5, "open": "09:00", "close": "21:00"},  # Saturday
-    {"day_of_week": 6, "open": "09:00", "close": "21:00"},  # Sunday
-])
+_DEFAULT_SCHEDULE = json.dumps(
+    [
+        {"day_of_week": 0, "open": "08:00", "close": "22:00"},  # Monday
+        {"day_of_week": 1, "open": "08:00", "close": "22:00"},  # Tuesday
+        {"day_of_week": 2, "open": "08:00", "close": "22:00"},  # Wednesday
+        {"day_of_week": 3, "open": "08:00", "close": "22:00"},  # Thursday
+        {"day_of_week": 4, "open": "08:00", "close": "22:00"},  # Friday
+        {"day_of_week": 5, "open": "09:00", "close": "21:00"},  # Saturday
+        {"day_of_week": 6, "open": "09:00", "close": "21:00"},  # Sunday
+    ]
+)
 
-# Default notification matrix — all 7 booking/payment/autopay kinds × in_app channel enabled.
+# Default notification matrix: all 7 booking/payment/autopay kinds have in_app enabled.
 # The 7 kinds from notifications/models.py _VALID_KINDS:
 #   booking_confirmed, booking_cancelled_by_client, booking_cancelled_by_owner,
 #   booking_rescheduled, payment_succeeded, autopay_charge_succeeded, autopay_charge_failed
-_DEFAULT_MATRIX = json.dumps({
-    "booking_confirmed": {"in_app": True},
-    "booking_cancelled_by_client": {"in_app": True},
-    "booking_cancelled_by_owner": {"in_app": True},
-    "booking_rescheduled": {"in_app": True},
-    "payment_succeeded": {"in_app": True},
-    "autopay_charge_succeeded": {"in_app": True},
-    "autopay_charge_failed": {"in_app": True},
-})
+_DEFAULT_MATRIX = json.dumps(
+    {
+        "booking_confirmed": {"in_app": True},
+        "booking_cancelled_by_client": {"in_app": True},
+        "booking_cancelled_by_owner": {"in_app": True},
+        "booking_rescheduled": {"in_app": True},
+        "payment_succeeded": {"in_app": True},
+        "autopay_charge_succeeded": {"in_app": True},
+        "autopay_charge_failed": {"in_app": True},
+    }
+)
 
 
 def upgrade() -> None:
@@ -95,7 +99,7 @@ def upgrade() -> None:
             step=60,
             ahead=14,
             cutoff=60,
-            cancel_hours=24,         # mirrors CANCEL_WINDOW_HOURS_RECEPTION
+            cancel_hours=24,  # mirrors CANCEL_WINDOW_HOURS_RECEPTION
             cancel_en=True,
             reschedule_same_day=True,
             no_show_kopecks=0,
@@ -142,17 +146,17 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute(
-        sa.text(
-            "DELETE FROM notification_prefs_config WHERE id = CAST(:id AS uuid)"
-        ).bindparams(id=_NOTIFICATION_PREFS_CONFIG_ID)
+        sa.text("DELETE FROM notification_prefs_config WHERE id = CAST(:id AS uuid)").bindparams(
+            id=_NOTIFICATION_PREFS_CONFIG_ID
+        )
     )
     op.execute(
-        sa.text(
-            "DELETE FROM working_hours_config WHERE id = CAST(:id AS uuid)"
-        ).bindparams(id=_WORKING_HOURS_CONFIG_ID)
+        sa.text("DELETE FROM working_hours_config WHERE id = CAST(:id AS uuid)").bindparams(
+            id=_WORKING_HOURS_CONFIG_ID
+        )
     )
     op.execute(
-        sa.text(
-            "DELETE FROM booking_config WHERE id = CAST(:id AS uuid)"
-        ).bindparams(id=_BOOKING_CONFIG_ID)
+        sa.text("DELETE FROM booking_config WHERE id = CAST(:id AS uuid)").bindparams(
+            id=_BOOKING_CONFIG_ID
+        )
     )

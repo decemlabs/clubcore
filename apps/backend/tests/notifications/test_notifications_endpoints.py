@@ -38,7 +38,6 @@ from app.core.security import generate_otp_code, hash_password
 from app.modules.auth.models import OtpCode, User
 from app.modules.clients.models import Client
 from app.modules.notifications import service
-from app.modules.notifications.schemas import ClientPushTokenRegisterRequest
 
 pytestmark = pytest.mark.asyncio(loop_scope="function")
 
@@ -50,7 +49,7 @@ _BASE_PHONE = "+79161234"
 
 
 def _phone(n: int) -> str:
-    """Return a stable E.164 phone for test client n (1–99)."""
+    """Return a stable E.164 phone for test client n (1–99)."""  # noqa: RUF002
     return f"{_BASE_PHONE}{n:04d}"
 
 
@@ -228,7 +227,7 @@ async def _create_notif(
         await db_session.execute(
             text(
                 "INSERT INTO in_app_notifications "
-                "(id, client_id, source_type, source_id, kind, title, body, created_at, updated_at) "
+                "(id, client_id, source_type, source_id, kind, title, body, created_at, updated_at) "  # noqa: E501
                 "VALUES (:id, :cid, :st, :sid, :kind, :title, :body, "
                 "       now() - :offset * interval '1 second', now())"
             ),
@@ -284,8 +283,7 @@ async def test_get_notifications_newest_first(
 
     # Insert older notification first (30 seconds ago) and newer after
     older_id = await _create_notif(
-        db_session, client.id, kind="payment_succeeded",
-        created_at_offset_seconds=30
+        db_session, client.id, kind="payment_succeeded", created_at_offset_seconds=30
     )
     await _create_notif(db_session, client.id, kind="booking_confirmed")
     await db_session.commit()
@@ -312,7 +310,9 @@ async def test_get_notifications_pagination_honored(
     await db_session.commit()
 
     await _create_notif(db_session, client.id, kind="booking_confirmed")
-    await _create_notif(db_session, client.id, kind="booking_cancelled_by_client", source_id=uuid4())
+    await _create_notif(
+        db_session, client.id, kind="booking_cancelled_by_client", source_id=uuid4()
+    )
     await db_session.commit()
 
     await _auth_as_client(http_client, db_session, client)
@@ -381,7 +381,9 @@ async def test_patch_mark_read_marks_single_notification(
     await db_session.commit()
 
     await _create_notif(db_session, client.id, kind="booking_confirmed")
-    await _create_notif(db_session, client.id, kind="booking_cancelled_by_client", source_id=uuid4())
+    await _create_notif(
+        db_session, client.id, kind="booking_cancelled_by_client", source_id=uuid4()
+    )
     await db_session.commit()
 
     await _auth_as_client(http_client, db_session, client)
@@ -640,7 +642,7 @@ async def test_post_push_token_extra_field_returns_422(
     http_client: AsyncClient,
     db_session: AsyncSession,
 ) -> None:
-    """POST /push-tokens with extra field → 422 (extra='forbid' on ClientPushTokenRegisterRequest, T-87-09)."""
+    """POST /push-tokens with extra field → 422 (extra='forbid' on ClientPushTokenRegisterRequest, T-87-09)."""  # noqa: E501
     staff = await _seed_staff(db_session, "push-extra")
     client = await _seed_client(db_session, staff, _phone(63))
     await db_session.commit()

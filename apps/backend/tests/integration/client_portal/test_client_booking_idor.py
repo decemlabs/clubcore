@@ -292,9 +292,7 @@ async def test_client_a_cannot_cancel_client_b_booking_404(
     )
 
     # Client B's booking should still be confirmed (not cancelled)
-    booking_b = await db_session.scalar(
-        select(Booking).where(Booking.id == booking_b_id)
-    )
+    booking_b = await db_session.scalar(select(Booking).where(Booking.id == booking_b_id))
     assert booking_b is not None
     assert booking_b.status == "confirmed", (
         f"Client B's booking was mutated by client A's IDOR attempt: status={booking_b.status}"

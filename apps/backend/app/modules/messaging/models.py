@@ -56,9 +56,7 @@ class MessageThread(Base, UUIDPkMixin, TimestampMixin):
         ),
         nullable=False,
     )
-    last_message_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     client_unread_count: Mapped[int] = mapped_column(
         Integer,
         server_default=text("0"),
@@ -71,9 +69,7 @@ class MessageThread(Base, UUIDPkMixin, TimestampMixin):
         DateTime(timezone=True), nullable=True
     )
 
-    __table_args__ = (
-        UniqueConstraint("client_id", name="uq_message_threads_client_id"),
-    )
+    __table_args__ = (UniqueConstraint("client_id", name="uq_message_threads_client_id"),)
 
 
 class MessageAttachment(Base, UUIDPkMixin, TimestampMixin):
@@ -142,9 +138,7 @@ class Message(Base, UUIDPkMixin, TimestampMixin):
         server_default=text("now()"),
         nullable=False,
     )
-    read_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     attachment_id: Mapped[UUIDType | None] = mapped_column(
         PgUUID(as_uuid=True),
         ForeignKey(

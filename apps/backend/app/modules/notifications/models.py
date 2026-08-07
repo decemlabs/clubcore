@@ -37,11 +37,7 @@ _VALID_KINDS = (
     "autopay_charge_failed",
 )
 
-_KIND_CHECK = (
-    "kind IN ("
-    + ", ".join(f"'{k}'" for k in _VALID_KINDS)
-    + ")"
-)
+_KIND_CHECK = "kind IN (" + ", ".join(f"'{k}'" for k in _VALID_KINDS) + ")"
 
 
 class InAppNotification(Base, UUIDPkMixin, TimestampMixin):
@@ -71,9 +67,7 @@ class InAppNotification(Base, UUIDPkMixin, TimestampMixin):
     kind: Mapped[str] = mapped_column(Text, nullable=False)
     title: Mapped[str] = mapped_column(Text, nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
-    read_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         # NAMING_CONVENTION expands to ck_in_app_notifications_kind
@@ -114,9 +108,7 @@ class ClientPushToken(Base, UUIDPkMixin, TimestampMixin):
     )
     token: Mapped[str] = mapped_column(Text, nullable=False)
     platform: Mapped[str] = mapped_column(Text, nullable=False)
-    unregistered_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    unregistered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         # NAMING_CONVENTION expands to ck_client_push_tokens_platform

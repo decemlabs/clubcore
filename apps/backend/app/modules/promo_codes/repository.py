@@ -42,9 +42,10 @@ async def list_promo_codes(
         predicates.append(PromoCode.is_active.is_(query.active))
 
     # COUNT with predicates for total
-    total: int = await session.scalar(
-        select(func.count()).select_from(PromoCode).where(and_(*predicates))
-    ) or 0
+    total: int = (
+        await session.scalar(select(func.count()).select_from(PromoCode).where(and_(*predicates)))
+        or 0
+    )
 
     # Correlated scalar subquery — used_count per PromoCode row
     used_count_subq = (

@@ -56,7 +56,7 @@ async def _seed_autopay_membership(
     method_id = "saved-card-" + nonce
 
     if end_date is None:
-        end_date = date.today() + timedelta(days=2)
+        end_date = date.today() + timedelta(days=2)  # noqa: DTZ011
 
     await session.execute(
         text(
@@ -165,7 +165,7 @@ def _decline_response() -> dict[str, Any]:
 @pytest.mark.asyncio
 async def test_charge_ok_path(db_session: AsyncSession) -> None:
     """Eligible autopay membership → ok provider response → correct DB state."""
-    today = date.today()
+    today = date.today()  # noqa: DTZ011
     seed = await _seed_autopay_membership(db_session, end_date=today + timedelta(days=2))
     membership_id: UUID = seed["membership_id"]
     plan_id: UUID = seed["plan_id"]
@@ -257,7 +257,7 @@ async def test_charge_ok_path(db_session: AsyncSession) -> None:
 @pytest.mark.asyncio
 async def test_charge_decline_path(db_session: AsyncSession) -> None:
     """Provider 4xx → claim status='failed' + NO online_payments + failure audit + id returned."""
-    today = date.today()
+    today = date.today()  # noqa: DTZ011
     seed = await _seed_autopay_membership(db_session, end_date=today + timedelta(days=1))
     membership_id: UUID = seed["membership_id"]
 
@@ -328,7 +328,7 @@ async def test_charge_transient_error_is_retryable(db_session: AsyncSession) -> 
     ON CONFLICT DO NOTHING guard would then skip forever). The claim row is deleted so
     a later tick re-attempts; a subsequent 'ok' response charges normally.
     """
-    today = date.today()
+    today = date.today()  # noqa: DTZ011
     seed = await _seed_autopay_membership(db_session, end_date=today + timedelta(days=1))
     membership_id: UUID = seed["membership_id"]
 
@@ -397,7 +397,7 @@ async def test_charge_transient_error_is_retryable(db_session: AsyncSession) -> 
 @pytest.mark.asyncio
 async def test_charge_amount_matches_plan_price(db_session: AsyncSession) -> None:
     """amount_kopecks on autopay_charges and online_payments = plan's current price_kopecks."""
-    today = date.today()
+    today = date.today()  # noqa: DTZ011
     specific_price = 350_000  # 3500.00 RUB
     seed = await _seed_autopay_membership(
         db_session,
@@ -442,7 +442,7 @@ async def test_charge_amount_matches_plan_price(db_session: AsyncSession) -> Non
 @pytest.mark.asyncio
 async def test_no_consent_zero_charges(db_session: AsyncSession) -> None:
     """ФЗ-376: membership with no consent_recorded_at on the card MUST NOT be charged."""
-    today = date.today()
+    today = date.today()  # noqa: DTZ011
     await _seed_autopay_membership(
         db_session,
         end_date=today + timedelta(days=1),

@@ -87,8 +87,7 @@ async def test_membership_temporal_fields_present(
     )
     # Far-future membership (end_date ~60 days away) → expiringSoon must be False
     assert data["expiringSoon"] is False, (
-        f"Far-future membership should have expiringSoon=False, "
-        f"got {data['expiringSoon']}"
+        f"Far-future membership should have expiringSoon=False, got {data['expiringSoon']}"
     )
 
 
@@ -148,19 +147,15 @@ async def test_membership_expiring_soon_true_for_near_expiry(
     db_session.add(near_membership)
     await db_session.commit()
 
-    body = await _get_authed(
-        async_client, db_session, near_client, "/api/v1/client/membership"
-    )
+    body = await _get_authed(async_client, db_session, near_client, "/api/v1/client/membership")
     assert body["data"] is not None
     data = body["data"]
 
     assert data["expiringSoon"] is True, (
-        f"Near-expiry membership (3 days) should have expiringSoon=True, "
-        f"got {data['expiringSoon']}"
+        f"Near-expiry membership (3 days) should have expiringSoon=True, got {data['expiringSoon']}"
     )
     assert 0 <= data["daysUntilEnd"] <= 7, (
-        f"Near-expiry membership should have daysUntilEnd <= 7, "
-        f"got {data['daysUntilEnd']}"
+        f"Near-expiry membership should have daysUntilEnd <= 7, got {data['daysUntilEnd']}"
     )
 
 
@@ -249,23 +244,18 @@ async def test_home_composite_empty_client_returns_null_slots(
         "/api/v1/client/home",
         headers={"Cookie": f"cc_client_access={token}"},
     )
-    assert resp.status_code == 200, (
-        f"Empty /home should return 200, got {resp.status_code}"
-    )
+    assert resp.status_code == 200, f"Empty /home should return 200, got {resp.status_code}"
     data = resp.json().get("data")
     assert data is not None, "/home should always return a data object (not null)"
     assert data.get("membership") is None, (
-        f"Empty client /home should have membership=null, "
-        f"got {data.get('membership')!r}"
+        f"Empty client /home should have membership=null, got {data.get('membership')!r}"
     )
     # next_booking serializes as nextBooking (camelCase)
     assert data.get("nextBooking") is None, (
-        f"Empty client /home should have nextBooking=null, "
-        f"got {data.get('nextBooking')!r}"
+        f"Empty client /home should have nextBooking=null, got {data.get('nextBooking')!r}"
     )
     assert data.get("expiringSoon") is False, (
-        f"Empty client /home should have expiringSoon=False, "
-        f"got {data.get('expiringSoon')!r}"
+        f"Empty client /home should have expiringSoon=False, got {data.get('expiringSoon')!r}"
     )
     # D-01: client with zero membership rows is a 'newbie'
     assert data.get("membershipState") == "newbie", (
@@ -311,9 +301,7 @@ async def test_visit_history_pagination_shape(
     redis_clean: object,
 ) -> None:
     """CHIST-01: GET /history/visits returns {items, total, page, pageSize} shape."""
-    body = await _get_authed(
-        async_client, db_session, client_a, "/api/v1/client/history/visits"
-    )
+    body = await _get_authed(async_client, db_session, client_a, "/api/v1/client/history/visits")
     data = body["data"]
     assert "items" in data, "visits history missing 'items' key"
     assert "total" in data, "visits history missing 'total' key"
@@ -361,9 +349,7 @@ async def test_payment_history_pagination_shape_and_refund_visible(
     Refund items have negative amountKopecks and subjectKind='refund'.
     Wire format: amountKopecks, subjectKind are camelCase (D-07).
     """
-    body = await _get_authed(
-        async_client, db_session, client_a, "/api/v1/client/history/payments"
-    )
+    body = await _get_authed(async_client, db_session, client_a, "/api/v1/client/history/payments")
     data = body["data"]
     assert "items" in data, "payments history missing 'items' key"
     assert "total" in data, "payments history missing 'total' key"
@@ -377,14 +363,11 @@ async def test_payment_history_pagination_shape_and_refund_visible(
     items = data["items"]
     # subjectKind is the camelCase form of subject_kind (D-07)
     refund_items = [i for i in items if i.get("subjectKind") == "refund"]
-    assert len(refund_items) >= 1, (
-        "Expected at least 1 refund item in payment history (CHIST-03)"
-    )
+    assert len(refund_items) >= 1, "Expected at least 1 refund item in payment history (CHIST-03)"
     # Refund must have negative amountKopecks
     for refund in refund_items:
         assert refund["amountKopecks"] < 0, (
-            f"Refund item should have negative amountKopecks, "
-            f"got {refund['amountKopecks']}"
+            f"Refund item should have negative amountKopecks, got {refund['amountKopecks']}"
         )
 
 
@@ -423,9 +406,17 @@ async def test_trainer_catalog_client_safe_fields(
 
     # Owner-only fields that MUST NOT be exposed (D-69-05) — camelCase wire format
     forbidden_fields = [
-        "phone", "isActive", "deletedAt", "createdAt", "updatedAt", "rates",
+        "phone",
+        "isActive",
+        "deletedAt",
+        "createdAt",
+        "updatedAt",
+        "rates",
         # Also check snake_case variants (should not appear in camelCase wire)
-        "is_active", "deleted_at", "created_at", "updated_at",
+        "is_active",
+        "deleted_at",
+        "created_at",
+        "updated_at",
     ]
     for field in forbidden_fields:
         assert field not in item, (
@@ -453,9 +444,7 @@ async def test_plans_catalog_returns_active_items(
     assert "priceKopecks" in item  # camelCase form of price_kopecks
     assert "durationDays" in item  # camelCase form of duration_days
     # freezeDaysLimit must not be exposed (D-69-05)
-    assert "freezeDaysLimit" not in item, (
-        "Plan catalog must NOT expose freezeDaysLimit (D-69-05)"
-    )
+    assert "freezeDaysLimit" not in item, "Plan catalog must NOT expose freezeDaysLimit (D-69-05)"
     assert "freeze_days_limit" not in item, (
         "Plan catalog must NOT expose freeze_days_limit (D-69-05)"
     )
@@ -549,14 +538,11 @@ async def test_home_membership_state_lapsed(
         "/api/v1/client/home",
         headers={"Cookie": f"cc_client_access={token}"},
     )
-    assert resp.status_code == 200, (
-        f"Lapsed /home should return 200, got {resp.status_code}"
-    )
+    assert resp.status_code == 200, f"Lapsed /home should return 200, got {resp.status_code}"
     data = resp.json().get("data")
     assert data is not None, "/home should always return a data object for a lapsed client"
     assert data.get("membership") is None, (
-        f"Lapsed client should have membership=null (no active), "
-        f"got {data.get('membership')!r}"
+        f"Lapsed client should have membership=null (no active), got {data.get('membership')!r}"
     )
     assert data.get("membershipState") == "lapsed", (
         f"Client with only expired membership should have membershipState='lapsed', "

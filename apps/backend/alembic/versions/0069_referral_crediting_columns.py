@@ -82,9 +82,7 @@ def upgrade() -> None:
     # Use raw op.execute() — op.drop_constraint/create_check_constraint would apply the
     # naming_convention template again, producing a double-prefixed name (D-07 gotcha).
     # Mirror migration 0007_status_taxonomy.py pattern.
-    op.execute(
-        "ALTER TABLE loyalty_ledger DROP CONSTRAINT ck_loyalty_ledger_entry_type"
-    )
+    op.execute("ALTER TABLE loyalty_ledger DROP CONSTRAINT ck_loyalty_ledger_entry_type")
     op.execute(
         "ALTER TABLE loyalty_ledger ADD CONSTRAINT ck_loyalty_ledger_entry_type "
         "CHECK (entry_type IN ('welcome', 'owner_grant', 'redemption', 'referral_accrual'))"
@@ -95,9 +93,7 @@ def downgrade() -> None:
     # Reverse in inverse order of upgrade.
     # 3. Restore the original 3-literal CHECK (drop new, recreate original).
     # Use raw op.execute() — mirrors the same naming_convention bypass as upgrade().
-    op.execute(
-        "ALTER TABLE loyalty_ledger DROP CONSTRAINT ck_loyalty_ledger_entry_type"
-    )
+    op.execute("ALTER TABLE loyalty_ledger DROP CONSTRAINT ck_loyalty_ledger_entry_type")
     op.execute(
         "ALTER TABLE loyalty_ledger ADD CONSTRAINT ck_loyalty_ledger_entry_type "
         "CHECK (entry_type IN ('welcome', 'owner_grant', 'redemption'))"

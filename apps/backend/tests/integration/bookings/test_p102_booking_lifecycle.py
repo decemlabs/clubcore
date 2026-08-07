@@ -73,9 +73,7 @@ def _csrf_headers(
     idempotency_key: str | None = None,
 ) -> dict[str, str]:
     """Build X-CSRF-Token + optional Idempotency-Key header dict."""
-    headers: dict[str, str] = {
-        "X-CSRF-Token": client.cookies.get("clubcore_csrf", "") or ""
-    }
+    headers: dict[str, str] = {"X-CSRF-Token": client.cookies.get("clubcore_csrf", "") or ""}
     if idempotency_key is not None:
         headers["Idempotency-Key"] = idempotency_key
     return headers
@@ -173,9 +171,7 @@ async def test_booking_lifecycle_create_then_cancel(
     assert slot.status == "active", f"Expected slot 'active' after cancel, got '{slot.status}'"
 
     # Verify booking row directly.
-    booking_row = await db_session.scalar(
-        select(Booking).where(Booking.id == data_create["id"])
-    )
+    booking_row = await db_session.scalar(select(Booking).where(Booking.id == data_create["id"]))
     assert booking_row is not None
     assert booking_row.status == "cancelled"
     assert booking_row.cancelled_at is not None
@@ -254,9 +250,7 @@ async def test_booking_lifecycle_complete_via_pt_session(
     assert r_pts.status_code == 201, r_pts.text
 
     # DB: booking must be 'completed' (complete_booking_by_pt_session same UoW).
-    booking_row = await db_session.scalar(
-        select(Booking).where(Booking.id == booking_id)
-    )
+    booking_row = await db_session.scalar(select(Booking).where(Booking.id == booking_id))
     assert booking_row is not None, "Booking row not found after pt-session"
     assert booking_row.status == "completed", (
         f"Expected booking 'completed', got '{booking_row.status}'"
@@ -326,11 +320,17 @@ async def db_session_real_commit_p102() -> AsyncIterator[AsyncSession]:
     # Static SQL subquery fragments (bind-param only — no user input interpolated).
     owner_subq = "(SELECT id FROM users WHERE email = :email)"
     client_subq = f"(SELECT id FROM clients WHERE created_by_user_id = {owner_subq})"  # noqa: S608
-    slot_subq = "(SELECT id FROM trainer_availability_slots WHERE created_by_user_id = " + owner_subq + ")"  # noqa: S608,E501
+    slot_subq = (
+        "(SELECT id FROM trainer_availability_slots WHERE created_by_user_id = " + owner_subq + ")"  # noqa: S608
+    )
     async with engine.begin() as conn:
         # 1. booking_notifications for bookings on this test's slots.
         await conn.execute(
-            text("DELETE FROM booking_notifications WHERE booking_id IN (SELECT id FROM bookings WHERE slot_id IN " + slot_subq + ")"),  # noqa: S608,E501
+            text(
+                "DELETE FROM booking_notifications WHERE booking_id IN (SELECT id FROM bookings WHERE slot_id IN "  # noqa: E501, S608
+                + slot_subq
+                + ")"
+            ),
             ep,
         )
         # 2. pt_sessions for this test's clients.
@@ -531,8 +531,7 @@ async def test_concurrent_create_booking_slot_already_booked_clear_409(
 
     statuses = sorted(r.status_code for r in responses)
     assert statuses == [201, 409], (
-        f"P102-race: expected [201, 409], got {statuses}; "
-        f"bodies: {[r.text for r in responses]}"
+        f"P102-race: expected [201, 409], got {statuses}; bodies: {[r.text for r in responses]}"
     )
 
     bodies_409 = [r.json() for r in responses if r.status_code == 409]

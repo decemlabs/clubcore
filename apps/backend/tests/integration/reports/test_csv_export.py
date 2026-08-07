@@ -638,11 +638,8 @@ async def test_payments_csv_formula_injection_guarded(
     client_name_col = list(CSV_PAYMENTS_HEADERS).index("clientName")
     data_rows = [row for row in rows[1:] if row]
     # The formula-injection-guarded cell must start with a single quote prefix
-    target = [
-        row for row in data_rows
-        if row[client_name_col].startswith("'=HYPERLINK")
-    ]
+    target = [row for row in data_rows if row[client_name_col].startswith("'=HYPERLINK")]
     assert target, (
-        f"Expected formula-injection-guarded cell starting with \"'=\" in clientName column. "
+        f'Expected formula-injection-guarded cell starting with "\'=" in clientName column. '
         f"Data rows: {data_rows}"
     )

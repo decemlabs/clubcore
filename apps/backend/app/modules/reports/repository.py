@@ -382,11 +382,15 @@ async def fetch_payments_for_csv(
         "ORDER BY p.received_at ASC, p.id ASC"
     )
     rows = (
-        await session.execute(
-            text(_sql),
-            {"from_date": from_date, "to_date": to_date},
+        (
+            await session.execute(
+                text(_sql),
+                {"from_date": from_date, "to_date": to_date},
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     return [dict(r) for r in rows]
 
 

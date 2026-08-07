@@ -310,9 +310,7 @@ async def test_update_percentage_over_100_returns_422(
     make_promo_code: Callable[..., Awaitable[PromoCode]],
 ) -> None:
     """WR-01 — PATCH a percentage promo to discountValue > 10000 (>100%) → 422."""
-    promo = await make_promo_code(
-        code="WR01CAP", discount_type="percentage", discount_value=1000
-    )
+    promo = await make_promo_code(code="WR01CAP", discount_type="percentage", discount_value=1000)
     r = await authed_client_owner.patch(
         f"/api/v1/promo-codes/{promo.id}",
         json={"discountValue": 50000},  # 500% — must be rejected on update too
@@ -332,9 +330,7 @@ async def test_update_type_change_revalidates_existing_value_returns_422(
 ) -> None:
     """WR-03 — flip a fixed(50000 kopecks) promo to percentage WITHOUT a new
     value: the merged effective value (50000 = 500%) exceeds the cap → 422."""
-    promo = await make_promo_code(
-        code="WR03FLIP", discount_type="fixed", discount_value=50000
-    )
+    promo = await make_promo_code(code="WR03FLIP", discount_type="fixed", discount_value=50000)
     r = await authed_client_owner.patch(
         f"/api/v1/promo-codes/{promo.id}",
         json={"discountType": "percentage"},  # value omitted; effective = 50000

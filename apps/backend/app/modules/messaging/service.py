@@ -503,9 +503,7 @@ async def serve_attachment(
     row = await repository.get_owned_attachment(session, attachment_id, client_id=client_id)
     if row is None:
         # T-92-10: 404-collapse — never 403 (no existence leak), MSG-02 precedent.
-        raise NotFoundError(
-            f"Attachment {attachment_id} not found or not owned by client"
-        )
+        raise NotFoundError(f"Attachment {attachment_id} not found or not owned by client")
 
     object_key = str(row["object_key"])
     mime_type = str(row["mime_type"])

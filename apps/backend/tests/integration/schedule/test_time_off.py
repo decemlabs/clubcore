@@ -791,9 +791,7 @@ async def test_force_cascade_restores_pt_credit_when_session_consumed(
 
     # The pt_session row is now cancelled.
     ps_cancelled_at = await db_session.scalar(
-        text(
-            "SELECT cancelled_at FROM pt_sessions WHERE booking_id = :bid"
-        ),
+        text("SELECT cancelled_at FROM pt_sessions WHERE booking_id = :bid"),
         {"bid": booking_resp.id},
     )
     assert ps_cancelled_at is not None, "pt_session must be marked cancelled after restore"
@@ -863,9 +861,7 @@ async def test_force_cascade_no_op_when_no_pt_session_consumed(
 
     # Zero pt_session_credit_restored audit rows.
     restore_count = await db_session.scalar(
-        text(
-            "SELECT count(*) FROM audit_log WHERE action = 'pt_session_credit_restored'"
-        ),
+        text("SELECT count(*) FROM audit_log WHERE action = 'pt_session_credit_restored'"),
     )
     assert restore_count == 0, (
         f"Expected 0 pt_session_credit_restored rows for no-session booking; got {restore_count}"

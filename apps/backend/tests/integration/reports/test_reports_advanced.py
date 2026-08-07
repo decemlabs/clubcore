@@ -412,9 +412,7 @@ async def test_at_risk_flags_stale_member(
     # Recent visit: today at 10:00 MSK.
     recent_ts = datetime.now(UTC).replace(hour=7, minute=0, second=0, microsecond=0)
 
-    await make_visit(
-        client_id=stale_client.id, membership_id=stale_mem.id, checked_in_at=stale_ts
-    )
+    await make_visit(client_id=stale_client.id, membership_id=stale_mem.id, checked_in_at=stale_ts)
     await make_visit(
         client_id=recent_client.id, membership_id=recent_mem.id, checked_in_at=recent_ts
     )
@@ -485,9 +483,9 @@ async def test_at_risk_ignores_visits_predating_membership(
     )
 
     # Only visit is 40 days ago — well before the current membership's start_date.
-    old_visit_ts = datetime.now(UTC).replace(
-        hour=7, minute=0, second=0, microsecond=0
-    ) - timedelta(days=40)
+    old_visit_ts = datetime.now(UTC).replace(hour=7, minute=0, second=0, microsecond=0) - timedelta(
+        days=40
+    )
     await make_visit(
         client_id=client.id,
         membership_id=membership.id,
@@ -536,8 +534,7 @@ async def test_at_risk_count_can_exceed_items_when_capped(
         f"items should be capped at {AT_RISK_MAX_ITEMS}, got {len(body['items'])}"
     )
     assert body["count"] >= AT_RISK_MAX_ITEMS + extra, (
-        f"count should be the uncapped total (>= {AT_RISK_MAX_ITEMS + extra}), "
-        f"got {body['count']}"
+        f"count should be the uncapped total (>= {AT_RISK_MAX_ITEMS + extra}), got {body['count']}"
     )
     assert body["count"] > len(body["items"]), (
         "count must exceed len(items) when the list is capped (IN-02)"

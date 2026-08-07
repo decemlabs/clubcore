@@ -74,7 +74,5 @@ def downgrade() -> None:
     # Reverse order: index → check → FK → column.
     op.drop_index("uq_otp_codes_client_channel_active", table_name="otp_codes")
     op.drop_constraint(op.f("ck_otp_codes_principal_excl"), "otp_codes", type_="check")
-    op.drop_constraint(
-        op.f("fk_otp_codes_client_id_clients"), "otp_codes", type_="foreignkey"
-    )
+    op.drop_constraint(op.f("fk_otp_codes_client_id_clients"), "otp_codes", type_="foreignkey")
     op.drop_column("otp_codes", "client_id")

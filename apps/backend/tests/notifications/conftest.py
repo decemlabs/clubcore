@@ -13,8 +13,8 @@ from __future__ import annotations
 
 import json
 
-import sqlalchemy as sa
 import pytest_asyncio
+import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.modules.client_portal.conftest import make_client, make_user
@@ -27,8 +27,7 @@ _WORKING_HOURS_CONFIG_ID = "00000000-0000-0000-0000-000000000004"
 
 # All-day schedule for all 7 weekdays — no slot time is blocked.
 _ALL_DAYS_OPEN = [
-    {"day_of_week": dow, "open_time": "00:00", "close_time": "23:59"}
-    for dow in range(0, 7)
+    {"day_of_week": dow, "open_time": "00:00", "close_time": "23:59"} for dow in range(0, 7)
 ]
 
 

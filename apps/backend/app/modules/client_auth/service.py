@@ -557,9 +557,7 @@ async def revoke_client_session(
     now = datetime.now(tz=UTC)
 
     row = await session.scalar(
-        select(ClientRefreshToken).where(
-            ClientRefreshToken.token_hash == presented_hash
-        )
+        select(ClientRefreshToken).where(ClientRefreshToken.token_hash == presented_hash)
     )
     if row is None:
         return
@@ -592,4 +590,3 @@ async def revoke_client_session(
     pipe.delete(f"auth:client:session:{client_id}:{family_id}")
     pipe.srem(f"auth:client:user_sessions:{client_id}", str(family_id))
     await pipe.execute()
-

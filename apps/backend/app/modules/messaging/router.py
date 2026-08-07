@@ -166,9 +166,7 @@ async def client_upload_attachment(
     # P17: bounded read — refuse to buffer more than 5MB+1 bytes before validation.
     raw = await file.read(5 * 1024 * 1024 + 1)
     if len(raw) > 5 * 1024 * 1024:
-        raise PayloadTooLargeError(
-            f"Upload exceeds the 5MB size limit ({len(raw)} bytes received)"
-        )
+        raise PayloadTooLargeError(f"Upload exceeds the 5MB size limit ({len(raw)} bytes received)")
 
     result = await service.create_attachment(
         session,

@@ -213,9 +213,7 @@ async def get_visits_csv(
 @router.get(
     "/payments.csv",
     response_class=StreamingResponse,
-    summary=(
-        "Payments ledger CSV download — one row per payment (owner-only; EXP-01 Phase 116)"
-    ),
+    summary=("Payments ledger CSV download — one row per payment (owner-only; EXP-01 Phase 116)"),
 )
 async def get_payments_csv(
     from_date: Annotated[date, Query(alias="fromDate")],

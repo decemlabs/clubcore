@@ -165,7 +165,7 @@ def _no_charge_mock(call_count_holder: list[int]) -> Any:
 @pytest.mark.asyncio
 async def test_skip_no_consent(db_session: AsyncSession) -> None:
     """ФЗ-376: membership with consent_recorded_at IS NULL MUST NOT be charged."""
-    today = date.today()
+    today = date.today()  # noqa: DTZ011
     ids = await _seed_client_plan(db_session)
     membership_id = await _seed_active_membership(
         db_session,
@@ -204,7 +204,7 @@ async def test_skip_no_consent(db_session: AsyncSession) -> None:
 @pytest.mark.asyncio
 async def test_skip_autopay_disabled(db_session: AsyncSession) -> None:
     """Membership with autopay_enabled=false MUST NOT be charged."""
-    today = date.today()
+    today = date.today()  # noqa: DTZ011
     ids = await _seed_client_plan(db_session)
     membership_id = await _seed_active_membership(
         db_session,
@@ -242,7 +242,7 @@ async def test_skip_autopay_disabled(db_session: AsyncSession) -> None:
 @pytest.mark.asyncio
 async def test_skip_dead_card(db_session: AsyncSession) -> None:
     """Membership whose card is unlinked (unlinked_at IS NOT NULL) MUST NOT be charged."""
-    today = date.today()
+    today = date.today()  # noqa: DTZ011
     ids = await _seed_client_plan(db_session)
     membership_id = await _seed_active_membership(
         db_session,
@@ -280,7 +280,7 @@ async def test_skip_dead_card(db_session: AsyncSession) -> None:
 @pytest.mark.asyncio
 async def test_skip_no_card_at_all(db_session: AsyncSession) -> None:
     """Membership with no client_payment_methods row at all MUST NOT be charged."""
-    today = date.today()
+    today = date.today()  # noqa: DTZ011
     ids = await _seed_client_plan(db_session)
     membership_id = await _seed_active_membership(
         db_session,
@@ -312,7 +312,7 @@ async def test_skip_no_card_at_all(db_session: AsyncSession) -> None:
 @pytest.mark.asyncio
 async def test_skip_already_renewed(db_session: AsyncSession) -> None:
     """Membership already renewed (a covering membership exists) MUST NOT be charged again."""
-    today = date.today()
+    today = date.today()  # noqa: DTZ011
     ids = await _seed_client_plan(db_session)
     end_date = today + timedelta(days=2)
     membership_id = await _seed_active_membership(
@@ -370,7 +370,7 @@ async def test_skip_already_renewed(db_session: AsyncSession) -> None:
 @pytest.mark.asyncio
 async def test_skip_out_of_window(db_session: AsyncSession) -> None:
     """Membership whose end_date is outside [today, today+window_days] MUST NOT be charged."""
-    today = date.today()
+    today = date.today()  # noqa: DTZ011
     ids = await _seed_client_plan(db_session)
     # end_date = today + 10 days, window_days = 3 → outside window
     membership_id = await _seed_active_membership(

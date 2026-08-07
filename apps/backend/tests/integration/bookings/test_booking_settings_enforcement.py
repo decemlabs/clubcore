@@ -17,31 +17,31 @@ dependency — self-contained on Plan 01 per 108-03-PLAN.md).
 PKs from migration 0071_seed_settings:
   booking_config:        00000000-0000-0000-0000-000000000003
   working_hours_config:  00000000-0000-0000-0000-000000000004
-"""
+"""  # noqa: E501
 
 from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pytest
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
-from zoneinfo import ZoneInfo
 
 from app.modules.auth.models import User
 from app.modules.bookings import service as booking_service
 from app.modules.bookings.constants import CANCEL_WINDOW_HOURS_RECEPTION
+from app.modules.bookings.schemas import (
+    BookingCancelRequest,
+    BookingCreateRequest,
+)
 from app.modules.bookings.service import (
     BookingAheadWindowError,
     BookingCutoffError,
     CancelWindowExpiredError,
     OutsideWorkingHoursError,
-)
-from app.modules.bookings.schemas import (
-    BookingCancelRequest,
-    BookingCreateRequest,
 )
 from app.modules.clients.models import Client
 from app.modules.pt_packages.models import PtPackage
@@ -56,8 +56,7 @@ _WORKING_HOURS_CONFIG_ID = "00000000-0000-0000-0000-000000000004"
 # Permissive schedule covering all 7 days, 00:00 - 23:59.
 # day_of_week: 0=Monday … 6=Sunday (CR-01 fix: 0-based convention, matches seed/frontend).
 _ALL_DAYS_OPEN: list[Any] = [
-    {"day_of_week": dow, "open_time": "00:00", "close_time": "23:59"}
-    for dow in range(0, 7)
+    {"day_of_week": dow, "open_time": "00:00", "close_time": "23:59"} for dow in range(0, 7)
 ]
 
 
@@ -87,11 +86,7 @@ async def _set_booking_config(
         params["cancel_window_hours"] = cancel_window_hours
     if not updates:
         return
-    sql = (
-        "UPDATE booking_config SET "
-        + ", ".join(updates)
-        + " WHERE id = CAST(:id AS uuid)"
-    )
+    sql = "UPDATE booking_config SET " + ", ".join(updates) + " WHERE id = CAST(:id AS uuid)"  # noqa: S608
     await session.execute(sa.text(sql), params)
     await session.flush()
 

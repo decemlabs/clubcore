@@ -214,16 +214,20 @@ async def validate_promo_code(
     # Step 1: Normalize code and fetch the alive PromoCode row.
     upper_code = code.upper()
     promo_row = (
-        await session.execute(
-            text(
-                "SELECT id, discount_type, discount_value, max_uses, per_client_limit, "
-                "valid_from, valid_until, is_active, applicable_to "
-                "FROM promo_codes "
-                "WHERE upper(code) = :code AND deleted_at IS NULL"
-            ),
-            {"code": upper_code},
+        (
+            await session.execute(
+                text(
+                    "SELECT id, discount_type, discount_value, max_uses, per_client_limit, "
+                    "valid_from, valid_until, is_active, applicable_to "
+                    "FROM promo_codes "
+                    "WHERE upper(code) = :code AND deleted_at IS NULL"
+                ),
+                {"code": upper_code},
+            )
         )
-    ).mappings().one_or_none()
+        .mappings()
+        .one_or_none()
+    )
 
     if promo_row is None:
         raise PromoNotFoundError("not_found")
@@ -263,28 +267,36 @@ async def validate_promo_code(
     # Step 5: Usage limit checks (raw SQL COUNT on promo_redemptions).
     if max_uses is not None:
         global_count_row = (
-            await session.execute(
-                text(
-                    "SELECT COUNT(*) AS cnt FROM promo_redemptions "
-                    "WHERE promo_code_id = :promo_id"
-                ),
-                {"promo_id": str(promo_id)},
+            (
+                await session.execute(
+                    text(
+                        "SELECT COUNT(*) AS cnt FROM promo_redemptions "
+                        "WHERE promo_code_id = :promo_id"
+                    ),
+                    {"promo_id": str(promo_id)},
+                )
             )
-        ).mappings().one()
+            .mappings()
+            .one()
+        )
         global_count = int(global_count_row["cnt"])
         if global_count >= max_uses:
             raise PromoUsedUpError("used_up")
 
     if per_client_limit is not None:
         client_count_row = (
-            await session.execute(
-                text(
-                    "SELECT COUNT(*) AS cnt FROM promo_redemptions "
-                    "WHERE promo_code_id = :promo_id AND client_id = :client_id"
-                ),
-                {"promo_id": str(promo_id), "client_id": str(client_id)},
+            (
+                await session.execute(
+                    text(
+                        "SELECT COUNT(*) AS cnt FROM promo_redemptions "
+                        "WHERE promo_code_id = :promo_id AND client_id = :client_id"
+                    ),
+                    {"promo_id": str(promo_id), "client_id": str(client_id)},
+                )
             )
-        ).mappings().one()
+            .mappings()
+            .one()
+        )
         client_count = int(client_count_row["cnt"])
         if client_count >= per_client_limit:
             raise PromoUsedUpError("used_up")
@@ -329,14 +341,18 @@ async def _read_plan_price(
     table = "membership_plans" if kind == "membership" else "pt_package_plans"
 
     row = (
-        await session.execute(
-            text(
-                f"SELECT price_kopecks FROM {table} "  # noqa: S608 — table is internal, not user input
-                "WHERE id = :id AND deleted_at IS NULL"
-            ),
-            {"id": str(plan_id)},
+        (
+            await session.execute(
+                text(
+                    f"SELECT price_kopecks FROM {table} "  # noqa: S608 — table is internal, not user input
+                    "WHERE id = :id AND deleted_at IS NULL"
+                ),
+                {"id": str(plan_id)},
+            )
         )
-    ).mappings().one_or_none()
+        .mappings()
+        .one_or_none()
+    )
 
     if row is None:
         raise PromoNotFoundError(f"{table}_not_found")
@@ -391,14 +407,18 @@ async def record_promo_redemption(
     # the cap check for the same promo code (T-999.4-09 race-safe enforcement).
     # Also reads per_client_limit for WR-01 re-check below.
     promo_row = (
-        await session.execute(
-            text(
-                "SELECT max_uses, per_client_limit FROM promo_codes "
-                "WHERE id = :id AND deleted_at IS NULL FOR UPDATE"
-            ),
-            {"id": str(promo_code_id)},
+        (
+            await session.execute(
+                text(
+                    "SELECT max_uses, per_client_limit FROM promo_codes "
+                    "WHERE id = :id AND deleted_at IS NULL FOR UPDATE"
+                ),
+                {"id": str(promo_code_id)},
+            )
         )
-    ).mappings().one_or_none()
+        .mappings()
+        .one_or_none()
+    )
 
     if promo_row is None:
         # PromoCode was soft-deleted between checkout and succeeded.
@@ -413,14 +433,18 @@ async def record_promo_redemption(
     max_uses = promo_row["max_uses"]
     if max_uses is not None:
         count_row = (
-            await session.execute(
-                text(
-                    "SELECT COUNT(*) AS cnt FROM promo_redemptions "
-                    "WHERE promo_code_id = :promo_id"
-                ),
-                {"promo_id": str(promo_code_id)},
+            (
+                await session.execute(
+                    text(
+                        "SELECT COUNT(*) AS cnt FROM promo_redemptions "
+                        "WHERE promo_code_id = :promo_id"
+                    ),
+                    {"promo_id": str(promo_code_id)},
+                )
             )
-        ).mappings().one()
+            .mappings()
+            .one()
+        )
         global_count = int(count_row["cnt"])
         if global_count >= max_uses:
             _log.warning(
@@ -439,14 +463,18 @@ async def record_promo_redemption(
     per_client_limit = promo_row["per_client_limit"]
     if per_client_limit is not None:
         client_count_row = (
-            await session.execute(
-                text(
-                    "SELECT COUNT(*) AS cnt FROM promo_redemptions "
-                    "WHERE promo_code_id = :promo_id AND client_id = :client_id"
-                ),
-                {"promo_id": str(promo_code_id), "client_id": str(client_id)},
+            (
+                await session.execute(
+                    text(
+                        "SELECT COUNT(*) AS cnt FROM promo_redemptions "
+                        "WHERE promo_code_id = :promo_id AND client_id = :client_id"
+                    ),
+                    {"promo_id": str(promo_code_id), "client_id": str(client_id)},
+                )
             )
-        ).mappings().one()
+            .mappings()
+            .one()
+        )
         client_count = int(client_count_row["cnt"])
         if client_count >= per_client_limit:
             _log.warning(
@@ -506,14 +534,8 @@ def _validate_effective_promo(
     Raises PromoCodeValidationError (422) on any violation.
     """
     if discount_type == "percentage" and discount_value > 10000:
-        raise PromoCodeValidationError(
-            "discount_value for percentage must be <= 10000 (i.e. 100%)"
-        )
-    if (
-        valid_from is not None
-        and valid_until is not None
-        and valid_until < valid_from
-    ):
+        raise PromoCodeValidationError("discount_value for percentage must be <= 10000 (i.e. 100%)")
+    if valid_from is not None and valid_until is not None and valid_until < valid_from:
         raise PromoCodeValidationError("valid_until must be >= valid_from")
 
 

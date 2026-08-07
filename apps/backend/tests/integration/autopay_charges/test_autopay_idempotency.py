@@ -58,7 +58,7 @@ async def _seed_autopay_membership(
     method_id = "saved-card-" + nonce
 
     if end_date is None:
-        end_date = date.today() + timedelta(days=2)
+        end_date = date.today() + timedelta(days=2)  # noqa: DTZ011
 
     await session.execute(
         text(
@@ -157,7 +157,7 @@ async def test_duplicate_tick_no_double_charge(db_session: AsyncSession) -> None
     The ON CONFLICT (membership_id, period_end) DO NOTHING claim INSERT is the
     DB-level double-charge guard (T-84-01 / T-84-05).
     """
-    today = date.today()
+    today = date.today()  # noqa: DTZ011
     seed = await _seed_autopay_membership(db_session, end_date=today + timedelta(days=2))
     membership_id: UUID = seed["membership_id"]
 
@@ -215,8 +215,8 @@ async def test_crash_between_claim_and_provider_no_double_charge(db_session: Asy
 
     Simulates a crash after the autopay_charges INSERT but before the YooKassa call.
     The deterministic idempotency_key is stable across runs for the same (membership_id, period_end).
-    """
-    today = date.today()
+    """  # noqa: E501
+    today = date.today()  # noqa: DTZ011
     seed = await _seed_autopay_membership(db_session, end_date=today + timedelta(days=1))
     membership_id: UUID = seed["membership_id"]
     period_end = seed["end_date"]
@@ -274,7 +274,7 @@ async def test_crash_between_claim_and_provider_no_double_charge(db_session: Asy
 @pytest.mark.asyncio
 async def test_failed_claim_no_retry_on_next_tick(db_session: AsyncSession) -> None:
     """A failed autopay_charges row blocks the next cron tick from re-charging the period."""
-    today = date.today()
+    today = date.today()  # noqa: DTZ011
     seed = await _seed_autopay_membership(db_session, end_date=today + timedelta(days=2))
     membership_id: UUID = seed["membership_id"]
     period_end = seed["end_date"]
@@ -285,7 +285,7 @@ async def test_failed_claim_no_retry_on_next_tick(db_session: AsyncSession) -> N
             "INSERT INTO autopay_charges"
             " (id, membership_id, period_end, status, amount_kopecks, failure_reason,"
             "  created_at, updated_at)"
-            " VALUES (gen_random_uuid(), :m_id, :p_end, 'failed', 199000, 'permanent_error:card_declined',"
+            " VALUES (gen_random_uuid(), :m_id, :p_end, 'failed', 199000, 'permanent_error:card_declined',"  # noqa: E501
             "  now(), now())"
         ),
         {"m_id": str(membership_id), "p_end": period_end},
@@ -339,7 +339,7 @@ async def test_decline_enqueues_failure_notification(db_session: AsyncSession) -
 
     Tests the full cron fn (charge_expiring_autopay) with a fake ARQ ctx.
     """
-    today = date.today()
+    today = date.today()  # noqa: DTZ011
     seed = await _seed_autopay_membership(db_session, end_date=today + timedelta(days=1))
     membership_id: UUID = seed["membership_id"]
 

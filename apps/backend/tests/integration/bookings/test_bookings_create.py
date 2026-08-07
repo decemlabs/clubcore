@@ -274,12 +274,11 @@ async def test_create_booking_pt_package_expired_before_slot_moscow_tz(
     """PtPackageExpiredBeforeSlot (D-38-12 / Pitfall 18 / BOOK-04).
 
     Crucial assertion: the comparison happens in Moscow TZ. A slot at
-    2026-07-01 01:00 Moscow is 2026-06-30 22:00 UTC. A package with
-    end_date=2026-06-30 (Moscow business date) MUST reject the slot —
+    01:00 Moscow is 22:00 UTC on the prior day. A package whose end_date
+    is that prior Moscow business date MUST reject the slot —
     naive .date() on the UTC datetime would mis-classify the slot as
     belonging to 2026-06-30 and incorrectly accept it.
     """
-    from datetime import date
     from zoneinfo import ZoneInfo
 
     moscow_tz = ZoneInfo("Europe/Moscow")
@@ -287,8 +286,14 @@ async def test_create_booking_pt_package_expired_before_slot_moscow_tz(
     client = await make_client()
     plan = await make_pt_package_plan()
 
-    # Slot at 2026-07-01 01:00 Moscow → 2026-06-30 22:00 UTC.
-    slot_start_moscow = datetime(2026, 7, 1, 1, 0, tzinfo=moscow_tz)
+    # Use a future date so this test cannot expire while preserving the
+    # 01:00 Moscow -> 22:00 UTC on the previous day boundary condition.
+    slot_date_moscow = datetime.now(tz=moscow_tz).date() + timedelta(days=1)
+    slot_start_moscow = datetime.combine(
+        slot_date_moscow,
+        datetime.min.time().replace(hour=1),
+        tzinfo=moscow_tz,
+    )
     slot_end_moscow = slot_start_moscow + timedelta(hours=1)
     slot = await make_slot(
         trainer_id=trainer.id,
@@ -298,7 +303,7 @@ async def test_create_booking_pt_package_expired_before_slot_moscow_tz(
     pkg = await make_pt_package(
         client_id=client.id,
         plan=plan,
-        end_date=date(2026, 6, 30),  # Moscow business date — strictly before slot.
+        end_date=slot_date_moscow - timedelta(days=1),
     )
 
     with pytest.raises(service.PtPackageExpiredBeforeSlotError) as exc_info:
