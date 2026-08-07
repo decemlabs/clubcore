@@ -27,10 +27,6 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.core.database import get_db
-from app.core.redis import get_redis
-from app.main import create_app
-
 # Phase 2 D-15 Settings requires DATABASE_URL/REDIS_URL/SECRET_KEY from env or .env.
 # CI / fresh checkouts run without `.env`; load `.env.example` defaults at import
 # time so Settings() in `create_app()` does not fail before any test executes.
@@ -44,6 +40,12 @@ if _ENV_EXAMPLE.is_file():
             continue
         _key, _, _value = _stripped.partition("=")
         os.environ.setdefault(_key.strip(), _value.strip())
+
+# Local application imports must happen after the test environment fallback:
+# several integration settings objects are constructed at module import time.
+from app.core.database import get_db  # noqa: E402
+from app.core.redis import get_redis  # noqa: E402
+from app.main import create_app  # noqa: E402
 
 
 @pytest_asyncio.fixture
