@@ -20,6 +20,7 @@ jobs:
   backend:
     name: Backend (drift gates + statics)
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     defaults:
       run:
         working-directory: apps/backend
@@ -103,7 +104,9 @@ jobs:
         run: uv run alembic upgrade head
 
       - name: pytest
-        run: uv run pytest
+        # Stop after the first failure so an environment-wide setup problem
+        # produces one actionable traceback instead of hours of cascading E's.
+        run: uv run pytest --maxfail=1
 
   frontend:
     name: Frontend (drift gates + statics)
